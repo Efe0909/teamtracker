@@ -5,6 +5,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>EkipTakip</title>
+<link rel="icon" href="/static/icon-192.png">
 <link rel="stylesheet" href="/static/app.css">
 <link rel="stylesheet" href="/static/home.css">
 </head>
@@ -61,6 +62,17 @@
     </a>
     {% endfor %}
   </div>
+
+  <a class="mod ready" href="/m" style="margin-top:13px;min-height:0;flex-direction:row;
+     align-items:center;gap:12px">
+    <div class="ic">📱</div>
+    <div style="flex:1">
+      <div class="nm">Cepte: mobil site</div>
+      <div class="ds">Yapılacaklar, arama, eylemler ve bildirimler — Safari'de
+        <b>Paylaş → Ana Ekrana Ekle</b> ile uygulama gibi açılır.</div>
+    </div>
+    <span class="go">→</span>
+  </a>
 
   <div class="hfoot">
     Kapsamın: <b>{{ scope_name }}</b>{% if user.is_admin %} · tüm ağaçta yetkili{% endif %}.

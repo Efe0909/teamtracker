@@ -1,0 +1,12 @@
+{% extends "mobile/base.html" %}
+{% block content %}
+<div class="msearch">
+  <div class="box">
+    <span class="ic">🔎</span>
+    <input name="q" value="{{ q }}" placeholder="Ara…" autocomplete="off" autofocus
+           hx-get="/m/ara" hx-target="#sonuc" hx-swap="outerHTML"
+           hx-trigger="input changed delay:300ms, search">
+  </div>
+</div>
+{% include "mobile/list_search.html" %}
+{% endblock %}

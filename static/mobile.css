@@ -1,0 +1,134 @@
+/* EkipTakip mobil — ayni token'lar (app.css), farkli yerlesim.
+   Kaynak UX: sahadaki mobil uygulama kaliba (buyuk baslik + yapiskan arama +
+   kart listesi + alt sekme cubugu). Palet ve dil bizim. */
+
+body.m{display:block;height:auto;min-height:100dvh;overflow:auto;background:var(--bg);
+  overscroll-behavior-y:contain;-webkit-tap-highlight-color:transparent}
+
+.mapp{max-width:560px;margin:0 auto;min-height:100dvh;background:var(--bg);position:relative;
+  padding-bottom:calc(84px + env(safe-area-inset-bottom))}
+
+/* ---- ust baslik: sabit, ortada buyuk harf baslik ---- */
+.mtop{position:sticky;top:0;z-index:20;background:var(--panel);border-bottom:1px solid var(--line);
+  padding:calc(9px + env(safe-area-inset-top)) 12px 9px;display:flex;align-items:center;gap:9px}
+.mtop .ttl{flex:1;text-align:center;font-size:13px;font-weight:800;letter-spacing:1.4px;
+  text-transform:uppercase}
+.mtop .slot{width:34px;height:34px;display:grid;place-items:center;flex-shrink:0}
+.mtop a.slot{color:var(--dim);text-decoration:none;font-size:19px;border-radius:10px}
+.mtop a.slot:active{background:var(--tint);color:var(--acc)}
+.mtop .cnt{position:absolute;top:calc(6px + env(safe-area-inset-top));right:8px;background:var(--err);
+  color:#fff;font-size:9px;font-weight:700;border-radius:999px;padding:1px 5px}
+
+/* ---- yapiskan arama + segment ---- */
+.msearch{position:sticky;top:0;z-index:15;background:var(--bg);padding:10px 12px 6px}
+.msearch .box{position:relative}
+.msearch input{padding:10px 12px 10px 34px;border-radius:12px;font-size:16px;box-shadow:var(--sh)}
+/* 16px: iOS 16px altindaki girdide odaklaninca sayfayi yakinlastirir */
+.msearch .ic{position:absolute;left:11px;top:10px;color:var(--dim);font-size:14px}
+.msearch .segs{margin-top:8px}
+.msearch .seg{padding:7px 4px;font-size:12px}
+.msearch a.seg{text-decoration:none;display:block}
+
+.mlist{padding:6px 12px 18px;display:flex;flex-direction:column;gap:9px}
+.mgrp{font-size:11px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--dim);
+  margin:9px 3px 1px}
+.mempty{color:var(--dim);font-size:13.5px;text-align:center;padding:44px 20px;line-height:1.6}
+
+/* ---- yapilacak karti: koyu yuzey, sagda tek eylem ---- */
+.tcard{display:flex;align-items:center;gap:11px;background:linear-gradient(155deg,#382e55,#262039);
+  color:#fff;border-radius:16px;padding:12px 13px;text-decoration:none;box-shadow:var(--sh)}
+.tcard:active{transform:scale(.99)}
+.tcard .body{flex:1;min-width:0}
+.tcard .t{font-size:14.5px;font-weight:700;line-height:1.35;margin-bottom:5px}
+.tcard .k{font-size:11.5px;color:#c3badf;line-height:1.6;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap}
+.tcard .k b{color:#fff;font-weight:600}
+.tcard .chips{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px}
+.tcard .act{display:flex;flex-direction:column;align-items:center;gap:4px;flex-shrink:0;width:52px}
+.tcard .act .circ{width:38px;height:38px;border-radius:50%;background:var(--acc);display:grid;
+  place-items:center;font-size:15px;color:#fff;box-shadow:0 3px 10px rgba(124,91,255,.45)}
+.tcard .act .lbl{font-size:9.5px;font-weight:700;letter-spacing:.2px;color:#d9d1f5}
+.tcard.done{background:var(--panel);color:var(--txt);box-shadow:none;border:1px solid var(--line)}
+.tcard.done .k{color:var(--dim)} .tcard.done .k b{color:var(--txt)}
+.tcard.done .act .circ{background:var(--tint);color:var(--ok)}
+.tcard.done .act .lbl{color:var(--dim)}
+
+/* ---- eylem karti: tarih rozeti onde ---- */
+.acard{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:11px 13px;
+  box-shadow:var(--sh);text-decoration:none;color:inherit;display:block}
+.acard .when{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:800;
+  letter-spacing:.4px;text-transform:uppercase;background:var(--tint);color:var(--acc);
+  border-radius:6px;padding:3px 8px;margin-bottom:7px}
+.acard.late .when{background:#fde4e8;color:#d13350}
+.acard .t{font-size:14px;font-weight:650;line-height:1.4}
+.acard .k{font-size:11.5px;color:var(--dim);margin-top:5px}
+
+/* ---- arama sonucu ---- */
+.scard{display:flex;align-items:center;gap:11px;background:var(--panel);border:1px solid var(--line);
+  border-radius:14px;padding:11px 12px;text-decoration:none;color:inherit;box-shadow:var(--sh)}
+.scard .tile{width:34px;height:34px;border-radius:11px;background:var(--tint);color:var(--acc);
+  display:grid;place-items:center;font-size:15px;flex-shrink:0}
+.scard .t{display:block;font-size:13.5px;font-weight:650;line-height:1.4}
+.scard .k{display:block;font-size:11.5px;color:var(--dim);margin-top:2px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ---- bildirim satiri ---- */
+.ncard{display:flex;gap:10px;align-items:flex-start;background:var(--panel);border:1px solid var(--line);
+  border-radius:14px;padding:11px 12px;text-decoration:none;color:inherit;box-shadow:var(--sh)}
+.ncard .av{width:30px;height:30px;font-size:12px;margin-top:1px}
+.ncard .t{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+  font-size:13.5px;line-height:1.45}
+.ncard .t b{font-weight:700}
+.ncard .k{display:block;font-size:11px;color:var(--dim);margin-top:3px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ncard.n-sys .av{background:var(--tint);color:var(--acc);font-size:14px}
+
+/* ---- alt sekme cubugu + ortadaki + ---- */
+.tabs{position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--panel);
+  border-top:1px solid var(--line);display:flex;align-items:flex-start;
+  padding:7px 4px calc(7px + env(safe-area-inset-bottom));box-shadow:0 -2px 14px rgba(90,60,180,.07)}
+.tabs .in{max-width:560px;margin:0 auto;width:100%;display:flex;align-items:flex-start}
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;text-decoration:none;
+  color:var(--dim);font-size:9.5px;font-weight:700;letter-spacing:.2px;position:relative;padding:3px 0}
+.tab .i{font-size:19px;line-height:1.15}
+.tab.on{color:var(--acc)}
+.tab .cnt{position:absolute;top:-1px;right:calc(50% - 19px);background:var(--err);color:#fff;
+  font-size:9px;font-weight:700;border-radius:999px;padding:0 4px;min-width:15px;text-align:center}
+.fab{flex:0 0 62px;display:grid;place-items:center}
+.fab a{width:52px;height:52px;border-radius:50%;background:var(--acc);color:#fff;display:grid;
+  place-items:center;font-size:26px;font-weight:300;text-decoration:none;margin-top:-20px;
+  box-shadow:0 5px 16px rgba(124,91,255,.5);border:3px solid var(--panel)}
+
+/* ---- kayit detayi ---- */
+.dwrap{display:flex;flex-direction:column;min-height:100dvh}
+.dhead{background:var(--panel);padding:12px 14px 11px;border-bottom:1px solid var(--line)}
+.dhead .t{font-size:17px;font-weight:750;letter-spacing:-.2px;line-height:1.3;margin:6px 0 5px}
+.dhead .path{font-size:11.5px;color:var(--dim)}
+.dstrip{display:flex;gap:6px;overflow-x:auto;padding:9px 12px;background:var(--panel2);
+  border-bottom:1px solid var(--line);scrollbar-width:none}
+.dstrip::-webkit-scrollbar{display:none}
+.dstrip .fld{flex-shrink:0}
+.dfeed{flex:1;padding:14px 12px;display:flex;flex-direction:column;gap:10px;
+  padding-bottom:calc(74px + env(safe-area-inset-bottom))}
+.dfeed .msg{max-width:86%}
+.dcomp{position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--panel);
+  border-top:1px solid var(--line);padding:9px 12px calc(9px + env(safe-area-inset-bottom));
+  display:flex;gap:8px;margin:0}
+.dcomp .in{max-width:560px;margin:0 auto;width:100%;display:flex;gap:8px}
+.dcomp input{border-radius:999px;padding:10px 14px;font-size:16px}
+.dcomp button{border-radius:999px;padding:8px 16px;flex-shrink:0}
+
+/* ---- yeni kayit formu ---- */
+.mform{padding:14px 12px;display:flex;flex-direction:column;gap:11px}
+.mform label{font-size:11.5px;font-weight:700;color:var(--dim);text-transform:uppercase;
+  letter-spacing:.5px;display:block;margin-bottom:5px}
+.mform input,.mform select,.mform textarea{font:inherit;font-size:16px;border-radius:12px;padding:10px 12px}
+.mform textarea{width:100%;background:var(--panel);color:var(--txt);border:1px solid var(--line);
+  min-height:88px;resize:vertical}
+.mform button{width:100%;padding:12px;border-radius:12px;font-size:15px;font-weight:600}
+
+/* ana ekrana ekle ipucu — sadece Safari sekmesinde gorunur, uygulamada gizli */
+.a2hs{margin:10px 12px 0;background:#fff6e8;border:1px solid #f0d5a8;color:#8a6420;border-radius:12px;
+  padding:10px 12px;font-size:12px;line-height:1.55}
+.a2hs b{color:#6b4c12}
+@media (display-mode:standalone){.a2hs{display:none}}

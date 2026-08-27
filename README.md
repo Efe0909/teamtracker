@@ -1,7 +1,8 @@
 # EkipTakip — alpha-0.1 (Faz 1)
 
-Ana sayfa (`/`) ekran seçimidir: Görev Yöneticisi çalışır, diğer modüller (kazanım ağacı,
-pivot, takvim, görev tanımları, arşiv, dosyalar/NAS, yönetim paneli) iskele sayfa gösterir.
+Ana sayfa (`/`) ekran seçimidir: Görev Yöneticisi (`/gorevler`) ve mobil site (`/m`)
+çalışır, diğer modüller (kazanım ağacı, pivot, takvim, görev tanımları, arşiv, dosyalar/NAS,
+yönetim paneli) iskele sayfa gösterir.
 Faz 1'in çalışan dikey dilimi: hiyerarşi + kayıtlar + kart içi sohbet + alan değişiklikleri.
 Yığın: Python 3.12 + FastAPI + Jinja2 + HTMX + SQLite, ham SQL, ORM yok, JS framework yok.
 
@@ -57,9 +58,14 @@ uç karşılığı (403 dahil).
 | `db.py` | ham SQL yardımcıları, `new_id()`, `now()`, `as_bool()` |
 | `tree.py` | `TreeIndex` — Euler tour, `is_descendant` O(1) |
 | `auth.py` | `current_user` (Faz 2'de OAuth), `can_edit_item` |
-| `schema.sql` | Faz 1 tabloları (users, nodes, items, item_participants, events) |
+| `schema.sql` | Faz 1 tabloları + `items_fts` (FTS5, trigger'larla senkron) |
 | `seed.py` | `layout-a.html`'deki ağaç, kartlar ve akış |
 | `templates/home.html` | ana sayfa — modül seçimi |
+| `templates/mobile/*` | mobil site: iskelet, sekmeler, listeler, kayıt detayı |
+| `static/mobile.css` | mobil yerleşim, aynı token'lar |
+| `static/manifest.json`, `static/sw.js` | PWA: ana ekrana ekleme + push girişi (Faz 3) |
+| `tools/ikon_uret.py` | PWA ikonlarını üretir (saf Python, bağımlılık yok) |
+| `spec/` | uyarlanacak ekranların çözümlemesi (`spec/README.md` kalıbı) |
 | `templates/module.html` | henüz yazılmamış modüller için iskele sayfa |
 | `templates/base.html` | görev yöneticisi yerleşimi (tek yerleşim dosyası) |
 | `templates/fragments/*` | layout'tan bağımsız parçalar (skin kuralı) |
@@ -77,6 +83,25 @@ uç karşılığı (403 dahil).
 Rayın altındaki avatardan değiştirilir (`POST /switch/{user_id}`, çerez `uid`).
 
 ## Uçlar
+
+**Mobil site (`/m`)** — aynı veritabanı, aynı yetki, ayrı yerleşim:
+
+| Yol | Ne |
+|---|---|
+| `GET /m` | yapılacaklar (`?sekme=kapali` → tamamlananlar) |
+| `GET /m/ara?q=` | FTS5 araması: kayıtlar + düğümler (HTMX ile canlı) |
+| `GET /m/eylemler` | son tarihli açık kayıtlar — gecikmiş olan başta |
+| `GET /m/bildirimler` | kartlarımda başkasının yaptığı hareketler (`events`'ten) |
+| `GET/POST /m/yeni` | yeni kayıt (kapsam dışı dal listelenmez, sunucu 403 döner) |
+| `GET /m/kayit/{id}` | sohbet + alan şeridi |
+| `POST /m/kayit/{id}/mesaj`, `PATCH /m/kayit/{id}/alan` | masaüstüyle aynı iş mantığı |
+| `GET /sw.js`, `/static/manifest.json` | PWA — kök kapsamdan servis edilir |
+
+iPhone'da **Safari → Paylaş → Ana Ekrana Ekle**: uygulama gibi açılır, kendi ikonu olur.
+Web push (Faz 3) iOS'ta yalnızca ana ekrana eklenmiş sitede çalışır; `sw.js` içindeki
+`push` / `notificationclick` girişleri hazır, sunucu tarafı `01-sema.md` §7 ile gelecek.
+
+**Masaüstü:**
 
 `GET /` (ana sayfa) · `GET /gorevler` (görev yöneticisi) · `GET /panel/inbox` ·
 `GET /panel/tree` · `GET /node/{id}/items` · `GET /item/{id}` · `POST /item/{id}/message` ·

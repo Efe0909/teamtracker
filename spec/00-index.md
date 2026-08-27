@@ -5,6 +5,7 @@ Kaynak sistemden uyarlanacak ekranlar. Sıra, `app.py` içindeki `MODULES` kayd�
 | # | Ekran | Modül (slug) | Görsel | Rapor | İskelet | Durum |
 |---|---|---|---|---|---|---|
 | — | Görev Yöneticisi | `gorevler` | — | `layout-a.html` | — | **yazıldı** |
+| 01 | Mobil site (cep) | `/m` | var (git'te değil) | `spec/01-mobil.md` | — | **yazıldı** |
 | | Kazanım Ağacı | `kazanim-agaci` | | | | bekliyor |
 | | Pivot & Veri Analizi | `pivot` | | | | bekliyor |
 | | Takvim | `takvim` | | | | bekliyor |
@@ -15,4 +16,15 @@ Kaynak sistemden uyarlanacak ekranlar. Sıra, `app.py` içindeki `MODULES` kayd�
 
 ## Akış haritası
 
-Ekranlar geldikçe doldurulur: hangi ekrandan hangisine, hangi eylemle geçiliyor.
+```
+/                ana sayfa (modül seçimi)
+├─ /gorevler     masaüstü görev yöneticisi  (tablo + kart + sohbet)
+├─ /m            mobil site — ana ekrana eklenebilir
+│   ├─ /m/ara            FTS5 arama
+│   ├─ /m/eylemler       son tarihli açık kayıtlar
+│   ├─ /m/bildirimler    kartlarımdaki hareketler
+│   └─ /m/kayit/{id}     sohbet + alan şeridi
+└─ /{modül}      iskele sayfa (kazanım ağacı, pivot, takvim, …)
+```
+
+Kalan ekranlar geldikçe doldurulur.

@@ -1,0 +1,29 @@
+{# fragment: mobile_todo — yapilacak kartlari. Siralama Python'da yapildi. #}
+<div class="mlist" id="liste" data-fragment="mobile_todo">
+  {% for r in rows %}
+  <a class="tcard{% if r.status == 'kapandi' %} done{% endif %}" href="/m/kayit/{{ r.id }}">
+    <div class="body">
+      <div class="chips">
+        <span class="chip {% if r.kind == 'hata' %}c-bug{% else %}c-task{% endif %}">
+          {{ 'Hata' if r.kind == 'hata' else 'Görev' }}</span>
+        {% if r.priority == 'kritik' %}<span class="chip c-crit">Kritik</span>{% endif %}
+        {% if r.dms %}<span class="chip c-dms">{{ r.dms }}</span>{% endif %}
+        {% if r.pillar %}<span class="chip c-pil">{{ r.pillar }}</span>{% endif %}
+      </div>
+      <div class="t">{{ r.title }}</div>
+      <div class="k"><b>Konum:</b> {{ r.path }}</div>
+      <div class="k">
+        <b>Durum:</b> {{ r.status_label }}
+        {% if r.due %} · <b>Son tarih:</b> {{ r.due.label }}{% if r.due.late %} ⚠{% endif %}{% endif %}
+        {% if r.msgs %} · 💬 {{ r.msgs }}{% endif %}
+      </div>
+    </div>
+    <div class="act">
+      <span class="circ">{{ '✓' if r.status == 'kapandi' else '▶' }}</span>
+      <span class="lbl">{{ 'Aç' if r.status == 'kapandi' else 'Devam et' }}</span>
+    </div>
+  </a>
+  {% else %}
+  <div class="mempty">{{ bos }}</div>
+  {% endfor %}
+</div>
