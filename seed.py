@@ -16,7 +16,7 @@ def ago(days: float = 0, hours: float = 0, minutes: float = 0) -> str:
 
 USERS = [
     # id anahtari sadece tohumda okunakli olsun diye; gercek id uuid4().hex
-    ("efe",   "kadirefeatcali@gmail.com", "Efe",   "#5b8cff", 0, 1, "Malzeme Temini"),
+    ("efe",   "efe@ekiptakip.local",      "Efe",   "#5b8cff", 0, 1, "Malzeme Temini"),
     ("selin", "selin@ekiptakip.local",    "Selin", "#e5484d", 1, 1, None),
     ("deniz", "deniz@ekiptakip.local",    "Deniz", "#d99a2b", 0, 0, "Üretim Hattı A"),
 ]

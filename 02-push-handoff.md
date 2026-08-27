@@ -66,7 +66,7 @@ Public key tarayıcıya gider, private key **asla**. `.env` ve `subs.json` dosya
 | `POST /subscribe` | tarayıcıdan gelen subscription objesini `subs.json`'a ekle (endpoint'e göre tekilleştir) |
 | `POST /send` | kayıtlı tüm aboneliklere push gönder, body: `{"title":"...","body":"..."}` |
 
-`/send` içinde `pywebpush.webpush(...)` çağrısı; `vapid_claims` içine `{"sub": "mailto:kadirefeatcali@gmail.com"}` koy — bu alan zorunlu.
+`/send` içinde `pywebpush.webpush(...)` çağrısı; `vapid_claims` içine `{"sub": "mailto:Efe0909@users.noreply.github.com"}` koy — bu alan zorunlu.
 
 **Ölü abonelik temizliği:** push servisi `404` veya `410` dönerse o aboneliği `subs.json`'dan sil. Bu gerçek hayatta en sık atlanan şey.
 
