@@ -7,6 +7,27 @@ Yığın: Python 3.12 + FastAPI + Jinja2 + HTMX + SQLite, ham SQL, ORM yok, JS f
 
 ## Çalıştır
 
+Tek komut (sanal ortam + bağımlılıklar + tohum + sunucu):
+
+```bash
+make up          # http://127.0.0.1:8000
+```
+
+Sonraki günler `make dev` yeter. `make` yazınca komut listesi çıkar:
+
+| Komut | Ne yapar |
+|---|---|
+| `make up` | sıfırdan kaldırır: kurulum + tohum (veritabanı yoksa) + sunucu |
+| `make dev` | sunucu, `--reload` açık (`make dev PORT=9000` ile port değişir) |
+| `make run` | sunucu, `--reload` kapalı |
+| `make seed` | veritabanını tohumlar — **varolan `ekiptakip.db` silinir** |
+| `make reseed` | veritabanını sıfırlar ve yeniden tohumlar |
+| `make test` | `pytest tests -q` |
+| `make check` | sunucu ayaktayken uçların durum kodlarını basar |
+| `make clean` / `make distclean` | veritabanı+önbellek / üstüne sanal ortam |
+
+Elle kurmak istersen:
+
 ```bash
 uv venv --python 3.12 .venv
 uv pip install --python .venv/bin/python fastapi "uvicorn[standard]" jinja2 python-multipart pytest httpx
@@ -15,11 +36,13 @@ uv pip install --python .venv/bin/python fastapi "uvicorn[standard]" jinja2 pyth
 ```
 
 `--workers 1` şart: ağaç indeksi süreç belleğinde (00-BASLA.md Karar 2).
+Makefile `--host 127.0.0.1` kullanır — alpha-0.1 kimlik doğrulaması olmadan dışarı açılmamalı
+(aşağıdaki bilgi güvenliği bölümü).
 
 ## Test
 
 ```bash
-.venv/bin/python -m pytest tests -q
+make test        # ya da: .venv/bin/python -m pytest tests -q
 ```
 
 `tests/test_tree.py` TreeIndex birim testleri, `tests/test_api.py` altı kabul kriterinin
@@ -29,6 +52,7 @@ uç karşılığı (403 dahil).
 
 | Dosya | Ne |
 |---|---|
+| `Makefile` | yerel kaldırma: `make up`, `make dev`, `make test` |
 | `app.py` | uçlar, gruplama/sıralama, sistem olayı yazımı |
 | `db.py` | ham SQL yardımcıları, `new_id()`, `now()`, `as_bool()` |
 | `tree.py` | `TreeIndex` — Euler tour, `is_descendant` O(1) |
