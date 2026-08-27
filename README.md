@@ -58,3 +58,62 @@ Tam sayfa / parça ayrımı `HX-Request` başlığıyla.
 ## Faz 1'de yok
 
 Giriş/OAuth, push, pivot, panel, talep akışı (`change_requests`), IWS terfisi, dosya ekleme.
+
+## Bilgi güvenliği
+
+Bu depo **public**. alpha-0.1 bir Faz 1 prototipidir; aşağıdaki durum bilerek böyledir,
+ağa açılmadan önce kapatılması gereken yerler işaretlidir.
+
+### Depoda ne var, ne yok
+
+- Depoda sır **yok**: parola, API anahtarı, token, VAPID anahtarı tutulmuyor.
+- `.gitignore` üç şeyi dışarıda tutar: `.venv/`, `*.db` (veritabanı), `.env`.
+  Bunları asla commit etme — `ekiptakip.db` içinde gerçek kart içeriği ve kullanıcı
+  e-postaları birikir.
+- `seed.py` ve `02-push-handoff.md` içinde bakımcının e-posta adresi geçiyor; tohum
+  verisindeki diğer kişiler ve içerik uydurmadır. Depo public olduğu için tohum verisine
+  **gerçek müşteri/ekip verisi koyma**.
+- Web push denendiğinde VAPID anahtarları `.env`'de kalır, koda gömülmez
+  (`02-push-handoff.md`).
+
+### Faz 1'de bilerek eksik olanlar
+
+| Konu | Durum | Ne zaman kapanır |
+|---|---|---|
+| Kimlik doğrulama | **Yok.** `uid` çerezi imzasız — çerezi elle yazan herkes istediği kullanıcı olur | Faz 2 (Google OAuth + imzalı oturum çerezi) |
+| CSRF koruması | Yok. POST/PATCH uçlarında token kontrolü yapılmıyor | Faz 2, kimlikle birlikte |
+| TLS | Yok. `uvicorn` düz HTTP | Dağıtımda önüne Caddy/nginx |
+| Hız sınırlama | Yok | İhtiyaç doğunca |
+| Denetim izi | Kısmi: alan değişiklikleri `events`'e `sistem` olayı olarak yazılır; okuma erişimi loglanmaz | — |
+
+**Bu yüzden alpha-0.1 yalnızca `127.0.0.1`'e bağlanmalı.** `--host 0.0.0.0` ile açma;
+tünel (`cloudflared`) ile dışarı verirsen kimlik doğrulaması olmadan herkes her kartı
+düzenler.
+
+### Faz 1'de bilerek doğru yapılanlar
+
+- **Yetki sunucuda uygulanır.** `can_edit_item` her POST/PATCH ucunda çalışır; şablon
+  sadece görsel olarak kilitler. `curl` ile kapsam dışı PATCH denemesi **403** döner
+  (`tests/test_api.py::test_out_of_scope_is_403_not_just_hidden`).
+- **Yetki kapsamı sızmaz.** Karta dahil edilen kişi (`item_participants`) yalnızca o kartta
+  yetkilidir, diğer kartlarda hâlâ salt okunur.
+- **SQL enjeksiyonu yok.** Tüm değerler parametreyle geçer. SQL'e giren tek metin
+  interpolasyonu `PATCH /item/{id}/field` içindeki sütun adıdır ve `EDITABLE` beyaz
+  listesinden gelir; alan değerleri ayrıca `STATUSES`/`PRIORITIES`/kullanıcı tablosuna
+  karşı doğrulanır.
+- **XSS'e karşı kaçış açık.** Jinja `select_autoescape` ile çalışır; mesaj ve başlık
+  gövdeleri `{{ }}` ile basılır, hiçbir yerde `|safe` kullanılmaz. Kullanıcı girdisi HTML
+  olarak yorumlanmaz.
+- **Dosya yükleme yok**, dolayısıyla yükleme kaynaklı saldırı yüzeyi de yok.
+
+### Açık bildirmeden önce
+
+1. Faz 2 kimliğini bağla (OAuth + imzalı çerez), `current_user` dışında hiçbir yeri
+   değiştirmen gerekmez.
+2. CSRF token'ı ekle.
+3. TLS sonlandıran bir ters vekil koy.
+4. `ekiptakip.db` için yedek ve erişim kısıtı tanımla — tek dosya, kopyalayan her şeyi alır.
+
+### Güvenlik açığı bildirimi
+
+Bir açık bulursan issue açma; doğrudan bakımcıya yaz (`Efe0909` GitHub profili).
