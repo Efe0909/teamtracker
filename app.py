@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from urllib.parse import urlparse
 
 from contextlib import asynccontextmanager
 
@@ -36,6 +37,65 @@ templates = Jinja2Templates(directory=BASE / "templates")
 STATUSES = {"acik": "Açık", "devam": "Devam", "beklemede": "Beklemede", "kapandi": "Kapandı"}
 PRIORITIES = {"kritik": "Kritik", "yuksek": "Yüksek", "orta": "Orta", "dusuk": "Düşük"}
 EDITABLE = {"status": STATUSES, "priority": PRIORITIES, "assignee_id": None, "due_date": None}
+
+# --- ana sayfa modul kaydi: tek dogruluk kaynagi (ana sayfa ve /{slug} ayni listeyi okur)
+
+MODULES = [
+    {"slug": "gorevler", "icon": "📋", "name": "Görev Yöneticisi", "ready": True,
+     "desc": "Kayıt tablosu, kart içi sohbet, atama ve alan değişiklikleri. Faz 1'in çalışan dilimi.",
+     "plan": []},
+    {"slug": "kazanim-agaci", "icon": "🌳", "name": "Kazanım Ağacı", "ready": False,
+     "desc": "Cell / makine kırılımını düzenlediğin ekran: düğüm ekle, adlandır, taşı, sil.",
+     "plan": ["Ağaç düzenleme nodes üzerinde çalışır; değişiklik anında uygulanır.",
+              "is_editor olmayanın değişikliği change_requests'e düşer, prev_state ile geri alınabilir (01-sema.md §4).",
+              "Yapı her değiştiğinde TreeIndex komple yeniden kurulur ve nodes.tin/tout tek UPDATE ile yazılır.",
+              "Taşımada döngü koruması: hedef, taşınan düğümün alt ağacında olamaz."]},
+    {"slug": "pivot", "icon": "📊", "name": "Pivot & Veri Analizi", "ready": False,
+     "desc": "Kayıtları düğüm, DMS, pillar, sorumlu ve zaman kırılımında çapraz say.",
+     "plan": ["Gruplama ve sayım SQL'de; Python'a dönen satır ekranda görünen satırdır (00-BASLA.md Karar 4).",
+              "Alt ağaç kırılımı tin/tout aralık taramasıyla — recursive CTE yok.",
+              "Bir hücreden tıklayınca aynı filtrelerle görev tablosuna geçiş.",
+              "Faz 2 kapsamı."]},
+    {"slug": "takvim", "icon": "📅", "name": "Takvim", "ready": False,
+     "desc": "Son tarihler, gecikmeler ve ekip yükü ay / hafta görünümünde.",
+     "plan": ["items.due_date üzerinden ay ve hafta görünümü.",
+              "Gecikmiş kayıtlar (due_date < bugün ve status <> 'kapandi') ayrı vurgulanır.",
+              "Bir güne tıklayınca o günün kayıtları görev tablosunda süzülür."]},
+    {"slug": "tanimlar", "icon": "📐", "name": "Görev Tanımları & Şemalar", "ready": False,
+     "desc": "Rol tanımları, yönetim şemaları ve standart iş akışları — kimin neyi yaptığı.",
+     "plan": ["Şemalar hiyerarşinin kendisinden türer: düğüm → sorumlu → yedek.",
+              "Tanım metinleri düğüme bağlı sürümlenir; değişiklik akışa sistem olayı düşer.",
+              "Salt okunur görünüm herkese açık, düzenleme is_editor kapsamına bağlı."]},
+    {"slug": "arsiv", "icon": "🗂", "name": "Ekip Arşivi", "ready": False,
+     "desc": "Kapanmış kayıtlar, alınan kararlar ve geçmiş dönemlerin kurumsal hafızası.",
+     "plan": ["Kapanmış kayıtlar silinmez, arşive düşer (01-sema.md açık nokta 3: deleted_at).",
+              "Tam metin arama FTS5 üzerinden — LIKE '%…%' yok.",
+              "Karar kayıtları kartın olay akışından toplanır."]},
+    {"slug": "dosyalar", "icon": "🗄", "name": "Dosyalar / NAS", "ready": False,
+     "desc": "Karta ve düğüme bağlı dosyalar; NAS klasörleriyle tek yerden erişim.",
+     "plan": ["01-sema.md açık nokta 1: attachments tablosu mu, düğüme bağlı NAS yolu mu — karar bekliyor.",
+              "Faz 1'de dosya yükleme bilerek yok; yükleme kaynaklı saldırı yüzeyi de yok (README).",
+              "Erişim yetkisi kartın yetkisiyle aynı yerden gelir, ikinci bir model kurulmaz."]},
+    {"slug": "admin", "icon": "🛡", "name": "Yönetim Paneli", "ready": False,
+     "desc": "Kullanıcılar, kapsamlar, yetkiler ve bekleyen değişiklik talepleri.",
+     "plan": ["Kullanıcı kapsamı (scope_node_id), is_admin / is_editor bayrakları buradan yönetilir.",
+              "Açık change_requests kuyruğu: onayla / reddet — ret prev_state'ten geri yazar.",
+              "Bildirim tercihleri ve susturmalar (01-sema.md §6).",
+              "Yetki her uçta sunucuda kontrol edilir; panel sadece görünen yüzü."]},
+]
+MODULE_BY_SLUG = {m["slug"]: m for m in MODULES}
+
+
+def home_stats(user) -> dict:
+    """Ana sayfa rozetleri — tek sorgu, sayfa basina yedi COUNT degil."""
+    r = db.q1(
+        "select"
+        " sum(case when status <> 'kapandi' then 1 else 0 end) acik,"
+        " sum(case when status <> 'kapandi' and assignee_id is null then 1 else 0 end) atanmamis,"
+        " sum(case when status <> 'kapandi' and assignee_id = ? then 1 else 0 end) bana,"
+        " count(*) hepsi from items", (user["id"],))
+    return {"open": r["acik"] or 0, "unassigned": r["atanmamis"] or 0,
+            "mine": r["bana"] or 0, "all": r["hepsi"] or 0, "nodes": len(TREE.nodes)}
 
 # --- agac indeksi: tek surec, yapi degisince komple yeniden kurulur --------
 
@@ -179,7 +239,20 @@ def log(item_id: str, etype: str, author_id: str | None, body: str) -> None:
 
 
 @app.get("/", response_class=HTMLResponse)
-def home(request: Request, item: str | None = None):
+def home(request: Request):
+    """Ana sayfa: modul secimi. Ekranlar buradan dallanir."""
+    user = auth.current_user(request)
+    stats = home_stats(user)
+    mods = [dict(m, href=("/" + m["slug"]),
+                 count=stats["all"] if m["slug"] == "gorevler" else None) for m in MODULES]
+    return render(request, "home.html", {
+        "user": user, "all_users": auth.all_users(), "modules": mods, "stats": stats,
+        "scope_name": TREE.name(user["scope_node_id"]) if user["scope_node_id"] else "tüm ağaç",
+    })
+
+
+@app.get("/gorevler", response_class=HTMLResponse)
+def tasks(request: Request, item: str | None = None):
     user = auth.current_user(request)
     rows = inbox_rows(user)
     current = get_item(item) if item else (
@@ -227,7 +300,7 @@ def item_view(request: Request, item_id: str):
     item = get_item(item_id)
     ctx = card_ctx(request, item, user)
     if not is_htmx(request):
-        return RedirectResponse(f"/?item={item_id}", status_code=303)
+        return RedirectResponse(f"/gorevler?item={item_id}", status_code=303)
     return render(request, "fragments/card.html", ctx)
 
 
@@ -320,9 +393,21 @@ def whoami(request: Request):
 
 
 @app.post("/switch/{user_id}")
-def switch_user(user_id: str):
+def switch_user(request: Request, user_id: str):
     if auth.get_user(user_id) is None:
         raise HTTPException(404, "kullanıcı yok")
-    r = RedirectResponse("/", status_code=303)
+    back = urlparse(request.headers.get("referer") or "").path or "/"   # sadece yol: acik yonlendirme yok
+    r = RedirectResponse(back, status_code=303)
     r.set_cookie(auth.COOKIE, user_id, httponly=True, samesite="lax")
     return r
+
+
+# --- iskele moduller: EN SONDA dursun, once tanimli rotalar eslessin --------
+
+
+@app.get("/{slug}", response_class=HTMLResponse)
+def module_page(request: Request, slug: str):
+    m = MODULE_BY_SLUG.get(slug)
+    if m is None or m["ready"]:
+        raise HTTPException(404, "sayfa yok")
+    return render(request, "module.html", {"m": m})

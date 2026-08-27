@@ -1,6 +1,8 @@
 # EkipTakip — alpha-0.1 (Faz 1)
 
-Tek dikey dilim: hiyerarşi + kayıtlar + kart içi sohbet + alan değişiklikleri.
+Ana sayfa (`/`) ekran seçimidir: Görev Yöneticisi çalışır, diğer modüller (kazanım ağacı,
+pivot, takvim, görev tanımları, arşiv, dosyalar/NAS, yönetim paneli) iskele sayfa gösterir.
+Faz 1'in çalışan dikey dilimi: hiyerarşi + kayıtlar + kart içi sohbet + alan değişiklikleri.
 Yığın: Python 3.12 + FastAPI + Jinja2 + HTMX + SQLite, ham SQL, ORM yok, JS framework yok.
 
 ## Çalıştır
@@ -33,9 +35,12 @@ uç karşılığı (403 dahil).
 | `auth.py` | `current_user` (Faz 2'de OAuth), `can_edit_item` |
 | `schema.sql` | Faz 1 tabloları (users, nodes, items, item_participants, events) |
 | `seed.py` | `layout-a.html`'deki ağaç, kartlar ve akış |
-| `templates/base.html` | tek yerleşim dosyası |
+| `templates/home.html` | ana sayfa — modül seçimi |
+| `templates/module.html` | henüz yazılmamış modüller için iskele sayfa |
+| `templates/base.html` | görev yöneticisi yerleşimi (tek yerleşim dosyası) |
 | `templates/fragments/*` | layout'tan bağımsız parçalar (skin kuralı) |
 | `static/app.css` | `layout-a.html`'den alınan token'lı CSS |
+| `static/home.css` | ana sayfa + iskele sayfa, aynı token'lar |
 
 ## Sahte kullanıcılar (Faz 1)
 
@@ -49,15 +54,20 @@ Rayın altındaki avatardan değiştirilir (`POST /switch/{user_id}`, çerez `ui
 
 ## Uçlar
 
-`GET /` · `GET /panel/inbox` · `GET /panel/tree` · `GET /node/{id}/items` ·
-`GET /item/{id}` · `POST /item/{id}/message` · `PATCH /item/{id}/field` · `POST /item` ·
-`GET /whoami` · `POST /switch/{user_id}`
+`GET /` (ana sayfa) · `GET /gorevler` (görev yöneticisi) · `GET /panel/inbox` ·
+`GET /panel/tree` · `GET /node/{id}/items` · `GET /item/{id}` · `POST /item/{id}/message` ·
+`PATCH /item/{id}/field` · `POST /item` · `GET /whoami` · `POST /switch/{user_id}` ·
+`GET /{slug}` (iskele modül sayfası — `app.MODULES` listesinden, en sonda tanımlı)
 
 Tam sayfa / parça ayrımı `HX-Request` başlığıyla.
+
+Modül listesi `app.py` içinde tek yerde (`MODULES`): ana sayfa kartları da iskele sayfalar da
+aynı listeden okur. Bir modül yazıldığında `ready` bayrağı `True` olur ve gerçek rotası eklenir.
 
 ## Faz 1'de yok
 
 Giriş/OAuth, push, pivot, panel, talep akışı (`change_requests`), IWS terfisi, dosya ekleme.
+Ana sayfadaki bu modüller iskele sayfaya gider — ölü bağlantı yok, ne geleceği yazılı.
 
 ## Bilgi güvenliği
 

@@ -1,0 +1,74 @@
+/* Ana sayfa — app.css token'larini kullanir, ham renk yazmaz.
+   app.css'teki body dashboard kabugu icin (flex + overflow:hidden); ana sayfa akar. */
+body.home{display:block;height:auto;min-height:100vh;overflow:auto}
+
+.hwrap{max-width:1080px;margin:0 auto;padding:34px 24px 48px}
+
+.hhead{display:flex;align-items:center;gap:13px;margin-bottom:26px;flex-wrap:wrap}
+.hhead .rlogo{margin-bottom:0;width:38px;height:38px;font-size:17px}
+.hbrand{font-size:19px;font-weight:750;letter-spacing:-.3px;line-height:1.2}
+.hbrand span{display:block;font-size:12px;font-weight:500;color:var(--dim);letter-spacing:0}
+
+.huser{position:relative;margin-left:auto}
+.huser>summary{list-style:none;display:flex;align-items:center;gap:7px;cursor:pointer;
+  background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:4px 12px 4px 5px;
+  font-size:12.5px;font-weight:600}
+.huser>summary::-webkit-details-marker{display:none}
+.huser>summary:hover{border-color:var(--acc-s);color:var(--acc)}
+.huser .menu{position:absolute;right:0;top:40px;width:210px;background:var(--panel);
+  border:1px solid var(--acc2);border-radius:13px;box-shadow:var(--sh-lg);padding:9px;z-index:30}
+.huser form{margin:0}
+.huser button{width:100%;display:flex;align-items:center;gap:7px;border:none;background:transparent;
+  border-radius:9px;padding:6px 7px;text-align:left}
+.huser button:hover{background:var(--tint);color:var(--acc)}
+
+.hlead{font-size:22px;font-weight:750;letter-spacing:-.4px;margin:0 0 5px}
+.hsub{color:var(--dim);font-size:13.5px;margin:0 0 12px;max-width:70ch}
+
+/* ozet seridi — tek sorgudan gelen sayilar */
+.hstats{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:24px}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:11px;
+  padding:7px 13px;box-shadow:var(--sh);display:flex;align-items:baseline;gap:7px}
+.stat b{font-size:16px;font-weight:750;letter-spacing:-.3px}
+.stat span{font-size:11.5px;color:var(--dim)}
+.stat.alert b{color:var(--err)}
+
+.hgrid{display:grid;gap:13px;grid-template-columns:repeat(auto-fill,minmax(258px,1fr))}
+
+.mod{display:flex;flex-direction:column;gap:9px;background:var(--panel);border:1px solid var(--line);
+  border-radius:15px;padding:15px 16px;text-decoration:none;color:inherit;box-shadow:var(--sh);
+  transition:.14s;position:relative;min-height:142px}
+.mod:hover{border-color:var(--acc-s);box-shadow:var(--sh-lg);transform:translateY(-2px)}
+.mod.soon{background:var(--panel2);box-shadow:none}
+.mod.soon:hover{transform:none;box-shadow:var(--sh)}
+
+.mod .ic{width:38px;height:38px;border-radius:11px;background:var(--tint);display:grid;
+  place-items:center;font-size:19px;flex-shrink:0}
+.mod.ready .ic{background:linear-gradient(135deg,var(--acc),#c48fff)}
+.mod .nm{font-size:14.5px;font-weight:700;letter-spacing:-.2px}
+.mod .ds{font-size:12.5px;color:var(--dim);line-height:1.45;flex:1}
+.mod .ft{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--dim)}
+.mod .go{margin-left:auto;color:var(--acc);font-weight:700}
+.mod.soon .go{color:var(--dim)}
+.tag{font-size:9.5px;font-weight:700;border-radius:5px;padding:2px 7px;letter-spacing:.3px;
+  text-transform:uppercase}
+.t-ready{background:#e2f5ec;color:#1c8a5b}
+.t-soon{background:#f0edf8;color:#7d75a0}
+
+.hfoot{margin-top:26px;font-size:12px;color:var(--dim);border-top:1px solid var(--line);padding-top:14px}
+.hfoot a{color:var(--acc);text-decoration:none}
+.hfoot a:hover{text-decoration:underline}
+
+/* modul iskele sayfasi (henuz yazilmamis ekranlar) */
+.mwrap{max-width:660px;margin:0 auto;padding:64px 24px}
+.mback{display:inline-flex;align-items:center;gap:6px;color:var(--dim);text-decoration:none;
+  font-size:12.5px;margin-bottom:22px}
+.mback:hover{color:var(--acc)}
+.mcard{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:26px;
+  box-shadow:var(--sh)}
+.mcard .ic{width:46px;height:46px;border-radius:13px;background:var(--tint);display:grid;
+  place-items:center;font-size:23px;margin-bottom:13px}
+.mcard h1{font-size:20px;font-weight:750;letter-spacing:-.3px;margin:0 0 6px}
+.mcard p{color:var(--dim);font-size:13.5px;margin:0 0 16px;line-height:1.6}
+.mcard ul{margin:0;padding-left:19px;color:var(--dim);font-size:13px;line-height:1.8}
+.mcard li b{color:var(--txt);font-weight:600}
