@@ -8,10 +8,14 @@ adımları izle.
 Hangi moddasın:
 
 ```bash
-systemctl cat cloudflared | grep ExecStart
+systemctl cat cloudflared | grep ExecStart      # Linux
+ps aux | grep [c]loudflared                     # macOS (systemd yok)
 #   ... --token ey...        -> UZAKTAN yönetiliyor (bu dosya)
 #   ... run <tunel-adi>      -> YEREL config.yml (deploy/cloudflared-ornek.yml)
 ```
+
+Bu makine (darwin) **uzaktan yönetiliyor**: tünel `temp`, root olarak `--token` ile
+koşuyor, `~/.cloudflared/` içinde yalnızca `cert.pem` var, `config.yml` yok.
 
 ## 1. İki public hostname ekle
 
