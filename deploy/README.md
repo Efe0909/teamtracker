@@ -92,7 +92,11 @@ curl -su efe -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/m    # 200
 
 **3. Tünel**
 
-İki yol var, ikisi de çalışır:
+> Tüneli **Cloudflare panelinden** yönetiyorsan (kurulum `--token` ile yapıldıysa) yerel
+> `config.yml` yok sayılır: **`deploy/cloudflare-dashboard.md`**'ye geç, aşağısı seni
+> ilgilendirmiyor. Hangi moddasın: `systemctl cat cloudflared | grep ExecStart`.
+
+Yerel `config.yml` ile yönetiyorsan iki yol var, ikisi de çalışır:
 
 - **Catch-all** (en son kural `- service: http://127.0.0.1:8080`, hostname'siz): tünele
   düşen her isim nginx'e gider, ayrımı `server_name` yapar. **Mevcut kuralların

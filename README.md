@@ -69,7 +69,7 @@ uç karşılığı (403 dahil).
 | `static/sw.js` | PWA service worker + push girişi (Faz 3); manifest `GET /manifest.json` ile üretilir |
 | `tools/ikon_uret.py` | PWA ikonlarını üretir (saf Python, bağımlılık yok) |
 | `spec/` | uyarlanacak ekranların çözümlemesi (`spec/README.md` kalıbı) |
-| `deploy/` | cloudflared + nginx + systemd ile yayına alma (`deploy/README.md`) |
+| `deploy/` | cloudflared + nginx + systemd ile yayına alma (`deploy/README.md`; tünel panelden yönetiliyorsa `deploy/cloudflare-dashboard.md`) |
 | `templates/module.html` | henüz yazılmamış modüller için iskele sayfa |
 | `templates/base.html` | görev yöneticisi yerleşimi (tek yerleşim dosyası) |
 | `templates/fragments/*` | layout'tan bağımsız parçalar (skin kuralı) |
