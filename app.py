@@ -5,6 +5,7 @@ Calistir: .venv/bin/uvicorn app:app --workers 1 --reload
 """
 from __future__ import annotations
 
+import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlparse
@@ -23,6 +24,67 @@ from tree import TreeIndex
 
 BASE = Path(__file__).parent
 
+# --- iki alan adi: app.<alan> mobil, dashboard.<alan> masaustu -------------
+#
+# Bos birakilirsa tek alan adi modunda calisir (/m ve /gorevler yollari).
+# Ayirmak icin ortam degiskenleri (deploy/):
+#   EKIPTAKIP_HOST_APP=app.polonyum.com
+#   EKIPTAKIP_HOST_DASHBOARD=dashboard.polonyum.com
+#   EKIPTAKIP_COOKIE_DOMAIN=.polonyum.com     (kimlik iki alt alan adinda ortak)
+
+HOST_APP = os.getenv("EKIPTAKIP_HOST_APP", "").lower()
+HOST_DASH = os.getenv("EKIPTAKIP_HOST_DASHBOARD", "").lower()
+COOKIE_DOMAIN = os.getenv("EKIPTAKIP_COOKIE_DOMAIN") or None
+
+# Her iki alan adinda da ayni yoldan servis edilenler — mobil onekine girmezler.
+SHARED_PATHS = ("/static/", "/sw.js", "/favicon.ico", "/manifest.json", "/switch/", "/whoami")
+
+
+def _host_of(scope) -> str:
+    for k, v in scope.get("headers", ()):
+        if k == b"host":
+            return v.decode("latin-1").split(":")[0].lower()
+    return ""
+
+
+class MobileHostPrefix:
+    """app.<alan> altinda mobil site kokte durur: /ara -> ic yolda /m/ara.
+
+    Sablonlar da ayni oneki kullanir (`mp`), boylece adres cubugunda /m gorunmez.
+    Masaustu sayfalari bu alan adindan ERISILEMEZ (/gorevler -> /m/gorevler -> 404):
+    iki alan adina ayri Access politikasi yazilabilsin diye kasten boyle.
+    """
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http" and HOST_APP and _host_of(scope) == HOST_APP:
+            path = scope["path"]
+            shared = path in ("/sw.js", "/favicon.ico", "/manifest.json", "/whoami") \
+                or path.startswith(("/static/", "/switch/"))
+            mobile = path == "/m" or path.startswith("/m/")
+            if not shared and not mobile:
+                scope["path"] = "/m" + ("" if path == "/" else path.rstrip("/"))
+        await self.app(scope, receive, send)
+
+
+def is_app_host(request) -> bool:
+    return bool(HOST_APP) and (request.url.hostname or "").lower() == HOST_APP
+
+
+def mp(request) -> str:
+    """Mobil yol oneki: app alan adinda bos, tek alan adi modunda '/m'."""
+    return "" if is_app_host(request) else "/m"
+
+
+def other_site(request, app_site: bool) -> str:
+    """Diger yuze baglanti. Alan adlari ayrilmamissa ayni koktende yol dondurur."""
+    host = HOST_APP if app_site else HOST_DASH
+    if not host:
+        return "/m" if app_site else "/"
+    return f"{request.url.scheme}://{host}/"
+
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
@@ -32,6 +94,7 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(title="EkipTakip", version="0.1.0-alpha", lifespan=lifespan)
+app.add_middleware(MobileHostPrefix)
 app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 templates = Jinja2Templates(directory=BASE / "templates")
 
@@ -248,6 +311,7 @@ def home(request: Request):
                  count=stats["all"] if m["slug"] == "gorevler" else None) for m in MODULES]
     return render(request, "home.html", {
         "user": user, "all_users": auth.all_users(), "modules": mods, "stats": stats,
+        "app_url": other_site(request, app_site=True),
         "scope_name": TREE.name(user["scope_node_id"]) if user["scope_node_id"] else "tüm ağaç",
     })
 
@@ -426,7 +490,7 @@ def switch_user(request: Request, user_id: str):
     # Ters vekil arkasinda uvicorn --proxy-headers ile calisir; scheme https ise
     # cerez Secure isaretlenir (tunel/nginx kurulumu: deploy/).
     r.set_cookie(auth.COOKIE, user_id, httponly=True, samesite="lax",
-                 secure=request.url.scheme == "https")
+                 secure=request.url.scheme == "https", domain=COOKIE_DOMAIN)
     return r
 
 
@@ -436,10 +500,10 @@ def switch_user(request: Request, user_id: str):
 # Push Faz 3'te buraya baglanir (01-sema.md §7, 02-push-handoff.md).
 
 MOBILE_TABS = [
-    {"slug": "yapilacaklar", "href": "/m", "icon": "📋", "label": "Yapılacak"},
-    {"slug": "ara", "href": "/m/ara", "icon": "🔎", "label": "Ara"},
-    {"slug": "eylemler", "href": "/m/eylemler", "icon": "⚡", "label": "Eylemler"},
-    {"slug": "bildirimler", "href": "/m/bildirimler", "icon": "🔔", "label": "Bildirim"},
+    {"slug": "yapilacaklar", "path": "", "icon": "📋", "label": "Yapılacak"},
+    {"slug": "ara", "path": "/ara", "icon": "🔎", "label": "Ara"},
+    {"slug": "eylemler", "path": "/eylemler", "icon": "⚡", "label": "Eylemler"},
+    {"slug": "bildirimler", "path": "/bildirimler", "icon": "🔔", "label": "Bildirim"},
 ]
 AYLAR = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"]
 PRIO_SQL = ("case priority when 'kritik' then 0 when 'yuksek' then 1"
@@ -578,9 +642,12 @@ def search_nodes(q: str, limit: int = 10) -> list[dict]:
     return out
 
 
-def m_ctx(request, user, tab: str, title: str, **extra) -> dict:
-    ctx = {"request": request, "user": user, "tabs": MOBILE_TABS, "tab": tab,
-           "title": title, "badge": notif_badge(user)}
+def m_ctx(request, user, tab: str | None, title: str, **extra) -> dict:
+    prefix = mp(request)
+    ctx = {"request": request, "user": user, "tab": tab, "title": title,
+           "badge": notif_badge(user), "mp": prefix, "mroot": prefix or "/",
+           "dash_url": other_site(request, app_site=False),
+           "tabs": [dict(t, href=(prefix + t["path"]) or "/") for t in MOBILE_TABS]}
     ctx.update(extra)
     return ctx
 
@@ -600,8 +667,35 @@ def mobile_card_ctx(request, item, user) -> dict:
         "feed": feed, "can_edit": auth.can_edit_item(user, item, TREE),
         "statuses": STATUSES, "priorities": PRIORITIES,
         "status_label": STATUSES[item["status"]], "priority_label": PRIORITIES[item["priority"]],
-        "tabs": MOBILE_TABS, "tab": None, "title": "Kayıt", "badge": notif_badge(user),
+        "tab": None, "title": "Kayıt", "badge": notif_badge(user),
+        "mp": mp(request), "mroot": mp(request) or "/",
+        "dash_url": other_site(request, app_site=False),
     }
+
+
+@app.get("/manifest.json", include_in_schema=False)
+def manifest(request: Request):
+    """Statik degil: start_url/scope alan adina gore degisir.
+
+    app.<alan> altinda mobil site kokte durur -> start_url "/". Tek alan adi
+    modunda "/m". Yanlis start_url ana ekrandaki uygulamayi bos sayfaya acar.
+    """
+    root = mp(request) or "/"          # app alan adinda "/", tek alan adinda "/m"
+    return JSONResponse({
+        "name": "EkipTakip", "short_name": "EkipTakip",
+        "description": "Ekibin kayıtları, eylemleri ve bildirimleri — cepte.",
+        "start_url": root, "scope": "/",
+        "display": "standalone", "orientation": "portrait",
+        "background_color": "#f4f1fb", "theme_color": "#7c5bff", "lang": "tr",
+        "icons": [
+            {"src": "/static/icon-192.png", "sizes": "192x192", "type": "image/png",
+             "purpose": "any"},
+            {"src": "/static/icon-512.png", "sizes": "512x512", "type": "image/png",
+             "purpose": "any"},
+            {"src": "/static/icon-512.png", "sizes": "512x512", "type": "image/png",
+             "purpose": "maskable"},
+        ],
+    }, media_type="application/manifest+json")
 
 
 @app.get("/favicon.ico", include_in_schema=False)
@@ -666,7 +760,7 @@ def m_new(request: Request, node_id: str = Form(...), title: str = Form(...),
           kind: str = Form("hata"), description: str = Form("")):
     user = auth.current_user(request)
     item_id = new_item(user, node_id, kind, title, description)
-    return RedirectResponse(f"/m/kayit/{item_id}", status_code=303)
+    return RedirectResponse(f"{mp(request)}/kayit/{item_id}", status_code=303)
 
 
 @app.get("/m/kayit/{item_id}", response_class=HTMLResponse)

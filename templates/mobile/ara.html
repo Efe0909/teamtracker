@@ -4,7 +4,7 @@
   <div class="box">
     <span class="ic">🔎</span>
     <input name="q" value="{{ q }}" placeholder="Ara…" autocomplete="off" autofocus
-           hx-get="/m/ara" hx-target="#sonuc" hx-swap="outerHTML"
+           hx-get="{{ mp }}/ara" hx-target="#sonuc" hx-swap="outerHTML"
            hx-trigger="input changed delay:300ms, search">
   </div>
 </div>

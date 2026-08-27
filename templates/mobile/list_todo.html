@@ -1,7 +1,7 @@
 {# fragment: mobile_todo — yapilacak kartlari. Siralama Python'da yapildi. #}
 <div class="mlist" id="liste" data-fragment="mobile_todo">
   {% for r in rows %}
-  <a class="tcard{% if r.status == 'kapandi' %} done{% endif %}" href="/m/kayit/{{ r.id }}">
+  <a class="tcard{% if r.status == 'kapandi' %} done{% endif %}" href="{{ mp }}/kayit/{{ r.id }}">
     <div class="body">
       <div class="chips">
         <span class="chip {% if r.kind == 'hata' %}c-bug{% else %}c-task{% endif %}">

@@ -1,11 +1,11 @@
 {% extends "mobile/base.html" %}
 
 {% block top_left %}
-<a class="slot" href="/m" aria-label="Geri">‹</a>
+<a class="slot" href="{{ mroot }}" aria-label="Geri">‹</a>
 {% endblock %}
 
 {% block content %}
-<form class="mform" method="post" action="/m/yeni">
+<form class="mform" method="post" action="{{ mp }}/yeni">
   <div>
     <label>Düğüm (zorunlu)</label>
     <select name="node_id" required>

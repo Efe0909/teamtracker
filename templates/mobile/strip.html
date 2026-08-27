@@ -3,7 +3,7 @@
   <span class="fld">
     <span class="k">Durum</span>
     {% if can_edit %}
-    <select name="status" hx-patch="/m/kayit/{{ item.id }}/alan" hx-target="#serit"
+    <select name="status" hx-patch="{{ mp }}/kayit/{{ item.id }}/alan" hx-target="#serit"
             hx-swap="outerHTML" class="v v-{{ item.status }}">
       {% for k, v in statuses.items() %}
       <option value="{{ k }}"{% if k == item.status %} selected{% endif %}>{{ v }}</option>
@@ -15,7 +15,7 @@
   <span class="fld">
     <span class="k">Öncelik</span>
     {% if can_edit %}
-    <select name="priority" hx-patch="/m/kayit/{{ item.id }}/alan" hx-target="#serit"
+    <select name="priority" hx-patch="{{ mp }}/kayit/{{ item.id }}/alan" hx-target="#serit"
             hx-swap="outerHTML" class="v v-{{ item.priority }}">
       {% for k, v in priorities.items() %}
       <option value="{{ k }}"{% if k == item.priority %} selected{% endif %}>{{ v }}</option>
@@ -27,7 +27,7 @@
   <span class="fld">
     <span class="k">Sorumlu</span>
     {% if can_edit %}
-    <select name="assignee_id" hx-patch="/m/kayit/{{ item.id }}/alan" hx-target="#serit"
+    <select name="assignee_id" hx-patch="{{ mp }}/kayit/{{ item.id }}/alan" hx-target="#serit"
             hx-swap="outerHTML" class="v">
       <option value="">—</option>
       {% for u in users %}
@@ -41,7 +41,7 @@
     <span class="k">Son tarih</span>
     {% if can_edit %}
     <input type="date" name="due_date" value="{{ item.due_date or '' }}" class="v"
-           hx-patch="/m/kayit/{{ item.id }}/alan" hx-target="#serit" hx-swap="outerHTML">
+           hx-patch="{{ mp }}/kayit/{{ item.id }}/alan" hx-target="#serit" hx-swap="outerHTML">
     {% else %}<span class="v">{{ item.due_date or '—' }}</span>{% endif %}
   </span>
 
