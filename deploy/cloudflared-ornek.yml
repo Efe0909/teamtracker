@@ -1,0 +1,25 @@
+# cloudflared ingress ornegi — MEVCUT config'ini bununla degistirme,
+# sadece ekiptakip satirlarini kendi ingress listene ekle.
+#
+# ~/.cloudflared/config.yml  (ya da /etc/cloudflared/config.yml)
+#
+#   cloudflared tunnel route dns <tunel-adi> ekiptakip.efeatcali.com
+#   sudo systemctl restart cloudflared
+
+tunnel: <TUNEL-ID>
+credentials-file: /home/efe/.cloudflared/<TUNEL-ID>.json
+
+ingress:
+  # --- EkipTakip -----------------------------------------------------------
+  - hostname: ekiptakip.efeatcali.com
+    service: http://127.0.0.1:8080          # nginx (uvicorn'a DEĞİL)
+    originRequest:
+      httpHostHeader: ekiptakip.efeatcali.com
+      connectTimeout: 10s
+      noTLSVerify: false
+
+  # --- mevcut push denemesi vs. buraya ------------------------------------
+  # - hostname: push.efeatcali.com
+  #   service: http://127.0.0.1:5000
+
+  - service: http_status:404                # son kural: hep en altta

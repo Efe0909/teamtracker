@@ -1,0 +1,42 @@
+# EkipTakip — systemd birimi.
+#
+#   sudo cp deploy/ekiptakip.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now ekiptakip
+#   systemctl status ekiptakip ; journalctl -u ekiptakip -f
+#
+# User / WorkingDirectory / ExecStart yollarini kendi kurulumuna gore degistir.
+
+[Unit]
+Description=EkipTakip (FastAPI + SQLite)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=efe
+Group=efe
+WorkingDirectory=/home/efe/projects/teamtracker
+
+# --workers 1 SART: agac indeksi surec bellegindedir (00-BASLA.md Karar 2).
+# --proxy-headers: TLS cloudflared'de bitiyor, uvicorn'un https'i bilmesi gerekir.
+ExecStart=/home/efe/projects/teamtracker/.venv/bin/uvicorn app:app \
+    --host 127.0.0.1 --port 8000 --workers 1 \
+    --proxy-headers --forwarded-allow-ips 127.0.0.1
+
+Restart=always
+RestartSec=3
+KillSignal=SIGINT
+TimeoutStopSec=10
+
+# --- hafif sikilastirma -------------------------------------------------
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+# Veritabani calisma dizinindeki ekiptakip.db — yazma hakki orada kalmali.
+
+[Install]
+WantedBy=multi-user.target

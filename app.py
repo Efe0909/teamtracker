@@ -423,7 +423,10 @@ def switch_user(request: Request, user_id: str):
         raise HTTPException(404, "kullanıcı yok")
     back = urlparse(request.headers.get("referer") or "").path or "/"   # sadece yol: acik yonlendirme yok
     r = RedirectResponse(back, status_code=303)
-    r.set_cookie(auth.COOKIE, user_id, httponly=True, samesite="lax")
+    # Ters vekil arkasinda uvicorn --proxy-headers ile calisir; scheme https ise
+    # cerez Secure isaretlenir (tunel/nginx kurulumu: deploy/).
+    r.set_cookie(auth.COOKIE, user_id, httponly=True, samesite="lax",
+                 secure=request.url.scheme == "https")
     return r
 
 

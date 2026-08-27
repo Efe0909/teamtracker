@@ -5,3 +5,6 @@ __pycache__/
 
 # spec: ham ekran goruntuleri git-e girmez (public depo)
 spec/gorseller/
+
+# deploy: kur.sh ciktilari (makineye ozel yollar)
+deploy/olusan/

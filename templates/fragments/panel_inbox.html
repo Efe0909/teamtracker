@@ -5,8 +5,7 @@
     <div class="grp">{{ group }}</div>
     {% for r in rows %}
     <div class="rec{% if r.id == selected %} on{% endif %}"
-         hx-get="/item/{{ r.id }}" hx-target="#main" hx-swap="innerHTML"
-         hx-on:click="document.querySelectorAll('.rec').forEach(e=>e.classList.remove('on'));this.classList.add('on')">
+         hx-get="/item/{{ r.id }}" hx-target="#main" hx-swap="innerHTML">
       <div class="row">
         <span class="chip {% if r.kind == 'hata' %}c-bug{% else %}c-task{% endif %}">
           {{ 'Hata' if r.kind == 'hata' else 'Görev' }}</span>

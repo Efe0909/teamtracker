@@ -40,6 +40,9 @@ uv pip install --python .venv/bin/python fastapi "uvicorn[standard]" jinja2 pyth
 Makefile `--host 127.0.0.1` kullanır — alpha-0.1 kimlik doğrulaması olmadan dışarı açılmamalı
 (aşağıdaki bilgi güvenliği bölümü).
 
+Yayına almak (cloudflared tüneli + nginx + systemd): `deploy/README.md`,
+hazırlık için `bash deploy/kur.sh`.
+
 ## Test
 
 ```bash
@@ -66,6 +69,7 @@ uç karşılığı (403 dahil).
 | `static/manifest.json`, `static/sw.js` | PWA: ana ekrana ekleme + push girişi (Faz 3) |
 | `tools/ikon_uret.py` | PWA ikonlarını üretir (saf Python, bağımlılık yok) |
 | `spec/` | uyarlanacak ekranların çözümlemesi (`spec/README.md` kalıbı) |
+| `deploy/` | cloudflared + nginx + systemd ile yayına alma (`deploy/README.md`) |
 | `templates/module.html` | henüz yazılmamış modüller için iskele sayfa |
 | `templates/base.html` | görev yöneticisi yerleşimi (tek yerleşim dosyası) |
 | `templates/fragments/*` | layout'tan bağımsız parçalar (skin kuralı) |
@@ -145,9 +149,11 @@ ağa açılmadan önce kapatılması gereken yerler işaretlidir.
 | Hız sınırlama | Yok | İhtiyaç doğunca |
 | Denetim izi | Kısmi: alan değişiklikleri `events`'e `sistem` olayı olarak yazılır; okuma erişimi loglanmaz | — |
 
-**Bu yüzden alpha-0.1 yalnızca `127.0.0.1`'e bağlanmalı.** `--host 0.0.0.0` ile açma;
-tünel (`cloudflared`) ile dışarı verirsen kimlik doğrulaması olmadan herkes her kartı
-düzenler.
+**Bu yüzden alpha-0.1 yalnızca `127.0.0.1`'e bağlanmalı.** `--host 0.0.0.0` ile açma.
+Tünel (`cloudflared`) ile dışarı vereceksen **önüne bir kapı koymadan verme** — kimlik
+doğrulaması olmadan adresi bilen herkes her kaydı düzenler. `deploy/` bunu kapı dahil
+kuruyor: Cloudflare Access (önerilen) ya da nginx basic auth, artı güvenlik başlıkları ve
+`Secure` çerez. Ayrıntı: `deploy/README.md`.
 
 ### Faz 1'de bilerek doğru yapılanlar
 
@@ -164,6 +170,9 @@ düzenler.
   gövdeleri `{{ }}` ile basılır, hiçbir yerde `|safe` kullanılmaz. Kullanıcı girdisi HTML
   olarak yorumlanmaz.
 - **Dosya yükleme yok**, dolayısıyla yükleme kaynaklı saldırı yüzeyi de yok.
+- **CSP `unsafe-eval` istemiyor.** Şablonlarda `hx-on=` kullanılmıyor (htmx onu
+  `new Function` ile derliyor); form temizleme ve satır seçimi tek yerdeki delege
+  dinleyicilerde. Yayın başlıkları `deploy/nginx-ekiptakip.conf` içinde.
 
 ### Açık bildirmeden önce
 

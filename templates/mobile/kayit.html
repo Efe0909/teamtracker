@@ -26,8 +26,7 @@
 {% endblock %}
 
 {% block bottom %}
-<form class="dcomp" hx-post="/m/kayit/{{ item.id }}/mesaj" hx-target="#feed" hx-swap="beforeend"
-      hx-on::after-request="this.reset()">
+<form class="dcomp" hx-post="/m/kayit/{{ item.id }}/mesaj" hx-target="#feed" hx-swap="beforeend">
   <div class="in">
     <input name="body" placeholder="{{ 'Mesaj yaz…' if can_edit else 'Bu kartta yazma yetkin yok' }}"
            autocomplete="off" {% if not can_edit %}disabled{% endif %}>
