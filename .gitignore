@@ -2,3 +2,6 @@
 __pycache__/
 *.db
 .env
+
+# spec: ham ekran goruntuleri git-e girmez (public depo)
+spec/gorseller/
