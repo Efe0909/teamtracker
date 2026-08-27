@@ -1,0 +1,33 @@
+{# fragment: mobile_search — arama sonuclari. FTS5 sirasi korunur. #}
+<div class="mlist" id="sonuc" data-fragment="mobile_search">
+  {% if not q %}
+    <div class="mempty">Kayıt başlığı, açıklaması ya da düğüm adı yaz.<br>
+      Örnek: <b>bütçe</b>, <b>kapak</b>, <b>sevkiyat</b></div>
+  {% else %}
+    {% if items %}<div class="mgrp">Kayıtlar</div>{% endif %}
+    {% for r in items %}
+    <a class="scard" href="/m/kayit/{{ r.id }}">
+      <span class="tile">{{ '🐞' if r.kind == 'hata' else '✓' }}</span>
+      <span style="flex:1;min-width:0">
+        <span class="t">{{ r.title }}</span>
+        <span class="k">{{ r.path }} · {{ r.msgs }} mesaj</span>
+      </span>
+    </a>
+    {% endfor %}
+
+    {% if nodes %}<div class="mgrp">Düğümler</div>{% endif %}
+    {% for n in nodes %}
+    <a class="scard" href="/m?dugum={{ n.id }}">
+      <span class="tile">🌳</span>
+      <span style="flex:1;min-width:0">
+        <span class="t">{{ n.name }}</span>
+        <span class="k">{{ n.path or 'kök' }}</span>
+      </span>
+    </a>
+    {% endfor %}
+
+    {% if not items and not nodes %}
+    <div class="mempty">“{{ q }}” için sonuç yok.</div>
+    {% endif %}
+  {% endif %}
+</div>

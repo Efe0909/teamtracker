@@ -22,7 +22,7 @@
 </div>
 
 <form class="newform" id="newform" hx-post="/item" hx-target="#main" hx-swap="innerHTML"
-      hx-on::after-request="this.reset()">
+     >
   <select name="node_id" style="width:auto">
     {% for n in tree %}
     <option value="{{ n.id }}" {% if n.id == item.node_id %}selected{% endif %}>

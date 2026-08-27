@@ -1,0 +1,26 @@
+{% extends "mobile/base.html" %}
+{% block content %}
+<div class="mlist" data-fragment="mobile_notifs">
+  {% for r in rows %}
+  <a class="ncard{% if r.type == 'sistem' %} n-sys{% endif %}" href="/m/kayit/{{ r.item_id }}">
+    {% if r.type == 'sistem' %}
+      <span class="av">⚙</span>
+    {% else %}
+      <span class="av" style="background:{{ r.author.color if r.author else '#7d75a0' }}">
+        {{ r.author.name[0] if r.author else '?' }}</span>
+    {% endif %}
+    <span style="flex:1;min-width:0">
+      <span class="t">
+        {% if r.type == 'sistem' %}{{ r.body }}
+        {% else %}<b>{{ r.author.name if r.author else 'Bilinmeyen' }}</b> mesaj yazdı: {{ r.body }}
+        {% endif %}
+      </span>
+      <span class="k">{{ r.title }} · {{ r.time }}</span>
+    </span>
+  </a>
+  {% else %}
+  <div class="mempty">Bildirim yok.<br>
+    Sana ait kartlarda biri bir şey yaptığında burada görürsün.</div>
+  {% endfor %}
+</div>
+{% endblock %}

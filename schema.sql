@@ -71,3 +71,23 @@ create table if not exists events (
   created_at   text not null
 );
 create index if not exists events_subject_idx on events(subject_type, subject_id, created_at);
+
+-- tam metin arama: FTS5 (00-BASLA.md Karar 4 — "LIKE '%kelime%' kullanma").
+-- content='items' ile golge tablo tutulmaz, satirlar items'tan okunur.
+create virtual table if not exists items_fts using fts5(
+  title, description, content='items', content_rowid='rowid',
+  tokenize="unicode61 remove_diacritics 2"          -- Türkçe: şğıöçü -> sgioçu katlanir
+);
+
+create trigger if not exists items_fts_ai after insert on items begin
+  insert into items_fts(rowid, title, description) values (new.rowid, new.title, new.description);
+end;
+create trigger if not exists items_fts_ad after delete on items begin
+  insert into items_fts(items_fts, rowid, title, description)
+    values ('delete', old.rowid, old.title, old.description);
+end;
+create trigger if not exists items_fts_au after update on items begin
+  insert into items_fts(items_fts, rowid, title, description)
+    values ('delete', old.rowid, old.title, old.description);
+  insert into items_fts(rowid, title, description) values (new.rowid, new.title, new.description);
+end;

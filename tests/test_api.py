@@ -30,8 +30,25 @@ def item_by_title(title):
     return db.q1("select * from items where title = ?", (title,))
 
 
-def test_home_lists_my_items(client):
+def test_home_lists_modules(client):
+    """Ana sayfa modul secimi: hazir olan calisir, digerleri iskele sayfaya gider."""
     r = client.get("/")
+    assert r.status_code == 200
+    assert "Görev Yöneticisi" in r.text and "Kazanım Ağacı" in r.text
+    assert 'href="/gorevler"' in r.text and 'href="/kazanim-agaci"' in r.text
+    assert "Bütçe onayı 6 gündür bekliyor" not in r.text        # ana sayfa tablo degil
+
+
+def test_module_stub_pages(client):
+    assert client.get("/kazanim-agaci").status_code == 200
+    assert client.get("/pivot").status_code == 200
+    assert client.get("/gorevler2").status_code == 404          # kayitli olmayan slug
+    r = client.get("/gorevler", follow_redirects=False)          # hazir modul iskele degil
+    assert r.status_code == 200 and "Yakında" not in r.text
+
+
+def test_tasks_lists_my_items(client):
+    r = client.get("/gorevler")
     assert r.status_code == 200
     assert "Bütçe onayı 6 gündür bekliyor" in r.text
 

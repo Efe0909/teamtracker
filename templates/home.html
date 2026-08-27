@@ -1,0 +1,84 @@
+{# Ana sayfa — modul secimi. Dashboard degil: base.html kabugunu kullanmaz. #}
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EkipTakip</title>
+<link rel="icon" href="/static/icon-192.png">
+<link rel="stylesheet" href="/static/app.css">
+<link rel="stylesheet" href="/static/home.css">
+</head>
+<body class="home">
+<div class="hwrap">
+
+  <header class="hhead">
+    <div class="rlogo">◆</div>
+    <div class="hbrand">EkipTakip<span>alpha-0.1 · Faz 1</span></div>
+
+    <details class="huser">
+      <summary>
+        <span class="av" style="background:{{ user.color }}">{{ user.name[0] }}</span>{{ user.name }} ▾
+      </summary>
+      <div class="menu">
+        <div class="small muted" style="padding:2px 6px 7px">Kullanıcı değiştir (Faz 1: sahte)</div>
+        {% for u in all_users %}
+        <form method="post" action="/switch/{{ u.id }}">
+          <button>
+            <span class="av" style="background:{{ u.color }}">{{ u.name[0] }}</span>
+            <span style="flex:1">{{ u.name }}</span>
+            {% if u.is_admin %}<span class="tag t-ready">admin</span>{% endif %}
+          </button>
+        </form>
+        {% endfor %}
+      </div>
+    </details>
+  </header>
+
+  <h1 class="hlead">Merhaba {{ user.name }}.</h1>
+  <p class="hsub">Ekibin ekranları burada. Hazır olanlar çalışıyor; geri kalanı sırada —
+     her biri aynı hiyerarşi ve yetki modelinin üstüne oturacak.</p>
+
+  <div class="hstats">
+    <div class="stat"><b>{{ stats.mine }}</b><span>bana ait</span></div>
+    <div class="stat{% if stats.unassigned %} alert{% endif %}">
+      <b>{{ stats.unassigned }}</b><span>atanmamış</span></div>
+    <div class="stat"><b>{{ stats.open }}</b><span>açık kayıt</span></div>
+    <div class="stat"><b>{{ stats.nodes }}</b><span>düğüm</span></div>
+  </div>
+
+  <div class="hgrid">
+    {% for m in modules %}
+    <a class="mod {{ 'ready' if m.ready else 'soon' }}" href="{{ m.href }}">
+      <div class="ic">{{ m.icon }}</div>
+      <div class="nm">{{ m.name }}</div>
+      <div class="ds">{{ m.desc }}</div>
+      <div class="ft">
+        <span class="tag {{ 't-ready' if m.ready else 't-soon' }}">
+          {{ 'Hazır' if m.ready else 'Yakında' }}</span>
+        {% if m.ready and m.count is not none %}<span>{{ m.count }} kayıt</span>{% endif %}
+        <span class="go">→</span>
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+
+  <a class="mod ready" href="/m" style="margin-top:13px;min-height:0;flex-direction:row;
+     align-items:center;gap:12px">
+    <div class="ic">📱</div>
+    <div style="flex:1">
+      <div class="nm">Cepte: mobil site</div>
+      <div class="ds">Yapılacaklar, arama, eylemler ve bildirimler — Safari'de
+        <b>Paylaş → Ana Ekrana Ekle</b> ile uygulama gibi açılır.</div>
+    </div>
+    <span class="go">→</span>
+  </a>
+
+  <div class="hfoot">
+    Kapsamın: <b>{{ scope_name }}</b>{% if user.is_admin %} · tüm ağaçta yetkili{% endif %}.
+    Faz 1'de çalışan dilim: hiyerarşi · kayıtlar · kart içi sohbet · alan değişiklikleri.
+  </div>
+
+</div>
+</body>
+</html>

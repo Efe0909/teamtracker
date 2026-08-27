@@ -7,11 +7,13 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from urllib.parse import urlparse
 
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import (FileResponse, HTMLResponse, JSONResponse,
+                               RedirectResponse)
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -36,6 +38,65 @@ templates = Jinja2Templates(directory=BASE / "templates")
 STATUSES = {"acik": "Açık", "devam": "Devam", "beklemede": "Beklemede", "kapandi": "Kapandı"}
 PRIORITIES = {"kritik": "Kritik", "yuksek": "Yüksek", "orta": "Orta", "dusuk": "Düşük"}
 EDITABLE = {"status": STATUSES, "priority": PRIORITIES, "assignee_id": None, "due_date": None}
+
+# --- ana sayfa modul kaydi: tek dogruluk kaynagi (ana sayfa ve /{slug} ayni listeyi okur)
+
+MODULES = [
+    {"slug": "gorevler", "icon": "📋", "name": "Görev Yöneticisi", "ready": True,
+     "desc": "Kayıt tablosu, kart içi sohbet, atama ve alan değişiklikleri. Faz 1'in çalışan dilimi.",
+     "plan": []},
+    {"slug": "kazanim-agaci", "icon": "🌳", "name": "Kazanım Ağacı", "ready": False,
+     "desc": "Cell / makine kırılımını düzenlediğin ekran: düğüm ekle, adlandır, taşı, sil.",
+     "plan": ["Ağaç düzenleme nodes üzerinde çalışır; değişiklik anında uygulanır.",
+              "is_editor olmayanın değişikliği change_requests'e düşer, prev_state ile geri alınabilir (01-sema.md §4).",
+              "Yapı her değiştiğinde TreeIndex komple yeniden kurulur ve nodes.tin/tout tek UPDATE ile yazılır.",
+              "Taşımada döngü koruması: hedef, taşınan düğümün alt ağacında olamaz."]},
+    {"slug": "pivot", "icon": "📊", "name": "Pivot & Veri Analizi", "ready": False,
+     "desc": "Kayıtları düğüm, DMS, pillar, sorumlu ve zaman kırılımında çapraz say.",
+     "plan": ["Gruplama ve sayım SQL'de; Python'a dönen satır ekranda görünen satırdır (00-BASLA.md Karar 4).",
+              "Alt ağaç kırılımı tin/tout aralık taramasıyla — recursive CTE yok.",
+              "Bir hücreden tıklayınca aynı filtrelerle görev tablosuna geçiş.",
+              "Faz 2 kapsamı."]},
+    {"slug": "takvim", "icon": "📅", "name": "Takvim", "ready": False,
+     "desc": "Son tarihler, gecikmeler ve ekip yükü ay / hafta görünümünde.",
+     "plan": ["items.due_date üzerinden ay ve hafta görünümü.",
+              "Gecikmiş kayıtlar (due_date < bugün ve status <> 'kapandi') ayrı vurgulanır.",
+              "Bir güne tıklayınca o günün kayıtları görev tablosunda süzülür."]},
+    {"slug": "tanimlar", "icon": "📐", "name": "Görev Tanımları & Şemalar", "ready": False,
+     "desc": "Rol tanımları, yönetim şemaları ve standart iş akışları — kimin neyi yaptığı.",
+     "plan": ["Şemalar hiyerarşinin kendisinden türer: düğüm → sorumlu → yedek.",
+              "Tanım metinleri düğüme bağlı sürümlenir; değişiklik akışa sistem olayı düşer.",
+              "Salt okunur görünüm herkese açık, düzenleme is_editor kapsamına bağlı."]},
+    {"slug": "arsiv", "icon": "🗂", "name": "Ekip Arşivi", "ready": False,
+     "desc": "Kapanmış kayıtlar, alınan kararlar ve geçmiş dönemlerin kurumsal hafızası.",
+     "plan": ["Kapanmış kayıtlar silinmez, arşive düşer (01-sema.md açık nokta 3: deleted_at).",
+              "Tam metin arama FTS5 üzerinden — LIKE '%…%' yok.",
+              "Karar kayıtları kartın olay akışından toplanır."]},
+    {"slug": "dosyalar", "icon": "🗄", "name": "Dosyalar / NAS", "ready": False,
+     "desc": "Karta ve düğüme bağlı dosyalar; NAS klasörleriyle tek yerden erişim.",
+     "plan": ["01-sema.md açık nokta 1: attachments tablosu mu, düğüme bağlı NAS yolu mu — karar bekliyor.",
+              "Faz 1'de dosya yükleme bilerek yok; yükleme kaynaklı saldırı yüzeyi de yok (README).",
+              "Erişim yetkisi kartın yetkisiyle aynı yerden gelir, ikinci bir model kurulmaz."]},
+    {"slug": "admin", "icon": "🛡", "name": "Yönetim Paneli", "ready": False,
+     "desc": "Kullanıcılar, kapsamlar, yetkiler ve bekleyen değişiklik talepleri.",
+     "plan": ["Kullanıcı kapsamı (scope_node_id), is_admin / is_editor bayrakları buradan yönetilir.",
+              "Açık change_requests kuyruğu: onayla / reddet — ret prev_state'ten geri yazar.",
+              "Bildirim tercihleri ve susturmalar (01-sema.md §6).",
+              "Yetki her uçta sunucuda kontrol edilir; panel sadece görünen yüzü."]},
+]
+MODULE_BY_SLUG = {m["slug"]: m for m in MODULES}
+
+
+def home_stats(user) -> dict:
+    """Ana sayfa rozetleri — tek sorgu, sayfa basina yedi COUNT degil."""
+    r = db.q1(
+        "select"
+        " sum(case when status <> 'kapandi' then 1 else 0 end) acik,"
+        " sum(case when status <> 'kapandi' and assignee_id is null then 1 else 0 end) atanmamis,"
+        " sum(case when status <> 'kapandi' and assignee_id = ? then 1 else 0 end) bana,"
+        " count(*) hepsi from items", (user["id"],))
+    return {"open": r["acik"] or 0, "unassigned": r["atanmamis"] or 0,
+            "mine": r["bana"] or 0, "all": r["hepsi"] or 0, "nodes": len(TREE.nodes)}
 
 # --- agac indeksi: tek surec, yapi degisince komple yeniden kurulur --------
 
@@ -179,7 +240,20 @@ def log(item_id: str, etype: str, author_id: str | None, body: str) -> None:
 
 
 @app.get("/", response_class=HTMLResponse)
-def home(request: Request, item: str | None = None):
+def home(request: Request):
+    """Ana sayfa: modul secimi. Ekranlar buradan dallanir."""
+    user = auth.current_user(request)
+    stats = home_stats(user)
+    mods = [dict(m, href=("/" + m["slug"]),
+                 count=stats["all"] if m["slug"] == "gorevler" else None) for m in MODULES]
+    return render(request, "home.html", {
+        "user": user, "all_users": auth.all_users(), "modules": mods, "stats": stats,
+        "scope_name": TREE.name(user["scope_node_id"]) if user["scope_node_id"] else "tüm ağaç",
+    })
+
+
+@app.get("/gorevler", response_class=HTMLResponse)
+def tasks(request: Request, item: str | None = None):
     user = auth.current_user(request)
     rows = inbox_rows(user)
     current = get_item(item) if item else (
@@ -227,33 +301,26 @@ def item_view(request: Request, item_id: str):
     item = get_item(item_id)
     ctx = card_ctx(request, item, user)
     if not is_htmx(request):
-        return RedirectResponse(f"/?item={item_id}", status_code=303)
+        return RedirectResponse(f"/gorevler?item={item_id}", status_code=303)
     return render(request, "fragments/card.html", ctx)
 
 
-@app.post("/item/{item_id}/message", response_class=HTMLResponse)
-def post_message(request: Request, item_id: str, body: str = Form("")):
-    user = auth.current_user(request)
-    item = get_item(item_id)
-    if not auth.can_edit_item(user, item, TREE):
-        raise HTTPException(403, "bu kartta yetkin yok")
+def add_message(user, item, body: str) -> dict | None:
+    """Mesaj yaz. Yetki cagiran ucta kontrol edilir; is mantigi tek yerde."""
     body = body.strip()
     if not body:
-        return HTMLResponse("")
-    log(item_id, "mesaj", user["id"], body)
-    db.x("update items set updated_at = ? where id = ?", (db.now(), item_id))
-    return render(request, "fragments/card_message.html",
-                  {"m": {"type": "mesaj", "body": body, "author": user, "mine": True,
-                         "time": short_time(db.now())}})
+        return None
+    log(item["id"], "mesaj", user["id"], body)
+    db.x("update items set updated_at = ? where id = ?", (db.now(), item["id"]))
+    return {"type": "mesaj", "body": body, "author": user, "mine": True,
+            "time": short_time(db.now())}
 
 
-@app.patch("/item/{item_id}/field", response_class=HTMLResponse)
-async def patch_field(request: Request, item_id: str):
-    user = auth.current_user(request)
-    item = get_item(item_id)
-    if not auth.can_edit_item(user, item, TREE):
-        raise HTTPException(403, "bu kartta yetkin yok")
-    form = await request.form()
+def change_field(user, item, form) -> bool:
+    """Tek alan degistir + sistem olayi yaz. Dogrulama burada, uclarda degil.
+
+    Doner: deger gercekten degisti mi.
+    """
     field = next((k for k in form if k in EDITABLE), None)
     if field is None:
         raise HTTPException(400, "bilinmeyen alan")
@@ -275,26 +342,50 @@ async def patch_field(request: Request, item_id: str):
 
     old, new = label(item[field]), label(value)
     if old == new:
-        return render(request, "fragments/card_fields.html", card_ctx(request, item, user))
+        return False
 
-    db.x(f"update items set {field} = ?, updated_at = ? where id = ?", (value, db.now(), item_id))
+    db.x(f"update items set {field} = ?, updated_at = ? where id = ?",
+         (value, db.now(), item["id"]))
     names = {"status": "durumu", "priority": "önceliği", "assignee_id": "sorumluyu",
              "due_date": "son tarihi"}
-    log(item_id, "sistem", user["id"], f"{user['name']} {names[field]} {old} → {new} yaptı")
+    log(item["id"], "sistem", user["id"], f"{user['name']} {names[field]} {old} → {new} yaptı")
+    return True
+
+
+@app.post("/item/{item_id}/message", response_class=HTMLResponse)
+def post_message(request: Request, item_id: str, body: str = Form("")):
+    user = auth.current_user(request)
+    item = get_item(item_id)
+    if not auth.can_edit_item(user, item, TREE):
+        raise HTTPException(403, "bu kartta yetkin yok")
+    m = add_message(user, item, body)
+    if m is None:
+        return HTMLResponse("")
+    return render(request, "fragments/card_message.html", {"m": m})
+
+
+@app.patch("/item/{item_id}/field", response_class=HTMLResponse)
+async def patch_field(request: Request, item_id: str):
+    user = auth.current_user(request)
+    item = get_item(item_id)
+    if not auth.can_edit_item(user, item, TREE):
+        raise HTTPException(403, "bu kartta yetkin yok")
+    if not change_field(user, item, await request.form()):
+        return render(request, "fragments/card_fields.html", card_ctx(request, item, user))
 
     ctx = card_ctx(request, get_item(item_id), user)
     ctx["oob_feed"] = True  # card_fields + card_feed birlikte tazelenir (hx-swap-oob)
     return render(request, "fragments/card_fields.html", ctx)
 
 
-@app.post("/item", response_class=HTMLResponse)
-def create_item(request: Request, node_id: str = Form(...), title: str = Form(...),
-                kind: str = Form("hata"), description: str = Form("")):
-    user = auth.current_user(request)
+def new_item(user, node_id: str, kind: str, title: str, description: str = "") -> str:
+    """Yeni kayit. Yetki burada: kapsam disinda dal secilemez (masaustu ve mobil ayni yol)."""
     if node_id not in TREE.nodes:
         raise HTTPException(400, "düğüm zorunlu")
     if kind not in ("hata", "gorev"):
         raise HTTPException(400, "geçersiz tür")
+    if not title.strip():
+        raise HTTPException(400, "başlık zorunlu")
     if not (db.as_bool(user["is_admin"]) or (
             user["scope_node_id"] and TREE.is_descendant(node_id, user["scope_node_id"]))):
         raise HTTPException(403, "bu dalda kayıt açma yetkin yok")
@@ -306,8 +397,15 @@ def create_item(request: Request, node_id: str = Form(...), title: str = Form(..
           user["id"], user["id"], now, now))
     db.x("insert into item_participants (item_id,user_id,added_by,added_at) values (?,?,?,?)",
          (item_id, user["id"], user["id"], now))
-    log(item_id, "sistem", user["id"],
-        f"{user['name']} bu kaydı açtı ({TREE.name(node_id)})")
+    log(item_id, "sistem", user["id"], f"{user['name']} bu kaydı açtı ({TREE.name(node_id)})")
+    return item_id
+
+
+@app.post("/item", response_class=HTMLResponse)
+def create_item(request: Request, node_id: str = Form(...), title: str = Form(...),
+                kind: str = Form("hata"), description: str = Form("")):
+    user = auth.current_user(request)
+    item_id = new_item(user, node_id, kind, title, description)
     return render(request, "fragments/card.html", card_ctx(request, get_item(item_id), user))
 
 
@@ -320,9 +418,295 @@ def whoami(request: Request):
 
 
 @app.post("/switch/{user_id}")
-def switch_user(user_id: str):
+def switch_user(request: Request, user_id: str):
     if auth.get_user(user_id) is None:
         raise HTTPException(404, "kullanıcı yok")
-    r = RedirectResponse("/", status_code=303)
-    r.set_cookie(auth.COOKIE, user_id, httponly=True, samesite="lax")
+    back = urlparse(request.headers.get("referer") or "").path or "/"   # sadece yol: acik yonlendirme yok
+    r = RedirectResponse(back, status_code=303)
+    # Ters vekil arkasinda uvicorn --proxy-headers ile calisir; scheme https ise
+    # cerez Secure isaretlenir (tunel/nginx kurulumu: deploy/).
+    r.set_cookie(auth.COOKIE, user_id, httponly=True, samesite="lax",
+                 secure=request.url.scheme == "https")
     return r
+
+
+# --- mobil site (/m): ayni veritabani, ayni yetki, ayri yerlesim ----------
+#
+# Safari'de "Ana Ekrana Ekle" ile applet gibi durur (manifest + service worker).
+# Push Faz 3'te buraya baglanir (01-sema.md §7, 02-push-handoff.md).
+
+MOBILE_TABS = [
+    {"slug": "yapilacaklar", "href": "/m", "icon": "📋", "label": "Yapılacak"},
+    {"slug": "ara", "href": "/m/ara", "icon": "🔎", "label": "Ara"},
+    {"slug": "eylemler", "href": "/m/eylemler", "icon": "⚡", "label": "Eylemler"},
+    {"slug": "bildirimler", "href": "/m/bildirimler", "icon": "🔔", "label": "Bildirim"},
+]
+AYLAR = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"]
+PRIO_SQL = ("case priority when 'kritik' then 0 when 'yuksek' then 1"
+            " when 'orta' then 2 else 3 end")
+MINE_SQL = ("(assignee_id = ? or id in"
+            " (select item_id from item_participants where user_id = ?))")
+MINE_SQL_I = ("(i.assignee_id = ? or i.id in"
+              " (select item_id from item_participants where user_id = ?))")   # join'li sorgular
+
+
+def rel_time(ts: str) -> str:
+    """'19 saat önce' — bildirim akisinda mutlak saat degil, mesafe okunur."""
+    when = datetime.strptime(ts, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    sec = (datetime.now(timezone.utc) - when).total_seconds()
+    if sec < 90:
+        return "az önce"
+    if sec < 3600:
+        return f"{int(sec // 60)} dakika önce"
+    if sec < 86400:
+        return f"{int(sec // 3600)} saat önce"
+    if sec < 7 * 86400:
+        return f"{int(sec // 86400)} gün önce"
+    return f"{when.day} {AYLAR[when.month - 1]}"
+
+
+def due_info(due: str | None) -> dict | None:
+    """Son tarih rozeti: metin + gecikti mi + kac gun kaldi."""
+    if not due:
+        return None
+    try:
+        d = datetime.strptime(due, "%Y-%m-%d").date()
+    except ValueError:
+        return None
+    left = (d - datetime.now(timezone.utc).date()).days
+    return {"label": f"{d.day} {AYLAR[d.month - 1]} {d.year}", "days": left, "late": left < 0}
+
+
+def mobile_row(r, users: dict) -> dict:
+    """Mobil kart sozlugu — sablon SQL satirini degil bunu gorur."""
+    a = users.get(r["assignee_id"])
+    return {
+        "id": r["id"], "kind": r["kind"], "title": r["title"], "status": r["status"],
+        "status_label": STATUSES[r["status"]], "priority": r["priority"],
+        "priority_label": PRIORITIES[r["priority"]], "dms": r["dms"], "pillar": r["pillar"],
+        "assignee": a,
+        "node": TREE.name(r["node_id"]),
+        "path": " › ".join(TREE.name(n) for n in TREE.ancestors(r["node_id"])[-2:]),
+        "due": due_info(r["due_date"]), "time": rel_time(r["updated_at"]),
+        "msgs": db.q1("select count(*) c from events where subject_type='item'"
+                      " and subject_id=? and event_type='mesaj'", (r["id"],))["c"],
+    }
+
+
+def mobile_todo(user, done: bool = False) -> list[dict]:
+    """Bana ait kayitlar. Siralama SQL'de: once oncelik, sonra son tarih."""
+    op = "=" if done else "<>"
+    rows = db.q(f"select * from items where status {op} 'kapandi' and {MINE_SQL}"
+                f" order by {PRIO_SQL}, (due_date is null), due_date, updated_at desc limit 60",
+                (user["id"], user["id"]))
+    users = users_by_id()
+    return [mobile_row(r, users) for r in rows]
+
+
+def mobile_actions(user) -> list[tuple[str, list[dict]]]:
+    """Son tarihi olan acik kayitlar — gecikmis olan basta."""
+    rows = db.q(f"select * from items where status <> 'kapandi' and due_date is not null"
+                f" and {MINE_SQL} order by due_date, {PRIO_SQL} limit 60",
+                (user["id"], user["id"]))
+    users = users_by_id()
+    groups: dict[str, list[dict]] = {"Gecikmiş": [], "Bu hafta": [], "Sonra": []}
+    for r in rows:
+        m = mobile_row(r, users)
+        left = m["due"]["days"] if m["due"] else 999
+        groups["Gecikmiş" if left < 0 else "Bu hafta" if left <= 7 else "Sonra"].append(m)
+    return [(g, rows_) for g, rows_ in groups.items() if rows_]
+
+
+def mobile_notifs(user, limit: int = 40) -> list[dict]:
+    """Bildirim akisi — Faz 1'de events'ten turetilir.
+
+    Gercek bildirim tablosu (okundu bilgisi, yonlendirme, susturma) 01-sema.md §6'da;
+    o gelene kadar 'bana ait kartlarda baskasinin yaptigi hareket' listesi yeterli.
+    """
+    rows = db.q(
+        "select e.*, i.id item_id, i.title from events e join items i on i.id = e.subject_id"
+        f" where e.subject_type='item' and {MINE_SQL_I}"
+        " and (e.author_id is null or e.author_id <> ?)"
+        " order by e.created_at desc limit ?",
+        (user["id"], user["id"], user["id"], limit))
+    users = users_by_id()
+    return [{"item_id": r["item_id"], "title": r["title"], "type": r["event_type"],
+             "body": r["body"], "author": users.get(r["author_id"]),
+             "time": rel_time(r["created_at"])} for r in rows]
+
+
+def notif_badge(user) -> int:
+    """Son 24 saatteki hareket sayisi. Okundu bilgisi Faz 3'te gelir (01-sema.md §6)."""
+    since = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return db.q1(
+        "select count(*) c from events e join items i on i.id = e.subject_id"
+        f" where e.subject_type='item' and {MINE_SQL_I}"
+        " and (e.author_id is null or e.author_id <> ?) and e.created_at > ?",
+        (user["id"], user["id"], user["id"], since))["c"]
+
+
+def fts_query(q: str) -> str | None:
+    """Kullanici metnini FTS5 sorgusuna cevirir: her kelime onek eslesmesi.
+
+    Ozel karakterler ayiklanir — MATCH ifadesi kullanici metniyle birlestirilmez.
+    """
+    words = [w for w in "".join(c if c.isalnum() else " " for c in q).split() if len(w) > 1]
+    return " ".join(f'"{w}"*' for w in words) or None
+
+
+def search_items(q: str, limit: int = 25) -> list[dict]:
+    match = fts_query(q)
+    if match is None:
+        return []
+    rows = db.q("select i.* from items_fts f join items i on i.rowid = f.rowid"
+                " where items_fts match ? order by rank limit ?", (match, limit))
+    users = users_by_id()
+    return [mobile_row(r, users) for r in rows]
+
+
+def search_nodes(q: str, limit: int = 10) -> list[dict]:
+    """Agac bellekte (00-BASLA.md Karar 2) — dugum aramasi SQL'e gitmez."""
+    fold = str.maketrans("şğıöçüİ", "sgiocui")
+    needle = q.lower().translate(fold)
+    out = []
+    for nid in TREE.nodes:
+        if needle in TREE.name(nid).lower().translate(fold):
+            out.append({"id": nid, "name": TREE.name(nid),
+                        "path": " › ".join(TREE.name(n) for n in TREE.ancestors(nid)[:-1])})
+        if len(out) == limit:
+            break
+    return out
+
+
+def m_ctx(request, user, tab: str, title: str, **extra) -> dict:
+    ctx = {"request": request, "user": user, "tabs": MOBILE_TABS, "tab": tab,
+           "title": title, "badge": notif_badge(user)}
+    ctx.update(extra)
+    return ctx
+
+
+def mobile_card_ctx(request, item, user) -> dict:
+    users = users_by_id()
+    feed = []
+    for e in db.q("select * from events where subject_type='item' and subject_id=?"
+                  " order by created_at", (item["id"],)):
+        a = users.get(e["author_id"])
+        feed.append({"type": e["event_type"], "body": e["body"], "author": a,
+                     "mine": a is not None and a["id"] == user["id"],
+                     "time": short_time(e["created_at"])})
+    return {
+        "request": request, "user": user, "item": item, "row": mobile_row(item, users),
+        "assignee": users.get(item["assignee_id"]), "users": list(users.values()),
+        "feed": feed, "can_edit": auth.can_edit_item(user, item, TREE),
+        "statuses": STATUSES, "priorities": PRIORITIES,
+        "status_label": STATUSES[item["status"]], "priority_label": PRIORITIES[item["priority"]],
+        "tabs": MOBILE_TABS, "tab": None, "title": "Kayıt", "badge": notif_badge(user),
+    }
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    return FileResponse(BASE / "static" / "icon-192.png", media_type="image/png")
+
+
+@app.get("/sw.js", include_in_schema=False)
+def service_worker():
+    """Kok kapsamdan servis edilir; /static altindan verilirse /m'yi kontrol edemez."""
+    return FileResponse(BASE / "static" / "sw.js", media_type="text/javascript",
+                        headers={"Service-Worker-Allowed": "/", "Cache-Control": "no-cache"})
+
+
+@app.get("/m", response_class=HTMLResponse)
+def m_todo(request: Request, sekme: str = "acik"):
+    user = auth.current_user(request)
+    done = sekme == "kapali"
+    return render(request, "mobile/todo.html",
+                  m_ctx(request, user, "yapilacaklar", "Yapılacaklar",
+                        rows=mobile_todo(user, done), done=done))
+
+
+@app.get("/m/ara", response_class=HTMLResponse)
+def m_search(request: Request, q: str = ""):
+    user = auth.current_user(request)
+    q = q.strip()
+    ctx = m_ctx(request, user, "ara", "Ara", q=q,
+                items=search_items(q) if q else [], nodes=search_nodes(q) if q else [])
+    if is_htmx(request):
+        return render(request, "mobile/list_search.html", ctx)
+    return render(request, "mobile/ara.html", ctx)
+
+
+@app.get("/m/eylemler", response_class=HTMLResponse)
+def m_actions(request: Request):
+    user = auth.current_user(request)
+    return render(request, "mobile/eylemler.html",
+                  m_ctx(request, user, "eylemler", "Eylemler", groups=mobile_actions(user)))
+
+
+@app.get("/m/bildirimler", response_class=HTMLResponse)
+def m_notifs(request: Request):
+    user = auth.current_user(request)
+    return render(request, "mobile/bildirimler.html",
+                  m_ctx(request, user, "bildirimler", "Bildirimler", rows=mobile_notifs(user)))
+
+
+@app.get("/m/yeni", response_class=HTMLResponse)
+def m_new_form(request: Request):
+    user = auth.current_user(request)
+    scope = user["scope_node_id"]
+    nodes = [{"id": nid, "name": ("— " * TREE.depth[nid]) + TREE.name(nid)}
+             for nid in sorted(TREE.nodes, key=lambda n: TREE.tin[n])
+             if db.as_bool(user["is_admin"]) or (scope and TREE.is_descendant(nid, scope))]
+    return render(request, "mobile/yeni.html",
+                  m_ctx(request, user, None, "Yeni kayıt", nodes=nodes))
+
+
+@app.post("/m/yeni")
+def m_new(request: Request, node_id: str = Form(...), title: str = Form(...),
+          kind: str = Form("hata"), description: str = Form("")):
+    user = auth.current_user(request)
+    item_id = new_item(user, node_id, kind, title, description)
+    return RedirectResponse(f"/m/kayit/{item_id}", status_code=303)
+
+
+@app.get("/m/kayit/{item_id}", response_class=HTMLResponse)
+def m_item(request: Request, item_id: str):
+    user = auth.current_user(request)
+    return render(request, "mobile/kayit.html",
+                  mobile_card_ctx(request, get_item(item_id), user))
+
+
+@app.post("/m/kayit/{item_id}/mesaj", response_class=HTMLResponse)
+def m_message(request: Request, item_id: str, body: str = Form("")):
+    user = auth.current_user(request)
+    item = get_item(item_id)
+    if not auth.can_edit_item(user, item, TREE):
+        raise HTTPException(403, "bu kartta yetkin yok")
+    m = add_message(user, item, body)
+    if m is None:
+        return HTMLResponse("")
+    return render(request, "fragments/card_message.html", {"m": m})
+
+
+@app.patch("/m/kayit/{item_id}/alan", response_class=HTMLResponse)
+async def m_field(request: Request, item_id: str):
+    user = auth.current_user(request)
+    item = get_item(item_id)
+    if not auth.can_edit_item(user, item, TREE):
+        raise HTTPException(403, "bu kartta yetkin yok")
+    ctx = mobile_card_ctx(request, item, user)
+    if change_field(user, item, await request.form()):
+        ctx = mobile_card_ctx(request, get_item(item_id), user)
+        ctx["oob_feed"] = True          # serit + akis birlikte tazelenir (hx-swap-oob)
+    return render(request, "mobile/strip.html", ctx)
+
+
+# --- iskele moduller: EN SONDA dursun, once tanimli rotalar eslessin --------
+
+
+@app.get("/{slug}", response_class=HTMLResponse)
+def module_page(request: Request, slug: str):
+    m = MODULE_BY_SLUG.get(slug)
+    if m is None or m["ready"]:
+        raise HTTPException(404, "sayfa yok")
+    return render(request, "module.html", {"m": m})

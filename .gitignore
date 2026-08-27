@@ -2,3 +2,9 @@
 __pycache__/
 *.db
 .env
+
+# spec: ham ekran goruntuleri git-e girmez (public depo)
+spec/gorseller/
+
+# deploy: kur.sh ciktilari (makineye ozel yollar)
+deploy/olusan/

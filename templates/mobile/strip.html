@@ -1,0 +1,57 @@
+{# fragment: mobile_strip — alan seridi. PATCH sonrasi akisla birlikte tazelenir. #}
+<div class="dstrip" id="serit" data-fragment="mobile_strip">
+  <span class="fld">
+    <span class="k">Durum</span>
+    {% if can_edit %}
+    <select name="status" hx-patch="/m/kayit/{{ item.id }}/alan" hx-target="#serit"
+            hx-swap="outerHTML" class="v v-{{ item.status }}">
+      {% for k, v in statuses.items() %}
+      <option value="{{ k }}"{% if k == item.status %} selected{% endif %}>{{ v }}</option>
+      {% endfor %}
+    </select>
+    {% else %}<span class="v v-{{ item.status }}">{{ status_label }}</span>{% endif %}
+  </span>
+
+  <span class="fld">
+    <span class="k">Öncelik</span>
+    {% if can_edit %}
+    <select name="priority" hx-patch="/m/kayit/{{ item.id }}/alan" hx-target="#serit"
+            hx-swap="outerHTML" class="v v-{{ item.priority }}">
+      {% for k, v in priorities.items() %}
+      <option value="{{ k }}"{% if k == item.priority %} selected{% endif %}>{{ v }}</option>
+      {% endfor %}
+    </select>
+    {% else %}<span class="v v-{{ item.priority }}">{{ priority_label }}</span>{% endif %}
+  </span>
+
+  <span class="fld">
+    <span class="k">Sorumlu</span>
+    {% if can_edit %}
+    <select name="assignee_id" hx-patch="/m/kayit/{{ item.id }}/alan" hx-target="#serit"
+            hx-swap="outerHTML" class="v">
+      <option value="">—</option>
+      {% for u in users %}
+      <option value="{{ u.id }}"{% if u.id == item.assignee_id %} selected{% endif %}>{{ u.name }}</option>
+      {% endfor %}
+    </select>
+    {% else %}<span class="v">{{ assignee.name if assignee else '—' }}</span>{% endif %}
+  </span>
+
+  <span class="fld">
+    <span class="k">Son tarih</span>
+    {% if can_edit %}
+    <input type="date" name="due_date" value="{{ item.due_date or '' }}" class="v"
+           hx-patch="/m/kayit/{{ item.id }}/alan" hx-target="#serit" hx-swap="outerHTML">
+    {% else %}<span class="v">{{ item.due_date or '—' }}</span>{% endif %}
+  </span>
+
+  {% if item.dms %}<span class="fld"><span class="k">DMS</span><span class="v">{{ item.dms }}</span></span>{% endif %}
+  {% if item.pillar %}<span class="fld"><span class="k">Pillar</span><span class="v">{{ item.pillar }}</span></span>{% endif %}
+</div>
+
+{% if oob_feed %}
+{# alan degisince sistem olayi akisa dusmeli — ikinci parca ayni yanitta tazelenir #}
+<div class="dfeed" id="feed" hx-swap-oob="true">
+  {% for m in feed %}{% include "fragments/card_message.html" %}{% endfor %}
+</div>
+{% endif %}
