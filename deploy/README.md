@@ -123,3 +123,23 @@ CSP `unsafe-eval` içermiyor; şablonlar da `hx-on=` kullanmıyor (htmx onu `new
 ile derler, CSP engeller). Şablonlara `hx-on=` eklersen bu kurulumda **sessizce çalışmaz** —
 davranışı `templates/base.html` ve `templates/mobile/base.html` içindeki delege
 dinleyicilere yaz.
+
+## macOS notu (bu makine)
+
+`nginx-ekiptakip.conf` + `ekiptakip.service` Linux/systemd içindir. Bu makinede:
+
+- nginx **Homebrew** ile, `Efe` kullanıcısında koşuyor → config `/opt/homebrew/etc/nginx/servers/`
+  altına **symlink**, `sudo` yok. Kullanılan dosya: `deploy/nginx-ekiptakip.macos.conf`.
+- 8080 portu push demosuyla (`push.polonyum.com`) paylaşılıyor; ayrışma `server_name` ile.
+  Bu yüzden `listen 8080` wildcard kalmalı — `listen 127.0.0.1:8080` yazılırsa nginx açılmaz.
+- `systemd` yok → `ekiptakip.service` kullanılmıyor. Uvicorn elle veya launchd ile.
+- Tünel **dashboard yönetimli** (`temp`, token ile root olarak çalışıyor). Yerel
+  `config.yml` **yok**, dolayısıyla `cloudflared-ornek.yml` bu makinede geçerli değil:
+  ingress kuralı Zero Trust panelinden "Public hostname" olarak eklenir.
+
+```bash
+ln -sf ~/projects/teamtracker/deploy/nginx-ekiptakip.macos.conf \
+       /opt/homebrew/etc/nginx/servers/ekiptakip.conf
+nginx -t && nginx -s reload
+curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: ekiptakip.efeatcali.com' http://127.0.0.1:8080/
+```
