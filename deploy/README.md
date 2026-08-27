@@ -16,7 +16,7 @@ imzasız, CSRF koruması yok. Tünelden verirken önüne bir kapı koymazsan adr
 her kaydı düzenler. İki seçenek:
 
 **A) Cloudflare Access (önerilen).** Zero Trust → Access → Applications → Self-hosted,
-hostname `ekiptakip.efeatcali.com`, policy: `Emails` = ekibin adresleri. Tünelin önünde
+hostname `ekiptakip.polonyum.com`, policy: `Emails` = ekibin adresleri. Tünelin önünde
 durur, uygulamaya hiç dokunmazsın; kişi bazlı, log tutar, parola paylaşmazsın.
 Kurduysan `nginx-ekiptakip.conf` içindeki `auth_basic` iki satırını yorum yap.
 
@@ -31,7 +31,7 @@ altına yazar — sistem dosyalarına dokunmaz, kopyalama komutlarını ekrana b
 
 ```bash
 bash deploy/kur.sh                       # varsayılan: repo yolu, $USER, 8000/8080
-HOSTNAME_=ekiptakip.efeatcali.com PORT_APP=8000 PORT_NGINX=8080 bash deploy/kur.sh
+HOSTNAME_=ekiptakip.polonyum.com PORT_APP=8000 PORT_NGINX=8080 bash deploy/kur.sh
 ```
 
 Sonra sırayla:
@@ -66,12 +66,12 @@ curl -su efe -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/m    # 200
 altına kural yazarsan çalışmaz. Sonra:
 
 ```bash
-cloudflared tunnel route dns <tunel-adi> ekiptakip.efeatcali.com
+cloudflared tunnel route dns <tunel-adi> ekiptakip.polonyum.com
 sudo systemctl restart cloudflared
-curl -su efe -o /dev/null -w '%{http_code}\n' https://ekiptakip.efeatcali.com/m   # 200
+curl -su efe -o /dev/null -w '%{http_code}\n' https://ekiptakip.polonyum.com/m   # 200
 ```
 
-Telefonda `https://ekiptakip.efeatcali.com/m` → Safari → **Paylaş → Ana Ekrana Ekle**.
+Telefonda `https://ekiptakip.polonyum.com/m` → Safari → **Paylaş → Ana Ekrana Ekle**.
 
 ## Güncelleme
 
@@ -141,5 +141,5 @@ dinleyicilere yaz.
 ln -sf ~/projects/teamtracker/deploy/nginx-ekiptakip.macos.conf \
        /opt/homebrew/etc/nginx/servers/ekiptakip.conf
 nginx -t && nginx -s reload
-curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: ekiptakip.efeatcali.com' http://127.0.0.1:8080/
+curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: ekiptakip.polonyum.com' http://127.0.0.1:8080/
 ```

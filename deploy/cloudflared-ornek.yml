@@ -3,7 +3,7 @@
 #
 # ~/.cloudflared/config.yml  (ya da /etc/cloudflared/config.yml)
 #
-#   cloudflared tunnel route dns <tunel-adi> ekiptakip.efeatcali.com
+#   cloudflared tunnel route dns <tunel-adi> ekiptakip.polonyum.com
 #   sudo systemctl restart cloudflared
 
 tunnel: <TUNEL-ID>
@@ -11,10 +11,10 @@ credentials-file: /home/efe/.cloudflared/<TUNEL-ID>.json
 
 ingress:
   # --- EkipTakip -----------------------------------------------------------
-  - hostname: ekiptakip.efeatcali.com
+  - hostname: ekiptakip.polonyum.com
     service: http://127.0.0.1:8080          # nginx (uvicorn'a DEĞİL)
     originRequest:
-      httpHostHeader: ekiptakip.efeatcali.com
+      httpHostHeader: ekiptakip.polonyum.com
       connectTimeout: 10s
       noTLSVerify: false
 

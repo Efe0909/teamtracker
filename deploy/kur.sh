@@ -9,7 +9,7 @@ OUT="$REPO/deploy/olusan"
 USER_NAME="${SUDO_USER:-${USER:-$(id -un)}}"
 PORT_APP="${PORT_APP:-8000}"
 PORT_NGINX="${PORT_NGINX:-8080}"
-HOSTNAME_="${HOSTNAME_:-ekiptakip.efeatcali.com}"
+HOSTNAME_="${HOSTNAME_:-ekiptakip.polonyum.com}"
 
 mkdir -p "$OUT"
 for f in nginx-ekiptakip.conf ekiptakip.service cloudflared-ornek.yml; do
@@ -17,7 +17,7 @@ for f in nginx-ekiptakip.conf ekiptakip.service cloudflared-ornek.yml; do
       -e "s#^User=efe#User=$USER_NAME#" \
       -e "s#^Group=efe#Group=$USER_NAME#" \
       -e "s#/home/efe/.cloudflared#$HOME/.cloudflared#g" \
-      -e "s#ekiptakip.efeatcali.com#$HOSTNAME_#g" \
+      -e "s#ekiptakip.polonyum.com#$HOSTNAME_#g" \
       -e "s#127.0.0.1:8000#127.0.0.1:$PORT_APP#g" \
       -e "s#--port 8000#--port $PORT_APP#g" \
       -e "s#127.0.0.1:8080#127.0.0.1:$PORT_NGINX#g" \
