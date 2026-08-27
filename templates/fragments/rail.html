@@ -1,0 +1,27 @@
+{# fragment: rail — sol ray. Kendi kokunu dondurur. #}
+<nav class="rail" data-fragment="rail">
+  <div class="rlogo">◆</div>
+  <button class="rbtn{% if panel != 'tree' %} on{% endif %}" data-mode="inbox"
+          hx-get="/panel/inbox" hx-target="#pbody" hx-swap="outerHTML">
+    🏠<span class="lbl">Bana ait</span></button>
+  <button class="rbtn{% if panel == 'tree' %} on{% endif %}" data-mode="tree"
+          hx-get="/panel/tree" hx-target="#pbody" hx-swap="outerHTML">
+    🌳<span class="lbl">Hiyerarşi</span></button>
+  <div style="flex:1"></div>
+  <details style="position:relative">
+    <summary class="rbtn" style="list-style:none">
+      <span class="av" style="background:{{ user.color }}">{{ user.name[0] }}</span></summary>
+    <div class="pop on" style="position:absolute;left:48px;bottom:0;top:auto;width:190px">
+      <div class="small muted" style="padding:2px 6px 7px">Kullanıcı değiştir (Faz 1: sahte)</div>
+      {% for u in all_users %}
+      <form method="post" action="/switch/{{ u.id }}" style="margin:0">
+        <button class="tnode" style="width:100%;border:none;background:transparent">
+          <span class="av" style="background:{{ u.color }}">{{ u.name[0] }}</span>
+          <span class="tn" style="text-align:left">{{ u.name }}</span>
+          {% if u.is_admin %}<span class="tb h1">admin</span>{% endif %}
+        </button>
+      </form>
+      {% endfor %}
+    </div>
+  </details>
+</nav>

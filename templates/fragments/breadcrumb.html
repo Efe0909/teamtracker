@@ -1,0 +1,35 @@
+{# fragment: breadcrumb — kart ustu yol + acilir agac + yeni kayit. #}
+<div class="crumb" data-fragment="breadcrumb">
+  {% for c in crumbs %}
+    {% if loop.last %}<span class="cur">{{ c.name }}</span>
+    {% else %}<a hx-get="/node/{{ c.id }}/items" hx-target="#pbody" hx-swap="outerHTML">{{ c.name }}</a><span>›</span>
+    {% endif %}
+  {% endfor %}
+  <span class="caret" data-toggle="#pop">▾</span>
+  <span class="sp"></span>
+  <button class="small" data-toggle="#newform">+ Kayıt</button>
+</div>
+
+<div class="pop" id="pop">
+  <div class="small muted" style="padding:4px 6px 8px">Dala süz</div>
+  {% for n in tree %}
+  <div class="tnode{% if n.id == item.node_id %} on{% endif %}" style="margin-left:{{ n.depth * 12 }}px"
+       hx-get="/node/{{ n.id }}/items" hx-target="#pbody" hx-swap="outerHTML">
+    <span class="tw">{{ '·' if n.leaf else '▼' }}</span><span class="tn">{{ n.name }}</span>
+    <span class="tb {% if n.count == 0 %}h0{% elif n.count < 3 %}h1{% elif n.count < 5 %}h2{% else %}h3{% endif %}">{{ n.count }}</span>
+  </div>
+  {% endfor %}
+</div>
+
+<form class="newform" id="newform" hx-post="/item" hx-target="#main" hx-swap="innerHTML"
+      hx-on::after-request="this.reset()">
+  <select name="node_id" style="width:auto">
+    {% for n in tree %}
+    <option value="{{ n.id }}" {% if n.id == item.node_id %}selected{% endif %}>
+      {{ '— ' * n.depth }}{{ n.name }}</option>
+    {% endfor %}
+  </select>
+  <select name="kind" style="width:auto"><option value="hata">Hata</option><option value="gorev">Görev</option></select>
+  <input name="title" placeholder="Başlık" required style="flex:1;min-width:160px">
+  <button class="primary">Aç</button>
+</form>

@@ -1,0 +1,7 @@
+{# fragment: card_head — baslik + aciklama. #}
+<div class="chead" data-fragment="card_head">
+  <h1 class="ctitle">
+    <span class="chip {% if item.kind == 'hata' %}c-bug{% else %}c-task{% endif %}">
+      {{ 'Hata' if item.kind == 'hata' else 'Görev' }}</span>{{ item.title }}</h1>
+  {% if item.description %}<div class="cdesc">{{ item.description }}</div>{% endif %}
+</div>

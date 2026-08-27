@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EkipTakip — Plan A referans arayüz</title>
+<!--
+  BU DOSYA BİR REFERANSTIR, UYGULAMA DEĞİL.
+  Backend şablonlarının (Jinja partial'ları) buradaki işaretlemeden türetilmesi beklenir.
+  Her <section data-fragment="..."> bir sunucu parçasına karşılık gelir.
+  Parçalar layout'tan bağımsızdır: aynı parça başka bir yerleşimde başka yere konabilir.
+-->
+<style>
+  :root{
+    --bg:#f4f1fb; --panel:#fff; --panel2:#f7f4fe; --tint:#efe9fd; --line:#e4dcf7;
+    --txt:#2c2440; --dim:#7d75a0; --acc:#7c5bff; --acc-s:#9d84ff; --acc2:#b79dff;
+    --ok:#22a06b; --warn:#c98a10; --err:#e0455c;
+    --sh:0 1px 2px rgba(60,40,120,.05), 0 6px 20px rgba(90,60,180,.07);
+    --sh-lg:0 2px 6px rgba(60,40,120,.07), 0 14px 40px rgba(90,60,180,.13);
+    --rail:56px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+       background:var(--bg);color:var(--txt);height:100vh;display:flex;overflow:hidden;
+       -webkit-font-smoothing:antialiased}
+  button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--panel);
+         color:var(--txt);border-radius:9px;padding:6px 11px;font-weight:500}
+  button:hover{border-color:var(--acc-s);color:var(--acc)}
+  button.primary{background:var(--acc);border-color:var(--acc);color:#fff;
+                 box-shadow:0 2px 8px rgba(124,91,255,.3)}
+  input,select{font:inherit;background:var(--panel);color:var(--txt);border:1px solid var(--line);
+        border-radius:9px;padding:7px 10px;width:100%}
+  input:focus,select:focus{outline:none;border-color:var(--acc-s);box-shadow:0 0 0 3px rgba(124,91,255,.13)}
+  .row{display:flex;align-items:center;gap:8px}
+  .muted{color:var(--dim)} .small{font-size:12px}
+
+  /* ============ 1. RAY — hiç değişmez ============ */
+  .rail{width:var(--rail);background:#ece6fa;border-right:1px solid var(--line);
+        display:flex;flex-direction:column;align-items:center;padding:10px 0;gap:4px;flex-shrink:0}
+  .rlogo{width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,var(--acc),#c48fff);
+         display:grid;place-items:center;color:#fff;font-weight:800;margin-bottom:10px;font-size:15px}
+  .rbtn{width:40px;height:40px;border-radius:11px;display:grid;place-items:center;cursor:pointer;
+        font-size:17px;color:var(--dim);position:relative;border:none;background:transparent}
+  .rbtn:hover{background:#e0d7f7;color:var(--acc)}
+  .rbtn.on{background:var(--acc);color:#fff;box-shadow:0 2px 8px rgba(124,91,255,.35)}
+  .rbtn .cnt{position:absolute;top:3px;right:3px;background:var(--err);color:#fff;font-size:9px;
+             font-weight:700;border-radius:999px;padding:1px 4px;min-width:15px}
+  .rbtn .lbl{position:absolute;left:48px;background:var(--txt);color:#fff;font-size:12px;
+             padding:4px 9px;border-radius:7px;white-space:nowrap;opacity:0;pointer-events:none;
+             transition:.12s;z-index:40}
+  .rbtn:hover .lbl{opacity:1}
+
+  /* ============ 2. UYARLANIR PANEL ============ */
+  .panel{width:300px;flex-shrink:0;background:var(--panel);border-right:1px solid var(--line);
+         display:flex;flex-direction:column;min-height:0}
+  .phead{padding:11px 13px;border-bottom:1px solid var(--line);flex-shrink:0}
+  .ptitle{font-size:12px;text-transform:uppercase;letter-spacing:.7px;color:var(--dim);font-weight:700}
+  .segs{display:flex;gap:3px;background:var(--panel2);border-radius:9px;padding:3px;margin-top:9px}
+  .seg{flex:1;text-align:center;font-size:11.5px;font-weight:600;padding:5px 4px;border-radius:7px;
+       cursor:pointer;color:var(--dim);border:none;background:transparent}
+  .seg.on{background:var(--panel);color:var(--acc);box-shadow:var(--sh)}
+  .pbody{flex:1;overflow:auto;padding:9px}
+  .grp{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;
+       color:var(--dim);margin:12px 5px 7px}
+  .grp:first-child{margin-top:2px}
+
+  /* kayıt satırı — son harekete göre sıralı (C'den ödünç) */
+  .rec{border:1px solid var(--line);border-radius:11px;padding:9px 10px;margin-bottom:7px;
+       cursor:pointer;background:var(--panel);transition:.13s}
+  .rec:hover{border-color:var(--acc-s);box-shadow:var(--sh)}
+  .rec.on{border-color:var(--acc);box-shadow:0 0 0 1.5px rgba(124,91,255,.35),var(--sh)}
+  .rec.unread{border-left:3px solid var(--acc);background:#fbfaff}
+  .rec .t{font-weight:600;font-size:13px;margin:4px 0 3px;line-height:1.35}
+  .rec.unread .t{font-weight:700}
+  .rec .last{font-size:11.5px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .rec .meta{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--dim);margin-top:6px}
+  .chip{font-size:9.5px;font-weight:700;border-radius:5px;padding:2px 6px;letter-spacing:.2px}
+  .c-bug{background:#fde4e8;color:#d13350} .c-task{background:#e4ecff;color:#3b62c9}
+  .c-dms{background:#e0eefb;color:#2c74ad} .c-pil{background:#eeecf5;color:#5a5280}
+  .c-le{background:#ffe9d9;color:#b4501a}
+  .c-crit{background:#fde4e8;color:#d13350}
+  .dotm{width:7px;height:7px;border-radius:50%;background:var(--acc);flex-shrink:0}
+
+  /* ağaç modu */
+  .tnode{display:flex;align-items:center;gap:6px;padding:6px 7px;border-radius:9px;cursor:pointer}
+  .tnode:hover{background:var(--tint)}
+  .tnode.on{background:var(--tint);box-shadow:inset 0 0 0 1.5px var(--acc-s)}
+  .tw{width:14px;text-align:center;color:var(--acc-s);font-size:9px}
+  .tn{flex:1;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tb{font-size:10.5px;font-weight:700;border-radius:999px;padding:1px 7px}
+  .h0{background:#f0edf8;color:#a49dc0} .h1{background:#e2f5ec;color:#1c8a5b}
+  .h2{background:#fdf0d9;color:#b47a09} .h3{background:#fde4e8;color:#d13350}
+  .tkids{margin-left:12px;border-left:1.5px solid var(--line);padding-left:4px}
+
+  /* ============ 3. İÇERİK ============ */
+  .main{flex:1;display:flex;flex-direction:column;min-width:0;background:var(--panel)}
+  .crumb{display:flex;align-items:center;gap:6px;padding:9px 18px;border-bottom:1px solid var(--line);
+         font-size:12px;color:var(--dim);flex-shrink:0;background:var(--panel)}
+  .crumb a{color:var(--dim);text-decoration:none;padding:2px 5px;border-radius:5px;cursor:pointer}
+  .crumb a:hover{background:var(--tint);color:var(--acc)}
+  .crumb .cur{color:var(--txt);font-weight:600}
+  .crumb .caret{color:var(--acc);font-weight:700;cursor:pointer;padding:2px 5px;border-radius:5px}
+  .crumb .caret:hover{background:var(--tint)}
+  .crumb .sp{flex:1}
+
+  .chead{padding:15px 18px 0;flex-shrink:0}
+  .ctitle{font-size:19px;font-weight:750;letter-spacing:-.3px;margin:0 0 4px;display:flex;
+          align-items:center;gap:9px;flex-wrap:wrap}
+  .cdesc{color:var(--dim);font-size:13px;margin-bottom:12px;max-width:75ch}
+
+  /* alan şeridi — 4 kutu yerine tek satır (C'den ödünç) */
+  .strip{display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding:9px 18px;
+         background:var(--panel2);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+  .fld{display:flex;align-items:center;gap:5px;background:var(--panel);border:1px solid var(--line);
+       border-radius:8px;padding:4px 9px;font-size:12px;cursor:pointer}
+  .fld:hover{border-color:var(--acc-s)}
+  .fld .k{color:var(--dim);font-size:11px}
+  .fld .v{font-weight:600}
+  .who{display:flex;align-items:center;gap:5px}
+  .av{width:21px;height:21px;border-radius:50%;display:grid;place-items:center;color:#fff;
+      font-size:10px;font-weight:700;flex-shrink:0}
+  .stack{display:flex}
+  .stack .av{margin-left:-6px;border:2px solid var(--panel2)}
+  .stack .av:first-child{margin-left:0}
+
+  .chat{flex:1;overflow:auto;padding:16px 18px;display:flex;flex-direction:column;gap:11px;
+        background:var(--bg)}
+  .msg{display:flex;gap:9px;max-width:74%}
+  .msg.me{align-self:flex-end;flex-direction:row-reverse}
+  .bub{background:var(--panel);border:1px solid var(--line);border-radius:15px;padding:8px 13px;
+       box-shadow:var(--sh);border-bottom-left-radius:5px;font-size:13.5px}
+  .msg.me .bub{background:linear-gradient(135deg,var(--acc),#9a72ff);border-color:transparent;
+       color:#fff;border-bottom-left-radius:15px;border-bottom-right-radius:5px}
+  .bub .nm{font-size:11px;font-weight:700;color:var(--acc);margin-bottom:2px}
+  .bub .ts{font-size:10px;color:var(--dim);margin-top:3px;text-align:right}
+  .msg.me .bub .ts{color:rgba(255,255,255,.75)}
+  .sys{align-self:center;font-size:11.5px;color:var(--dim);background:var(--panel);
+       border:1px solid var(--line);border-radius:999px;padding:4px 14px;box-shadow:var(--sh)}
+  .comp{border-top:1px solid var(--line);padding:11px 16px;display:flex;gap:9px;flex-shrink:0;
+        background:var(--panel)}
+
+  /* ağaç açılır kutusu (breadcrumb'dan) */
+  .pop{position:absolute;top:38px;left:200px;width:270px;background:var(--panel);
+       border:1px solid var(--acc2);border-radius:13px;box-shadow:var(--sh-lg);padding:9px;z-index:30;display:none}
+  .pop.on{display:block}
+  .wrapmain{position:relative;display:flex;flex-direction:column;flex:1;min-width:0}
+
+  .note{position:fixed;right:16px;bottom:16px;background:#fff6e8;border:1px solid #f0d5a8;
+        color:#8a6420;border-radius:12px;padding:11px 14px;font-size:12px;max-width:290px;
+        box-shadow:var(--sh-lg);line-height:1.55;z-index:50}
+  .note b{color:#6b4c12}
+  .note .x{float:right;cursor:pointer;font-weight:700;margin-left:8px}
+</style>
+</head>
+<body>
+
+<!-- =================== 1. RAY (fragment: rail) =================== -->
+<nav class="rail" data-fragment="rail">
+  <div class="rlogo">◆</div>
+  <button class="rbtn on" onclick="mode('bana',this)">🏠<span class="cnt">3</span><span class="lbl">Bana ait</span></button>
+  <button class="rbtn" onclick="mode('agac',this)">🌳<span class="lbl">Hiyerarşi</span></button>
+  <button class="rbtn" onclick="mode('tablo',this)">📋<span class="lbl">Tablo</span></button>
+  <button class="rbtn" onclick="mode('pivot',this)">📊<span class="lbl">Pivot & Panel</span></button>
+  <button class="rbtn" onclick="mode('talep',this)">⑂<span class="cnt">2</span><span class="lbl">Talepler</span></button>
+  <div style="flex:1"></div>
+  <button class="rbtn">🔔<span class="cnt">5</span><span class="lbl">Bildirimler</span></button>
+  <button class="rbtn"><span class="av" style="background:#5b8cff">E</span><span class="lbl">Efe</span></button>
+</nav>
+
+<!-- =================== 2. PANEL (fragment: panel_*) =================== -->
+<aside class="panel">
+  <div class="phead">
+    <div class="ptitle" id="ptitle">Bana ait</div>
+    <div class="segs" id="segs">
+      <button class="seg on">Son hareket</button>
+      <button class="seg">Öncelik</button>
+      <button class="seg">Takip</button>
+    </div>
+  </div>
+
+  <!-- panel: BANA modu (fragment: panel_inbox) -->
+  <div class="pbody" id="p-bana" data-fragment="panel_inbox">
+    <div class="grp">Bugün</div>
+
+    <div class="rec unread on">
+      <div class="row"><span class="chip c-bug">Hata</span><span class="chip c-crit">Kritik</span>
+        <span class="chip c-dms">DH</span><div style="flex:1"></div><span class="dotm"></span></div>
+      <div class="t">Bütçe onayı 6 gündür bekliyor</div>
+      <div class="last">Deniz: CFO izinde, vekaleten onay için…</div>
+      <div class="meta">Malzeme Temini › Bütçe Onayı<div style="flex:1"></div>14:20</div>
+    </div>
+
+    <div class="rec unread">
+      <div class="row"><span class="chip c-bug">Hata</span><span class="chip c-crit">Kritik</span>
+        <span class="chip c-pil">SN</span><div style="flex:1"></div><span class="dotm"></span></div>
+      <div class="t">Sevkiyat tarihi etkinlikten sonraya düşüyor</div>
+      <div class="last">Efe: Bu aslında bütçe onayının türevi…</div>
+      <div class="meta">Malzeme Temini › Sevkiyat<div style="flex:1"></div>11:05</div>
+    </div>
+
+    <div class="rec unread">
+      <div class="row"><span class="chip c-task">Görev</span><span class="chip c-le">LE</span>
+        <div style="flex:1"></div><span class="dotm"></span></div>
+      <div class="t">Kapak Ünitesi — tekrar eden kayıp</div>
+      <div class="last">3 DMS kaydından açıldı</div>
+      <div class="meta">Dolum Makinesi › Kapak Ünitesi<div style="flex:1"></div>09:40</div>
+    </div>
+
+    <div class="grp">Bu hafta</div>
+
+    <div class="rec">
+      <div class="row"><span class="chip c-task">Görev</span><span class="chip c-dms">UPS</span></div>
+      <div class="t">Onay akışına vekalet mekanizması ekle</div>
+      <div class="last">Selin: Standart şablon hazırlıyorum.</div>
+      <div class="meta">Bütçe Onayı<div style="flex:1"></div>Sal</div>
+    </div>
+
+    <div class="rec">
+      <div class="row"><span class="chip c-bug">Hata</span><span class="chip c-dms">IPS</span></div>
+      <div class="t">Tedarikçi teklifleri karşılaştırılamıyor</div>
+      <div class="last">Üç teklif farklı formatta geldi</div>
+      <div class="meta">Tedarikçi Seçimi<div style="flex:1"></div>Pzt</div>
+    </div>
+  </div>
+
+  <!-- panel: AĞAÇ modu (fragment: panel_tree) — aynı 300px, farklı içerik -->
+  <div class="pbody" id="p-agac" style="display:none" data-fragment="panel_tree">
+    <div class="tnode"><span class="tw">▼</span><span class="tn">Yıllık Bayi Toplantısı</span><span class="tb h3">6</span></div>
+    <div class="tkids">
+      <div class="tnode on"><span class="tw">▼</span><span class="tn">Malzeme Temini</span><span class="tb h3">5</span></div>
+      <div class="tkids">
+        <div class="tnode"><span class="tw">·</span><span class="tn">Bütçe Onayı</span><span class="tb h2">3</span></div>
+        <div class="tnode"><span class="tw">·</span><span class="tn">Tedarikçi Seçimi</span><span class="tb h1">1</span></div>
+        <div class="tnode"><span class="tw">·</span><span class="tn">Sevkiyat & Teslim</span><span class="tb h1">1</span></div>
+      </div>
+      <div class="tnode"><span class="tw">▼</span><span class="tn">Mekan & Lojistik</span><span class="tb h0">0</span></div>
+      <div class="tkids">
+        <div class="tnode"><span class="tw">·</span><span class="tn">Salon Sözleşmesi</span><span class="tb h0">0</span></div>
+        <div class="tnode"><span class="tw">·</span><span class="tn">Ulaşım & Konaklama</span><span class="tb h0">0</span></div>
+      </div>
+      <div class="tnode"><span class="tw">▶</span><span class="tn">İletişim & Tanıtım</span><span class="tb h1">1</span></div>
+    </div>
+    <div class="tnode"><span class="tw">▼</span><span class="tn">Üretim Hattı A</span><span class="tb h1">2</span></div>
+    <div class="tkids">
+      <div class="tnode"><span class="tw">▼</span><span class="tn">Dolum Makinesi</span><span class="tb h1">2</span></div>
+      <div class="tkids">
+        <div class="tnode"><span class="tw">·</span><span class="tn">Kapak Ünitesi</span><span class="tb h1">2</span></div>
+        <div class="tnode"><span class="tw">·</span><span class="tn">Etiketleme Ünitesi</span><span class="tb h0">0</span></div>
+      </div>
+    </div>
+  </div>
+</aside>
+
+<!-- =================== 3. İÇERİK =================== -->
+<div class="wrapmain">
+
+  <!-- breadcrumb (fragment: breadcrumb) — ağacın üçüncü erişim noktası -->
+  <div class="crumb" data-fragment="breadcrumb">
+    <a>Yıllık Bayi Toplantısı 2026</a><span>›</span>
+    <a>Malzeme Temini</a><span>›</span>
+    <span class="cur">Bütçe Onayı</span>
+    <span class="caret" onclick="document.getElementById('pop').classList.toggle('on')">▾</span>
+    <span class="sp"></span>
+    <button class="small">+ Kayıt</button>
+  </div>
+
+  <div class="pop" id="pop">
+    <div class="small muted" style="padding:4px 6px 8px">Dala süz veya taşı</div>
+    <div class="tnode"><span class="tw">▼</span><span class="tn">Malzeme Temini</span><span class="tb h3">5</span></div>
+    <div class="tkids">
+      <div class="tnode on"><span class="tw">·</span><span class="tn">Bütçe Onayı</span><span class="tb h2">3</span></div>
+      <div class="tnode"><span class="tw">·</span><span class="tn">Tedarikçi Seçimi</span><span class="tb h1">1</span></div>
+      <div class="tnode"><span class="tw">·</span><span class="tn">Sevkiyat & Teslim</span><span class="tb h1">1</span></div>
+    </div>
+  </div>
+
+  <!-- kart başlığı (fragment: card_head) -->
+  <div class="chead" data-fragment="card_head">
+    <h1 class="ctitle"><span class="chip c-bug">Hata</span>Bütçe onayı 6 gündür bekliyor</h1>
+    <div class="cdesc">Finans departmanı onay vermeden tedarikçi ile sözleşme imzalanamıyor.
+      Zincirin tamamı bekliyor.</div>
+  </div>
+
+  <!-- alan şeridi (fragment: card_fields) — tıklanınca yerinde düzenlenir -->
+  <div class="strip" data-fragment="card_fields">
+    <span class="fld"><span class="k">Durum</span><span class="v" style="color:#d13350">Açık</span></span>
+    <span class="fld"><span class="k">Öncelik</span><span class="v" style="color:#d13350">Kritik</span></span>
+    <span class="fld who"><span class="k">Sorumlu</span>
+      <span class="av" style="background:#d99a2b">D</span><span class="v">Deniz</span></span>
+    <span class="fld"><span class="k">Son tarih</span><span class="v">22 Ağu</span></span>
+    <span class="fld"><span class="k">DMS</span><span class="v">DH</span></span>
+    <span class="fld"><span class="k">Pillar</span><span class="v">SN</span></span>
+    <div style="flex:1"></div>
+    <div class="stack">
+      <span class="av" style="background:#d99a2b">D</span>
+      <span class="av" style="background:#e5484d">S</span>
+      <span class="av" style="background:#5b8cff">E</span>
+    </div>
+    <button class="small">+ Kişi</button>
+    <button class="small">↑ Escale</button>
+    <button class="small">🔔</button>
+  </div>
+
+  <!-- akış (fragment: card_feed) -->
+  <div class="chat" data-fragment="card_feed">
+    <div class="sys">Selin bu hatayı açtı ve Deniz'e atadı · 14 Ağu 09:12</div>
+    <div class="msg"><span class="av" style="background:#e5484d">S</span>
+      <div class="bub"><div class="nm">Selin</div>
+        Deniz, finanstan dönüş var mı? Tedarikçi fiyat kilidi cuma bitiyor.
+        <div class="ts">14 Ağu 09:20</div></div></div>
+    <div class="msg"><span class="av" style="background:#d99a2b">D</span>
+      <div class="bub"><div class="nm">Deniz</div>
+        CFO izinde, vekaleten onay için IT'den yetki devri istedim.
+        <div class="ts">15 Ağu 11:40</div></div></div>
+    <div class="sys">Durum "Açık" olarak kaldı — 3 gündür hareket yok · 17 Ağu</div>
+    <div class="msg me"><div class="bub">
+        Bu bir DH kaydı ama üçüncü tekrar. Kapak Ünitesi'ndeki gibi LE'ye taşıyalım mı?
+        <div class="ts">bugün 14:20</div></div></div>
+  </div>
+
+  <div class="comp" data-fragment="composer">
+    <input placeholder="Mesaj yaz…">
+    <button class="primary">Gönder</button>
+  </div>
+</div>
+
+<div class="note" id="note">
+  <span class="x" onclick="document.getElementById('note').remove()">×</span>
+  <b>Referans arayüz.</b> Raydan 🌳'a bas — panel ağaca dönüşür, üçüncü bölme açılmaz.
+  Breadcrumb'daki ▾ ağacı açılır kutu olarak indirir.
+</div>
+
+<script>
+/* Sadece gösterim: panelin moda göre içerik değiştirdiğini göstermek için.
+   Gerçek uygulamada bu geçişi sunucu yapar (hx-get ile panel parçası değişir). */
+function mode(m,el){
+  document.querySelectorAll('.rbtn').forEach(b=>b.classList.remove('on'));
+  el.classList.add('on');
+  const bana=m==='bana';
+  document.getElementById('p-bana').style.display=bana?'':'none';
+  document.getElementById('p-agac').style.display=m==='agac'?'':'none';
+  document.getElementById('ptitle').textContent=
+    {bana:'Bana ait',agac:'Hiyerarşi',tablo:'Tablo',pivot:'Pivot & Panel',talep:'Talepler'}[m];
+  document.getElementById('segs').style.display=bana?'':'none';
+}
+</script>
+</body>
+</html>

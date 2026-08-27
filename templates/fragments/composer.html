@@ -1,0 +1,7 @@
+{# fragment: composer — mesaj yazma kutusu. #}
+<form class="comp" data-fragment="composer" hx-post="/item/{{ item.id }}/message"
+      hx-target="#feed" hx-swap="beforeend" hx-on::after-request="this.reset()">
+  <input name="body" placeholder="{{ 'Mesaj yaz…' if can_edit else 'Bu kartta yazma yetkin yok' }}"
+         autocomplete="off" {% if not can_edit %}disabled{% endif %}>
+  <button class="primary" {% if not can_edit %}disabled{% endif %}>Gönder</button>
+</form>

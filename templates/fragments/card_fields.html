@@ -1,0 +1,51 @@
+{# fragment: card_fields — alan seridi. Serit ya da yan panel olarak calisir (kabi boyutlandirir).
+   Yetki: sablon sadece can_edit'e gore soluklastirir; asil kontrol PATCH ucunda. #}
+<div class="strip" id="fields" data-fragment="card_fields">
+  <span class="fld{% if not can_edit %} ro{% endif %}"><span class="k">Durum</span>
+    {% if can_edit %}
+      <select name="status" class="v v-{{ item.status }}" hx-patch="/item/{{ item.id }}/field"
+              hx-target="#fields" hx-swap="outerHTML" hx-trigger="change">
+        {% for k, v in statuses.items() %}<option value="{{ k }}" {% if k == item.status %}selected{% endif %}>{{ v }}</option>{% endfor %}
+      </select>
+    {% else %}<span class="v v-{{ item.status }}">{{ status_label }}</span>{% endif %}
+  </span>
+
+  <span class="fld{% if not can_edit %} ro{% endif %}"><span class="k">Öncelik</span>
+    {% if can_edit %}
+      <select name="priority" class="v v-{{ item.priority }}" hx-patch="/item/{{ item.id }}/field"
+              hx-target="#fields" hx-swap="outerHTML" hx-trigger="change">
+        {% for k, v in priorities.items() %}<option value="{{ k }}" {% if k == item.priority %}selected{% endif %}>{{ v }}</option>{% endfor %}
+      </select>
+    {% else %}<span class="v v-{{ item.priority }}">{{ priority_label }}</span>{% endif %}
+  </span>
+
+  <span class="fld who{% if not can_edit %} ro{% endif %}"><span class="k">Sorumlu</span>
+    {% if assignee %}<span class="av" style="background:{{ assignee.color }}">{{ assignee.name[0] }}</span>{% endif %}
+    {% if can_edit %}
+      <select name="assignee_id" class="v" hx-patch="/item/{{ item.id }}/field"
+              hx-target="#fields" hx-swap="outerHTML" hx-trigger="change">
+        {% for u in users %}<option value="{{ u.id }}" {% if u.id == item.assignee_id %}selected{% endif %}>{{ u.name }}</option>{% endfor %}
+      </select>
+    {% else %}<span class="v">{{ assignee.name if assignee else '—' }}</span>{% endif %}
+  </span>
+
+  <span class="fld{% if not can_edit %} ro{% endif %}"><span class="k">Son tarih</span>
+    {% if can_edit %}
+      <input type="date" name="due_date" class="v" value="{{ item.due_date or '' }}"
+             hx-patch="/item/{{ item.id }}/field" hx-target="#fields" hx-swap="outerHTML"
+             hx-trigger="change">
+    {% else %}<span class="v">{{ item.due_date or '—' }}</span>{% endif %}
+  </span>
+
+  {% if item.dms %}<span class="fld"><span class="k">DMS</span><span class="v">{{ item.dms }}</span></span>{% endif %}
+  {% if item.pillar %}<span class="fld"><span class="k">Pillar</span><span class="v">{{ item.pillar }}</span></span>{% endif %}
+
+  <div style="flex:1"></div>
+  <div class="stack">
+    {% for p in participants %}<span class="av" style="background:{{ p.color }}">{{ p.name[0] }}</span>{% endfor %}
+  </div>
+  {% if not can_edit %}<span class="lock">🔒 salt okunur — kapsamın dışında</span>{% endif %}
+</div>
+{% if oob_feed %}
+  {% with oob = True %}{% include "fragments/card_feed.html" %}{% endwith %}
+{% endif %}
