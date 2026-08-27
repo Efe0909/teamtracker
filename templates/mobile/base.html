@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="EkipTakip">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#7c5bff">
-<link rel="manifest" href="/static/manifest.json">
+<link rel="manifest" href="/manifest.json">
 <link rel="apple-touch-icon" href="/static/icon-180.png">
 <link rel="icon" href="/static/icon-192.png">
 
@@ -27,7 +27,7 @@
     <div class="slot">{% block top_left %}<span class="rlogo" style="width:30px;height:30px;font-size:14px">◆</span>{% endblock %}</div>
     <div class="ttl">{{ title }}</div>
     <div class="slot">{% block top_right %}
-      <a class="slot" href="/" title="Masaüstü">
+      <a class="slot" href="{{ dash_url }}" title="Masaüstü">
         <span class="av" style="background:{{ user.color }}">{{ user.name[0] }}</span></a>
     {% endblock %}</div>
   </header>

@@ -18,6 +18,10 @@ kendi ikonu var (`manifest.json` + `sw.js`). Push bildirimleri Faz 3'te buraya b
 iOS'ta web push **yalnızca ana ekrana eklenmiş** sitede çalışır, bu yüzden PWA kabuğu
 bildirimden önce gelmek zorundaydı.
 
+Yayında iki alan adı: `app.polonyum.com` mobil siteyi kökte servis eder,
+`dashboard.polonyum.com` masaüstünü. Mobil yolların hepsi `/m` öneki olmadan görünür;
+masaüstü sayfaları `app` alan adından erişilemez (ayrı Access politikası yazılabilsin diye).
+
 ## 2. Akış
 
 ```

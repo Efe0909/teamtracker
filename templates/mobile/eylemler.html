@@ -4,7 +4,7 @@
   {% for group, rows in groups %}
     <div class="mgrp">{{ group }}</div>
     {% for r in rows %}
-    <a class="acard{% if r.due.late %} late{% endif %}" href="/m/kayit/{{ r.id }}">
+    <a class="acard{% if r.due.late %} late{% endif %}" href="{{ mp }}/kayit/{{ r.id }}">
       <span class="when">⏱ {{ r.due.label }}</span>
       <div class="t">{{ r.title }}</div>
       <div class="k">

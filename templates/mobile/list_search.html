@@ -6,7 +6,7 @@
   {% else %}
     {% if items %}<div class="mgrp">Kayıtlar</div>{% endif %}
     {% for r in items %}
-    <a class="scard" href="/m/kayit/{{ r.id }}">
+    <a class="scard" href="{{ mp }}/kayit/{{ r.id }}">
       <span class="tile">{{ '🐞' if r.kind == 'hata' else '✓' }}</span>
       <span style="flex:1;min-width:0">
         <span class="t">{{ r.title }}</span>
@@ -17,7 +17,7 @@
 
     {% if nodes %}<div class="mgrp">Düğümler</div>{% endif %}
     {% for n in nodes %}
-    <a class="scard" href="/m?dugum={{ n.id }}">
+    <a class="scard" href="{{ mroot }}?dugum={{ n.id }}">
       <span class="tile">🌳</span>
       <span style="flex:1;min-width:0">
         <span class="t">{{ n.name }}</span>

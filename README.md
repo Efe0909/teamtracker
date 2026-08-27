@@ -66,7 +66,7 @@ uç karşılığı (403 dahil).
 | `templates/home.html` | ana sayfa — modül seçimi |
 | `templates/mobile/*` | mobil site: iskelet, sekmeler, listeler, kayıt detayı |
 | `static/mobile.css` | mobil yerleşim, aynı token'lar |
-| `static/manifest.json`, `static/sw.js` | PWA: ana ekrana ekleme + push girişi (Faz 3) |
+| `static/sw.js` | PWA service worker + push girişi (Faz 3); manifest `GET /manifest.json` ile üretilir |
 | `tools/ikon_uret.py` | PWA ikonlarını üretir (saf Python, bağımlılık yok) |
 | `spec/` | uyarlanacak ekranların çözümlemesi (`spec/README.md` kalıbı) |
 | `deploy/` | cloudflared + nginx + systemd ile yayına alma (`deploy/README.md`) |
@@ -88,7 +88,11 @@ Rayın altındaki avatardan değiştirilir (`POST /switch/{user_id}`, çerez `ui
 
 ## Uçlar
 
-**Mobil site (`/m`)** — aynı veritabanı, aynı yetki, ayrı yerleşim:
+**Mobil site (`/m`)** — aynı veritabanı, aynı yetki, ayrı yerleşim.
+Yayında iki alan adına ayrılabilir: `app.<alan>` mobil siteyi **kökte** servis eder
+(`/`, `/ara`, …), `dashboard.<alan>` masaüstünü. `EKIPTAKIP_HOST_APP` /
+`EKIPTAKIP_HOST_DASHBOARD` / `EKIPTAKIP_COOKIE_DOMAIN` ile açılır; boşsa tek alan adı
+modu (`/m`). Ayrıntı: `deploy/README.md`.
 
 | Yol | Ne |
 |---|---|

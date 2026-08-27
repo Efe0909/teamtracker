@@ -2,7 +2,7 @@
 {% block content %}
 <div class="mlist" data-fragment="mobile_notifs">
   {% for r in rows %}
-  <a class="ncard{% if r.type == 'sistem' %} n-sys{% endif %}" href="/m/kayit/{{ r.item_id }}">
+  <a class="ncard{% if r.type == 'sistem' %} n-sys{% endif %}" href="{{ mp }}/kayit/{{ r.item_id }}">
     {% if r.type == 'sistem' %}
       <span class="av">⚙</span>
     {% else %}

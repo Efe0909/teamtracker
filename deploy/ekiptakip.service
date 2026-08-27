@@ -18,6 +18,12 @@ User=efe
 Group=efe
 WorkingDirectory=/home/efe/projects/teamtracker
 
+# Iki alan adi ayrimi: app.<alan> mobil siteyi KOKTE servis eder, masaustu
+# sayfalari o alan adindan erisilemez. Bos birakirsan tek alan adi modu (/m).
+Environment=EKIPTAKIP_HOST_APP=app.polonyum.com
+Environment=EKIPTAKIP_HOST_DASHBOARD=dashboard.polonyum.com
+Environment=EKIPTAKIP_COOKIE_DOMAIN=.polonyum.com
+
 # --workers 1 SART: agac indeksi surec bellegindedir (00-BASLA.md Karar 2).
 # --proxy-headers: TLS cloudflared'de bitiyor, uvicorn'un https'i bilmesi gerekir.
 ExecStart=/home/efe/projects/teamtracker/.venv/bin/uvicorn app:app \

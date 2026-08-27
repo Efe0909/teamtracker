@@ -3,7 +3,7 @@
   <div class="in">
     {% for t in tabs %}
       {% if loop.index == 3 %}
-      <div class="fab"><a href="/m/yeni" aria-label="Yeni kayıt">+</a></div>
+      <div class="fab"><a href="{{ mp }}/yeni" aria-label="Yeni kayıt">+</a></div>
       {% endif %}
       <a class="tab{% if t.slug == tab %} on{% endif %}" href="{{ t.href }}">
         <span class="i">{{ t.icon }}</span>{{ t.label }}

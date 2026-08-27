@@ -4,10 +4,39 @@ Zincir:
 
 ```
 telefon ──https──> Cloudflare ──tünel──> cloudflared ──> nginx 127.0.0.1:8080 ──> uvicorn 127.0.0.1:8000
-                    (TLS burada biter)                    (kapı + statik)          (--workers 1)
+                    (TLS burada biter)   (catch-all)      (server_name ile ayrım)   (--workers 1)
 ```
 
 Uygulama **hiçbir zaman** 0.0.0.0'a bağlanmaz; dışarıya çıkan tek şey tünel.
+
+## İki alan adı
+
+| Alan adı | Ne servis eder | Yollar |
+|---|---|---|
+| `app.polonyum.com` | mobil site, **kökte** | `/`, `/ara`, `/eylemler`, `/bildirimler`, `/kayit/{id}`, `/yeni` |
+| `dashboard.polonyum.com` | masaüstü | `/` (ana sayfa), `/gorevler`, modül sayfaları |
+
+Ayrımı nginx `server_name` ile yapar; uygulama `Host` başlığına bakıp mobil siteyi kökte
+servis eder. Bunun için systemd biriminde üç değişken var:
+
+```ini
+Environment=EKIPTAKIP_HOST_APP=app.polonyum.com
+Environment=EKIPTAKIP_HOST_DASHBOARD=dashboard.polonyum.com
+Environment=EKIPTAKIP_COOKIE_DOMAIN=.polonyum.com
+```
+
+Boş bırakırsan tek alan adı modunda çalışır (`/m` ve `/gorevler`) — yerelde `make dev`
+böyle çalışıyor, testler ikisini de kapsıyor.
+
+Üç ayrıntı, üçü de kasıtlı:
+
+- **Masaüstü sayfaları `app` alan adından erişilemez** (`/gorevler` → 404). İki alan adına
+  ayrı Cloudflare Access politikası yazabilesin diye; yoksa dashboard'a koyduğun sıkı
+  politikayı `app` üzerinden dolanmak mümkün olurdu.
+- **Çerez `.polonyum.com`'a yazılır**, yoksa kimlik iki alt alan adında ayrı ayrı seçilir.
+- **`manifest.json` uygulamadan üretilir**, statik dosya değil: `start_url` `app` alan
+  adında `/`, tek alan adı modunda `/m`. Yanlış `start_url` ana ekrandaki uygulamayı boş
+  sayfaya açar.
 
 ## Önce: kapı meselesi
 
@@ -16,9 +45,11 @@ imzasız, CSRF koruması yok. Tünelden verirken önüne bir kapı koymazsan adr
 her kaydı düzenler. İki seçenek:
 
 **A) Cloudflare Access (önerilen).** Zero Trust → Access → Applications → Self-hosted,
-hostname `ekiptakip.efeatcali.com`, policy: `Emails` = ekibin adresleri. Tünelin önünde
+hostname `app.polonyum.com` (ve ayrıca `dashboard.polonyum.com`), policy: `Emails` =
+ekibin adresleri. İki alan adına ayrı politika yazabilirsin — örneğin dashboard yalnızca
+yöneticilere. Tünelin önünde
 durur, uygulamaya hiç dokunmazsın; kişi bazlı, log tutar, parola paylaşmazsın.
-Kurduysan `nginx-ekiptakip.conf` içindeki `auth_basic` iki satırını yorum yap.
+Kurduysan `nginx-ekiptakip-ortak.conf` içindeki `auth_basic` iki satırını yorum yap.
 
 **B) Basic auth (hızlı).** Tek parola, herkes aynı. `htpasswd` ile kurulur (aşağıda).
 Perimetre kapanır ama **kimlik değildir**: içeri giren kişi rayın altındaki listeden
@@ -61,17 +92,31 @@ curl -su efe -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/m    # 200
 
 **3. Tünel**
 
-`deploy/olusan/cloudflared-ornek.yml` içindeki ingress bloğunu kendi
-`~/.cloudflared/config.yml` dosyana ekle — **`service: http_status:404` en altta kalsın**,
-altına kural yazarsan çalışmaz. Sonra:
+İki yol var, ikisi de çalışır:
+
+- **Catch-all** (en son kural `- service: http://127.0.0.1:8080`, hostname'siz): tünele
+  düşen her isim nginx'e gider, ayrımı `server_name` yapar. **Mevcut kuralların
+  (push denemesi vb.) catch-all'ın ÜSTÜNDE kalsın**, altındaki her şeyi yutar.
+- **Açık isim**: `app` ve `dashboard` için ayrı `hostname:` kuralları, en altta
+  `- service: http_status:404`.
+
+**`originRequest.httpHostHeader` KOYMA.** Host başlığını sabitlersen nginx alan adlarını
+ayıramaz, ikisi de aynı bloğa düşer.
+
+DNS'i iki isim için de ekle (proxy'li wildcard kayıt plana göre değişiyor, bu garanti):
 
 ```bash
-cloudflared tunnel route dns <tunel-adi> ekiptakip.efeatcali.com
+cloudflared tunnel route dns <tunel-adi> app.polonyum.com
+cloudflared tunnel route dns <tunel-adi> dashboard.polonyum.com
 sudo systemctl restart cloudflared
-curl -su efe -o /dev/null -w '%{http_code}\n' https://ekiptakip.efeatcali.com/m   # 200
+curl -su efe -o /dev/null -w '%{http_code}\n' https://app.polonyum.com/         # 200
+curl -su efe -o /dev/null -w '%{http_code}\n' https://dashboard.polonyum.com/   # 200
 ```
 
-Telefonda `https://ekiptakip.efeatcali.com/m` → Safari → **Paylaş → Ana Ekrana Ekle**.
+nginx'te `default_server` bloğu bilinmeyen host'u `444` ile kapatıyor — catch-all
+kullanırken bu şart, yoksa tünele düşen rastgele bir isim uygulamayı açar.
+
+Telefonda `https://app.polonyum.com` → Safari → **Paylaş → Ana Ekrana Ekle**.
 
 ## Güncelleme
 
