@@ -1,0 +1,36 @@
+/* Kaynak sistem taslaklarının ortak görünümü — gerçek ürün CSS'i değil,
+   ekran görüntülerinin sadeleştirilmiş yeniden çizimi. */
+* { box-sizing: border-box; margin: 0; }
+body { display: flex; min-height: 100vh; font: 14px/1.5 system-ui, sans-serif;
+       background: #f5f3ee; color: #26262b; }
+aside { width: 210px; flex: none; background: #1d1d22; color: #cfcfd6; padding: 16px 0; }
+aside b { display: block; padding: 6px 18px 14px; color: #fff; font-size: 15px; }
+aside a { display: block; padding: 8px 18px; color: inherit; text-decoration: none; }
+aside a.aktif { background: #34343c; color: #fff; }
+main { flex: 1; padding: 24px 28px; min-width: 0; }
+h1 { font-size: 21px; margin-bottom: 16px; }
+h2 { font-size: 16px; margin: 18px 0 8px; }
+.sekmeler { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
+.sekmeler span { border: 1px solid #c8c4b8; padding: 5px 14px; background: #fff; }
+.sekmeler .aktif { background: #cfc7f2; border-color: #9c8fe0; }
+.filtreler { display: flex; gap: 10px; margin: 10px 0 16px; flex-wrap: wrap; }
+.filtreler label { display: flex; flex-direction: column; font-size: 11px; color: #6b6b74; }
+.filtreler select, .filtreler input { min-width: 110px; padding: 4px 6px; }
+.cipler { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+.cip { padding: 10px 22px; border-radius: 8px; text-align: center; }
+.cip small { display: block; font-size: 11px; }
+.kirmizi { background: #f2b8ad; } .turuncu { background: #f6d0a2; }
+.yesil { background: #bfe3c0; } .gri { background: #e4e1d8; }
+table { width: 100%; border-collapse: collapse; background: #fff; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #e4e1d8;
+         vertical-align: top; }
+th { background: #edeae2; font-size: 12px; }
+a { color: #4d3fb5; }
+.kartlar { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+           gap: 16px; }
+.kart { border: 1px solid #d5d1c6; background: #fbfaf6; min-height: 130px;
+        display: flex; align-items: center; justify-content: center;
+        text-align: center; padding: 14px; font-size: 15px; }
+.rozet { display: inline-block; padding: 2px 10px; border-radius: 10px;
+         background: #dcefdb; font-size: 12px; }
+.not { color: #6b6b74; font-size: 12px; margin-top: 18px; }

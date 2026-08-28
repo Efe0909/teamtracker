@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="tr"><head><meta charset="utf-8"><title>Kaynak taslak — Görev yöneticisi</title>
+<link rel="stylesheet" href="kaynak.css"></head>
+<body>
+<aside>
+  <b>Kaynak Sistem</b>
+  <a href="#">🔍 Ara</a>
+  <a href="#">🔧 Prosedürler</a>
+  <a href="#" class="aktif">📊 Panolar</a>
+  <a href="#">👥 Ekipler</a>
+  <a href="#">🗃 Veri Yönetimi</a>
+  <a href="#">📘 Kılavuzlar</a>
+</aside>
+<main>
+  <h1>Task Manager</h1>
+  <div class="sekmeler">
+    <span class="aktif">Task Manager</span><span>Action Manager</span>
+    <span>Statistics over time</span><span>Statistics</span>
+    <span>Analysis</span><span>Board Rules</span>
+  </div>
+  <div class="sekmeler">
+    <span class="aktif">All</span><span>Last Shift</span>
+    <span>Last Operational Day</span><span>Open Actions</span><span>Overdue Actions</span>
+  </div>
+  <div class="cipler">
+    <div class="cip kirmizi">Yüksek<small>1</small></div>
+    <div class="cip turuncu">Orta (3 gün çözüm süresi)<small>2</small></div>
+    <div class="cip gri">Open <b>14</b> · Closed <b>230</b> · All <b>244</b></div>
+  </div>
+  <div class="filtreler">
+    <label>Shift<select><option>All</option></select></label>
+    <label>Type<select><option>All</option></select></label>
+    <label>PMR<select><option>All</option></select></label>
+    <label>Action assignee<select><option>All</option></select></label>
+    <label>Priority<select><option>All</option></select></label>
+    <label>Unit<select><option>All</option></select></label>
+    <label>Ara<input placeholder="Search"></label>
+  </div>
+  <table>
+    <tr><th>ID</th><th>Machine</th><th>Author</th><th>Priority</th><th>Type</th>
+        <th>End Time</th><th>Description</th><th>Defect Department</th>
+        <th>Status</th><th>Action Assignee(s)</th><th>Due Date</th></tr>
+    <tr><td><a href="kart-detay.html">100241</a></td><td>M-07</td><td>Efe</td>
+        <td>🟠 Orta</td><td>Küçük Hatalar</td><td>27 Ağu 11:06</td>
+        <td>Taşıyıcı bantta sürtme izi</td><td>Bakım</td><td>Açık</td><td>—</td><td>—</td></tr>
+    <tr><td><a href="kart-detay.html">100238</a></td><td>Hat-3</td><td>Selin</td>
+        <td>🟠 Orta</td><td>Kalitesel Anormallikler</td><td>27 Ağu 10:22</td>
+        <td>Sarım bozukluğu tespit edildi</td><td>Kalite</td><td>Açık</td><td>Deniz</td><td>29 Ağu</td></tr>
+    <tr><td><a href="kart-detay.html">100231</a></td><td>Hücre-2</td><td>Barış</td>
+        <td>🟢 Düşük</td><td>5S Gereksiz Öğeler</td><td>27 Ağu 09:01</td>
+        <td>Tanımsız alanda malzeme birikmesi</td><td>Üretim</td><td>Açık</td><td>—</td><td>—</td></tr>
+  </table>
+  <p class="not">Kaynakta ~18 kolon var (DMS Found, PMR, Report Origin, Action Resolver…);
+  burada kısaltıldı. Satır tıklayınca kayıt detay modalı açılıyor. Uyarlama kararları:
+  60 — 2.2 (kolon bütçesi 8, vardiya yerine hafta, modal yerine sayfa).</p>
+</main>
+</body></html>
