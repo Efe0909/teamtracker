@@ -8,8 +8,7 @@ from fastapi.testclient import TestClient
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import db  # noqa: E402
-import seed  # noqa: E402
+from shared import db, seed  # noqa: E402
 
 
 @pytest.fixture(scope="module")

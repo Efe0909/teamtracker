@@ -1,0 +1,103 @@
+/* EkipTakip — MASAÜSTÜ site. shared/static/base.css üstüne biner.
+   Ray + panel + içerik yerleşimi; token'lar base.css'te. */
+
+  /* ============ 1. RAY — hiç değişmez ============ */
+  .rail{width:var(--rail);background:#ece6fa;border-right:1px solid var(--line);
+        display:flex;flex-direction:column;align-items:center;padding:10px 0;gap:4px;flex-shrink:0}
+  .rlogo{width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,var(--acc),#c48fff);
+         display:grid;place-items:center;color:#fff;font-weight:800;margin-bottom:10px;font-size:15px}
+  .rbtn{width:40px;height:40px;border-radius:11px;display:grid;place-items:center;cursor:pointer;
+        font-size:17px;color:var(--dim);position:relative;border:none;background:transparent}
+  .rbtn:hover{background:#e0d7f7;color:var(--acc)}
+  .rbtn.on{background:var(--acc);color:#fff;box-shadow:0 2px 8px rgba(124,91,255,.35)}
+  .rbtn .cnt{position:absolute;top:3px;right:3px;background:var(--err);color:#fff;font-size:9px;
+             font-weight:700;border-radius:999px;padding:1px 4px;min-width:15px}
+  .rbtn .lbl{position:absolute;left:48px;background:var(--txt);color:#fff;font-size:12px;
+             padding:4px 9px;border-radius:7px;white-space:nowrap;opacity:0;pointer-events:none;
+             transition:.12s;z-index:40}
+  .rbtn:hover .lbl{opacity:1}
+
+  /* ============ 2. UYARLANIR PANEL ============ */
+  .panel{width:300px;flex-shrink:0;background:var(--panel);border-right:1px solid var(--line);
+         display:flex;flex-direction:column;min-height:0}
+  .phead{padding:11px 13px;border-bottom:1px solid var(--line);flex-shrink:0}
+  .ptitle{font-size:12px;text-transform:uppercase;letter-spacing:.7px;color:var(--dim);font-weight:700}
+  .segs{display:flex;gap:3px;background:var(--panel2);border-radius:9px;padding:3px;margin-top:9px}
+  .seg{flex:1;text-align:center;font-size:11.5px;font-weight:600;padding:5px 4px;border-radius:7px;
+       cursor:pointer;color:var(--dim);border:none;background:transparent}
+  .seg.on{background:var(--panel);color:var(--acc);box-shadow:var(--sh)}
+  .pbody{flex:1;overflow:auto;padding:9px}
+  .grp{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;
+       color:var(--dim);margin:12px 5px 7px}
+  .grp:first-child{margin-top:2px}
+
+  /* kayıt satırı — son harekete göre sıralı (C'den ödünç) */
+  .rec{border:1px solid var(--line);border-radius:11px;padding:9px 10px;margin-bottom:7px;
+       cursor:pointer;background:var(--panel);transition:.13s}
+  .rec:hover{border-color:var(--acc-s);box-shadow:var(--sh)}
+  .rec.on{border-color:var(--acc);box-shadow:0 0 0 1.5px rgba(124,91,255,.35),var(--sh)}
+  .rec.unread{border-left:3px solid var(--acc);background:#fbfaff}
+  .rec .t{font-weight:600;font-size:13px;margin:4px 0 3px;line-height:1.35}
+  .rec.unread .t{font-weight:700}
+  .rec .last{font-size:11.5px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .rec .meta{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--dim);margin-top:6px}
+  .dotm{width:7px;height:7px;border-radius:50%;background:var(--acc);flex-shrink:0}
+
+  /* ağaç modu */
+  .tnode{display:flex;align-items:center;gap:6px;padding:6px 7px;border-radius:9px;cursor:pointer}
+  .tnode:hover{background:var(--tint)}
+  .tnode.on{background:var(--tint);box-shadow:inset 0 0 0 1.5px var(--acc-s)}
+  .tw{width:14px;text-align:center;color:var(--acc-s);font-size:9px}
+  .tn{flex:1;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tb{font-size:10.5px;font-weight:700;border-radius:999px;padding:1px 7px}
+  .h0{background:#f0edf8;color:#a49dc0} .h1{background:#e2f5ec;color:#1c8a5b}
+  .h2{background:#fdf0d9;color:#b47a09} .h3{background:#fde4e8;color:#d13350}
+  .tkids{margin-left:12px;border-left:1.5px solid var(--line);padding-left:4px}
+
+  /* ============ 3. İÇERİK ============ */
+  .main{flex:1;display:flex;flex-direction:column;min-width:0;background:var(--panel)}
+  .crumb{display:flex;align-items:center;gap:6px;padding:9px 18px;border-bottom:1px solid var(--line);
+         font-size:12px;color:var(--dim);flex-shrink:0;background:var(--panel)}
+  .crumb a{color:var(--dim);text-decoration:none;padding:2px 5px;border-radius:5px;cursor:pointer}
+  .crumb a:hover{background:var(--tint);color:var(--acc)}
+  .crumb .cur{color:var(--txt);font-weight:600}
+  .crumb .caret{color:var(--acc);font-weight:700;cursor:pointer;padding:2px 5px;border-radius:5px}
+  .crumb .caret:hover{background:var(--tint)}
+  .crumb .sp{flex:1}
+
+  .chead{padding:15px 18px 0;flex-shrink:0}
+  .ctitle{font-size:19px;font-weight:750;letter-spacing:-.3px;margin:0 0 4px;display:flex;
+          align-items:center;gap:9px;flex-wrap:wrap}
+  .cdesc{color:var(--dim);font-size:13px;margin-bottom:12px;max-width:75ch}
+
+  /* alan şeridi — 4 kutu yerine tek satır (C'den ödünç) */
+  .strip{display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding:9px 18px;
+         background:var(--panel2);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+  .strip{display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding:9px 18px;
+         background:var(--panel2);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+  .chat{flex:1;overflow:auto;padding:16px 18px;display:flex;flex-direction:column;gap:11px;
+        background:var(--bg)}
+  .comp{border-top:1px solid var(--line);padding:11px 16px;display:flex;gap:9px;flex-shrink:0;
+        background:var(--panel)}
+  /* ağaç açılır kutusu (breadcrumb'dan) */
+  .pop{position:absolute;top:38px;left:200px;width:270px;background:var(--panel);
+       border:1px solid var(--acc2);border-radius:13px;box-shadow:var(--sh-lg);padding:9px;z-index:30;display:none}
+  .pop.on{display:block}
+  .wrapmain{position:relative;display:flex;flex-direction:column;flex:1;min-width:0}
+
+  .note{position:fixed;right:16px;bottom:16px;background:#fff6e8;border:1px solid #f0d5a8;
+        color:#8a6420;border-radius:12px;padding:11px 14px;font-size:12px;max-width:290px;
+        box-shadow:var(--sh-lg);line-height:1.55;z-index:50}
+  .note b{color:#6b4c12}
+  .note .x{float:right;cursor:pointer;font-weight:700;margin-left:8px}
+
+  /* ---- kart alanları: salt okunur ve kompozisyon ---- */
+  .fld select,.fld input{border:none;background:transparent;padding:0;width:auto;font-weight:600;
+        font-size:12px;border-radius:0}
+  .fld select:focus,.fld input:focus{outline:none;box-shadow:none}
+  .fld.ro{opacity:.6;cursor:not-allowed}
+  .comp input:disabled{opacity:.55}
+  .htmx-request.comp button{opacity:.6}
+  form.comp{margin:0}
+  .newform{display:none;gap:6px;padding:9px;border-bottom:1px solid var(--line)}
+  .newform.on{display:flex;flex-wrap:wrap}

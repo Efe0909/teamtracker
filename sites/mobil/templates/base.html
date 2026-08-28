@@ -1,0 +1,55 @@
+{# Mobil iskelet. Yerlesim SADECE burada; listeler kendi kokunu donduren parcalar. #}
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{{ title }} — EkipTakip</title>
+
+{# Safari: "Ana Ekrana Ekle" sonrasi tarayici cubugu olmadan acilir #}
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="EkipTakip">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#7c5bff">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/static/icon-180.png">
+<link rel="icon" href="/static/icon-192.png">
+
+<link rel="stylesheet" href="/static/base.css">
+<link rel="stylesheet" href="/static/m/mobil.css">
+<script src="/static/htmx.min.js"></script>
+</head>
+<body class="m">
+
+<div class="mapp">
+  <header class="mtop">
+    <div class="slot">{% block top_left %}<span class="rlogo" style="width:30px;height:30px;font-size:14px">◆</span>{% endblock %}</div>
+    <div class="ttl">{{ title }}</div>
+    {# Masaustune baglanti YOK (tasarim karari, spec/50-yapi.md): iki site
+       birbirine kopru kurmaz. Avatar yalnizca kim oldugunu gosterir. #}
+    <div class="slot">{% block top_right %}
+      <span class="av" style="background:{{ user.color }}" title="{{ user.name }}">{{ user.name[0] }}</span>
+    {% endblock %}</div>
+  </header>
+
+  {% block content %}{% endblock %}
+</div>
+
+{% block bottom %}{% include "tabs.html" %}{% endblock %}
+
+<script>
+/* Vanilla toplam ~10 satir: service worker kaydi + akis dibine kaydirma. */
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+/* Acilista basligi kesmemek icin kaydirma yok; yeni mesaj gelince dibe in. */
+document.body.addEventListener("htmx:afterSwap", e => {
+  if (e.target.id === "feed") window.scrollTo({ top: document.body.scrollHeight });
+});
+/* Gonderilen form temizlenir. hx-on= yerine burada: CSP'de 'unsafe-eval' istemiyoruz. */
+document.body.addEventListener("htmx:afterRequest", e => {
+  const f = e.target.closest("form");
+  if (f && e.detail.successful) f.reset();
+});
+</script>
+</body>
+</html>

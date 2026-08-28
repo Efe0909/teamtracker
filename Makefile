@@ -39,7 +39,7 @@ $(DB): $(STAMP)
 	@$(MAKE) --no-print-directory seed
 
 seed: $(STAMP)  ## veritabanini tohumla (VAROLAN ekiptakip.db SILINIR)
-	$(BIN)/python seed.py
+	$(BIN)/python -m shared.seed
 
 reseed: clean seed  ## veritabanini sifirla ve yeniden tohumla
 

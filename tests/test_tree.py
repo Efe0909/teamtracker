@@ -4,7 +4,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from tree import TreeIndex  # noqa: E402
+from shared.tree import TreeIndex  # noqa: E402
 
 ROWS = [
     {"id": "a", "parent_id": None, "name": "A", "node_type": "t", "sort_order": 0},

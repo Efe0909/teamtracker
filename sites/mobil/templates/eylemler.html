@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="mlist" data-fragment="mobile_actions">
+  {% for group, rows in groups %}
+    <div class="mgrp">{{ group }}</div>
+    {% for r in rows %}
+    <a class="acard{% if r.due.late %} late{% endif %}" href="{{ mp }}/kayit/{{ r.id }}">
+      <span class="when">⏱ {{ r.due.label }}</span>
+      <div class="t">{{ r.title }}</div>
+      <div class="k">
+        {{ r.path }}
+        {% if r.due.late %} · {{ -r.due.days }} gün gecikti
+        {% elif r.due.days == 0 %} · bugün
+        {% else %} · {{ r.due.days }} gün kaldı{% endif %}
+      </div>
+    </a>
+    {% endfor %}
+  {% else %}
+  <div class="mempty">Son tarihi olan açık kaydın yok.<br>
+    Bir karta son tarih verince burada çıkar.</div>
+  {% endfor %}
+</div>
+{% endblock %}
