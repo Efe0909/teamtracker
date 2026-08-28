@@ -8,6 +8,9 @@
 | `30-mobil.md` | mobil site çözümlemesi (kaynak ekranlardan uyarlama) |
 | `40-push.md` | web push: hazır olan, eksik olan, denemeden çıkan dersler |
 | `50-yapi.md` | repo yapısı, iki site ayrımı, ayrık veritabanı yolu |
+| `60-kaynak-uyarlama.md` | kaynak panoların çözümlemesi |
+| `61-arastirma-sentezi.md` | araştırma sentezi |
+| `70-guvenlik.md` | tehdit modeli, kimlik, yetki, CSRF, sırlar, denetim izi |
 | `60-kaynak-uyarlama.md` | kaynak panoların çözümlemesi: veri hattı, ekran ekran uyarlama, alınmayacaklar |
 | `61-arastirma-sentezi.md` | IWS ve ekip araçları kaynak taraması — bizim ölçeğe uyan/uymayan pratikler |
 | `referans/` | kaynak arayüz dosyaları (`spec/referans/layout-a.html`) |

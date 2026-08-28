@@ -68,6 +68,22 @@ ekranında "yöneticine söyle" mesajı görür, kayıt oluşmaz.
 Gerekçe: aksi hâlde kapsamsız kullanıcılar birikir ve "atanmamış havuzu herkese açık"
 kuralı (spec/10) tanımadığımız kişilere de açılır. Yetki ve kapsam üyelik anında verilir.
 
+**Eşleşme kuralları** (ikisi de hesap devralmayı engellemek için):
+
+| Durum | Ne olur |
+|---|---|
+| `sub` eşleşti, e-posta farklı | **Girer**, e-posta güncellenir. Kişi kurumsal adresini değiştirmiştir; kimliğin çapası `sub`. |
+| E-posta eşleşti, satırda `sub` yok | **Girer**, `sub` bağlanır (ilk giriş). |
+| E-posta eşleşti, satırdaki `sub` farklı | **Reddedilir** (`hesap_uyusmuyor`). Adres geri dönüştürülmüş olabilir — başkasının kaydını devralmaya en kısa yol budur. |
+| Hiçbiri eşleşmedi | **Reddedilir** (`davetsiz`), kullanıcı oluşturulmaz. |
+
+E-posta karşılaştırması büyük/küçük harf duyarsızdır (`collate nocase`); yoksa
+aynı kişi için iki satır oluşabilirdi.
+
+**Listeyi kim yönetir:** yönetim ekranı gelene kadar `tools/kullanici.py`
+(`listele` / `ekle` / `kapat` / `ac`). İlk kurulumda en az bir admin bu betikle
+eklenir, yoksa kimse giremez.
+
 Yeni sütunlar:
 
 | Sütun | Ne için |
@@ -139,6 +155,18 @@ Kurallar:
   eşleşmezse **403**.
 - Muaf: `/giris`, `/giris/callback` (oturum yokken çalışır, kendi `state`'i var).
 - Token oturum ömrü boyunca sabit; oturum yenilenince yenilenir.
+- Karşılaştırma `hmac.compare_digest` ile yapılır.
+
+**`SameSite=Lax`'in bu mimarideki sınırı:** çerez `.<alan>`'a yazıldığı için
+`*.<alan>` altındaki **her** servis "same-site" sayılır — Lax oradan gelen
+isteği engellemez, üstelik üst alan adına çerez de yazabilir (cookie tossing).
+Bu yüzden CSRF token'ı bir "ekstra" değil, **asıl** korumadır. Ve şu bir güven
+kararıdır: `.<alan>` altına üçüncü tarafın kontrol ettiği hiçbir şey konmaz.
+Çerez yayında `__Secure-` önekli; `__Host-` kullanılamıyor çünkü o önek `Domain`
+niteliğini yasaklar, biz ise iki alt alan adında tek oturum için ona muhtacız.
+
+**`GET` hiçbir şey yazmaz.** CSRF kontrolü yalnızca güvensiz metotlarda çalıştığı
+için bu bir kural, tercih değil: yazma yapan bir `GET` sessizce korumasız olur.
 
 ---
 
@@ -166,6 +194,10 @@ Bugün doğru olanlar korunacak, teste bağlanacak:
 
 Kulüp ölçeğinde tam bir sınırlayıcıya gerek yok. Yalnızca **giriş uçları**: IP başına
 dakikada 10 deneme, aşılırsa 429. Süreç belleğinde sayaç yeterli (`--workers 1`).
+
+IP `X-Real-IP` başlığından okunur; nginx onu yazar (`deploy/`). **Vekil bu
+başlığı yazmazsa** bütün istekler `127.0.0.1` görünür, sayaç tek kovaya düşer ve
+bir kişi bütün kulübü kilitler. Yani vekil yapılandırması bu kuralın parçasıdır.
 
 Yazma uçları için sınır **koymuyoruz**: davetli listesi zaten kapıyı daraltıyor, yanlış
 pozitif riski faydadan büyük.
