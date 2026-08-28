@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="tr"><head><meta charset="utf-8"><title>Kaynak taslak — Analysis</title>
+<link rel="stylesheet" href="kaynak.css">
+<style>.paneller{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.panel{border:1px solid #d5d1c6;background:#fff;min-height:200px;display:flex;
+align-items:center;justify-content:center;color:#8a8a92}</style></head>
+<body>
+<aside>
+  <b>Kaynak Sistem</b>
+  <a href="#">🔍 Ara</a>
+  <a href="#">🔧 Prosedürler</a>
+  <a href="#" class="aktif">📊 Panolar</a>
+  <a href="#">👥 Ekipler</a>
+  <a href="#">🗃 Veri Yönetimi</a>
+  <a href="#">📘 Kılavuzlar</a>
+</aside>
+<main>
+  <h1>Analysis</h1>
+  <div class="sekmeler">
+    <span>Task Manager</span><span>Action Manager</span><span>Statistics over time</span>
+    <span>Statistics</span><span class="aktif">Analysis</span><span>Board Rules</span>
+  </div>
+  <div class="filtreler">
+    <label>Shift<select><option>All</option></select></label>
+    <label>Type<select><option>All</option></select></label>
+    <label>PMR<select><option>All</option></select></label>
+    <label>Action assignee<select><option>All</option></select></label>
+    <label>Priority<select><option>All</option></select></label>
+    <label>Unit<select><option>All</option></select></label>
+  </div>
+  <div class="paneller">
+    <div class="panel">[grafik: açık kayıtların tip kırılımı]</div>
+    <div class="panel">[grafik: birim başına açık kayıt]</div>
+    <div class="panel">[grafik: zaman içinde açılış/kapanış]</div>
+    <div class="panel">[grafik: departman kırılımı]</div>
+  </div>
+  <p class="not">Filtre şeridi tabloyla ortak; grafik panelleri aynı veri kümesinin
+  hazır kırılımları. Bizde ayrı modül değil, pivot modülünün infografik yüzü (60 — 2.3).</p>
+</main>
+</body></html>

@@ -11,6 +11,7 @@
 | `60-kaynak-uyarlama.md` | kaynak panoların çözümlemesi: veri hattı, ekran ekran uyarlama, alınmayacaklar |
 | `61-arastirma-sentezi.md` | IWS ve ekip araçları kaynak taraması — bizim ölçeğe uyan/uymayan pratikler |
 | `referans/` | kaynak arayüz dosyaları (`spec/referans/layout-a.html`) |
+| `../reference/` | kaynak ekranların temizlenmiş HTML taslakları (ham fotoğraflar git dışı) |
 | `iskelet/` | ekran iskeletleri (statik HTML taslak) |
 | `gorseller/` | ham ekran görüntüleri — git'e girmez |
 
