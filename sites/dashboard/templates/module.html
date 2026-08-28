@@ -1,0 +1,26 @@
+{# Henuz yazilmamis modul icin iskele sayfa. Olu baglanti birakma, ne gelecegini soyle. #}
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ m.name }} — EkipTakip</title>
+<link rel="icon" href="/static/icon-192.png">
+<link rel="stylesheet" href="/static/base.css">
+<link rel="stylesheet" href="/static/d/dashboard.css">
+<link rel="stylesheet" href="/static/d/home.css">
+</head>
+<body class="home">
+<div class="mwrap">
+  <a class="mback" href="/">← Ana sayfa</a>
+  <div class="mcard">
+    <div class="ic">{{ m.icon }}</div>
+    <h1>{{ m.name }} <span class="tag t-soon">Yakında</span></h1>
+    <p>{{ m.desc }}</p>
+    <ul>
+      {% for line in m.plan %}<li>{{ line }}</li>{% endfor %}
+    </ul>
+  </div>
+</div>
+</body>
+</html>

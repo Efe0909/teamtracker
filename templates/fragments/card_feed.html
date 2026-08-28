@@ -1,4 +1,0 @@
-{# fragment: card_feed — mesaj + sistem olaylari, tek kronolojik akis. #}
-<div class="chat" id="feed" data-fragment="card_feed"{% if oob %} hx-swap-oob="true"{% endif %}>
-  {% for m in feed %}{% include "fragments/card_message.html" %}{% endfor %}
-</div>

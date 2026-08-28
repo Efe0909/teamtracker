@@ -11,8 +11,7 @@ from fastapi.testclient import TestClient
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import db  # noqa: E402
-import seed  # noqa: E402
+from shared import db, seed  # noqa: E402
 
 APP = "app.polonyum.com"
 DASH = "dashboard.polonyum.com"
@@ -24,12 +23,13 @@ def client(tmp_path_factory):
     db._conn = None
     seed.run()
     import app as app_mod  # noqa: E402
-    onceki = (app_mod.HOST_APP, app_mod.HOST_DASH, app_mod.COOKIE_DOMAIN)
-    app_mod.HOST_APP, app_mod.HOST_DASH = APP, DASH
-    app_mod.COOKIE_DOMAIN = ".polonyum.com"
+    from shared import config  # noqa: E402
+    onceki = (config.HOST_APP, config.HOST_DASH, config.COOKIE_DOMAIN)
+    config.HOST_APP, config.HOST_DASH = APP, DASH
+    config.COOKIE_DOMAIN = ".polonyum.com"
     with TestClient(app_mod.app) as c:
         yield c
-    app_mod.HOST_APP, app_mod.HOST_DASH, app_mod.COOKIE_DOMAIN = onceki
+    config.HOST_APP, config.HOST_DASH, config.COOKIE_DOMAIN = onceki
 
 
 def app_host(client, path, **kw):
@@ -70,12 +70,27 @@ def test_desktop_is_unreachable_from_app_host(client):
 def test_dashboard_host_serves_desktop(client):
     r = dash_host(client, "/")
     assert r.status_code == 200 and "Görev Yöneticisi" in r.text
-    assert f"https://{APP}/" in r.text or f"http://{APP}/" in r.text   # cepteki yuze bağlantı
     assert dash_host(client, "/gorevler").status_code == 200
 
 
+def test_sites_do_not_link_to_each_other(client):
+    """Tasarim karari (spec/50-yapi.md): iki site birbirine hyperlink vermez.
+
+    Mobil adresi masaustunde YAZILI durur ama tiklanabilir degil.
+    """
+    dash = dash_host(client, "/").text
+    assert APP in dash                                   # adres gorunuyor
+    assert f'href="https://{APP}' not in dash and f'href="http://{APP}' not in dash
+    assert f'href="//{APP}' not in dash
+
+    for path in ("/", "/eylemler", "/bildirimler"):
+        mobil = app_host(client, path).text
+        assert DASH not in mobil                         # masaustune iz yok
+        assert 'href="/gorevler"' not in mobil
+
+
 def test_shared_paths_work_on_app_host(client):
-    for path in ("/sw.js", "/favicon.ico", "/static/app.css", "/static/icon-180.png"):
+    for path in ("/sw.js", "/favicon.ico", "/static/base.css", "/static/icon-180.png"):
         assert app_host(client, path).status_code == 200, path
 
 

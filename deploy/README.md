@@ -76,7 +76,7 @@ sudo systemctl daemon-reload && sudo systemctl enable --now ekiptakip
 curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8000/m        # 200
 ```
 
-`--workers 1` şart: ağaç indeksi süreç belleğinde (00-BASLA.md Karar 2). İkinci worker
+`--workers 1` şart: ağaç indeksi süreç belleğinde (spec/10-kararlar.md 'Ağaç bellekte'). İkinci worker
 açarsan iki farklı ağaç indeksi oluşur ve yetki kontrolü tutarsızlaşır.
 
 **2. nginx + kapı**
@@ -156,8 +156,8 @@ Günlük yedek için crontab (`crontab -e`):
 Tünel HTTPS verdiği için web push'un ön şartı karşılandı: iOS'ta web push **yalnızca
 ana ekrana eklenmiş** sitede çalışır, o yüzden önce `/m`'yi ekletmek gerekiyor.
 `static/sw.js` içinde `push` ve `notificationclick` girişleri hazır. Eksik olan sunucu
-tarafı: `push_subscriptions` tablosu (01-sema.md §7) + VAPID anahtarları. Anahtarlar
-`.env`'de kalır, koda gömülmez (02-push-handoff.md).
+tarafı: `push_subscriptions` tablosu (spec/20-sema.md §7) + VAPID anahtarları. Anahtarlar
+`.env`'de kalır, koda gömülmez (spec/40-push.md).
 
 ## Bu kurulumun kapatmadıkları
 

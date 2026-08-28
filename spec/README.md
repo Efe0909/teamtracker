@@ -9,7 +9,7 @@ spec/
   00-index.md             ekran listesi + akış haritası + durum
   gorseller/              ham ekran goruntuleri — GIT'E GIRMEZ (.gitignore)
   NN-<ekran>.md           çözümleme raporu
-  iskelet/<ekran>.html    statik HTML iskelet (layout-a.html kalıbında)
+  iskelet/<ekran>.html    statik HTML iskelet (spec/referans/layout-a.html kalıbında)
 ```
 
 ## Rapor ne içerir (`NN-<ekran>.md`)
@@ -17,19 +17,19 @@ spec/
 1. **İş** — bu ekran hangi soruyu cevaplıyor, kim kullanıyor, günde kaç kez.
 2. **Akış** — bir öncesi / bir sonrası hangi ekran, hangi eylemle geçiliyor.
 3. **Ekrandaki bölgeler** — her biri bir `data-fragment` adıyla: ne gösteriyor, nereden
-   besleniyor (hangi tablo/sütun — `01-sema.md`'ye bağla), boşken ne yazıyor.
+   besleniyor (hangi tablo/sütun — `spec/20-sema.md`'ye bağla), boşken ne yazıyor.
 4. **Eylemler** — düğme/alan başına: kim yapabilir (yetki), sunucuda ne değişir,
    ekranda ne tazelenir.
 5. **Veri ihtiyacı** — mevcut şemayla karşılanıyor mu; karşılanmıyorsa eksik tablo/sütun
-   önerisi, `01-sema.md`'deki hangi açık noktaya denk geldiği.
+   önerisi, `spec/20-sema.md`'deki hangi açık noktaya denk geldiği.
 6. **Alınmayacaklar** — kaynaktaki neyi kasten kopyalamıyoruz ve neden.
 
 Kaynak ekranın kötü yanlarını da yaz. Birebir kopya değil, uyarlama yapıyoruz.
 
 ## İskelet ne olur (`iskelet/<ekran>.html`)
 
-- `layout-a.html` kalıbı: her bölge `<section data-fragment="X">`, parça **nerede
-  gösterildiğini bilmez** (00-BASLA.md Karar 3 — skin kuralı).
+- `spec/referans/layout-a.html` kalıbı: her bölge `<section data-fragment="X">`, parça **nerede
+  gösterildiğini bilmez** (spec/10-kararlar.md 'skin kuralı' — skin kuralı).
 - Renkler `static/app.css` token'larından: `--acc`, `--line`, `--panel`, `--dim`, `--sh`…
   **Ham renk yazma.** İskelet `<link rel="stylesheet" href="/static/app.css">` ile açılsın,
   ekrana özel ne varsa aynı token'ların üstüne, dosya içinde `<style>` olarak.
@@ -42,6 +42,6 @@ Kaynak ekranın kötü yanlarını da yaz. Birebir kopya değil, uyarlama yapıy
 - **Gerçek veri yazma.** Depo public. Ekran görüntüsündeki müşteri/çalışan adları, kayıt
   içerikleri, dosya yolları spec'e geçmez; yapıyı anlat, örnekleri tohum verisinden uydur.
 - Görseller `spec/gorseller/` içinde kalır, commit edilmez.
-- Rapor `01-sema.md` ve `00-BASLA.md`'ye atıf yapsın; aynı kararı ikinci kez almayalım.
+- Rapor `spec/20-sema.md` ve `spec/10-kararlar.md`'ye atıf yapsın; aynı kararı ikinci kez almayalım.
 - Bir ekran hazır olduğunda `00-index.md` satırı güncellenir ve `app.py`'deki `MODULES`
   kaydına bağlanır (`ready` bayrağı ancak gerçek rota yazılınca `True` olur).

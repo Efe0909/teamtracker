@@ -1,10 +1,23 @@
-.venv/
+# Python
 __pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+
+# Veritabani: gercek kart icerigi ve kullanici e-postalari birikir, ASLA commit etme
 *.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Sirlar (VAPID anahtarlari, token'lar)
 .env
 
-# spec: ham ekran goruntuleri git-e girmez (public depo)
+# spec: ham ekran goruntuleri — depo public, yapiyi yaz goruntuyu koyma
 spec/gorseller/
 
 # deploy: kur.sh ciktilari (makineye ozel yollar)
 deploy/olusan/
+
+# isletim sistemi
+.DS_Store

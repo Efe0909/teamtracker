@@ -1,7 +1,7 @@
 """PWA ikonlarini uretir (saf Python, bagimlilik yok).
 
 Calistir: .venv/bin/python tools/ikon_uret.py
-Uretir: static/icon-180.png (apple-touch-icon), icon-192.png, icon-512.png
+Uretir: shared/static/icon-180.png (apple-touch-icon), icon-192.png, icon-512.png
 
 Tasarim: paletin mor gradyani (--acc #7c5bff -> #c48fff) uzerine beyaz elmas (rlogo ile ayni).
 """
@@ -11,7 +11,7 @@ import struct
 import zlib
 from pathlib import Path
 
-OUT = Path(__file__).resolve().parents[1] / "static"
+OUT = Path(__file__).resolve().parents[1] / "shared" / "static"
 ACC = (0x7C, 0x5B, 0xFF)
 ACC2 = (0xC4, 0x8F, 0xFF)
 
