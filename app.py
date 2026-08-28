@@ -10,6 +10,7 @@ Ortak çekirdek shared/ altında: veritabanı, yetki, ağaç, iş mantığı, pa
 """
 from __future__ import annotations
 
+import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import urlparse
@@ -62,6 +63,9 @@ class MobileHostPrefix:
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    # Yanlis yapilandirma calisma aninda degil ACILISTA yakalanir (spec/70 §7).
+    for uyari in config.dogrula():
+        print(f"[ekiptakip] UYARI: {uyari}", file=sys.stderr)
     db.connect()
     service.rebuild_tree()
     yield

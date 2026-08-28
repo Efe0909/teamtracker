@@ -9,14 +9,32 @@ pragma foreign_keys = on;
 
 create table if not exists users (
   id            text primary key,
-  email         text unique not null,
+  email         text unique not null,      -- davetli listesi: giris bunun uzerinden eslesir
   name          text not null,
   color         text,
   is_admin      integer not null default 0,
   is_editor     integer not null default 0,
   scope_node_id text,
-  created_at    text not null
+  created_at    text not null,
+  -- kimlik (spec/70-guvenlik.md §2.3)
+  google_sub    text unique,               -- Google'in degismeyen kullanici kimligi
+  is_active     integer not null default 1,-- 0 => giris yok VE varolan oturum aninda olur
+  last_login_at text
 );
+
+-- Guvenlik olaylari: kim girdi, kim reddedildi, nerede 403 yedi.
+-- Kart olaylari events'te; bunlar ayri tabloda cunku kayda degil SISTEME ait.
+create table if not exists guvenlik_olaylari (
+  id         text primary key,
+  created_at text not null,
+  tur        text not null check (tur in
+             ('giris','giris_reddi','cikis','yetki_reddi','pasiflestirme')),
+  actor_id   text references users(id) on delete set null,
+  email      text,                          -- reddedilen girisde kullanici satiri yok
+  ip         text,
+  detay      text
+);
+create index if not exists guvenlik_zaman_idx on guvenlik_olaylari(created_at desc);
 
 create table if not exists nodes (
   id             text primary key,
