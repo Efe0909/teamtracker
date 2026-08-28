@@ -1,0 +1,56 @@
+{# fragment: card_actions — eylem seridi (spec/20-sema.md §3a, spec/60 2.4).
+   Kayit "ne oldu", eylem "kim ne yapacak": her eylemin kendi atanani, tarihi, durumu.
+   Yetki: sablon soluklastirir; asil kontrol POST/PATCH ucunda. #}
+<div class="acts" id="acts" data-fragment="card_actions" {% if oob_acts %}hx-swap-oob="true"{% endif %}>
+  <div class="ahead">⚡ Eylemler
+    {% if acik_eylem %}<span class="tb h2">{{ acik_eylem }} açık</span>
+    {% else %}<span class="tb h1">hepsi kapalı</span>{% endif %}
+    <span class="small muted" style="font-weight:400">— kayıt, açık eylem varken kapanmaz</span>
+  </div>
+
+  {% for e in eylemler %}
+  <div class="arow{% if e.done %} done{% endif %}">
+    {% if can_edit %}
+    <select name="status" class="adur v-{{ e.status }}" hx-patch="/eylem/{{ e.id }}"
+            hx-target="#acts" hx-swap="outerHTML" hx-trigger="change">
+      {% for k, v in eylem_durum.items() %}
+      <option value="{{ k }}" {% if k == e.status %}selected{% endif %}>{{ v }}</option>
+      {% endfor %}
+    </select>
+    {% else %}<span class="adur v-{{ e.status }}">{{ eylem_durum[e.status] }}</span>{% endif %}
+    <span class="at">{{ e.title }}</span>
+    {% if can_edit %}
+    <select name="assignee_id" class="akisi" hx-patch="/eylem/{{ e.id }}"
+            hx-target="#acts" hx-swap="outerHTML" hx-trigger="change">
+      <option value="">— havuzda —</option>
+      {% for u in users %}
+      <option value="{{ u.id }}" {% if e.assignee and u.id == e.assignee.id %}selected{% endif %}>{{ u.name }}</option>
+      {% endfor %}
+    </select>
+    <input type="date" name="due_date" class="atarih{% if e.overdue %} gec{% endif %}"
+           value="{{ e.due or '' }}" hx-patch="/eylem/{{ e.id }}"
+           hx-target="#acts" hx-swap="outerHTML" hx-trigger="change">
+    {% else %}
+    <span class="akisi">{{ e.assignee.name if e.assignee else '— havuzda —' }}</span>
+    <span class="atarih{% if e.overdue %} gec{% endif %}">{{ e.due or '—' }}</span>
+    {% endif %}
+  </div>
+  {% else %}
+  <div class="empty small" style="padding:8px">Eylem yok — "kim ne yapacak" henüz belirlenmedi.</div>
+  {% endfor %}
+
+  {% if can_edit %}
+  <form class="aform" hx-post="/item/{{ item.id }}/eylem" hx-target="#acts" hx-swap="outerHTML">
+    <input name="title" placeholder="Yeni eylem…" required>
+    <select name="assignee_id" style="width:auto">
+      <option value="">— havuzda —</option>
+      {% for u in users %}<option value="{{ u.id }}">{{ u.name }}</option>{% endfor %}
+    </select>
+    <input type="date" name="due_date" style="width:auto">
+    <button class="primary">Ekle</button>
+  </form>
+  {% endif %}
+</div>
+{% if oob_feed %}
+  {% with oob = True %}{% include "fragments/card_feed.html" %}{% endwith %}
+{% endif %}

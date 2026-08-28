@@ -56,6 +56,19 @@ def gocler() -> list[str]:
     conn = connect()
     yapildi: list[str] = []
 
+    # ONCE eksik tablolar: schema.sql'in tamami 'create ... if not exists' (tek
+    # insert'ler tetikleyicilerin ICINDE), yani betigi bastan calistirmak varolan
+    # veriye dokunmaz. Tek tek ifade kesmiyoruz: teams'in hemen ardinda index
+    # yok, metin kesimi komsu tablolari da yutuyordu.
+    # Sutun eklemeler bundan SONRA gelir; yoksa hic tablosu olmayan bir
+    # veritabaninda `alter table` bulunmayan tabloya carpar.
+    tablolar = {r["name"] for r in conn.execute(
+        "select name from sqlite_master where type='table'")}
+    eksik = {"guvenlik_olaylari", "teams", "team_members", "actions"} - tablolar
+    if eksik:
+        conn.executescript(SCHEMA_PATH.read_text(encoding="utf-8"))
+        yapildi.extend(sorted(eksik))
+
     var = {r["name"] for r in conn.execute("pragma table_info(users)")}
     for sutun, tanim in (("google_sub", "text"),
                          ("is_active", "integer not null default 1"),
@@ -71,23 +84,14 @@ def gocler() -> list[str]:
     conn.execute("create unique index if not exists users_email_nocase_idx"
                  " on users(lower(email))")
 
-    # Yeni tablolar/indeksler: semadaki create ... if not exists ifadeleri zaten
-    # idempotent, tumunu calistirmak yerine yalnizca eksik olani kur.
-    tablolar = {r["name"] for r in conn.execute(
-        "select name from sqlite_master where type='table'")}
-    if "guvenlik_olaylari" not in tablolar:
-        conn.executescript(_govde("create table if not exists guvenlik_olaylari"))
-        yapildi.append("guvenlik_olaylari")
+    # items.team_id: takim ekrani ile geldi, eski items tablosunda yok.
+    icols = {r["name"] for r in conn.execute("pragma table_info(items)")}
+    if icols and "team_id" not in icols:
+        conn.execute("alter table items add column team_id text references teams(id)")
+        yapildi.append("items.team_id")
+
     conn.commit()
     return yapildi
-
-
-def _govde(baslangic: str) -> str:
-    """schema.sql icinden tek bir ifadeyi ve ardindaki indeksleri ceker."""
-    metin = SCHEMA_PATH.read_text(encoding="utf-8")
-    i = metin.index(baslangic)
-    j = metin.index(";", metin.index("create index", i)) + 1
-    return metin[i:j]
 
 
 def q(sql: str, args: tuple = ()) -> list[sqlite3.Row]:

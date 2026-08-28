@@ -11,6 +11,7 @@
 <link rel="stylesheet" href="/static/d/home.css">
 </head>
 <body class="home" hx-headers='{"X-CSRF-Token": "{{ csrf_token }}"}'>
+{% include "fragments/uyari_mobil.html" %}
 <div class="hwrap">
 
   <header class="hhead">
@@ -42,6 +43,8 @@
      her biri aynı hiyerarşi ve yetki modelinin üstüne oturacak.</p>
 
   <div class="hstats">
+    <div class="stat{% if stats.my_actions %} alert{% endif %}">
+      <b>{{ stats.my_actions }}</b><span>açık eylemim</span></div>
     <div class="stat"><b>{{ stats.mine }}</b><span>bana ait</span></div>
     <div class="stat{% if stats.unassigned %} alert{% endif %}">
       <b>{{ stats.unassigned }}</b><span>atanmamış</span></div>
