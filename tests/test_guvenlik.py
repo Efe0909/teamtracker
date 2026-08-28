@@ -244,3 +244,48 @@ def test_gocler_eski_veritabanina_sutun_ekler(tmp_path):
     finally:
         db._conn.close()
         db.DB_PATH, db._conn = onceki_yol, onceki_conn
+
+
+# --- sertlestirme (AC-9, AC-10, §8) ---------------------------------------
+
+
+def test_guvenlik_basliklari_uygulamadan_gelir(client):
+    """AC-9: nginx olmadan da gecerli olsunlar."""
+    r = client.get("/gorevler")
+    csp = r.headers["content-security-policy"]
+    assert "script-src 'self'" in csp
+    assert "unsafe-inline" not in csp.split("style-src")[0]   # script tarafinda YOK
+    assert "unsafe-eval" not in csp
+    assert "frame-ancestors 'none'" in csp and "form-action 'self'" in csp
+    assert r.headers["x-content-type-options"] == "nosniff"
+    assert r.headers["referrer-policy"] == "same-origin"
+    assert r.headers["x-frame-options"] == "DENY"
+
+
+def test_sablonlarda_satir_ici_script_yok():
+    """CSP'nin script-src 'self' kalabilmesi buna bagli."""
+    for yol in Path(ROOT).rglob("sites/*/templates/**/*.html"):
+        metin = yol.read_text(encoding="utf-8")
+        assert "<script>" not in metin, yol
+        assert "hx-on" not in metin, yol          # htmx onu new Function ile derler
+
+
+def test_giris_hiz_siniri(client):
+    """AC-10: kaba kuvvete karsi dakikada 10 deneme."""
+    from shared import sertlestirme
+    sertlestirme._gecmis.clear()
+    kodlar = [client.get("/giris", follow_redirects=False).status_code for _ in range(12)]
+    assert 429 in kodlar
+    assert kodlar.index(429) >= sertlestirme.SINIR
+    sertlestirme._gecmis.clear()
+
+
+def test_403_denetim_izine_yazilir(client):
+    """AC-6'nin ikinci yarisi: kapsam disi yazma denemesi iz birakir."""
+    u = db.q1("select id from users where name = 'Efe'")
+    client.post(f"/switch/{u['id']}", follow_redirects=False)
+    it = db.q1("select * from items where title = 'Kapak Ünitesi — tekrar eden kayıp'")
+    once = db.q1("select count(*) c from guvenlik_olaylari where tur='yetki_reddi'")["c"]
+    r = client.post(f"/item/{it['id']}/message", data={"body": "kapsam disi"})
+    assert r.status_code == 403
+    assert db.q1("select count(*) c from guvenlik_olaylari where tur='yetki_reddi'")["c"] == once + 1

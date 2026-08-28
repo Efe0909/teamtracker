@@ -18,11 +18,12 @@ from urllib.parse import urlparse
 from urllib.parse import quote
 
 from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi.exception_handlers import http_exception_handler
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
-from shared import auth, config, csrf, db, kimlik, service
+from shared import auth, config, csrf, db, kimlik, sertlestirme, service
 from sites.dashboard import routes as dashboard
 from sites.mobil import routes as mobil
 
@@ -120,8 +121,9 @@ app = FastAPI(title="EkipTakip", version="0.1.0-alpha", lifespan=lifespan)
 
 # Ara katman sirasi: EN SON eklenen EN DISTA calisir.
 #   MobileHostPrefix (yolu duzeltir) -> SessionMiddleware (oturumu acar)
-#     -> GirisKapisi (kimligi arar) -> CsrfKapisi (token) -> rotalar
+#     -> GirisKapisi (kimligi arar) -> GuvenlikBasliklari -> CsrfKapisi -> rotalar
 app.add_middleware(csrf.CsrfKapisi)
+app.add_middleware(sertlestirme.GuvenlikBasliklari)
 app.add_middleware(GirisKapisi)
 app.add_middleware(
     SessionMiddleware,
@@ -138,6 +140,22 @@ app.add_middleware(MobileHostPrefix)
 app.mount("/static/d", StaticFiles(directory=BASE / "sites/dashboard/static"), name="statik-d")
 app.mount("/static/m", StaticFiles(directory=BASE / "sites/mobil/static"), name="statik-m")
 app.mount("/static", StaticFiles(directory=BASE / "shared/static"), name="statik")
+
+
+@app.exception_handler(HTTPException)
+async def yetki_reddini_yaz(request: Request, exc: HTTPException):
+    """403'ler denetim izine tek yerden yazilir (spec/70-guvenlik.md §8).
+
+    Uclarda tek tek yazilsaydi biri unutulurdu; burasi hepsinin gectigi yer.
+    """
+    if exc.status_code == 403:
+        try:
+            kimlik.olay(request, "yetki_reddi",
+                        actor_id=request.session.get("uid") if hasattr(request, "session") else None,
+                        detay=f"{request.method} {request.url.path}")
+        except Exception:                      # denetim yazimi istegi bozmasin
+            pass
+    return await http_exception_handler(request, exc)
 
 
 # --- iki sitenin de kullandigi uclar ---------------------------------------

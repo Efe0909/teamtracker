@@ -13,7 +13,7 @@ from authlib.integrations.starlette_client import OAuth, OAuthError
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from . import config, db
+from . import config, db, sertlestirme
 from .render import ORTAK as ORTAK_DIZIN
 from .render import site_templates
 
@@ -125,6 +125,9 @@ def _sayfa(request: Request, hata: str | None = None, kod: int = 200) -> HTMLRes
 
 @router.get("/giris", response_class=HTMLResponse)
 async def giris(request: Request, nereye: str = "/"):
+    if sertlestirme.sinir_asildi(request):
+        olay(request, "giris_reddi", detay="hiz siniri")
+        return sertlestirme.cok_deneme()
     if oturumdaki_id(request):
         return RedirectResponse(guvenli_donus(nereye), status_code=303)
     if config.sahte_kimlik():
@@ -138,6 +141,9 @@ async def giris(request: Request, nereye: str = "/"):
 async def giris_callback(request: Request):
     if config.sahte_kimlik():
         raise HTTPException(404)
+    if sertlestirme.sinir_asildi(request):
+        olay(request, "giris_reddi", detay="hiz siniri")
+        return sertlestirme.cok_deneme()
     try:
         # state dogrulamasi ve id_token imzasi authlib'in isi
         token = await _oauth.google.authorize_access_token(request)
