@@ -144,4 +144,21 @@
   .atarih.gec,.arow input.gec{color:var(--err)}
   .aform{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}
   .aform input[name=title]{flex:1;min-width:150px}
+  .abolum{font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;
+          color:var(--dim);margin:9px 2px 5px}
   .crumb .sep{color:var(--line)}
+
+  /* ---- kayıt sayfası: sol ~2/3 içerik, sağ dar sohbet (spec/60 2.4) ---- */
+  .kbody{display:flex;flex:1;min-height:0}
+  .ksol{flex:2;min-width:0;overflow:auto;display:flex;flex-direction:column;
+        background:var(--panel)}
+  .ksol .acts,.ksol .ekler{border-top:1px solid var(--line)}
+  .ekler{padding:9px 18px;background:var(--panel)}
+  .ksag{flex:1;min-width:280px;max-width:430px;display:flex;flex-direction:column;
+        min-height:0;border-left:1px solid var(--line);background:var(--bg)}
+  .ksag .msg{max-width:92%}
+  @media (max-width:820px){
+    .kbody{flex-direction:column;overflow:auto}
+    .ksol{overflow:visible;flex:none}
+    .ksag{max-width:none;min-height:320px;border-left:none;border-top:1px solid var(--line)}
+  }
