@@ -1,13 +1,17 @@
-"""Kimlik + yetki. Faz 1'de kimlik sahte, YETKI GERCEK (spec/10-kararlar.md 'Kimlik').
+"""Kimlik + yetki (spec/70-guvenlik.md).
 
-current_user icerigi Faz 2'de OAuth'a baglanir; cagri yerleri degismez.
+Kimlik artik gercek: imzali oturum cerezinden gelir, kullanici satiri HER ISTEKTE
+veritabanindan okunur — bu yuzden `is_active = 0` yapilan kisi bir sonraki istekte
+disaridadir, ayri bir oturum tablosu tutmaya gerek kalmaz.
+
+Yetki modeli degismedi (spec/10-kararlar.md 'Yetki').
 """
 from __future__ import annotations
 
-from . import db
+from . import config, db
 from .tree import TreeIndex
 
-COOKIE = "uid"
+COOKIE = "uid"          # yalnizca sahte kimlik modunda (gelistirme/test)
 
 
 def get_user(user_id: str | None):
@@ -17,15 +21,26 @@ def get_user(user_id: str | None):
 
 
 def all_users():
-    return db.q("select * from users order by name")
+    return db.q("select * from users where is_active = 1 order by name")
+
+
+def _aktif(u):
+    return u if u is not None and db.as_bool(u["is_active"]) else None
 
 
 def current_user(request):
-    """Faz 2'de burasi OAuth'a baglanir."""
-    u = get_user(request.cookies.get(COOKIE))
-    if u is None:
-        u = db.q1("select * from users order by created_at limit 1")
-    return u
+    """Oturumdaki kullanici, yoksa None.
+
+    Sahte kimlik modunda (EKIPTAKIP_AUTH=sahte, yayinda acilmaz) oturum yoksa
+    `uid` cerezine, o da yoksa ilk kullaniciya duser — gelistirme kolayligi.
+    """
+    u = _aktif(get_user(request.session.get("uid") if hasattr(request, "session") else None))
+    if u is not None:
+        return u
+    if config.sahte_kimlik():
+        return _aktif(get_user(request.cookies.get(COOKIE))) or db.q1(
+            "select * from users where is_active = 1 order by created_at limit 1")
+    return None
 
 
 def participant_ids(item_id: str) -> set[str]:

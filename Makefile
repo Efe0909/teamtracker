@@ -10,7 +10,8 @@ HOST    ?= 127.0.0.1
 PORT    ?= 8000
 DB      := ekiptakip.db
 STAMP   := $(VENV)/.deps-ok
-DEPS    := fastapi uvicorn[standard] jinja2 python-multipart pytest httpx
+DEPS    := fastapi uvicorn[standard] jinja2 python-multipart pytest httpx \
+           authlib itsdangerous          # kimlik: OIDC + imzali oturum
 
 .DEFAULT_GOAL := help
 .PHONY: help up setup seed reseed dev run test check clean distclean

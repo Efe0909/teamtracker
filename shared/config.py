@@ -34,8 +34,10 @@ SESSION_MAX_AGE = 30 * 24 * 3600            # 30 gun: telefondaki uygulama surek
 
 # --- ortak yollar (mobil onekine girmezler) -------------------------------
 
-SHARED_PATHS = ("/static/", "/sw.js", "/favicon.ico", "/manifest.json", "/giris", "/cikis",
-                "/whoami")
+# Iki alan adinda da AYNI yoldan servis edilenler: mobil onegine girmezler.
+# /giris burada olmazsa app.<alan>/giris -> /m/giris olur ve giris yapilamaz.
+SHARED_PATHS = ("/static/", "/sw.js", "/favicon.ico", "/manifest.json",
+                "/giris", "/cikis", "/whoami", "/switch/")
 
 
 def yayinda() -> bool:

@@ -11,8 +11,14 @@
   <details style="position:relative">
     <summary class="rbtn" style="list-style:none">
       <span class="av" style="background:{{ user.color }}">{{ user.name[0] }}</span></summary>
-    <div class="pop on" style="position:absolute;left:48px;bottom:0;top:auto;width:190px">
-      <div class="small muted" style="padding:2px 6px 7px">Kullanıcı değiştir (Faz 1: sahte)</div>
+    <div class="pop on" style="position:absolute;left:48px;bottom:0;top:auto;width:200px">
+      <div class="small" style="padding:2px 6px 8px">
+        <b>{{ user.name }}</b><br><span class="muted">{{ user.email }}</span></div>
+
+      {% if sahte_kimlik() %}
+      {# Kullanici degistirme YALNIZCA gelistirme modunda; yayinda bu rota yok. #}
+      <div class="small muted" style="padding:6px 6px 5px;border-top:1px solid var(--line)">
+        Kullanıcı değiştir (sahte kimlik)</div>
       {% for u in all_users %}
       <form method="post" action="/switch/{{ u.id }}" style="margin:0">
         <button class="tnode" style="width:100%;border:none;background:transparent">
@@ -22,6 +28,13 @@
         </button>
       </form>
       {% endfor %}
+      {% endif %}
+
+      <form method="post" action="/cikis" style="margin:6px 0 0;border-top:1px solid var(--line);padding-top:6px">
+        <button class="tnode" style="width:100%;border:none;background:transparent">
+          <span class="tw">⏻</span><span class="tn" style="text-align:left">Çıkış</span>
+        </button>
+      </form>
     </div>
   </details>
 </nav>

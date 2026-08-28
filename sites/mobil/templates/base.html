@@ -29,7 +29,18 @@
     {# Masaustune baglanti YOK (tasarim karari, spec/50-yapi.md): iki site
        birbirine kopru kurmaz. Avatar yalnizca kim oldugunu gosterir. #}
     <div class="slot">{% block top_right %}
-      <span class="av" style="background:{{ user.color }}" title="{{ user.name }}">{{ user.name[0] }}</span>
+      <details style="position:relative">
+        <summary style="list-style:none;cursor:pointer">
+          <span class="av" style="background:{{ user.color }}" title="{{ user.name }}">{{ user.name[0] }}</span>
+        </summary>
+        <div class="pop on" style="position:absolute;right:0;left:auto;top:38px;width:190px;z-index:40">
+          <div class="small" style="padding:2px 6px 8px">
+            <b>{{ user.name }}</b><br><span class="muted">{{ user.email }}</span></div>
+          <form method="post" action="/cikis" style="margin:0;border-top:1px solid var(--line);padding-top:6px">
+            <button style="width:100%;border:none;background:transparent;text-align:left">⏻ Çıkış</button>
+          </form>
+        </div>
+      </details>
     {% endblock %}</div>
   </header>
 

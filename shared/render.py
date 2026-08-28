@@ -10,11 +10,17 @@ from pathlib import Path
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
+from . import config
+
 ORTAK = Path(__file__).parent / "templates"
 
 
 def site_templates(dizin: Path) -> Jinja2Templates:
-    return Jinja2Templates(directory=[dizin, ORTAK])
+    t = Jinja2Templates(directory=[dizin, ORTAK])
+    # Sablon "kimlik sahte mi" bilsin: kullanici degistirme listesi yalnizca
+    # gelistirmede gorunur, yayinda yerine cikis dugmesi durur.
+    t.env.globals["sahte_kimlik"] = config.sahte_kimlik
+    return t
 
 
 def render(templates: Jinja2Templates, request, name: str, ctx: dict) -> HTMLResponse:

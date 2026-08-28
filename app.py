@@ -15,11 +15,14 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import urlparse
 
-from fastapi import FastAPI, HTTPException, Request
+from urllib.parse import quote
+
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.sessions import SessionMiddleware
 
-from shared import auth, config, db, service
+from shared import auth, config, db, kimlik, service
 from sites.dashboard import routes as dashboard
 from sites.mobil import routes as mobil
 
@@ -46,15 +49,15 @@ class MobileHostPrefix:
     iki alan adina ayri Access politikasi yazilabilsin diye kasten boyle.
     """
 
-    ORTAK = ("/sw.js", "/favicon.ico", "/manifest.json", "/whoami")
-
     def __init__(self, app):
         self.app = app
 
     async def __call__(self, scope, receive, send):
         if scope["type"] == "http" and config.HOST_APP and _host_of(scope) == config.HOST_APP:
             path = scope["path"]
-            ortak = path in self.ORTAK or path.startswith(("/static/", "/switch/"))
+            # Ortak yollar onege girmez — /giris burada olmazsa mobil alan adinda
+            # giris /m/giris'e cevrilir ve 404 doner (yani hic girilemez).
+            ortak = path.startswith(config.SHARED_PATHS)
             mobil_yol = path == "/m" or path.startswith("/m/")
             if not ortak and not mobil_yol:
                 scope["path"] = "/m" + ("" if path == "/" else path.rstrip("/"))
@@ -71,7 +74,57 @@ async def lifespan(_app: FastAPI):
     yield
 
 
+class GirisKapisi:
+    """Oturumu olmayan istek iceri girmez (spec/70-guvenlik.md §2).
+
+    HTML gezinmesi giris sayfasina yonlenir; HTMX istegi HX-Redirect ile tam
+    sayfa yonlendirmesi yapar (yoksa giris sayfasi bir parcanin icine duserdi);
+    digerleri 401 alir.
+    """
+
+    # Oturum gerektirmeyenler: giris akisi, PWA kabugu, statikler.
+    ACIK = ("/giris", "/cikis", "/sw.js", "/favicon.ico", "/manifest.json", "/static/")
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+        yol = scope["path"]
+        if yol.startswith(self.ACIK):
+            return await self.app(scope, receive, send)
+
+        request = Request(scope, receive)
+        if auth.current_user(request) is not None:
+            return await self.app(scope, receive, send)
+
+        htmx = request.headers.get("hx-request") == "true"
+        hedef = "/giris?nereye=" + quote(yol, safe="/")
+        if htmx:
+            yanit = Response(status_code=401, headers={"HX-Redirect": hedef})
+        elif scope["method"] == "GET" and "text/html" in request.headers.get("accept", ""):
+            yanit = RedirectResponse(hedef, status_code=303)
+        else:
+            yanit = Response("giriş gerekli", status_code=401)
+        await yanit(scope, receive, send)
+
+
 app = FastAPI(title="EkipTakip", version="0.1.0-alpha", lifespan=lifespan)
+
+# Ara katman sirasi: EN SON eklenen EN DISTA calisir.
+#   MobileHostPrefix (yolu duzeltir) -> SessionMiddleware (oturumu acar)
+#     -> GirisKapisi (kimligi arar) -> rotalar
+app.add_middleware(GirisKapisi)
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=config.SECRET_KEY,
+    session_cookie=config.SESSION_COOKIE,
+    max_age=config.SESSION_MAX_AGE,
+    same_site="lax",                 # siteler arasi POST/PATCH cerezi tasimaz
+    https_only=config.yayinda(),     # yayinda yalnizca HTTPS
+    domain=config.COOKIE_DOMAIN,     # bir giris, iki site
+)
 app.add_middleware(MobileHostPrefix)
 
 # Statik: ortak kokte, site dosyalari kendi alt yolunda (nginx de boyle ayirir).
@@ -96,19 +149,19 @@ def whoami(request: Request):
                          "scope": service.TREE.name(u["scope_node_id"]) if u["scope_node_id"] else None})
 
 
-@app.post("/switch/{user_id}")
-def switch_user(request: Request, user_id: str):
-    """Faz 1'de kimlik sahte; Faz 2'de burasi OAuth'a baglanir (auth.current_user)."""
-    if auth.get_user(user_id) is None:
-        raise HTTPException(404, "kullanıcı yok")
-    back = urlparse(request.headers.get("referer") or "").path or "/"   # sadece yol: acik yonlendirme yok
-    r = RedirectResponse(back, status_code=303)
-    # Ters vekil arkasinda uvicorn --proxy-headers ile calisir; scheme https ise
-    # cerez Secure isaretlenir. Alt alan adlari kimligi paylassin diye domain.
-    r.set_cookie(auth.COOKIE, user_id, httponly=True, samesite="lax",
-                 secure=request.url.scheme == "https", domain=config.COOKIE_DOMAIN)
-    return r
+if config.sahte_kimlik():
+    # Kullanici degistirme YALNIZCA gelistirme modunda var; yayin kurulumunda
+    # bu rota hic tanimlanmaz (sahte kimlik zaten acilisi reddettirir).
+    @app.post("/switch/{user_id}")
+    def switch_user(request: Request, user_id: str):
+        if auth.get_user(user_id) is None:
+            raise HTTPException(404, "kullanıcı yok")
+        kimlik.oturum_ac(request, user_id)
+        back = urlparse(request.headers.get("referer") or "").path or "/"
+        return RedirectResponse(back, status_code=303)
 
+
+app.include_router(kimlik.router)
 
 # Sira onemli: dashboard'un /{slug} iskele rotasi EN SONDA eslesmeli.
 app.include_router(mobil.router)
