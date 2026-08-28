@@ -86,6 +86,28 @@ Karta dahil edilen kişi yalnızca **o kartta** yetkilidir; yetki kapsama sızma
 **Atanmamış havuzu herkese açık:** sahipsiz iş kimsenin sorumluluğunda değildir, onu
 yetkiyle gizlemek kaybolmasına yol açar.
 
+## Kayıt takıma, eylem kişiye
+
+Kaynak sistem çözümlemesinden gelen bağlayıcı karar (`spec/60-kaynak-uyarlama.md`):
+
+- **Kayıt** (hata/görev) bir **takıma** tanımlanır (`items.team_id`). "Ekibe atanan
+  iş kimin sorunu" belirsizliği kayıt seviyesinde kabul edilir: sahip takımdır.
+- **Eylem** bir **kişiye** atanır (`actions.assignee_id`) — ilk gören üstlenir ya da
+  lider/mentor dağıtır. Sorumluluk ancak eylem seviyesinde kişiselleşir.
+- Kayıt, açık eylemi varken kapanamaz. Eylem olayları kartın akışına düşer, ayrı
+  akış yok. Ayrı bir "eylem yöneticisi" ekranı da yok — kart içi şerit + "Açık
+  eylemim" filtresi yeter.
+- Kart yetkisine üçüncü yol eklenir: kartın takımının üyesi olmak (kapsam ve
+  katılımcılığa ek). `can_edit_item` bu kontrolle genişleyecek.
+
+## Kadans hafta, gün değil
+
+Vardiya/DDS kavramları uyarlamada yok; ekip uzaktan ve gün içi devir yapmıyor.
+Dönemsel eksen **hafta**: hızlı filtreler ("Bu hafta", "Geciken"), WDS panosu
+(🚧) ve özet bildirimleri hep hafta üstünden düşünülür. Günlük iş kişinin kendi
+sorumluluğudur, takibi `items.pillar` etiketiyle yapılır. Şemaya ve arayüze
+vardiya benzeri bir boyut ekleme.
+
 ## Kimlik (Faz 1'de sahte)
 
 `uid` çerezi, imzasız. `auth.current_user` Faz 2'de OAuth'a bağlanacak; çağrı yerleri

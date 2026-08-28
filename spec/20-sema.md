@@ -9,6 +9,8 @@ Postgres söz dizimiyle yazılmış **hedef** şema; bugün SQLite'ta karşılı
 |---|---|
 | `users`, `nodes`, `items`, `item_participants`, `events` | **kurulu** |
 | `items_fts` (FTS5 + trigger'lar) | **kurulu** — şemada aşağıda yok, SQLite'a özel |
+| `teams`, `team_members` (§2a) | yok — ekipler ekranıyla gelecek (`spec/60-kaynak-uyarlama.md` 2.5) |
+| `actions` (§3a) | yok — kart eylem şeridiyle gelecek (`spec/60-kaynak-uyarlama.md` 2.4) |
 | `change_requests` | yok — kazanım ağacı ekranıyla gelecek |
 | `notifications`, `notification_prefs`, `mutes` | yok — mobil bildirimler bugün `events`'ten türetiliyor |
 | `push_subscriptions` | yok — `spec/40-push.md` |
@@ -83,6 +85,45 @@ select id from alt;
 
 ---
 
+## 2a. Ekipler
+
+Kaynak uyarlamasıyla geldi (`spec/60-kaynak-uyarlama.md` 2.5). Takım, hiyerarşiden
+ayrı bir varlık: `nodes` işin *nerede* olduğunu, `teams` işi *kimin sahiplendiğini*
+tutar. Bir takım istenirse ağaçtaki bir düğüme bağlanır (`node_id`), zorunlu değil.
+
+```sql
+create table teams (
+  id          uuid primary key default gen_random_uuid(),
+  name        text not null unique,
+  description text,                              -- takımın görev alanı, ekipler ekranında görünür
+  node_id     uuid references nodes(id) on delete set null,
+  color       text,
+  created_at  timestamptz not null default now()
+);
+
+create table team_members (
+  team_id  uuid references teams(id) on delete cascade,
+  user_id  uuid references users(id) on delete cascade,
+  role     text not null default 'uye' check (role in ('lider','mentor','uye')),
+  added_at timestamptz not null default now(),
+  primary key (team_id, user_id)
+);
+```
+
+**Atama modeli (bağlayıcı, bkz. `spec/10-kararlar.md`):** kayıt **takıma**
+tanımlanır (`items.team_id`), eylem **kişiye** atanır (`actions.assignee_id`).
+Eylemi ilk gören üstlenir ya da lider/mentor dağıtır. "Ekibe atanan görev kimin
+sorunu" belirsizliği eylem seviyesinde çözülür; kayıt seviyesinde sahip takımdır.
+
+**Takım sohbeti:** `events.subject_type` `'team'` değerini kazanır (§5) — kart
+akışıyla aynı tablo, aynı bileşen. Ayrı mesajlaşma altyapısı kurulmaz.
+
+**Yetkiye etkisi:** kart yetkisinin üçüncü yolu — kartın `team_id`'si kullanıcının
+üyesi olduğu bir takımsa kart yetkisi vardır (kapsam ve katılımcılığa ek).
+`can_edit_item` bu kontrolle genişler; yapıya (`nodes`) sızmaz.
+
+---
+
 ## 3. Kartlar (hata / görev)
 
 ```sql
@@ -96,7 +137,8 @@ create table items (
               check (status in ('acik','devam','beklemede','kapandi')),
   priority    text not null default 'orta'
               check (priority in ('kritik','yuksek','orta','dusuk')),
-  assignee_id uuid references users(id) on delete set null,
+  team_id     uuid references teams(id) on delete set null,  -- kaydın sahibi takım (§2a)
+  assignee_id uuid references users(id) on delete set null,  -- kaydı üstlenen kişi; kişi ataması asıl eylemde (§3a)
   created_by  uuid not null references users(id),
   due_date    date,
   escalated   boolean not null default false,
@@ -117,6 +159,50 @@ create table item_participants (
 ```
 
 **Kritik kural:** `item_participants`'ta olan kişi, kartın düğümü kendi kapsamı dışında olsa bile o kartta tam yetkilidir. Yetki karta özeldir, kapsama sızmaz — diğer kartlarda hâlâ salt okunur.
+
+**Sabit sınıflandırma alanları (öneri):** kaynak sistemdeki form cevaplarının
+bizde karşılığı form-builder değil (`spec/60-kaynak-uyarlama.md` §4), az sayıda
+sabit sütundur: `recurring boolean not null default false` (tekrar eden mi) ve
+`origin_team_id uuid references teams(id)` (sorun hangi takımdan kaynaklanıyor —
+kök neden kırılımının en ucuz hali). Ekran ihtiyacı netleşince eklenir.
+
+---
+
+## 3a. Eylemler
+
+Kaynak uyarlamasının en önemli şema kararı (`spec/60-kaynak-uyarlama.md` §1):
+kayıt "ne oldu"yu, eylem "kim ne yapacak"ı tutar. Bir kayda 0..n eylem bağlanır.
+
+```sql
+create table actions (
+  id          uuid primary key default gen_random_uuid(),
+  item_id     uuid not null references items(id) on delete cascade,
+  title       text not null,
+  assignee_id uuid references users(id) on delete set null,  -- null = takım havuzunda, üstlenen bekliyor
+  status      text not null default 'acik'
+              check (status in ('acik','devam','kapandi','iptal')),
+  due_date    date,
+  created_by  uuid not null references users(id),
+  resolved_by uuid references users(id),
+  resolved_at timestamptz,
+  created_at  timestamptz not null default now()
+);
+create index on actions(item_id);
+create index on actions(assignee_id) where status in ('acik','devam');
+```
+
+Kurallar:
+
+- **Kayıt, açık eylemi varken kapanamaz.** Uygulama katmanında kontrol; kapanış
+  denemesi açık eylemleri listeleyen bir hata döndürür.
+- Eylem olayları (açıldı, atandı, üstlenildi, kapandı) **kartın** `events`
+  akışına sistem olayı olarak düşer; eylemin ayrı akışı yoktur. Eylem üstünde
+  konuşma gerekiyorsa kartta konuşulur.
+- Eylem yetkisi kart yetkisinden türer: kartı düzenleyebilen eylem açar/kapar;
+  atanan kişi kendi eylemini her durumda güncelleyebilir (katılımcı sayılır).
+- `beklemede` durumu bilerek yok: bekleyen iş kartın durumudur, eylemin değil.
+- Görev tablosundaki "Açık eylemim" hızlı filtresi ve mobil `/eylemler` bu
+  tablodan okur; `items.due_date` kayıt-seviyesi son tarih olarak kalır.
 
 ---
 
@@ -159,12 +245,13 @@ Onay geldiğinde: `ekle/adlandir/tasi` için sadece `pending_cr_id`'yi temizle (
 
 ## 5. Olay akışı (kart içi sohbet)
 
-Kartın da talebin de içinde aynı yapıda bir akış var — tek tabloda topla:
+Kartın da talebin de içinde aynı yapıda bir akış var — tek tabloda topla.
+Takım sohbeti (§2a) da aynı tabloda: `subject_type='team'`, `subject_id=teams.id`.
 
 ```sql
 create table events (
   id           uuid primary key default gen_random_uuid(),
-  subject_type text not null check (subject_type in ('item','change_request')),
+  subject_type text not null check (subject_type in ('item','change_request','team')),
   subject_id   uuid not null,
   event_type   text not null check (event_type in ('mesaj','sistem')),
   author_id    uuid references users(id),   -- sistem olaylarında da kim tetikledi
@@ -264,11 +351,26 @@ Oturumları veritabanında tutmak yerine imzalı çerez kullan; bu ölçekte tab
 
 ## Açık noktalar (karar bekliyor)
 
-1. **Karta dosya eklenmesi:** `attachments` tablosu mu, düğüme bağlı NAS yolu mu?
-   (Dosyalar/NAS ekranı bu karara bağlı.)
+1. **Karta dosya eklenmesi:** 🚧 yön belli, karar değil. Kalıcı evde dockerize +
+   NAS bağlama düşünülüyor; `attachments` tablosu dosya meta'sını tutar, dosya
+   diske/NAS'a yazılır. Açık soru — saklama süresi: ekler kalıcı mı, yoksa kayıt
+   kapandıktan sonra arşivlenmemişse 30 günde silinsin mi? Kılavuzlar görünümü ve
+   kart ek kutusu (`spec/60-kaynak-uyarlama.md` 2.4, 2.7) bu karara bağlı.
+   Not: dosya yükleme açıldığı an README'deki "yükleme yok = o saldırı yüzeyi yok"
+   satırı düşer; kapı (Access) şartı burada da geçerli.
 2. **Hata ilişkileri:** "Sevkiyat gecikmesi, bütçe onayından kaynaklanıyor" bağını tutan
    `item_links` tablosu — kök neden analizini zincir halinde göstermeyi sağlar.
+   (`items.origin_team_id` bunun ucuz ön hali — §3.)
 3. **Silme politikası:** şu an `on delete cascade`; düğüm silinince kartları da gidiyor.
    Arşivleme (`deleted_at`) tercih edilirse ekip arşivi ekranı da bunun üstüne oturur.
 4. **Okunabilir kayıt kodu** (`BUT-1042`): insanlar konuşmada ve e-postada kullanıyor.
    Önek ilk düğümden türer, sayı global artar, kayıt taşınsa bile kod değişmez.
+   Kaynak çözümlemesiyle **öne çekildi** (`spec/60-kaynak-uyarlama.md` §1 madde 6):
+   kaynakta numara tablonun ilk kolonu ve tüm konuşmaların ortak dili.
+5. **Rutinler / WDS panosu:** 🚧 tekrarlayan görev tanımı (`routines`: başlık,
+   sorumlu takım/kişi, periyot) + haftalık tamamlama işareti. WDS panosunun
+   matris görünümü buna oturur; ilk sürüm rutinsiz açılabilir
+   (`spec/60-kaynak-uyarlama.md` 2.9).
+6. **Düğüm KPI'ları:** 🚧 "ölçülebilir çıktısı olan her şey makinedir" soyutlaması
+   (`spec/60-kaynak-uyarlama.md` 2.6). Düğüme hedef/gerçekleşen KPI bağlamak
+   istenirse ayrı tablo; ihtiyaç netleşmeden açılmaz.

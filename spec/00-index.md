@@ -8,6 +8,8 @@
 | `30-mobil.md` | mobil site çözümlemesi (kaynak ekranlardan uyarlama) |
 | `40-push.md` | web push: hazır olan, eksik olan, denemeden çıkan dersler |
 | `50-yapi.md` | repo yapısı, iki site ayrımı, ayrık veritabanı yolu |
+| `60-kaynak-uyarlama.md` | kaynak panoların çözümlemesi: veri hattı, ekran ekran uyarlama, alınmayacaklar |
+| `61-arastirma-sentezi.md` | IWS ve ekip araçları kaynak taraması — bizim ölçeğe uyan/uymayan pratikler |
 | `referans/` | kaynak arayüz dosyaları (`spec/referans/layout-a.html`) |
 | `iskelet/` | ekran iskeletleri (statik HTML taslak) |
 | `gorseller/` | ham ekran görüntüleri — git'e girmez |
@@ -18,14 +20,17 @@ Kaynak sistemden uyarlanacak ekranlar. Sıra, `app.py` içindeki `MODULES` kayd�
 
 | # | Ekran | Modül (slug) | Görsel | Rapor | İskelet | Durum |
 |---|---|---|---|---|---|---|
-| — | Görev Yöneticisi | `gorevler` | — | `referans/layout-a.html` | — | **yazıldı** |
+| — | Görev Yöneticisi | `gorevler` | var (git'te değil) | `referans/layout-a.html`, `60` 2.2 | — | **yazıldı** — v2 düzeni `60` 2.2 |
 | 30 | Mobil site (cep) | `app.<alan>` | var (git'te değil) | `spec/30-mobil.md` | — | **yazıldı** |
-| | Kazanım Ağacı | `kazanim-agaci` | | | | bekliyor |
-| | Pivot & Veri Analizi | `pivot` | | | | bekliyor |
+| 60 | Kart eylem şeridi | (`gorevler` kartı) | var (git'te değil) | `60-kaynak-uyarlama.md` 2.4 | — | **yazıldı** — sıradaki iş |
+| 60 | Ekipler | `ekipler` | var (git'te değil) | `60-kaynak-uyarlama.md` 2.5 | — | **yazıldı** |
+| | Kazanım Ağacı | `kazanim-agaci` | var (git'te değil) | `60-kaynak-uyarlama.md` 2.6 | | bekliyor |
+| | Pivot & Veri Analizi | `pivot` | var (git'te değil) | `60-kaynak-uyarlama.md` 2.3 | | bekliyor |
 | | Takvim | `takvim` | | | | bekliyor |
-| | Görev Tanımları & Şemalar | `tanimlar` | | | | bekliyor |
+| | Görev Tanımları & Şemalar | `tanimlar` | | `60-kaynak-uyarlama.md` 2.8 | | bekliyor |
 | | Ekip Arşivi | `arsiv` | | | | bekliyor |
-| | Dosyalar / NAS | `dosyalar` | | | | bekliyor |
+| | Dosyalar / NAS | `dosyalar` | var (git'te değil) | `60-kaynak-uyarlama.md` 2.7 | | 🚧 ek kararına bağlı |
+| | WDS panosu | `wds` | var (git'te değil) | `60-kaynak-uyarlama.md` 2.9 | | 🚧 rutin kararına bağlı |
 | | Yönetim Paneli | `admin` | | | | bekliyor |
 
 ## Akış haritası
