@@ -8,7 +8,11 @@
     <span class="small muted" style="font-weight:400">— kayıt, açık eylem varken kapanmaz</span>
   </div>
 
+  {% set ns = namespace(bolum=false) %}
   {% for e in eylemler %}
+  {% if e.done and not ns.bolum %}{% set ns.bolum = true %}
+  <div class="abolum">Tamamlanan / iptal</div>
+  {% endif %}
   <div class="arow{% if e.done %} done{% endif %}">
     {% if can_edit %}
     <select name="status" class="adur v-{{ e.status }}" hx-patch="/eylem/{{ e.id }}"

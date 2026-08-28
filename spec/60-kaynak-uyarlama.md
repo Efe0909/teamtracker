@@ -89,6 +89,13 @@ Kaynak kart modalı, soldan sağa: başlık + durum açılırı → **eylem list
 aktivite akışı + yorum kutusu. Bizim kartta akış zaten var (`events`,
 sistem+mesaj tek kronoloji — koruyoruz, kaynakla birebir aynı felsefe).
 
+**Düzen (karar):** kaynaktaki iki sütun aynen alınır — **sol ~2/3**: bilgiler
+(başlık/açıklama), detay şeridi (durum, öncelik, takım, sorumlu, tarih), açık
+ve tamamlanmış eylemler, ekler kutusu (🚧 dosya kararına kadar yer tutucu);
+**sağda dar sütun**: sohbet (akış + yorum kutusu). Sohbet tam genişlik ana
+alan DEĞİL — kartın asıl gövdesi iş, sohbet eşlikçi. Dar ekranda sütunlar
+alt alta düşer.
+
 Eklenecekler:
 
 1. **Eylem şeridi** — kartın üstünde, tablo halinde: eylem, atanan, son tarih,
