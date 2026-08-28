@@ -38,6 +38,46 @@ böyle çalışıyor, testler ikisini de kapsıyor.
   adında `/`, tek alan adı modunda `/m`. Yanlış `start_url` ana ekrandaki uygulamayı boş
   sayfaya açar.
 
+## Kimlik: Google ile giriş
+
+Uygulamanın kendi kimliği artık var (`spec/70-guvenlik.md`). Kurulum:
+
+**1. Google OAuth istemcisi.** Google Cloud Console → APIs & Services →
+Credentials → *Create credentials* → *OAuth client ID* → **Web application**.
+Yetkili redirect URI olarak iki siteyi de ekle:
+
+```
+https://dashboard.<alan>/giris/callback
+https://app.<alan>/giris/callback
+```
+
+Kapsam yalnızca `openid email profile` — hassas kapsam isteme, Google doğrulama
+incelemesi getirir. Kulübün Google Workspace hesabı varsa uygulamayı **Internal**
+yap: kullanıcı sınırı yok, doğrulama yok. Değilse "In production"a al; **Testing**
+modunda kalma, orada izinler 7 günde bir düşer ve 100 kullanıcı sınırı var.
+
+**2. Sırlar.** `/etc/ekiptakip.env` (systemd `EnvironmentFile`) ya da depo
+kökünde `.env`:
+
+```bash
+EKIPTAKIP_SECRET_KEY=$(python3 -c "import secrets;print(secrets.token_urlsafe(32))")
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+EKIPTAKIP_ENV=yayin
+```
+
+Eksikse uygulama **açılmaz** — çalışma anında değil açılışta öğrenirsin.
+`SECRET_KEY` değişirse herkesin oturumu düşer; acil durum düğmesi budur.
+
+**3. Davetli listesi.** Kayıtlı olmayan e-posta giremez ve kullanıcı
+oluşturulmaz. İlk admini elle ekle, yoksa kimse giremez:
+
+```bash
+.venv/bin/python tools/kullanici.py ekle sen@ornek.com "Adın" --admin
+.venv/bin/python tools/kullanici.py listele
+.venv/bin/python tools/kullanici.py kapat ayrilan@ornek.com   # oturumu anında düşer
+```
+
 ## Önce: kapı meselesi
 
 alpha-0.1'in kendi kimlik doğrulaması **yok** (README "Bilgi güvenliği"). `uid` çerezi

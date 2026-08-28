@@ -10,7 +10,7 @@
 <link rel="stylesheet" href="/static/d/dashboard.css">
 <link rel="stylesheet" href="/static/d/home.css">
 </head>
-<body class="home">
+<body class="home" hx-headers='{"X-CSRF-Token": "{{ csrf_token }}"}'>
 <div class="mwrap">
   <a class="mback" href="/">← Ana sayfa</a>
   <div class="mcard">

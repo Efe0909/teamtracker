@@ -110,8 +110,8 @@ def run() -> None:
     for key, email, name, color, admin, editor, scope_name in USERS:
         scope = next((nid[k] for k, _p, n, _t in NODES if n == scope_name), None)
         conn.execute(
-            "insert into users (id,email,name,color,is_admin,is_editor,scope_node_id,created_at)"
-            " values (?,?,?,?,?,?,?,?)",
+            "insert into users (id,email,name,color,is_admin,is_editor,scope_node_id,"
+            "created_at,is_active) values (?,?,?,?,?,?,?,?,1)",
             (uid[key], email, name, color, admin, editor, scope, now))
 
     for order, (key, parent, name, ntype) in enumerate(NODES):

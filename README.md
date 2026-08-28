@@ -36,12 +36,13 @@ yayına almak: `deploy/README.md`.
 
 ```
 app.py       giriş noktası
-shared/      ortak çekirdek: db, şema, tohum, ağaç, yetki, iş mantığı, arama, palet
+shared/      ortak çekirdek: db, şema, tohum, ağaç, kimlik, yetki, CSRF,
+             sertleştirme, iş mantığı, arama, palet
 sites/       dashboard/ ve mobil/ — her biri kendi rotaları, şablonları, CSS'i
 spec/        kararlar, şema, ekran çözümlemeleri
 deploy/      cloudflared + nginx + systemd
-tools/       yardımcı betikler (PWA ikonları)
-tests/       43 test: yetki (403), FTS eşleşmesi, iki alan adı ayrımı, PWA dosyaları
+tools/       yardımcı betikler: PWA ikonları, davetli listesi yönetimi
+tests/       69 test: kimlik, oturum, CSRF, yetki (403), FTS, iki alan adı, PWA
 ```
 
 Ayrıntı ve gerekçeler: **`spec/50-yapi.md`**.
@@ -55,7 +56,8 @@ Ayrıntı ve gerekçeler: **`spec/50-yapi.md`**.
 | Mobil ekranlar nereden uyarlandı? | `spec/30-mobil.md` |
 | Push ne durumda? | `spec/40-push.md` |
 | Klasör yapısı, ayrık veritabanı | `spec/50-yapi.md` |
-| Yayına alma | `deploy/README.md` |
+| Kimlik, yetki, tehdit modeli | `spec/70-guvenlik.md` |
+| Yayına alma, Google OAuth kurulumu | `deploy/README.md` |
 | Yeni ekran çözümlemesi nasıl yazılır | `spec/README.md` |
 
 ## Sahte kullanıcılar (Faz 1)
@@ -77,17 +79,28 @@ Bu depo **public**. alpha-0.1 bir prototip; aşağıdaki durum bilerek böyledir
   tutar. `ekiptakip.db` içinde gerçek kart içeriği birikir — **commit etme**.
 - Tohum verisine **gerçek müşteri/ekip verisi koyma**.
 
-### Bilerek eksik olanlar
+### Kimlik ve yetki
 
-| Konu | Durum | Ne zaman kapanır |
-|---|---|---|
-| Kimlik doğrulama | **Yok.** `uid` çerezi imzasız — çerezi elle yazan herkes istediği kullanıcı olur | Faz 2 (Google OAuth + imzalı çerez) |
-| CSRF koruması | Yok | Faz 2, kimlikle birlikte |
-| TLS | Yok. `uvicorn` düz HTTP | Dağıtımda cloudflared + nginx (`deploy/`) |
-| Hız sınırlama | Yok | İhtiyaç doğunca |
+Google ile giriş, imzalı oturum, davetli listesi. Tasarım ve tehdit modeli:
+**`spec/70-guvenlik.md`**. Kurulum: `deploy/README.md`.
 
-**Bu yüzden alpha-0.1 yalnızca `127.0.0.1`'e bağlanmalı.** Tünelden dışarı vereceksen
-**önüne kapı koymadan verme** (Cloudflare Access ya da basic auth) — `deploy/README.md`.
+- Giriş yalnızca `users` tablosunda kayıtlı e-postalara açık; bilinmeyen adres
+  giremez ve **kullanıcı oluşmaz**. Listeyi `tools/kullanici.py` yönetir.
+- `is_active = 0` yapılan kişi **bir sonraki istekte** düşer (kullanıcı satırı her
+  istekte okunuyor; ayrı oturum tablosu yok).
+- Yanlış yapılandırma çalışma anında değil **açılışta** yakalanır: yayında sahte
+  kimlik, eksik/kısa `SECRET_KEY`, eksik Google anahtarı → süreç açılmaz.
+- Geliştirmede `make dev` sahte kimlikle çalışır (`EKIPTAKIP_AUTH=sahte`); bu
+  değişken yayın kurulumunda açılışı **reddettirir**.
+
+| Konu | Durum |
+|---|---|
+| TLS | `uvicorn` düz HTTP; dağıtımda cloudflared + nginx (`deploy/`) |
+| Tek oturum iptali | Yok — hesap kapatma ya da anahtar rotasyonu (gerekçe: spec §2.4) |
+| İki faktör, oturum yönetim ekranı, WAF | Kapsam dışı (spec §1) |
+
+**Uygulama yalnızca `127.0.0.1`'e bağlanır.** Tünelden dışarı verirken önüne
+ikinci bir kapı (Cloudflare Access) koymak tavsiye edilir — `deploy/README.md`.
 
 ### Bilerek doğru yapılanlar
 
@@ -98,7 +111,13 @@ Bu depo **public**. alpha-0.1 bir prototip; aşağıdaki durum bilerek böyledir
   interpolasyonu alan adıdır ve beyaz listeden gelir. FTS sorgusu kullanıcı metniyle
   birleştirilmez, kelimeler ayıklanıp önek eşleşmesine çevrilir.
 - **XSS'e karşı kaçış açık.** Jinja `select_autoescape`; hiçbir yerde `|safe` yok.
-- **CSP `unsafe-eval` istemiyor.** Şablonlarda `hx-on=` kullanılmıyor.
+- **CSP `unsafe-eval` de `unsafe-inline` de istemiyor** (script tarafında):
+  şablonlarda satır içi `<script>` ve `hx-on=` yok, davranış `.js` dosyalarında.
+  Başlıkları uygulama üretir, nginx değil — vekilsiz çalıştırmada da geçerli.
+- **CSRF:** imzalı oturuma bağlı token; HTMX başlıkla, düz formlar gizli alanla
+  taşır. Karşılaştırma `hmac.compare_digest`.
+- **Denetim izi:** giriş, giriş reddi, çıkış, 403 ve pasifleştirme
+  `guvenlik_olaylari` tablosuna yazılır (gövde tutulmaz).
 - **Dosya yükleme yok**, dolayısıyla yükleme kaynaklı saldırı yüzeyi de yok.
 
 ### Açık bildirimi

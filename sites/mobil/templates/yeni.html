@@ -6,6 +6,7 @@
 
 {% block content %}
 <form class="mform" method="post" action="{{ mp }}/yeni">
+  <input type="hidden" name="csrf" value="{{ csrf_token }}">
   <div>
     <label>Düğüm (zorunlu)</label>
     <select name="node_id" required>

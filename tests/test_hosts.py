@@ -28,6 +28,8 @@ def client(tmp_path_factory):
     config.HOST_APP, config.HOST_DASH = APP, DASH
     config.COOKIE_DOMAIN = ".polonyum.com"
     with TestClient(app_mod.app) as c:
+        from conftest import csrf_tak  # noqa: E402
+        csrf_tak(c)
         yield c
     config.HOST_APP, config.HOST_DASH, config.COOKIE_DOMAIN = onceki
 
@@ -94,18 +96,55 @@ def test_shared_paths_work_on_app_host(client):
         assert app_host(client, path).status_code == 200, path
 
 
+def test_login_paths_are_not_rewritten_on_app_host(client):
+    """/giris mobil onegine girmemeli.
+
+    Girseydi app.<alan>/giris -> /m/giris olur, 404 doner ve mobil alan adindan
+    HIC giris yapilamazdi (spec/70-guvenlik.md §2.2).
+    """
+    for path in ("/giris", "/manifest.json", "/whoami"):
+        assert app_host(client, path).status_code != 404, path
+
+
 def test_manifest_start_url_follows_host(client):
     assert app_host(client, "/manifest.json").json()["start_url"] == "/"
     assert dash_host(client, "/manifest.json").json()["start_url"] == "/m"
 
 
-def test_cookie_is_shared_between_subdomains(client):
-    """Kimlik iki alt alan adinda ortak olmali — yoksa kullanici iki kere secilir."""
+def test_session_cookie_is_configured_for_both_subdomains(client):
+    """Kimlik iki alt alan adinda ortak olmali — yoksa kullanici iki kere girer.
+
+    Oturum cerezinin nitelikleri SessionMiddleware'e ACILISTA baglanir; bu yuzden
+    fixture'in sonradan yamaladigi COOKIE_DOMAIN cereze yansimaz. Test bu yuzden
+    yapilandirmayi ara katman yiginindan okur (spec/70-guvenlik.md §2.4).
+    """
+    from starlette.middleware.sessions import SessionMiddleware  # noqa: E402
+
+    import app as app_mod  # noqa: E402
+    from shared import config  # noqa: E402
+
+    katman = next(m for m in app_mod.app.user_middleware if m.cls is SessionMiddleware)
+    kw = katman.kwargs
+    assert kw["session_cookie"] == config.SESSION_COOKIE
+    assert kw["same_site"] == "lax"                  # siteler arasi istek cerezi tasimaz
+    assert kw["max_age"] == config.SESSION_MAX_AGE
+    assert "domain" in kw                            # config.COOKIE_DOMAIN buradan gecer
+    assert kw["secret_key"]                          # imzasiz oturum olmaz
+
+
+def test_session_survives_across_both_hosts(client):
+    """Sahte kimlik modunda oturum acilir; iki alan adinda da ayni kullanici gorunur."""
     uid = db.q1("select id from users where name = 'Selin'")["id"]
     r = client.post(f"/switch/{uid}", headers={"host": APP}, follow_redirects=False)
     assert r.status_code == 303
-    assert "domain=.polonyum.com" in r.headers["set-cookie"].lower()
+    assert app_host(client, "/whoami").json()["name"] == "Selin"
+    assert dash_host(client, "/whoami").json()["name"] == "Selin"
+
+    # Cerezi temizlemek oturumu da siler; CSRF token'i oturumda durdugu icin
+    # yeniden alinmali (tarayicida da boyle olur: yeni oturum, yeni token).
     client.cookies.clear()
+    from conftest import csrf_tak  # noqa: E402
+    csrf_tak(client)
 
 
 def test_detail_and_write_paths_work_at_root(client):

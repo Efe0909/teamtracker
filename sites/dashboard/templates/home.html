@@ -10,7 +10,7 @@
 <link rel="stylesheet" href="/static/d/dashboard.css">
 <link rel="stylesheet" href="/static/d/home.css">
 </head>
-<body class="home">
+<body class="home" hx-headers='{"X-CSRF-Token": "{{ csrf_token }}"}'>
 <div class="hwrap">
 
   <header class="hhead">
@@ -25,6 +25,7 @@
         <div class="small muted" style="padding:2px 6px 7px">Kullanıcı değiştir (Faz 1: sahte)</div>
         {% for u in all_users %}
         <form method="post" action="/switch/{{ u.id }}">
+          <input type="hidden" name="csrf" value="{{ csrf_token }}">
           <button>
             <span class="av" style="background:{{ u.color }}">{{ u.name[0] }}</span>
             <span style="flex:1">{{ u.name }}</span>

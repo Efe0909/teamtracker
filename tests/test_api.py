@@ -18,6 +18,8 @@ def client(tmp_path_factory):
     seed.run()
     import app  # noqa: E402
     with TestClient(app.app) as c:
+        from conftest import csrf_tak  # noqa: E402
+        csrf_tak(c)                    # yazma istekleri token tasisin
         yield c
 
 

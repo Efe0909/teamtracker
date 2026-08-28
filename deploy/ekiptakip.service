@@ -18,6 +18,13 @@ User=efe
 Group=efe
 WorkingDirectory=/home/efe/projects/teamtracker
 
+# Sirlar burada: EKIPTAKIP_SECRET_KEY, GOOGLE_CLIENT_ID/SECRET.
+# Basindaki "-" dosya yoksa acilisi engellemez; ama sirlar olmadan uygulama
+# zaten acilmaz (spec/70-guvenlik.md §7). Depo kokundeki .env de okunur.
+EnvironmentFile=-/etc/ekiptakip.env
+
+Environment=EKIPTAKIP_ENV=yayin
+
 # Iki alan adi ayrimi: app.<alan> mobil siteyi KOKTE servis eder, masaustu
 # sayfalari o alan adindan erisilemez. Bos birakirsan tek alan adi modu (/m).
 Environment=EKIPTAKIP_HOST_APP=app.polonyum.com

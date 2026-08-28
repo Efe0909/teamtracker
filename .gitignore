@@ -10,8 +10,10 @@ __pycache__/
 *.db-wal
 *.db-shm
 
-# Sirlar (VAPID anahtarlari, token'lar)
-.env
+# Sirlar: oturum anahtari, Google OAuth istemcisi, VAPID
+# (.env.ornek depoda durur — isimler var, degerler yok)
+.env*
+!.env.ornek
 
 # spec: ham ekran goruntuleri — depo public, yapiyi yaz goruntuyu koyma
 spec/gorseller/
