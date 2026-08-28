@@ -52,11 +52,20 @@ def test_tasks_lists_my_items(client):
     assert "Bütçe onayı 6 gündür bekliyor" in r.text
 
 
-def test_item_fragment_is_partial(client):
+def test_item_redirects_to_task_page(client):
+    """Eski /item ucu kayit sayfasina yonlendirir; sayfa URL'si paylasilabilir (spec/60 2.4)."""
     it = item_by_title("Bütçe onayı 6 gündür bekliyor")
-    r = client.get(f"/item/{it['id']}", headers={"HX-Request": "true"})
+    r = client.get(f"/item/{it['id']}", follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == f"/gorevler/{it['id']}"
+    page = client.get(f"/gorevler/{it['id']}").text
+    assert 'data-fragment="card_feed"' in page and 'data-fragment="card_actions"' in page
+
+
+def test_table_fragment_on_htmx(client):
+    """Filtre degisince tam sayfa degil yalnizca #sonuc parcasi doner."""
+    r = client.get("/gorevler", headers={"HX-Request": "true"})
     assert r.status_code == 200
-    assert "<html" not in r.text and 'data-fragment="card_feed"' in r.text
+    assert "<html" not in r.text and 'data-fragment="tablo"' in r.text
 
 
 def test_message_appends_single_event(client):
@@ -81,11 +90,43 @@ def test_field_change_writes_system_event_and_oob_feed(client):
 
 
 def test_node_filter_includes_subtree(client):
+    """dugum filtresi alt agaci kapsar (tin/tout, shared/filters.DugumFiltre)."""
     node = db.q1("select id from nodes where name = 'Malzeme Temini'")
-    r = client.get(f"/node/{node['id']}/items", headers={"HX-Request": "true"})
+    r = client.get(f"/gorevler?dugum={node['id']}")
     assert "Bütçe onayı 6 gündür bekliyor" in r.text
     assert "Tedarikçi teklifleri karşılaştırılamıyor" in r.text
     assert "Kapak Ünitesi — tekrar eden kayıp" not in r.text   # baska kok
+
+
+def test_team_filter(client):
+    team = db.q1("select id from teams where name = 'Maliye'")
+    r = client.get(f"/gorevler?takim={team['id']}")
+    assert "Bütçe onayı 6 gündür bekliyor" in r.text
+    assert "Onay akışına vekalet mekanizması ekle" in r.text
+    assert "Sevkiyat tarihi etkinlikten sonraya düşüyor" not in r.text  # Satın Alım
+
+
+def test_quick_filter_overdue_via_action(client):
+    """geciken: kaydin kendisi degil, acik bir eyleminin son tarihi gecmis olsa da dusmeli."""
+    r = client.get("/gorevler?hizli=geciken")
+    assert "Bütçe onayı 6 gündür bekliyor" in r.text        # eylemi dun'e gecikmis
+    assert "Kapak Ünitesi — tekrar eden kayıp" not in r.text
+
+
+def test_quick_filter_my_open_actions(client):
+    u = users(client)
+    client.cookies.set("uid", u["Deniz"])
+    r = client.get("/gorevler?hizli=eylemim")
+    assert "Bütçe onayı 6 gündür bekliyor" in r.text        # CFO vekalet eylemi Deniz'de
+    assert "Tedarikçi teklifleri karşılaştırılamıyor" not in r.text  # eylemi kapali
+    client.cookies.delete("uid")
+
+
+def test_bad_filter_values_fall_back(client):
+    """Gecersiz filtre degeri sorguya sizmaz, sessizce yok sayilir."""
+    r = client.get("/gorevler?takim=xx&sirala='; drop table items;--&hizli=bilinmez")
+    assert r.status_code == 200
+    assert "Bütçe onayı 6 gündür bekliyor" in r.text
 
 
 def test_out_of_scope_is_403_not_just_hidden(client):
@@ -114,8 +155,53 @@ def test_participant_beats_scope(client):
     it = item_by_title("Bütçe onayı 6 gündür bekliyor")
     client.cookies.set("uid", u["Deniz"])
     assert client.post(f"/item/{it['id']}/message", data={"body": "dahilim"}).status_code == 200
-    other = item_by_title("Tedarikçi teklifleri karşılaştırılamıyor")   # dahil degil
+    # vekalet: Maliye takimi, Deniz uye degil, dahil degil, kapsam disi -> 403
+    other = item_by_title("Onay akışına vekalet mekanizması ekle")
     assert client.post(f"/item/{other['id']}/message", data={"body": "x"}).status_code == 403
+    client.cookies.delete("uid")
+
+
+def test_team_membership_beats_scope(client):
+    """Kartin takiminin uyesi, dugum kapsam disinda olsa da kartta yetkilidir (spec/20 §2a).
+
+    Teklif karti Satin Alim'da; Deniz uye ama karta dahil degil, kapsami baska agac.
+    """
+    u = users(client)
+    it = item_by_title("Tedarikçi teklifleri karşılaştırılamıyor")
+    client.cookies.set("uid", u["Deniz"])
+    assert client.post(f"/item/{it['id']}/message", data={"body": "takımdanım"}).status_code == 200
+    client.cookies.delete("uid")
+
+
+def test_actions_crud_and_close_guard(client):
+    """Eylem ekle -> kayit kapanamaz -> eylemleri kapat -> kayit kapanir (spec/20 §3a)."""
+    it = item_by_title("Sevkiyat tarihi etkinlikten sonraya düşüyor")
+    u = users(client)
+    r = client.post(f"/item/{it['id']}/eylem", data={"title": "Nakliye planını revize et",
+                                                     "assignee_id": u["Deniz"]},
+                    headers={"HX-Request": "true"})
+    assert r.status_code == 200 and "Nakliye planını revize et" in r.text
+    # kayit acik eylem varken kapanamaz
+    assert client.patch(f"/item/{it['id']}/field", data={"status": "kapandi"}).status_code == 400
+    # tum eylemleri kapat, sonra kayit kapanabilsin
+    for a in db.q("select id from actions where item_id=? and status in ('acik','devam')", (it["id"],)):
+        assert client.patch(f"/eylem/{a['id']}", data={"status": "kapandi"},
+                            headers={"HX-Request": "true"}).status_code == 200
+    assert client.patch(f"/item/{it['id']}/field", data={"status": "kapandi"}).status_code == 200
+    # sistem olaylari kartin akisina dustu
+    son = db.q("select body from events where subject_id=? order by created_at desc limit 5", (it["id"],))
+    assert any("eylem" in r["body"] for r in son)
+
+
+def test_action_endpoints_respect_card_permission(client):
+    """Eylem uclari da kart yetkisinden gecer: kapsam disi kullaniciya 403."""
+    u = users(client)
+    it = item_by_title("Onay akışına vekalet mekanizması ekle")     # Maliye; Deniz disarida
+    a = db.q1("select id from actions where item_id = ?", (it["id"],))
+    client.cookies.set("uid", u["Deniz"])
+    assert client.post(f"/item/{it['id']}/eylem", data={"title": "x"}).status_code == 403
+    if a:
+        assert client.patch(f"/eylem/{a['id']}", data={"status": "kapandi"}).status_code == 403
     client.cookies.delete("uid")
 
 

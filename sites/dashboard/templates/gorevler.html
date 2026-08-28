@@ -1,0 +1,57 @@
+{# Gorev Yoneticisi — tam sayfa tablo (spec/60-kaynak-uyarlama.md 2.2).
+   Yerlesim SADECE burada; parcalar nerede gosterildiklerini bilmez. #}
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Görev Yöneticisi — EkipTakip</title>
+<link rel="icon" href="/static/icon-192.png">
+<link rel="stylesheet" href="/static/base.css">
+<link rel="stylesheet" href="/static/d/dashboard.css">
+<script src="/static/htmx.min.js"></script>
+</head>
+<body>
+{% include "fragments/uyari_mobil.html" %}
+{% with aktif = "gorevler" %}{% include "fragments/rail.html" %}{% endwith %}
+
+<div class="tmain" id="main">
+  <div class="thead row">
+    <h1>Görev Yöneticisi</h1>
+    <div style="flex:1"></div>
+    <button class="primary" data-toggle="#newform">＋ Kayıt</button>
+  </div>
+
+  {# yeni kayit: duz form — kayit sayfasina 303 ile gider (URL paylasilabilir) #}
+  <form class="newform" id="newform" method="post" action="/item">
+    <select name="node_id" style="width:auto">
+      {% for n in nodes %}
+      <option value="{{ n.id }}">{{ '— ' * n.depth }}{{ n.name }}</option>
+      {% endfor %}
+    </select>
+    <select name="kind" style="width:auto">
+      <option value="hata">Hata</option><option value="gorev">Görev</option>
+    </select>
+    <select name="team_id" style="width:auto">
+      <option value="">Takım yok</option>
+      {% for f in filtreler if f.param == "takim" %}
+        {% for v, et, _g in f.options() %}<option value="{{ v }}">{{ et }}</option>{% endfor %}
+      {% endfor %}
+    </select>
+    <input name="title" placeholder="Başlık" required style="flex:1;min-width:160px">
+    <button class="primary">Aç</button>
+  </form>
+
+  {% include "fragments/filtreler.html" %}
+  {% include "fragments/tablo.html" %}
+</div>
+
+<script>
+/* Vanilla toplami ~5 satir: ac/kapa. hx-on= yok (CSP, spec/10-kararlar.md). */
+document.body.addEventListener('click', e => {
+  const t = e.target.closest('[data-toggle]');
+  if (t) document.querySelector(t.dataset.toggle)?.classList.toggle('on');
+});
+</script>
+</body>
+</html>

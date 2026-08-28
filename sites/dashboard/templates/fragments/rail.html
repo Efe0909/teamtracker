@@ -1,12 +1,9 @@
 {# fragment: rail — sol ray. Kendi kokunu dondurur. #}
 <nav class="rail" data-fragment="rail">
   <a class="rlogo" href="/" title="Ana sayfa" style="text-decoration:none">◆</a>
-  <button class="rbtn{% if panel != 'tree' %} on{% endif %}" data-mode="inbox"
-          hx-get="/panel/inbox" hx-target="#pbody" hx-swap="outerHTML">
-    🏠<span class="lbl">Bana ait</span></button>
-  <button class="rbtn{% if panel == 'tree' %} on{% endif %}" data-mode="tree"
-          hx-get="/panel/tree" hx-target="#pbody" hx-swap="outerHTML">
-    🌳<span class="lbl">Hiyerarşi</span></button>
+  <a class="rbtn{% if aktif == 'gorevler' %} on{% endif %}" href="/gorevler"
+     style="text-decoration:none;display:grid;place-items:center">
+    📋<span class="lbl">Görev Yöneticisi</span></a>
   <div style="flex:1"></div>
   <details style="position:relative">
     <summary class="rbtn" style="list-style:none">

@@ -19,6 +19,17 @@
     {% else %}<span class="v v-{{ item.priority }}">{{ priority_label }}</span>{% endif %}
   </span>
 
+  <span class="fld{% if not can_edit %} ro{% endif %}"><span class="k">Takım</span>
+    {% if team %}<span class="tdot" style="background:{{ team.color }}"></span>{% endif %}
+    {% if can_edit %}
+      <select name="team_id" class="v" hx-patch="/item/{{ item.id }}/field"
+              hx-target="#fields" hx-swap="outerHTML" hx-trigger="change">
+        <option value="">—</option>
+        {% for t in teams %}<option value="{{ t.id }}" {% if t.id == item.team_id %}selected{% endif %}>{{ t.name }}</option>{% endfor %}
+      </select>
+    {% else %}<span class="v">{{ team.name if team else '—' }}</span>{% endif %}
+  </span>
+
   <span class="fld who{% if not can_edit %} ro{% endif %}"><span class="k">Sorumlu</span>
     {% if assignee %}<span class="av" style="background:{{ assignee.color }}">{{ assignee.name[0] }}</span>{% endif %}
     {% if can_edit %}
@@ -41,6 +52,7 @@
   {% if item.pillar %}<span class="fld"><span class="k">Pillar</span><span class="v">{{ item.pillar }}</span></span>{% endif %}
 
   <div style="flex:1"></div>
+  {% if creator %}<span class="small muted">Açan: {{ creator.name }} · {{ olusturma }}</span>{% endif %}
   <div class="stack">
     {% for p in participants %}<span class="av" style="background:{{ p.color }}">{{ p.name[0] }}</span>{% endfor %}
   </div>

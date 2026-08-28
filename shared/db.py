@@ -42,8 +42,17 @@ def connect(path: Path | None = None) -> sqlite3.Connection:
 def init(path: Path | None = None) -> sqlite3.Connection:
     conn = connect(path)
     conn.executescript(SCHEMA_PATH.read_text(encoding="utf-8"))
+    _migrate(conn)
     conn.commit()
     return conn
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Var olan veritabanina sutun ekleme. schema.sql 'if not exists' oldugu icin
+    eski items tablosuna yeni sutunu burada acariz; tam migration araci bu olcekte fazla."""
+    cols = {r[1] for r in conn.execute("pragma table_info(items)")}
+    if "team_id" not in cols:
+        conn.execute("alter table items add column team_id text references teams(id)")
 
 
 def q(sql: str, args: tuple = ()) -> list[sqlite3.Row]:

@@ -21,6 +21,22 @@ USERS = [
     ("deniz", "deniz@ekiptakip.local",    "Deniz", "#d99a2b", 0, 0, "Üretim Hattı A"),
 ]
 
+TEAMS = [
+    # (anahtar, ad, aciklama, renk)
+    ("tasarim",   "Tasarım",   "Görsel üretim: afiş, sosyal medya, sahne tasarımı.", "#8e6bff"),
+    ("maliye",    "Maliye",    "Bütçe, onay akışları ve ödemeler.",                  "#1c8a5b"),
+    ("satinalim", "Satın Alım", "Tedarikçi seçimi, sözleşme ve sevkiyat takibi.",    "#b4501a"),
+]
+
+TEAM_MEMBERS = [
+    # (takim, kullanici, rol)
+    ("tasarim",   "efe",   "lider"),
+    ("tasarim",   "selin", "mentor"),
+    ("maliye",    "selin", "lider"),
+    ("satinalim", "deniz", "uye"),
+    ("satinalim", "efe",   "uye"),
+]
+
 NODES = [
     # (anahtar, ust anahtar, ad, tur)
     ("bayi",     None,     "Yıllık Bayi Toplantısı 2026", "Etkinlik"),
@@ -39,38 +55,55 @@ NODES = [
 ]
 
 ITEMS = [
-    dict(key="butce_onay", node="butce", kind="hata",
+    dict(key="butce_onay", node="butce", kind="hata", team="maliye",
          title="Bütçe onayı 6 gündür bekliyor",
          description="Finans departmanı onay vermeden tedarikçi ile sözleşme "
                      "imzalanamıyor. Zincirin tamamı bekliyor.",
          status="acik", priority="kritik", assignee="deniz", created_by="selin",
          due="2026-09-04", dms="DH", pillar="SN", parts=["deniz", "selin", "efe"],
          created=ago(days=12), updated=ago(minutes=20)),
-    dict(key="sevkiyat_tarih", node="sevkiyat", kind="hata",
+    dict(key="sevkiyat_tarih", node="sevkiyat", kind="hata", team="satinalim",
          title="Sevkiyat tarihi etkinlikten sonraya düşüyor",
          description="Tedarikçi teslim tarihi 3 Eylül; etkinlik 28 Ağustos.",
          status="devam", priority="kritik", assignee="efe", created_by="efe",
          due="2026-09-10", dms=None, pillar="SN", parts=["efe", "selin"],
          created=ago(days=11), updated=ago(hours=3)),
-    dict(key="kapak_kayip", node="kapak", kind="gorev",
+    dict(key="kapak_kayip", node="kapak", kind="gorev", team=None,
          title="Kapak Ünitesi — tekrar eden kayıp",
          description="3 DMS kaydından açıldı. Tekrar eden duruş, LE'ye taşınması "
                      "değerlendiriliyor.",
          status="beklemede", priority="yuksek", assignee="deniz", created_by="selin",
          due=None, dms="LE", pillar=None, parts=["deniz"],
          created=ago(days=8), updated=ago(hours=5)),
-    dict(key="vekalet", node="butce", kind="gorev",
+    dict(key="vekalet", node="butce", kind="gorev", team="maliye",
          title="Onay akışına vekalet mekanizması ekle",
          description="CFO izindeyken onay zinciri duruyor; vekalet tanımı gerekiyor.",
          status="devam", priority="orta", assignee="efe", created_by="selin",
          due=None, dms="UPS", pillar=None, parts=["efe", "selin"],
          created=ago(days=6), updated=ago(days=1, hours=2)),
-    dict(key="teklif", node="tedarik", kind="hata",
+    dict(key="teklif", node="tedarik", kind="hata", team="satinalim",
          title="Tedarikçi teklifleri karşılaştırılamıyor",
          description="Üç teklif farklı formatta geldi; kıyas tablosu çıkarılamıyor.",
          status="acik", priority="orta", assignee="efe", created_by="efe",
          due=None, dms="IPS", pillar=None, parts=["efe"],
          created=ago(days=7), updated=ago(days=2)),
+]
+
+def gun(delta: int) -> str:
+    """Bugune gore tarih (YYYY-AA-GG) — eylem son tarihleri icin."""
+    return (datetime.now(timezone.utc).date() + timedelta(days=delta)).isoformat()
+
+
+ACTIONS = [
+    # (kayit, baslik, atanan, durum, son tarih, acan, olusturma)
+    ("butce_onay", "CFO vekalet onayını IT üzerinden tamamlat",
+     "deniz", "acik", gun(2), "selin", ago(days=11)),
+    ("butce_onay", "Tedarikçiden fiyat kilidi uzatması iste",
+     "efe", "devam", gun(-1), "selin", ago(days=10)),              # son tarihi gecti
+    ("teklif", "Teklifleri tek şablona geçir",
+     "efe", "kapandi", None, "efe", ago(days=6)),
+    ("sevkiyat_tarih", "Alternatif kargo firmalarından süre al",
+     None, "acik", gun(4), "efe", ago(days=2)),                    # havuzda, ustlenen yok
 ]
 
 EVENTS = [
@@ -105,6 +138,7 @@ def run() -> None:
 
     uid = {k: db.new_id() for k, *_ in USERS}
     nid = {k: db.new_id() for k, *_ in NODES}
+    tid = {k: db.new_id() for k, *_ in TEAMS}
     iid = {i["key"]: db.new_id() for i in ITEMS}
 
     for key, email, name, color, admin, editor, scope_name in USERS:
@@ -120,13 +154,23 @@ def run() -> None:
             " values (?,?,?,?,?,?,?)",
             (nid[key], nid[parent] if parent else None, name, ntype, order, uid["selin"], now))
 
+    for key, name, desc, color in TEAMS:
+        conn.execute(
+            "insert into teams (id,name,description,node_id,color,created_at)"
+            " values (?,?,?,null,?,?)", (tid[key], name, desc, color, now))
+    for team, member, role in TEAM_MEMBERS:
+        conn.execute(
+            "insert into team_members (team_id,user_id,role,added_at) values (?,?,?,?)",
+            (tid[team], uid[member], role, now))
+
     for it in ITEMS:
         conn.execute(
-            "insert into items (id,node_id,kind,title,description,status,priority,"
+            "insert into items (id,node_id,kind,title,description,status,priority,team_id,"
             "assignee_id,created_by,due_date,dms,pillar,escalated,created_at,updated_at)"
-            " values (?,?,?,?,?,?,?,?,?,?,?,?,0,?,?)",
+            " values (?,?,?,?,?,?,?,?,?,?,?,?,?,0,?,?)",
             (iid[it["key"]], nid[it["node"]], it["kind"], it["title"], it["description"],
-             it["status"], it["priority"], uid[it["assignee"]], uid[it["created_by"]],
+             it["status"], it["priority"], tid[it["team"]] if it["team"] else None,
+             uid[it["assignee"]], uid[it["created_by"]],
              it["due"], it["dms"], it["pillar"], it["created"], it["updated"]))
         for p in it["parts"]:
             conn.execute(
@@ -140,9 +184,18 @@ def run() -> None:
             " values (?,'item',?,?,?,?,?)",
             (db.new_id(), iid[item_key], etype, uid[author] if author else None, body, created))
 
+    for item_key, title, assignee, status, due, creator, created in ACTIONS:
+        biten = status in ("kapandi", "iptal")
+        conn.execute(
+            "insert into actions (id,item_id,title,assignee_id,status,due_date,"
+            "created_by,resolved_by,resolved_at,created_at) values (?,?,?,?,?,?,?,?,?,?)",
+            (db.new_id(), iid[item_key], title, uid[assignee] if assignee else None,
+             status, due, uid[creator], uid[assignee] if biten else None,
+             created if biten else None, created))
+
     conn.commit()
-    print(f"tohumlandi: {len(USERS)} kullanici, {len(NODES)} dugum, "
-          f"{len(ITEMS)} kayit, {len(EVENTS)} olay -> {db.DB_PATH.name}")
+    print(f"tohumlandi: {len(USERS)} kullanici, {len(TEAMS)} takim, {len(NODES)} dugum, "
+          f"{len(ITEMS)} kayit, {len(ACTIONS)} eylem, {len(EVENTS)} olay -> {db.DB_PATH.name}")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,49 @@
+{# fragment: filtreler — hizli cipler + boyut filtreleri (spec/60-kaynak-uyarlama.md 2.2).
+   Genel dongu: shared/filters.py'ye yeni Filtre eklemek bu sablonu DEGISTIRMEZ.
+   Form GET /gorevler'e gider; sunucu htmx istegine yalnizca #sonuc parcasini doner. #}
+<form class="fbar" data-fragment="filtreler" hx-get="/gorevler" hx-target="#sonuc"
+      hx-swap="outerHTML" hx-push-url="true" hx-trigger="change, submit">
+
+  <div class="qbar">
+    {% for k, et in hizli %}
+    <button class="qbtn{% if secili.hizli == k %} on{% endif %}" name="hizli" value="{{ k }}">
+      {{ et }}</button>
+    {% endfor %}
+  </div>
+
+  <div class="fset">
+    {% for f in filtreler %}
+      {% set secenekler = f.options() %}
+      {% if secenekler %}
+      <label class="ff"><span>{{ f.label }}</span>
+        <select name="{{ f.param }}">
+          <option value="">Hepsi</option>
+          {% set ns = namespace(grup=none) %}
+          {% for v, et, g in secenekler %}
+            {% if g != ns.grup %}
+              {% if ns.grup is not none %}</optgroup>{% endif %}
+              {% if g is not none %}<optgroup label="{{ g }}">{% endif %}
+              {% set ns.grup = g %}
+            {% endif %}
+            <option value="{{ v }}" {% if secili.get(f.param) == v %}selected{% endif %}>{{ et }}</option>
+          {% endfor %}
+          {% if ns.grup is not none %}</optgroup>{% endif %}
+        </select>
+      </label>
+      {% else %}
+      <label class="ff"><span>{{ f.label }}</span>
+        <input type="search" name="{{ f.param }}" value="{{ secili.get(f.param, '') }}"
+               placeholder="kelime…" hx-trigger="input changed delay:400ms" hx-get="/gorevler"
+               hx-target="#sonuc" hx-swap="outerHTML" hx-push-url="true" hx-include="closest form">
+      </label>
+      {% endif %}
+    {% endfor %}
+    <label class="ff"><span>Sırala</span>
+      <select name="sirala">
+        {% for k, et in siralama.items() %}
+        <option value="{{ k }}" {% if secili.sirala == k %}selected{% endif %}>{{ et }}</option>
+        {% endfor %}
+      </select>
+    </label>
+  </div>
+</form>

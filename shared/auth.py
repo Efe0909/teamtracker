@@ -33,7 +33,14 @@ def participant_ids(item_id: str) -> set[str]:
         "select user_id from item_participants where item_id = ?", (item_id,))}
 
 
+def team_ids(user_id: str) -> set[str]:
+    return {r["team_id"] for r in db.q(
+        "select team_id from team_members where user_id = ?", (user_id,))}
+
+
 def can_edit_item(user, item, tree: TreeIndex) -> bool:
+    """Kart yetkisinin yollari: admin, atanan/açan, karta dahil, kartin takiminin
+    uyesi (spec/20-sema.md §2a), ya da dugum kapsam alt agacinda."""
     if user is None or item is None:
         return False
     if db.as_bool(user["is_admin"]):
@@ -41,6 +48,8 @@ def can_edit_item(user, item, tree: TreeIndex) -> bool:
     if user["id"] in (item["assignee_id"], item["created_by"]):
         return True
     if user["id"] in participant_ids(item["id"]):  # karta dahil edilenler
+        return True
+    if item["team_id"] and item["team_id"] in team_ids(user["id"]):
         return True
     scope = user["scope_node_id"]
     return bool(scope) and tree.is_descendant(item["node_id"], scope)

@@ -62,7 +62,7 @@ class MobileHostPrefix:
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    db.connect()
+    db.init()          # idempotent: yeni tablolar 'if not exists', sutun ekleme _migrate'te
     service.rebuild_tree()
     yield
 
