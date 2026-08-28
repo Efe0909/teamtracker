@@ -46,6 +46,46 @@ def init(path: Path | None = None) -> sqlite3.Connection:
     return conn
 
 
+def gocler() -> list[str]:
+    """Kurulu veritabanini guncel semaya tasir. Acilista calisir, idempotent.
+
+    `create table if not exists` varolan tabloya SUTUN EKLEMEZ; bu yuzden yeni
+    sutunlar burada tek tek eklenir. Alternatifi `make seed` idi, o da butun
+    gercek veriyi siler.
+    """
+    conn = connect()
+    yapildi: list[str] = []
+
+    var = {r["name"] for r in conn.execute("pragma table_info(users)")}
+    for sutun, tanim in (("google_sub", "text"),
+                         ("is_active", "integer not null default 1"),
+                         ("last_login_at", "text")):
+        if sutun not in var:
+            conn.execute(f"alter table users add column {sutun} {tanim}")
+            yapildi.append(f"users.{sutun}")
+    if "google_sub" in yapildi[0:1] or "users.google_sub" in yapildi:
+        conn.execute("create unique index if not exists users_google_sub_idx"
+                     " on users(google_sub) where google_sub is not null")
+
+    # Yeni tablolar/indeksler: semadaki create ... if not exists ifadeleri zaten
+    # idempotent, tumunu calistirmak yerine yalnizca eksik olani kur.
+    tablolar = {r["name"] for r in conn.execute(
+        "select name from sqlite_master where type='table'")}
+    if "guvenlik_olaylari" not in tablolar:
+        conn.executescript(_govde("create table if not exists guvenlik_olaylari"))
+        yapildi.append("guvenlik_olaylari")
+    conn.commit()
+    return yapildi
+
+
+def _govde(baslangic: str) -> str:
+    """schema.sql icinden tek bir ifadeyi ve ardindaki indeksleri ceker."""
+    metin = SCHEMA_PATH.read_text(encoding="utf-8")
+    i = metin.index(baslangic)
+    j = metin.index(";", metin.index("create index", i)) + 1
+    return metin[i:j]
+
+
 def q(sql: str, args: tuple = ()) -> list[sqlite3.Row]:
     return connect().execute(sql, args).fetchall()
 

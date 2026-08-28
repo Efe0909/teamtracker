@@ -7,18 +7,18 @@ Bizim isimiz akisi dogru kurmak ve KIMIN gireceğine karar vermek.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+import secrets
 
 from authlib.integrations.starlette_client import OAuth, OAuthError
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
 
 from . import config, db
-from .render import ORTAK
+from .render import ORTAK as ORTAK_DIZIN
+from .render import site_templates
 
 router = APIRouter()
-_TPL = Jinja2Templates(directory=[ORTAK])
+_TPL = site_templates(ORTAK_DIZIN)
 
 OTURUM_ANAHTARI = "uid"          # oturum sozlugunde kullanici id'si
 
@@ -40,6 +40,9 @@ def olay(request: Request | None, tur: str, actor_id: str | None = None,
          email: str | None = None, detay: str | None = None) -> None:
     """Kim girdi, kim reddedildi, kim 403 yedi. Govde tutulmaz (spec/70 §8)."""
     ip = None
+    if request is not None and detay is None:
+        sid = request.session.get("sid") if hasattr(request, "session") else None
+        detay = f"sid={sid}" if sid else None
     if request is not None:
         ip = request.headers.get("x-real-ip") or (
             request.client.host if request.client else None)
@@ -53,6 +56,9 @@ def olay(request: Request | None, tur: str, actor_id: str | None = None,
 
 def oturum_ac(request: Request, user_id: str) -> None:
     request.session[OTURUM_ANAHTARI] = user_id
+    # sid: tek bir oturumu ayirt etmek icin. Bugun yalnizca denetim izinde
+    # kullaniliyor; tek oturum iptali gerekirse kara listenin capasi bu olur.
+    request.session["sid"] = secrets.token_urlsafe(9)
 
 
 def oturum_kapat(request: Request) -> None:
@@ -86,10 +92,16 @@ def girebilir(email: str, sub: str) -> tuple[dict | None, str | None]:
     return u, None
 
 
-def girisi_isle(user, sub: str) -> None:
-    """Ilk girişte google_sub baglanir; her girişte son giris zamani yazilir."""
-    db.x("update users set google_sub = ?, last_login_at = ? where id = ?",
-         (sub, db.now(), user["id"]))
+def girisi_isle(user, sub: str, email: str) -> None:
+    """Ilk girişte google_sub baglanir; her girişte son giris zamani yazilir.
+
+    Ayni Google hesabi (sub) farkli bir e-postayla gelirse e-posta GUNCELLENIR:
+    kisi kurumsal adresini degistirmis olabilir, kimligin capasi sub'dir.
+    Tersi (ayni e-posta, farkli sub) girebilir() icinde REDDEDILIR — hesap
+    devralma vektoru (spec/70-guvenlik.md §2.3).
+    """
+    db.x("update users set google_sub = ?, email = ?, last_login_at = ? where id = ?",
+         (sub, email, db.now(), user["id"]))
 
 
 # --- donus adresi ---------------------------------------------------------
@@ -149,7 +161,7 @@ async def giris_callback(request: Request):
         }
         return _sayfa(request, mesajlar[sebep], 403)
 
-    girisi_isle(user, sub)
+    girisi_isle(user, sub, email)
     oturum_ac(request, user["id"])
     olay(request, "giris", actor_id=user["id"], email=email)
     return RedirectResponse(guvenli_donus(request.session.pop("giris_donus", "/")),

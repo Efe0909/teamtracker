@@ -22,7 +22,7 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
-from shared import auth, config, db, kimlik, service
+from shared import auth, config, csrf, db, kimlik, service
 from sites.dashboard import routes as dashboard
 from sites.mobil import routes as mobil
 
@@ -45,8 +45,12 @@ class MobileHostPrefix:
     """app.<alan> altinda /ara -> ic yolda /m/ara.
 
     Sablonlar da ayni oneki kullanir (config.mp), boylece adres cubugunda /m
-    gorunmez. Masaustu sayfalari bu alan adindan ERISILEMEZ (/gorevler -> 404):
-    iki alan adina ayri Access politikasi yazilabilsin diye kasten boyle.
+    gorunmez. Masaustu sayfalari bu alan adindan gorunmez (/gorevler -> 404).
+
+    DIKKAT: bu bir ARAYUZ ayrimidir, yetki siniri DEGIL. Ayrim istemcinin
+    gonderdigi Host basligina bakar; surece dogrudan erisen biri baska bir Host
+    yazarak diger yuzu alir. Gercek sinir kimlik + yetki kontrolleridir
+    (spec/70-guvenlik.md §9: uygulama onundeki katmana guvenerek atlamaz).
     """
 
     def __init__(self, app):
@@ -70,6 +74,8 @@ async def lifespan(_app: FastAPI):
     for uyari in config.dogrula():
         print(f"[ekiptakip] UYARI: {uyari}", file=sys.stderr)
     db.connect()
+    for ad in db.gocler():           # kurulu veritabani yeni sutunlari alsin
+        print(f"[ekiptakip] goc: {ad}", file=sys.stderr)
     service.rebuild_tree()
     yield
 
@@ -114,12 +120,13 @@ app = FastAPI(title="EkipTakip", version="0.1.0-alpha", lifespan=lifespan)
 
 # Ara katman sirasi: EN SON eklenen EN DISTA calisir.
 #   MobileHostPrefix (yolu duzeltir) -> SessionMiddleware (oturumu acar)
-#     -> GirisKapisi (kimligi arar) -> rotalar
+#     -> GirisKapisi (kimligi arar) -> CsrfKapisi (token) -> rotalar
+app.add_middleware(csrf.CsrfKapisi)
 app.add_middleware(GirisKapisi)
 app.add_middleware(
     SessionMiddleware,
     secret_key=config.SECRET_KEY,
-    session_cookie=config.SESSION_COOKIE,
+    session_cookie=config.cerez_adi(),
     max_age=config.SESSION_MAX_AGE,
     same_site="lax",                 # siteler arasi POST/PATCH cerezi tasimaz
     https_only=config.yayinda(),     # yayinda yalnizca HTTPS

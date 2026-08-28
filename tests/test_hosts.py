@@ -28,6 +28,8 @@ def client(tmp_path_factory):
     config.HOST_APP, config.HOST_DASH = APP, DASH
     config.COOKIE_DOMAIN = ".polonyum.com"
     with TestClient(app_mod.app) as c:
+        from conftest import csrf_tak  # noqa: E402
+        csrf_tak(c)
         yield c
     config.HOST_APP, config.HOST_DASH, config.COOKIE_DOMAIN = onceki
 
@@ -137,7 +139,12 @@ def test_session_survives_across_both_hosts(client):
     assert r.status_code == 303
     assert app_host(client, "/whoami").json()["name"] == "Selin"
     assert dash_host(client, "/whoami").json()["name"] == "Selin"
+
+    # Cerezi temizlemek oturumu da siler; CSRF token'i oturumda durdugu icin
+    # yeniden alinmali (tarayicida da boyle olur: yeni oturum, yeni token).
     client.cookies.clear()
+    from conftest import csrf_tak  # noqa: E402
+    csrf_tak(client)
 
 
 def test_detail_and_write_paths_work_at_root(client):

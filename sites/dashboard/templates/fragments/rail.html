@@ -20,7 +20,7 @@
       <div class="small muted" style="padding:6px 6px 5px;border-top:1px solid var(--line)">
         Kullanıcı değiştir (sahte kimlik)</div>
       {% for u in all_users %}
-      <form method="post" action="/switch/{{ u.id }}" style="margin:0">
+      <form method="post" action="/switch/{{ u.id }}" style="margin:0"><input type="hidden" name="csrf" value="{{ csrf_token }}">
         <button class="tnode" style="width:100%;border:none;background:transparent">
           <span class="av" style="background:{{ u.color }}">{{ u.name[0] }}</span>
           <span class="tn" style="text-align:left">{{ u.name }}</span>
@@ -30,7 +30,7 @@
       {% endfor %}
       {% endif %}
 
-      <form method="post" action="/cikis" style="margin:6px 0 0;border-top:1px solid var(--line);padding-top:6px">
+      <form method="post" action="/cikis" style="margin:6px 0 0;border-top:1px solid var(--line);padding-top:6px"><input type="hidden" name="csrf" value="{{ csrf_token }}">
         <button class="tnode" style="width:100%;border:none;background:transparent">
           <span class="tw">⏻</span><span class="tn" style="text-align:left">Çıkış</span>
         </button>

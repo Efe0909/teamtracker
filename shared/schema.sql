@@ -9,7 +9,9 @@ pragma foreign_keys = on;
 
 create table if not exists users (
   id            text primary key,
-  email         text unique not null,      -- davetli listesi: giris bunun uzerinden eslesir
+  -- collate nocase: 'Efe@x.com' ile 'efe@x.com' AYNI satirdir; yoksa ayni kisi
+  -- icin iki kayit olusabilir ve davetli listesi eslesmesi kacar.
+  email         text not null collate nocase unique,
   name          text not null,
   color         text,
   is_admin      integer not null default 0,
@@ -35,6 +37,7 @@ create table if not exists guvenlik_olaylari (
   detay      text
 );
 create index if not exists guvenlik_zaman_idx on guvenlik_olaylari(created_at desc);
+create index if not exists guvenlik_tur_idx on guvenlik_olaylari(tur, created_at desc);
 
 create table if not exists nodes (
   id             text primary key,

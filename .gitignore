@@ -12,7 +12,7 @@ __pycache__/
 
 # Sirlar: oturum anahtari, Google OAuth istemcisi, VAPID
 # (.env.ornek depoda durur — isimler var, degerler yok)
-.env
+.env*
 !.env.ornek
 
 # spec: ham ekran goruntuleri — depo public, yapiyi yaz goruntuyu koyma

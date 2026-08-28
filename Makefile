@@ -44,9 +44,11 @@ seed: $(STAMP)  ## veritabanini tohumla (VAROLAN ekiptakip.db SILINIR)
 
 reseed: clean seed  ## veritabanini sifirla ve yeniden tohumla
 
-dev: $(STAMP)  ## sunucuyu --reload ile calistir (varsayilan http://127.0.0.1:8000)
-	@echo "→ http://$(HOST):$(PORT)  (ana sayfa)   ·   /gorevler  (gorev yoneticisi)"
-	$(BIN)/uvicorn app:app --host $(HOST) --port $(PORT) --workers 1 --reload
+# Gelistirmede kimlik SAHTE: Google anahtari olmadan calissin diye. Yayinda bu
+# degisken acilisi reddettirir (spec/70-guvenlik.md §2.5).
+dev: $(STAMP)  ## sunucuyu --reload ile calistir, SAHTE kimlikle (geliştirme)
+	@echo "→ http://$(HOST):$(PORT)   ·   kimlik: SAHTE (yalnizca gelistirme)"
+	EKIPTAKIP_AUTH=sahte $(BIN)/uvicorn app:app --host $(HOST) --port $(PORT) --workers 1 --reload
 
 run: $(STAMP)  ## sunucuyu --reload olmadan calistir
 	$(BIN)/uvicorn app:app --host $(HOST) --port $(PORT) --workers 1

@@ -11,6 +11,13 @@ from __future__ import annotations
 import os
 import secrets
 import sys
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+# .env depo kokunde; systemd WorkingDirectory de orasi. Ortamda zaten tanimli
+# olan degerler EZILMEZ (override=False): systemd Environment= satirlari kazanir.
+load_dotenv(Path(__file__).resolve().parents[1] / ".env", override=False)
 
 # --- iki alan adi ---------------------------------------------------------
 #   EKIPTAKIP_HOST_APP=app.polonyum.com
@@ -28,8 +35,13 @@ GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
 GOOGLE_KESIF = "https://accounts.google.com/.well-known/openid-configuration"
 
+# Fallback burada olmali: SessionMiddleware bu degeri IMPORT aninda okuyor.
+# dogrula() icinde uretilseydi oturumlar bos anahtarla imzalanirdi.
 SECRET_KEY = os.getenv("EKIPTAKIP_SECRET_KEY", "")
-SESSION_COOKIE = "ekiptakip"
+SECRET_URETILDI = not SECRET_KEY
+if SECRET_URETILDI:
+    SECRET_KEY = secrets.token_urlsafe(32)
+SESSION_COOKIE = "ekiptakip"          # yayinda __Secure- onekiyle (bkz. cerez_adi)
 SESSION_MAX_AGE = 30 * 24 * 3600            # 30 gun: telefondaki uygulama surekli sormasin
 
 # --- ortak yollar (mobil onekine girmezler) -------------------------------
@@ -43,19 +55,37 @@ SHARED_PATHS = ("/static/", "/sw.js", "/favicon.ico", "/manifest.json",
 def yayinda() -> bool:
     """Yayin kurulumu mu — kurallarin sertlestigi yer.
 
-    Iki isaret: acikca EKIPTAKIP_ENV=yayin, ya da alan adi tanimli olmasi.
-    Ikincisi unutulmaya karsi emniyet: alan adi verildiyse bu is ciddidir.
+    Iki isaret: acikca EKIPTAKIP_ENV=yayin, ya da alan adi ORTAM DEGISKENIYLE
+    verilmis olmasi. Ikincisi unutulmaya karsi emniyet: alan adi verildiyse
+    bu is ciddidir.
+
+    Dikkat: modul nitelikleri (HOST_APP/HOST_DASH) degil ORTAM okunur. Bu ikisi
+    farkli sorular: nitelikler "istek hangi yuze gidecek" (testler yamalar),
+    ortam "burasi gercek bir kurulum mu" (yamalanmaz).
     """
-    return os.getenv("EKIPTAKIP_ENV", "").lower() == "yayin" or bool(HOST_APP or HOST_DASH)
+    return (os.getenv("EKIPTAKIP_ENV", "").lower() == "yayin"
+            or bool(os.getenv("EKIPTAKIP_HOST_APP") or os.getenv("EKIPTAKIP_HOST_DASHBOARD")))
 
 
 def _test_kosumu() -> bool:
     """Testte olumcul kontroller uyariya doner.
 
-    Ortam degiskeniyle degil pytest'in yuklu olmasiyla anlasilir: yayin sureci
-    icinde pytest yoktur, dolayisiyla bu bir arka kapi degildir.
+    Acik bayrak: yalnizca tests/conftest.py koyar. Onceki surum "pytest
+    sys.modules'te mi" diye bakiyordu; pytest yayin venv'inde de kurulu
+    oldugu icin savunma bir import zincirine asili kaliyordu.
+
+    YAYINDA BU BAYRAK YOK SAYILIR — arka kapi olmasin diye.
     """
-    return "pytest" in sys.modules
+    return os.getenv("EKIPTAKIP_TEST_YAPILANDIRMA") == "1" and not yayinda()
+
+
+def cerez_adi() -> str:
+    """Yayinda __Secure- oneki: cerez yalnizca HTTPS uzerinden yazilabilir.
+
+    __Host- kullanamiyoruz: o onek Domain niteligini yasaklar, biz ise iki alt
+    alan adinda tek oturum icin Domain'e muhtaciz (spec/70-guvenlik.md §2.4).
+    """
+    return ("__Secure-" + SESSION_COOKIE) if yayinda() else SESSION_COOKIE
 
 
 def sahte_kimlik() -> bool:
@@ -67,9 +97,12 @@ def dogrula() -> list[str]:
 
     Amac: yanlis yapilandirmayi calisma aninda degil ACILISTA yakalamak.
     """
-    global SECRET_KEY
     uyarilar: list[str] = []
     olumcul: list[str] = []
+
+    if AUTH_MODE not in ("google", "sahte"):
+        olumcul.append(f"EKIPTAKIP_AUTH gecersiz: {AUTH_MODE!r}. "
+                       "Yalnizca 'google' ya da 'sahte' olabilir.")
 
     if sahte_kimlik() and yayinda():
         olumcul.append("EKIPTAKIP_AUTH=sahte ile yayin kurulumu acilamaz "
@@ -79,15 +112,15 @@ def dogrula() -> list[str]:
         olumcul.append("GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET tanimli degil. "
                        "Ya .env'e koy ya da gelistirme icin EKIPTAKIP_AUTH=sahte kullan.")
 
-    if not SECRET_KEY:
+    if SECRET_URETILDI:
         if yayinda():
             olumcul.append("EKIPTAKIP_SECRET_KEY tanimli degil — yayinda acilmaz.")
-        SECRET_KEY = secrets.token_urlsafe(32)
         uyarilar.append("EKIPTAKIP_SECRET_KEY yok: gecici anahtar uretildi, "
                         "surec kapaninca butun oturumlar duser.")
     elif len(SECRET_KEY) < 32:
-        uyarilar.append("EKIPTAKIP_SECRET_KEY 32 karakterden kisa; "
-                        "`python -c \"import secrets;print(secrets.token_urlsafe(32))\"`")
+        mesaj = ("EKIPTAKIP_SECRET_KEY 32 karakterden kisa; uret: "
+                 "python -c \"import secrets;print(secrets.token_urlsafe(32))\"")
+        (olumcul if yayinda() else uyarilar).append(mesaj)
 
     if sahte_kimlik():
         uyarilar.append("KIMLIK SAHTE (EKIPTAKIP_AUTH=sahte): giris yok, ilk kullanici "
