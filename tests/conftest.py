@@ -7,6 +7,8 @@ icin dogru yer. Olumcul yapilandirma kontrolleri testte uyariya doner
 import os
 
 os.environ.setdefault("EKIPTAKIP_AUTH", "sahte")
+# Sahte kimlik yalnizca acikca "gelistirme" denince kabul edilir.
+os.environ.setdefault("EKIPTAKIP_ENV", "gelistirme")
 os.environ.setdefault("EKIPTAKIP_SECRET_KEY", "test-" + "y" * 40)
 # Olumcul yapilandirma kontrolleri testte uyariya doner. Bu bayrak YAYINDA
 # yok sayilir (shared/config._test_kosumu) — arka kapi degil.

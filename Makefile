@@ -48,7 +48,8 @@ reseed: clean seed  ## veritabanini sifirla ve yeniden tohumla
 # degisken acilisi reddettirir (spec/70-guvenlik.md §2.5).
 dev: $(STAMP)  ## sunucuyu --reload ile calistir, SAHTE kimlikle (geliştirme)
 	@echo "→ http://$(HOST):$(PORT)   ·   kimlik: SAHTE (yalnizca gelistirme)"
-	EKIPTAKIP_AUTH=sahte $(BIN)/uvicorn app:app --host $(HOST) --port $(PORT) --workers 1 --reload
+	EKIPTAKIP_AUTH=sahte EKIPTAKIP_ENV=gelistirme \
+	  $(BIN)/uvicorn app:app --host $(HOST) --port $(PORT) --workers 1 --reload
 
 run: $(STAMP)  ## sunucuyu --reload olmadan calistir
 	$(BIN)/uvicorn app:app --host $(HOST) --port $(PORT) --workers 1

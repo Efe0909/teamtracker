@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import secrets
 
-from authlib.integrations.starlette_client import OAuth, OAuthError
+from authlib.integrations.starlette_client import OAuth
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
@@ -23,14 +23,23 @@ _TPL = site_templates(ORTAK_DIZIN)
 OTURUM_ANAHTARI = "uid"          # oturum sozlugunde kullanici id'si
 
 _oauth = OAuth()
-if config.AUTH_MODE == "google":
-    _oauth.register(
-        name="google",
-        server_metadata_url=config.GOOGLE_KESIF,
-        client_id=config.GOOGLE_CLIENT_ID,
-        client_secret=config.GOOGLE_CLIENT_SECRET,
-        client_kwargs={"scope": "openid email profile"},   # hassas kapsam YOK
-    )
+
+
+def _google():
+    """Istemci ILK KULLANIMDA kurulur.
+
+    Import aninda kurulsaydi, AUTH_MODE sonradan degistirilen her baglamda
+    (testler) istemci hic olmazdi.
+    """
+    if "google" not in _oauth._registry:
+        _oauth.register(
+            name="google",
+            server_metadata_url=config.GOOGLE_KESIF,
+            client_id=config.GOOGLE_CLIENT_ID,
+            client_secret=config.GOOGLE_CLIENT_SECRET,
+            client_kwargs={"scope": "openid email profile"},   # hassas kapsam YOK
+        )
+    return _oauth.google
 
 
 # --- guvenlik olaylari ----------------------------------------------------
@@ -55,6 +64,14 @@ def olay(request: Request | None, tur: str, actor_id: str | None = None,
 
 
 def oturum_ac(request: Request, user_id: str) -> None:
+    """Oturum SIFIRDAN kurulur.
+
+    clear() sart: giris oncesi oturumda duran CSRF token'i giristen sonra da
+    gecerli kalsaydi, saldirgan kendi token'ini kurbanin tarayicisina yazdirip
+    (alt alan adindan cookie tossing) giris sonrasi CSRF korumasini delerdi.
+    Oturum sabitlemesine karsi da ayni hareket dogru olan.
+    """
+    request.session.clear()
     request.session[OTURUM_ANAHTARI] = user_id
     # sid: tek bir oturumu ayirt etmek icin. Bugun yalnizca denetim izinde
     # kullaniliyor; tek oturum iptali gerekirse kara listenin capasi bu olur.
@@ -62,7 +79,8 @@ def oturum_ac(request: Request, user_id: str) -> None:
 
 
 def oturum_kapat(request: Request) -> None:
-    request.session.pop(OTURUM_ANAHTARI, None)
+    """Cikista da komple temizlik: token dahil hicbir sey tasinmaz."""
+    request.session.clear()
 
 
 def oturumdaki_id(request: Request) -> str | None:
@@ -133,7 +151,7 @@ async def giris(request: Request, nereye: str = "/"):
     if config.sahte_kimlik():
         return _sayfa(request)
     request.session["giris_donus"] = guvenli_donus(nereye)
-    return await _oauth.google.authorize_redirect(
+    return await _google().authorize_redirect(
         request, str(request.url_for("giris_callback")))
 
 
@@ -146,9 +164,12 @@ async def giris_callback(request: Request):
         return sertlestirme.cok_deneme()
     try:
         # state dogrulamasi ve id_token imzasi authlib'in isi
-        token = await _oauth.google.authorize_access_token(request)
-    except OAuthError as e:
-        olay(request, "giris_reddi", detay=f"oauth: {e.error}")
+        token = await _google().authorize_access_token(request)
+    except Exception as e:
+        # OAuthError yetmez: id_token dogrulama hatalari (joserfc) AuthlibBaseError
+        # ALT SINIFI DEGIL, ag hatalari da degil. Dar yakalarsak kullaniciya ham
+        # 500 doner ve red denetim izine hic yazilmaz.
+        olay(request, "giris_reddi", detay=f"oauth: {type(e).__name__}")
         return _sayfa(request, "Giriş tamamlanamadı. Tekrar dene.", 400)
 
     claims = token.get("userinfo") or {}
@@ -167,11 +188,11 @@ async def giris_callback(request: Request):
         }
         return _sayfa(request, mesajlar[sebep], 403)
 
+    nereye = guvenli_donus(request.session.get("giris_donus", "/"))
     girisi_isle(user, sub, email)
-    oturum_ac(request, user["id"])
+    oturum_ac(request, user["id"])        # oturumu temizler: donus adresi ONCE okundu
     olay(request, "giris", actor_id=user["id"], email=email)
-    return RedirectResponse(guvenli_donus(request.session.pop("giris_donus", "/")),
-                            status_code=303)
+    return RedirectResponse(nereye, status_code=303)
 
 
 @router.post("/cikis")

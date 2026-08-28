@@ -88,8 +88,18 @@ def cerez_adi() -> str:
     return ("__Secure-" + SESSION_COOKIE) if yayinda() else SESSION_COOKIE
 
 
+def gelistirmede() -> bool:
+    """Sahte kimligin kabul edildigi TEK durum: acikca gelistirme denmis olmasi.
+
+    Onceki surum tersini yapiyordu (yayin oldugunu cikarmaya calisiyordu) ve
+    tek alan adi modunda kurulan gercek bir sunucuda — EKIPTAKIP_ENV yazilmayi
+    unutulursa — sahte kimlik sessizce acilabiliyordu.
+    """
+    return os.getenv("EKIPTAKIP_ENV", "").lower() == "gelistirme"
+
+
 def sahte_kimlik() -> bool:
-    return AUTH_MODE == "sahte"
+    return AUTH_MODE == "sahte" and gelistirmede()
 
 
 def dogrula() -> list[str]:
@@ -104,13 +114,16 @@ def dogrula() -> list[str]:
         olumcul.append(f"EKIPTAKIP_AUTH gecersiz: {AUTH_MODE!r}. "
                        "Yalnizca 'google' ya da 'sahte' olabilir.")
 
-    if sahte_kimlik() and yayinda():
-        olumcul.append("EKIPTAKIP_AUTH=sahte ile yayin kurulumu acilamaz "
-                       "(EKIPTAKIP_ENV=yayin ya da alan adi tanimli). Gercek kimlik sart.")
+    if AUTH_MODE == "sahte" and not gelistirmede():
+        olumcul.append("EKIPTAKIP_AUTH=sahte yalnizca EKIPTAKIP_ENV=gelistirme ile "
+                       "birlikte kabul edilir. Gercek kurulumda gercek kimlik sart.")
+    if AUTH_MODE == "sahte" and yayinda():
+        olumcul.append("EKIPTAKIP_AUTH=sahte ile yayin kurulumu acilamaz.")
 
     if AUTH_MODE == "google" and not (GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET):
         olumcul.append("GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET tanimli degil. "
-                       "Ya .env'e koy ya da gelistirme icin EKIPTAKIP_AUTH=sahte kullan.")
+                       "Ya .env'e koy ya da gelistirme icin "
+                       "EKIPTAKIP_AUTH=sahte EKIPTAKIP_ENV=gelistirme kullan.")
 
     if SECRET_URETILDI:
         if yayinda():

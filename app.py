@@ -89,8 +89,12 @@ class GirisKapisi:
     digerleri 401 alir.
     """
 
-    # Oturum gerektirmeyenler: giris akisi, PWA kabugu, statikler.
-    ACIK = ("/giris", "/cikis", "/sw.js", "/favicon.ico", "/manifest.json", "/static/")
+    # Oturum gerektirmeyenler. TAM ESLESME (yalniz /static/ onek):
+    # onek eslesmesi olsaydi, ileride eklenen bir modul slug'i (/giris-raporu
+    # gibi) sessizce kimliksiz okunabilir olurdu — /{slug} yakalayicisi var.
+    ACIK_TAM = frozenset({"/giris", "/giris/callback", "/sw.js", "/favicon.ico",
+                          "/manifest.json"})
+    ACIK_ONEK = ("/static/",)
 
     def __init__(self, app):
         self.app = app
@@ -99,7 +103,7 @@ class GirisKapisi:
         if scope["type"] != "http":
             return await self.app(scope, receive, send)
         yol = scope["path"]
-        if yol.startswith(self.ACIK):
+        if yol in self.ACIK_TAM or yol.startswith(self.ACIK_ONEK):
             return await self.app(scope, receive, send)
 
         request = Request(scope, receive)
@@ -169,6 +173,8 @@ def favicon():
 @app.get("/whoami")
 def whoami(request: Request):
     u = auth.current_user(request)
+    if u is None:                                   # kapi gevserse gurultusuz duralim
+        return JSONResponse({"hata": "oturum yok"}, status_code=401)
     return JSONResponse({"id": u["id"], "name": u["name"], "email": u["email"],
                          "is_admin": db.as_bool(u["is_admin"]),
                          "scope": service.TREE.name(u["scope_node_id"]) if u["scope_node_id"] else None})

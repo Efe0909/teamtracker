@@ -111,12 +111,19 @@ yüzden **iptal anında işler**: `is_active = 0` yapılan kişi bir sonraki ist
 
 ### 2.5 Sahte kimlik (geliştirme)
 
-`POST /switch/{user_id}` **kalkıyor.** Yerinde `EKIPTAKIP_AUTH=sahte` ortam değişkeni
-varsa devreye giren geliştirme modu var: ilk kullanıcı olarak oturum açılır, `/switch`
-çalışır. Bu değişken yoksa **gerçek kimlik zorunlu**.
+`POST /switch/{user_id}` **kalkıyor.** Yerinde bir geliştirme modu var: ilk kullanıcı
+olarak oturum açılır, `/switch` rotası tanımlanır.
 
-Kurallar: açılışta uyarı basılır; `EKIPTAKIP_HOST_APP` tanımlıysa (yani yayın kurulumu)
-sahte mod **açılmayı reddeder ve süreç durur**. Testler bu modu kullanır.
+**Açılması iki şarta birden bağlı:** `EKIPTAKIP_AUTH=sahte` **ve**
+`EKIPTAKIP_ENV=gelistirme`. Yani ispat yükü ters çevrildi: "burası yayın değil" diye
+çıkarım yapmıyoruz, "burası geliştirme" diye **açıkça söylenmesini** istiyoruz.
+
+Gerekçe: önceki kurgu yayını çıkarımla (alan adı tanımlı mı) buluyordu ve tek alan adı
+modunda kurulan gerçek bir sunucuda `EKIPTAKIP_ENV` yazılmayı unutulursa sahte kimlik
+sessizce açılıyordu — o durumda `uid` çerezini elle yazan herkes admin olurdu.
+
+Açılışta uyarı basılır; şartlar sağlanmıyorsa süreç **durur**. Testler bu modu kullanır,
+ama kapıyı gerçekten sınayan testler (`tests/test_kimlik_gercek.py`) gerçek modda koşar.
 
 ---
 
@@ -154,8 +161,18 @@ Kurallar:
 - Ara katman `POST/PATCH/PUT/DELETE` isteklerinde token'ı oturumdakiyle karşılaştırır,
   eşleşmezse **403**.
 - Muaf: `/giris`, `/giris/callback` (oturum yokken çalışır, kendi `state`'i var).
-- Token oturum ömrü boyunca sabit; oturum yenilenince yenilenir.
+- **Girişte ve çıkışta oturum komple temizlenir** (`session.clear()`), token dahil.
+  Aksi hâlde: saldırgan kimliksiz bir istekle oturuma kendi token'ını bastırır (giriş
+  sayfası da token üretir), o çerezi alt alan adından kurbanın tarayıcısına yazdırır,
+  kurban giriş yaptıktan sonra oturumda **saldırganın bildiği token** durur ve asıl
+  koruma düşer. Oturum sabitlemesine karşı da doğru olan hareket bu.
 - Karşılaştırma `hmac.compare_digest` ile yapılır.
+- **Kimliksiz CSRF reddi denetim izine yazılmaz:** her satır senkron bir SQLite
+  `commit()`; yazsaydık adresi bilen herkes sınırsız satır ürettirip diski şişirir ve
+  olay döngüsünü yavaşlatırdı.
+- Muafiyet listeleri **tam eşleşme** (yalnız `/static/` önek). Önek eşleşmesi olsaydı,
+  ileride eklenen bir modül slug'ı (`/giris-raporu` gibi) `/{slug}` yakalayıcısı
+  üzerinden sessizce kimliksiz okunabilir olurdu.
 
 **`SameSite=Lax`'in bu mimarideki sınırı:** çerez `.<alan>`'a yazıldığı için
 `*.<alan>` altındaki **her** servis "same-site" sayılır — Lax oradan gelen

@@ -63,9 +63,13 @@ def gocler() -> list[str]:
         if sutun not in var:
             conn.execute(f"alter table users add column {sutun} {tanim}")
             yapildi.append(f"users.{sutun}")
-    if "google_sub" in yapildi[0:1] or "users.google_sub" in yapildi:
-        conn.execute("create unique index if not exists users_google_sub_idx"
-                     " on users(google_sub) where google_sub is not null")
+    conn.execute("create unique index if not exists users_google_sub_idx"
+                 " on users(google_sub) where google_sub is not null")
+    # Eski veritabaninda email sutunu 'collate nocase' DEGIL ve SQLite bunu
+    # sonradan degistirmeye izin vermez. Tekilligi ifade uzerinden garanti et:
+    # 'Efe@x' ile 'efe@x' iki satir olamasin.
+    conn.execute("create unique index if not exists users_email_nocase_idx"
+                 " on users(lower(email))")
 
     # Yeni tablolar/indeksler: semadaki create ... if not exists ifadeleri zaten
     # idempotent, tumunu calistirmak yerine yalnizca eksik olani kur.

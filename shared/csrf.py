@@ -37,7 +37,10 @@ def token(request: Request) -> str:
 
 class CsrfKapisi:
     # Giris akisi muaf: oturum henuz yok, kendi state parametresi var.
-    ACIK = ("/giris", "/static/", "/sw.js", "/favicon.ico", "/manifest.json")
+    # Tam eslesme (yalniz /static/ onek) — bkz. GirisKapisi'ndaki ayni gerekce.
+    ACIK_TAM = frozenset({"/giris", "/giris/callback", "/sw.js", "/favicon.ico",
+                          "/manifest.json"})
+    ACIK_ONEK = ("/static/",)
 
     def __init__(self, app):
         self.app = app
@@ -45,7 +48,7 @@ class CsrfKapisi:
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http" or scope["method"] not in GUVENSIZ:
             return await self.app(scope, receive, send)
-        if scope["path"].startswith(self.ACIK):
+        if scope["path"] in self.ACIK_TAM or scope["path"].startswith(self.ACIK_ONEK):
             return await self.app(scope, receive, send)
 
         request = Request(scope, receive)
@@ -89,7 +92,10 @@ def _tekrar(govde: bytes):
 async def _reddet(request: Request, scope, receive, send):
     from . import kimlik                                   # dairesel import olmasin
     uid = request.session.get("uid")
-    kimlik.olay(request, "yetki_reddi", actor_id=uid, detay=f"csrf: {scope['path']}")
+    # Yalnizca OTURUMLU red yazilir: aksi hâlde kimliksiz istekler denetim
+    # tablosuna sinirsiz satir yazdirir (her satir senkron bir SQLite commit'i).
+    if uid:
+        kimlik.olay(request, "yetki_reddi", actor_id=uid, detay=f"csrf: {scope['path']}")
     kabul = request.headers.get("accept", "")
     yanit = (JSONResponse({"hata": "csrf"}, status_code=403) if "json" in kabul
              else PlainTextResponse("Oturumun tazelenmiş olabilir. Sayfayı yenile.",

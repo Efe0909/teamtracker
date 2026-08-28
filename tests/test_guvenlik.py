@@ -80,8 +80,20 @@ def test_yayinda_kisa_anahtar_acilmaz():
 
 
 def test_gelistirmede_sahte_kimlik_acilir():
-    r = _alt_surec({"EKIPTAKIP_AUTH": "sahte", "EKIPTAKIP_SECRET_KEY": "k" * 40})
+    r = _alt_surec({"EKIPTAKIP_AUTH": "sahte", "EKIPTAKIP_ENV": "gelistirme",
+                    "EKIPTAKIP_SECRET_KEY": "k" * 40})
     assert r.returncode == 0, r.stderr[-800:]
+
+
+def test_sahte_kimlik_acik_bayrak_olmadan_acilmaz():
+    """'Yayin oldugunu kanitla' degil 'gelistirme oldugunu kanitla'.
+
+    Tek alan adi modunda kurulan gercek bir sunucuda EKIPTAKIP_ENV yazilmayi
+    unutulursa sahte kimlik sessizce acilmamali.
+    """
+    r = _alt_surec({"EKIPTAKIP_AUTH": "sahte", "EKIPTAKIP_SECRET_KEY": "k" * 40})
+    assert r.returncode != 0
+    assert "gelistirme" in (r.stderr + r.stdout)
 
 
 def test_oturum_anahtari_bos_olamaz():
@@ -211,12 +223,33 @@ def test_okuma_istekleri_token_istemez(client):
 
 
 def test_csrf_reddi_denetim_izine_yazilir(client):
+    """Oturumlu reddin izi kalir."""
+    from conftest import csrf_tak
+
+    u = db.q1("select id from users where name = 'Efe'")
+    client.post(f"/switch/{u['id']}", follow_redirects=False)   # gercek oturum ac
+    csrf_tak(client)
     once = db.q1("select count(*) c from guvenlik_olaylari where tur='yetki_reddi'")["c"]
     it = db.q1("select id from items limit 1")
     client.post(f"/item/{it['id']}/message", data={"body": "x"},
                 headers={"X-CSRF-Token": "yanlis"})
     sonra = db.q1("select count(*) c from guvenlik_olaylari where tur='yetki_reddi'")["c"]
     assert sonra == once + 1
+
+
+def test_kimliksiz_csrf_reddi_denetime_yazilmaz(client):
+    """Aksi hâlde kimliksiz istekler denetim tablosunu sinirsiz sisirir.
+
+    Her satir senkron bir SQLite commit'i; ucuz bir yavaslatma vektoru olurdu.
+    """
+    from conftest import csrf_tak
+
+    client.cookies.clear()                       # oturumsuz
+    once = db.q1("select count(*) c from guvenlik_olaylari")["c"]
+    for _ in range(5):
+        client.post("/cikis", headers={"X-CSRF-Token": "yanlis"})
+    assert db.q1("select count(*) c from guvenlik_olaylari")["c"] == once
+    csrf_tak(client)
 
 
 # --- goc (denetim bulgusu B3) ---------------------------------------------
