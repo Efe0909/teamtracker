@@ -239,7 +239,7 @@ def test_csrf_reddi_denetim_izine_yazilir(client):
 def test_kimliksiz_csrf_reddi_denetime_yazilmaz(client):
     """Aksi hâlde kimliksiz istekler denetim tablosunu sinirsiz sisirir.
 
-    Her satir senkron bir SQLite commit'i; ucuz bir yavaslatma vektoru olurdu.
+    Her satir senkron bir veritabani commit'i; ucuz bir yavaslatma vektoru olurdu.
     """
     from conftest import csrf_tak
 
