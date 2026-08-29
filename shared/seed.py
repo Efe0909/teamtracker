@@ -1,6 +1,6 @@
 """Tohum veri — spec/referans/layout-a.html'deki ornek agac, kartlar ve akis.
 
-Calistir: .venv/bin/python -m shared.seed   (varolan ekiptakip.db silinir)
+Calistir: .venv/bin/python -m shared.seed   (VAROLAN VERI SILINIR)
 """
 from __future__ import annotations
 
@@ -9,10 +9,12 @@ from datetime import datetime, timedelta, timezone
 from . import db
 
 
-def ago(days: float = 0, hours: float = 0, minutes: float = 0) -> str:
-    """Tohum zamanlari 'simdi'ye gore uretilir — gruplama (Bugun/Bu hafta) anlamli kalsin."""
-    t = datetime.now(timezone.utc) - timedelta(days=days, hours=hours, minutes=minutes)
-    return t.strftime("%Y-%m-%dT%H:%M:%SZ")
+def ago(days: float = 0, hours: float = 0, minutes: float = 0) -> datetime:
+    """Tohum zamanlari 'simdi'ye gore uretilir — gruplama (Bugun/Bu hafta) anlamli kalsin.
+
+    Artik metin degil datetime: sutun tipi timestamptz.
+    """
+    return datetime.now(timezone.utc) - timedelta(days=days, hours=hours, minutes=minutes)
 
 USERS = [
     # id anahtari sadece tohumda okunakli olsun diye; gercek id uuid4().hex
@@ -97,52 +99,60 @@ EVENTS = [
 
 
 def run() -> None:
-    if db.DB_PATH.exists():
-        db.DB_PATH.unlink()
-    db.init()
-    conn = db.connect()
+    """Semayi kurar (goc) ve tablolari SIFIRDAN doldurur.
+
+    Dosya silmek yerine truncate: veritabani bir sunucuda, dosya degil.
+    cascade + restart identity ile bagli satirlar da temizlenir.
+    """
+    db.gocler()
+    db.calistir("truncate table events, item_participants, items, nodes,"
+                " guvenlik_olaylari, users restart identity cascade")
     now = db.now()
 
     uid = {k: db.new_id() for k, *_ in USERS}
     nid = {k: db.new_id() for k, *_ in NODES}
     iid = {i["key"]: db.new_id() for i in ITEMS}
 
-    for key, email, name, color, admin, editor, scope_name in USERS:
-        scope = next((nid[k] for k, _p, n, _t in NODES if n == scope_name), None)
-        conn.execute(
-            "insert into users (id,email,name,color,is_admin,is_editor,scope_node_id,"
-            "created_at,is_active) values (?,?,?,?,?,?,?,?,1)",
-            (uid[key], email, name, color, admin, editor, scope, now))
+    # Sira onemli: users.scope_node_id -> nodes, nodes.created_by -> users.
+    # Dongusel; once kullanicilar KAPSAMSIZ yazilir, dugumlerden sonra kapsam
+    # guncellenir. (SQLite'ta bu FK hic tanimli degildi ve sorun gorunmuyordu.)
+    for sira, (key, email, name, color, admin, editor, _s) in enumerate(USERS):
+        db.x("insert into users (id,email,name,color,is_admin,is_editor,"
+             "created_at,is_active) values (%s,%s,%s,%s,%s,%s,%s,true)",
+             (uid[key], email, name, color, bool(admin), bool(editor),
+              now + timedelta(seconds=sira)))     # esit zaman = belirsiz siralama
 
     for order, (key, parent, name, ntype) in enumerate(NODES):
-        conn.execute(
-            "insert into nodes (id,parent_id,name,node_type,sort_order,created_by,created_at)"
-            " values (?,?,?,?,?,?,?)",
-            (nid[key], nid[parent] if parent else None, name, ntype, order, uid["selin"], now))
+        db.x("insert into nodes (id,parent_id,name,node_type,sort_order,created_by,created_at)"
+             " values (%s,%s,%s,%s,%s,%s,%s)",
+             (nid[key], nid[parent] if parent else None, name, ntype, order,
+              uid["selin"], now))
+
+    for key, _e, _n, _c, _a, _ed, scope_name in USERS:
+        if scope_name:
+            db.x("update users set scope_node_id = %s where id = %s",
+                 (nid[next(k for k, _p, n, _t in NODES if n == scope_name)], uid[key]))
 
     for it in ITEMS:
-        conn.execute(
-            "insert into items (id,node_id,kind,title,description,status,priority,"
-            "assignee_id,created_by,due_date,dms,pillar,escalated,created_at,updated_at)"
-            " values (?,?,?,?,?,?,?,?,?,?,?,?,0,?,?)",
-            (iid[it["key"]], nid[it["node"]], it["kind"], it["title"], it["description"],
-             it["status"], it["priority"], uid[it["assignee"]], uid[it["created_by"]],
-             it["due"], it["dms"], it["pillar"], it["created"], it["updated"]))
+        db.x("insert into items (id,node_id,kind,title,description,status,priority,"
+             "assignee_id,created_by,due_date,dms,pillar,escalated,created_at,updated_at)"
+             " values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,false,%s,%s)",
+             (iid[it["key"]], nid[it["node"]], it["kind"], it["title"], it["description"],
+              it["status"], it["priority"], uid[it["assignee"]], uid[it["created_by"]],
+              it["due"], it["dms"], it["pillar"], it["created"], it["updated"]))
         for p in it["parts"]:
-            conn.execute(
-                "insert into item_participants (item_id,user_id,added_by,added_at)"
-                " values (?,?,?,?)",
-                (iid[it["key"]], uid[p], uid[it["created_by"]], it["created"]))
+            db.x("insert into item_participants (item_id,user_id,added_by,added_at)"
+                 " values (%s,%s,%s,%s)",
+                 (iid[it["key"]], uid[p], uid[it["created_by"]], it["created"]))
 
     for item_key, etype, author, body, created in EVENTS:
-        conn.execute(
-            "insert into events (id,subject_type,subject_id,event_type,author_id,body,created_at)"
-            " values (?,'item',?,?,?,?,?)",
-            (db.new_id(), iid[item_key], etype, uid[author] if author else None, body, created))
+        db.x("insert into events (id,subject_type,subject_id,event_type,author_id,body,"
+             "created_at) values (%s,'item',%s,%s,%s,%s,%s)",
+             (db.new_id(), iid[item_key], etype, uid[author] if author else None,
+              body, created))
 
-    conn.commit()
     print(f"tohumlandi: {len(USERS)} kullanici, {len(NODES)} dugum, "
-          f"{len(ITEMS)} kayit, {len(EVENTS)} olay -> {db.DB_PATH.name}")
+          f"{len(ITEMS)} kayit, {len(EVENTS)} olay")
 
 
 if __name__ == "__main__":

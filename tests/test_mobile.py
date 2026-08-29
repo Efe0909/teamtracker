@@ -15,10 +15,9 @@ from shared import db, seed  # noqa: E402
 
 
 @pytest.fixture(scope="module")
-def client(tmp_path_factory):
-    db.DB_PATH = tmp_path_factory.mktemp("db") / "test.db"
-    db._conn = None
-    seed.run()
+def client():
+    from conftest import test_veritabani  # noqa: E402
+    test_veritabani("mobil")
     import app  # noqa: E402
     with TestClient(app.app) as c:
         from conftest import csrf_tak  # noqa: E402
@@ -27,11 +26,11 @@ def client(tmp_path_factory):
 
 
 def users():
-    return {u["name"]: u["id"] for u in db.q("select id,name from users")}
+    return {u["name"]: str(u["id"]) for u in db.q("select id,name from users")}
 
 
 def item_by_title(title):
-    return db.q1("select * from items where title = ?", (title,))
+    return db.q1("select * from items where title = %s", (title,))
 
 
 def test_todo_lists_my_open_items(client):
@@ -80,7 +79,7 @@ def test_actions_group_by_due_date(client):
 def test_notifications_exclude_my_own_events(client):
     """Bildirim = bana ait kartta BASKASININ yaptigi hareket."""
     u = users()
-    client.cookies.set("uid", u["Deniz"])
+    client.cookies.set("uid", str(u["Deniz"]))
     r = client.get("/m/bildirimler")
     assert "Selin" in r.text
     assert "Deniz mesaj yazdı" not in r.text
@@ -92,11 +91,11 @@ def test_item_detail_and_message(client):
     r = client.get(f"/m/kayit/{it['id']}")
     assert r.status_code == 200 and 'data-fragment="mobile_strip"' in r.text
 
-    before = db.q1("select count(*) c from events where subject_id=?", (it["id"],))["c"]
+    before = db.q1("select count(*) c from events where subject_id=%s", (it["id"],))["c"]
     r = client.post(f"/m/kayit/{it['id']}/mesaj", data={"body": "mobilden yazdım"},
                     headers={"HX-Request": "true"})
     assert r.status_code == 200 and "mobilden yazdım" in r.text
-    assert db.q1("select count(*) c from events where subject_id=?", (it["id"],))["c"] == before + 1
+    assert db.q1("select count(*) c from events where subject_id=%s", (it["id"],))["c"] == before + 1
 
 
 def test_field_change_refreshes_strip_and_feed(client):
@@ -106,7 +105,7 @@ def test_field_change_refreshes_strip_and_feed(client):
     assert r.status_code == 200
     assert 'hx-swap-oob="true"' in r.text                       # serit + akis birlikte
     assert item_by_title("Bütçe onayı 6 gündür bekliyor")["priority"] == "yuksek"
-    last = db.q1("select * from events where subject_id=? order by created_at desc, rowid desc"
+    last = db.q1("select * from events where subject_id=%s order by created_at desc"
                  " limit 1", (it["id"],))
     assert last["event_type"] == "sistem" and "Kritik → Yüksek" in last["body"]
 

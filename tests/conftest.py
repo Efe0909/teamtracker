@@ -36,3 +36,42 @@ def csrf_tak(client, yol: str = "/") -> str:
     assert m, f"{yol} sayfasinda CSRF token'i yok"
     client.headers["X-CSRF-Token"] = m.group(1)
     return m.group(1)
+
+
+# --- her test modulu kendi veritabanini alir ------------------------------
+#
+# Testler Postgres'e karsi kosar (spec/80-veritabani.md §5). SQLite'a dusen bir
+# yol BILEREK yok: gecisin asil riski lehce farki ve o fark tam da testlerin
+# gormedigi yerde kalirdi.
+
+import re as _re  # noqa: E402
+import sys as _sys  # noqa: E402
+from pathlib import Path as _Path  # noqa: E402
+
+_sys.path.insert(0, str(_Path(__file__).resolve().parents[1]))
+
+
+def _yonetim_dsn(dsn: str) -> str:
+    return _re.sub(r"/[^/?]+(\?|$)", r"/postgres\1", dsn)
+
+
+def test_veritabani(ad: str):
+    """`ekiptakip_test_<ad>` veritabanini sifirdan kurar ve baglanir."""
+    import psycopg
+
+    from shared import db, seed
+
+    temel = os.getenv("DATABASE_URL") or db.DSN
+    yeni_ad = f"ekiptakip_test_{ad}"
+    try:
+        with psycopg.connect(_yonetim_dsn(temel), autocommit=True) as c:
+            c.execute(f'drop database if exists "{yeni_ad}" with (force)')
+            c.execute(f'create database "{yeni_ad}"')
+    except psycopg.OperationalError as e:
+        raise RuntimeError(
+            "Testler icin PostgreSQL gerekiyor. `docker compose up -d` ile kaldir.\n"
+            f"Denenen: {_yonetim_dsn(temel)}\n{e}") from e
+
+    db.baglan(_re.sub(r"/[^/?]+(\?|$)", f"/{yeni_ad}\\1", temel))
+    seed.run()
+    return db

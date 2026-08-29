@@ -7,6 +7,7 @@ Bizim isimiz akisi dogru kurmak ve KIMIN gireceğine karar vermek.
 """
 from __future__ import annotations
 
+import ipaddress
 import secrets
 
 from authlib.integrations.starlette_client import OAuth
@@ -53,10 +54,16 @@ def olay(request: Request | None, tur: str, actor_id: str | None = None,
         sid = request.session.get("sid") if hasattr(request, "session") else None
         detay = f"sid={sid}" if sid else None
     if request is not None:
-        ip = request.headers.get("x-real-ip") or (
+        ham = request.headers.get("x-real-ip") or (
             request.client.host if request.client else None)
+        # Sutun tipi inet: gecersiz deger insert'i patlatir ve denetim yazimi
+        # istegi bozar. Basligi istemci gonderiyor, yani uydurulabilir.
+        try:
+            ip = str(ipaddress.ip_address(ham)) if ham else None
+        except ValueError:
+            ip = None
     db.x("insert into guvenlik_olaylari (id,created_at,tur,actor_id,email,ip,detay)"
-         " values (?,?,?,?,?,?,?)",
+         " values (%s,%s,%s,%s,%s,%s,%s)",
          (db.new_id(), db.now(), tur, actor_id, email, ip, detay))
 
 
@@ -72,7 +79,7 @@ def oturum_ac(request: Request, user_id: str) -> None:
     Oturum sabitlemesine karsi da ayni hareket dogru olan.
     """
     request.session.clear()
-    request.session[OTURUM_ANAHTARI] = user_id
+    request.session[OTURUM_ANAHTARI] = str(user_id)   # oturum JSON'a yaziliyor
     # sid: tek bir oturumu ayirt etmek icin. Bugun yalnizca denetim izinde
     # kullaniliyor; tek oturum iptali gerekirse kara listenin capasi bu olur.
     request.session["sid"] = secrets.token_urlsafe(9)
@@ -97,9 +104,9 @@ def girebilir(email: str, sub: str) -> tuple[dict | None, str | None]:
     Doner: (kullanici, red_sebebi). Kullanici YOKSA olusturulmaz — davetli
     listesi disi giris yok (spec/70 §2.3).
     """
-    u = db.q1("select * from users where google_sub = ?", (sub,))
+    u = db.q1("select * from users where google_sub = %s", (sub,))
     if u is None:
-        u = db.q1("select * from users where lower(email) = lower(?)", (email,))
+        u = db.q1("select * from users where lower(email) = lower(%s)", (email,))
     if u is None:
         return None, "davetsiz"
     if u["google_sub"] and u["google_sub"] != sub:
@@ -118,7 +125,7 @@ def girisi_isle(user, sub: str, email: str) -> None:
     Tersi (ayni e-posta, farkli sub) girebilir() icinde REDDEDILIR — hesap
     devralma vektoru (spec/70-guvenlik.md §2.3).
     """
-    db.x("update users set google_sub = ?, email = ?, last_login_at = ? where id = ?",
+    db.x("update users set google_sub = %s, email = %s, last_login_at = %s where id = %s",
          (sub, email, db.now(), user["id"]))
 
 

@@ -9,20 +9,24 @@ from . import db, service
 
 
 def fts_query(q: str) -> str | None:
-    """Kullanici metnini FTS5 sorgusuna cevirir: her kelime onek eslesmesi.
+    """Kullanici metnini tsquery'ye cevirir: her kelime ONEK eslesmesi.
 
-    Ozel karakterler ayiklanir — MATCH ifadesi kullanici metniyle birlestirilmez.
+    Ozel karakterler ayiklanir; ifade kullanici metniyle birlestirilmez,
+    to_tsquery'ye parametre olarak gider. 'tr' yapilandirmasi aksani katlar
+    (bkz. spec/80-veritabani.md §3 — Turkce stemmer bilerek kullanilmiyor).
     """
     words = [w for w in "".join(c if c.isalnum() else " " for c in q).split() if len(w) > 1]
-    return " ".join(f'"{w}"*' for w in words) or None
+    return " & ".join(f"{w}:*" for w in words) or None
 
 
 def search_items(q: str, limit: int = 25) -> list[dict]:
     match = fts_query(q)
     if match is None:
         return []
-    return db.q("select i.* from items_fts f join items i on i.rowid = f.rowid"
-                " where items_fts match ? order by rank limit ?", (match, limit))
+    return db.q("select i.*, ts_rank(i.arama, sorgu) rank from items i,"
+                " to_tsquery('tr', %s) sorgu"
+                " where i.arama @@ sorgu order by rank desc, i.updated_at desc limit %s",
+                (match, limit))
 
 
 

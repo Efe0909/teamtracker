@@ -79,7 +79,7 @@ def home_stats(user) -> dict:
         "select"
         " sum(case when status <> 'kapandi' then 1 else 0 end) acik,"
         " sum(case when status <> 'kapandi' and assignee_id is null then 1 else 0 end) atanmamis,"
-        " sum(case when status <> 'kapandi' and assignee_id = ? then 1 else 0 end) bana,"
+        " sum(case when status <> 'kapandi' and assignee_id = %s then 1 else 0 end) bana,"
         " count(*) hepsi from items", (user["id"],))
     return {"open": r["acik"] or 0, "unassigned": r["atanmamis"] or 0,
             "mine": r["bana"] or 0, "all": r["hepsi"] or 0, "nodes": len(service.TREE.nodes)}
@@ -119,7 +119,7 @@ def grouped(rows: list[dict]) -> list[tuple[str, list[dict]]]:
 def inbox_rows(user) -> list[dict]:
     """Bana ait: sorumlusu ben ya da karta dahil edilmisim."""
     return item_rows(
-        "assignee_id = ? or id in (select item_id from item_participants where user_id = ?)",
+        "assignee_id = %s or id in (select item_id from item_participants where user_id = %s)",
         (user["id"], user["id"]))
 
 
@@ -137,7 +137,7 @@ def tree_rows() -> list[dict]:
 def card_ctx(request, item, user) -> dict:
     users = users_by_id()
     feed = []
-    for e in db.q("select * from events where subject_type='item' and subject_id=?"
+    for e in db.q("select * from events where subject_type='item' and subject_id=%s"
                   " order by created_at", (item["id"],)):
         a = users.get(e["author_id"])
         feed.append({"type": e["event_type"], "body": e["body"], "author": a,
@@ -177,7 +177,7 @@ def tasks(request: Request, item: str | None = None):
     user = auth.current_user(request)
     rows = inbox_rows(user)
     current = get_item(item) if item else (
-        db.q1("select * from items where id = ?", (rows[0]["id"],)) if rows else None)
+        db.q1("select * from items where id = %s", (rows[0]["id"],)) if rows else None)
     ctx = {
         "user": user, "all_users": auth.all_users(), "panel_title": "Bana ait",
         "panel": "inbox", "groups": grouped(rows), "selected": current["id"] if current else None,
@@ -205,11 +205,13 @@ def panel_tree(request: Request):
 
 @router.get("/node/{node_id}/items", response_class=HTMLResponse)
 def node_items(request: Request, node_id: str):
+    node_id = db.uid(node_id)
     if node_id not in service.TREE.nodes:
         raise HTTPException(404, "düğüm yok")
     user = auth.current_user(request)
     ids = service.TREE.subtree(node_id)
-    rows = item_rows(f"node_id in ({','.join('?' * len(ids))})", tuple(ids))
+    # Postgres'te dizi daha temiz: tek parametre, uzunluk sinirina takilmaz.
+    rows = item_rows("node_id = any(%s)", (ids,))
     return render(request, "fragments/panel_inbox.html",
                   {"user": user, "groups": grouped(rows), "selected": None,
                    "panel_title": service.TREE.name(node_id), "oob_head": True})

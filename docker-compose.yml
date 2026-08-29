@@ -1,0 +1,31 @@
+# Gelistirme ve test icin PostgreSQL.
+#
+#   docker compose up -d          ayaga kaldir
+#   docker compose down           durdur (veri kalir)
+#   docker compose down -v        veriyi de sil
+#
+# Yayinda bu dosya KULLANILMAZ: orada Postgres bir servis olarak kurulur
+# (deploy/README.md). Buradaki parola gelistirme icindir, sir degildir.
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: ekiptakip-db
+    environment:
+      POSTGRES_USER: ekiptakip
+      POSTGRES_PASSWORD: ekiptakip
+      POSTGRES_DB: ekiptakip
+      # Turkce siralama ve buyuk/kucuk harf davranisi icin
+      LANG: tr_TR.utf8
+    ports:
+      - "5432:5432"            # psql / TablePlus / DBeaver buradan baglanir
+    volumes:
+      - ekiptakip-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ekiptakip -d ekiptakip"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  ekiptakip-pgdata:

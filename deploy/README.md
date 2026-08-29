@@ -107,10 +107,28 @@ ALAN=polonyum.com PORT_APP=8000 PORT_NGINX=8080 bash deploy/kur.sh
 
 Sonra sırayla:
 
+**0. PostgreSQL**
+
+Yayında Docker değil, servis olarak kurulur (`spec/80-veritabani.md` §6):
+
+```bash
+sudo apt install postgresql postgresql-contrib     # ya da: brew install postgresql@16
+sudo -u postgres psql <<'SQL'
+create role ekiptakip login password 'GERCEK_PAROLA';
+create database ekiptakip owner ekiptakip;
+\c ekiptakip
+create extension if not exists pgcrypto;   -- uzantilar bir kez, superuser ile
+create extension if not exists unaccent;
+SQL
+```
+
+Uygulama **superuser değil** `ekiptakip` rolüyle bağlanır. Parola `.env`'de
+(`DATABASE_URL`), git'e girmez. Şema göçleri açılışta kendiliğinden koşar.
+
 **1. Uygulama**
 
 ```bash
-make setup && make seed                  # veritabanı yoksa (VAROLANI SİLER — bkz. aşağı)
+make setup && make seed                  # tohum: VAROLAN VERİYİ SİLER
 sudo cp deploy/olusan/ekiptakip.service /etc/systemd/system/
 sudo systemctl daemon-reload && sudo systemctl enable --now ekiptakip
 curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8000/m        # 200
@@ -175,18 +193,19 @@ ana ekrandan silip yeniden ekle.
 
 ## Yedek
 
-Veritabanı tek dosya: `ekiptakip.db`. Kopyalayan her şeyi alır — yedeği de erişimi de
-buna göre ayarla. Çalışırken `cp` ile değil, `.backup` ile al:
+`pg_dump` ile al; çalışırken güvenlidir (tutarlı anlık görüntü):
 
 ```bash
-sqlite3 ekiptakip.db ".backup '/yedek/ekiptakip-$(date +%F).db'"
+pg_dump -Fc "$DATABASE_URL" -f /yedek/ekiptakip-$(date +%F).dump
 ```
 
 Günlük yedek için crontab (`crontab -e`):
 
 ```
-15 3 * * * cd /home/efe/projects/teamtracker && sqlite3 ekiptakip.db ".backup '/yedek/ekiptakip-$(date +\%F).db'"
+15 3 * * * pg_dump -Fc "postgresql://ekiptakip:PAROLA@127.0.0.1/ekiptakip" -f /yedek/ekiptakip-$(date +\%F).dump
 ```
+
+Geri yükleme (boş veritabanına): `pg_restore -d ekiptakip /yedek/....dump`
 
 **`make seed` / `make reseed` varolan veritabanını siler.** Yayındaki makinede
 çalıştırma; `make dev` yerine `systemctl restart ekiptakip` kullan.

@@ -8,13 +8,16 @@ Ekip için hata/görev takibi: hiyerarşi + kayıtlar + kart içi sohbet + alan 
 | **Masaüstü** | ana sayfa (modül seçimi), görev yöneticisi (tablo + kart + sohbet) | `dashboard.<alan>` |
 | **Mobil** | yapılacaklar, arama, eylemler, bildirimler — ana ekrana eklenebilir (PWA) | `app.<alan>` |
 
-Yığın: Python 3.12 + FastAPI + Jinja2 + HTMX + SQLite, ham SQL. ORM yok, JS framework yok.
+Yığın: Python 3.12 + FastAPI + Jinja2 + HTMX + **PostgreSQL**, ham SQL. ORM yok, JS framework yok.
 
 ## Çalıştır
 
 ```bash
-make up          # kurulum + tohum + sunucu → http://127.0.0.1:8000
+make up          # bağımlılıklar + Docker'da Postgres + tohum + sunucu → http://127.0.0.1:8000
 ```
+
+Postgres Docker'da çalışır (`docker-compose.yml`); `psql`/TablePlus/DBeaver ile
+`postgresql://ekiptakip:ekiptakip@127.0.0.1:5432/ekiptakip` adresinden bağlanabilirsin.
 
 Sonraki günler `make dev` yeter. `make` yazınca komut listesi çıkar:
 
@@ -22,7 +25,8 @@ Sonraki günler `make dev` yeter. `make` yazınca komut listesi çıkar:
 |---|---|
 | `make up` | sıfırdan kaldırır: kurulum + tohum (veritabanı yoksa) + sunucu |
 | `make dev` / `make run` | sunucu, `--reload` açık / kapalı (`make dev PORT=9000`) |
-| `make seed` / `make reseed` | tohumlar / sıfırlayıp tohumlar — **varolan `ekiptakip.db` silinir** |
+| `make db-ac` / `make db-kapat` | Docker'daki Postgres'i kaldır / durdur |
+| `make seed` / `make reseed` | tohumlar — **varolan veri silinir** |
 | `make test` | `pytest tests -q` |
 | `make check` | sunucu ayaktayken uçların durum kodlarını basar |
 | `make clean` / `make distclean` | veritabanı + önbellek / üstüne sanal ortam |
@@ -36,8 +40,8 @@ yayına almak: `deploy/README.md`.
 
 ```
 app.py       giriş noktası
-shared/      ortak çekirdek: db, şema, tohum, ağaç, kimlik, yetki, CSRF,
-             sertleştirme, iş mantığı, arama, palet
+shared/      ortak çekirdek: db (psycopg), göçler, tohum, ağaç, kimlik, yetki,
+             CSRF, sertleştirme, iş mantığı, arama, palet
 sites/       dashboard/ ve mobil/ — her biri kendi rotaları, şablonları, CSS'i
 spec/        kararlar, şema, ekran çözümlemeleri
 deploy/      cloudflared + nginx + systemd
@@ -55,7 +59,8 @@ Ayrıntı ve gerekçeler: **`spec/50-yapi.md`**.
 | Veri modeli ne, ne eksik? | `spec/20-sema.md` |
 | Mobil ekranlar nereden uyarlandı? | `spec/30-mobil.md` |
 | Push ne durumda? | `spec/40-push.md` |
-| Klasör yapısı, ayrık veritabanı | `spec/50-yapi.md` |
+| Klasör yapısı | `spec/50-yapi.md` |
+| Veritabanı, göçler, arama | `spec/80-veritabani.md` |
 | Kimlik, yetki, tehdit modeli | `spec/70-guvenlik.md` |
 | Yayına alma, Google OAuth kurulumu | `deploy/README.md` |
 | Yeni ekran çözümlemesi nasıl yazılır | `spec/README.md` |

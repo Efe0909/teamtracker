@@ -18,10 +18,9 @@ DASH = "dashboard.polonyum.com"
 
 
 @pytest.fixture(scope="module")
-def client(tmp_path_factory):
-    db.DB_PATH = tmp_path_factory.mktemp("db") / "test.db"
-    db._conn = None
-    seed.run()
+def client():
+    from conftest import test_veritabani  # noqa: E402
+    test_veritabani("hosts")
     import app as app_mod  # noqa: E402
     from shared import config  # noqa: E402
     onceki = (config.HOST_APP, config.HOST_DASH, config.COOKIE_DOMAIN)
