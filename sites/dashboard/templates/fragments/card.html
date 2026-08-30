@@ -1,6 +1,25 @@
-{# fragment: card — kart parcalarinin birlesimi (#main icine konur). #}
+{# fragment: card — kayit sayfasinin govdesi (#main icine konur).
+   Duzen spec/60-kaynak-uyarlama.md 2.4: sol ~2/3 icerik (bilgiler, detaylar,
+   eylemler, ekler), sag dar sutun sohbet. Kaynak modalin yerlesimiyle ayni. #}
 {% include "fragments/breadcrumb.html" %}
-{% include "fragments/card_head.html" %}
-{% include "fragments/card_fields.html" %}
-{% include "fragments/card_feed.html" %}
-{% include "fragments/composer.html" %}
+<div class="kbody" data-fragment="card">
+  <div class="ksol">
+    {% include "fragments/card_head.html" %}
+    {% include "fragments/card_fields.html" %}
+    {% include "fragments/card_actions.html" %}
+
+    {# Ekler — spec/20-sema.md acik nokta 1 🚧: dosya karari (docker+NAS, saklama
+       suresi) verilene kadar yer tutucu. Karar gelince attachments buraya oturur. #}
+    <div class="ekler" data-fragment="card_ekler">
+      <div class="ahead">📎 Ekler</div>
+      <div class="empty small" style="padding:6px">
+        Dosya ekleri henüz yok — 🚧 saklama kararına bağlı (spec/20-sema.md açık nokta 1).
+      </div>
+    </div>
+  </div>
+
+  <div class="ksag">
+    {% include "fragments/card_feed.html" %}
+    {% include "fragments/composer.html" %}
+  </div>
+</div>

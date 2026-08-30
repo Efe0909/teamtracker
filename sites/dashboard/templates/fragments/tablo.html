@@ -1,0 +1,44 @@
+{# fragment: tablo — ozet cipleri + kayit tablosu. Kolon butcesi 8 (spec/60 2.2).
+   Sayilar filtrelenmis kumeyi ozetler; sorgu tek SUM(CASE) (spec/10-kararlar.md). #}
+<div id="sonuc" data-fragment="tablo">
+  <div class="ozet">
+    {% if oz.kritik %}<span class="ocip o-kritik">Kritik <b>{{ oz.kritik }}</b></span>{% endif %}
+    {% if oz.yuksek %}<span class="ocip o-yuksek">Yüksek <b>{{ oz.yuksek }}</b></span>{% endif %}
+    {% if oz.orta %}<span class="ocip o-orta">Orta <b>{{ oz.orta }}</b></span>{% endif %}
+    {% if oz.dusuk %}<span class="ocip o-dusuk">Düşük <b>{{ oz.dusuk }}</b></span>{% endif %}
+    <span style="flex:1"></span>
+    <span class="osay">Açık <b>{{ oz.acik or 0 }}</b> · Kapalı <b>{{ oz.kapali or 0 }}</b> ·
+      Tümü <b>{{ oz.hepsi or 0 }}</b></span>
+  </div>
+
+  <table class="gtable">
+    <thead><tr>
+      <th style="width:38%">Kayıt</th><th>Düğüm</th><th>Takım</th><th>Öncelik</th>
+      <th>Durum</th><th>Sorumlu</th><th>Son tarih</th><th>Hareket</th>
+    </tr></thead>
+    <tbody>
+    {% for r in rows %}
+      <tr>
+        <td>
+          <span class="chip {% if r.kind == 'hata' %}c-bug{% else %}c-task{% endif %}">
+            {{ 'Hata' if r.kind == 'hata' else 'Görev' }}</span>
+          <a class="tlink" href="/gorevler/{{ r.id }}">{{ r.title }}</a>
+          {% if r.acik_eylem %}<span class="chip c-eyl" title="açık eylem">⚡{{ r.acik_eylem }}</span>{% endif %}
+        </td>
+        <td class="dim">{{ r.path }}</td>
+        <td>{% if r.team %}<span class="tdot" style="background:{{ r.team.color }}"></span>
+            {{ r.team.name }}{% else %}<span class="dim">—</span>{% endif %}</td>
+        <td><span class="v-{{ r.priority }}">{{ priorities[r.priority] }}</span></td>
+        <td><span class="v-{{ r.status }}">{{ statuses[r.status] }}</span></td>
+        <td>{% if r.assignee %}<span class="av" style="background:{{ r.assignee.color }}">
+            {{ r.assignee.name[0] }}</span> {{ r.assignee.name }}{% else %}<span class="dim">—</span>{% endif %}</td>
+        <td>{% if r.due %}<span {% if r.overdue %}class="gec"{% endif %}>{{ r.due }}</span>
+            {% else %}<span class="dim">—</span>{% endif %}</td>
+        <td class="dim">{{ r.time }}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="8"><div class="empty">Bu filtrelerle kayıt yok.</div></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>

@@ -75,6 +75,7 @@ async def lifespan(_app: FastAPI):
     for uyari in config.dogrula():
         print(f"[ekiptakip] UYARI: {uyari}", file=sys.stderr)
     db.connect()
+    # gocler() eksik tablolari da kurar (teams, actions); ayri db.init() gerekmez.
     for ad in db.gocler():           # kurulu veritabani yeni sutunlari alsin
         print(f"[ekiptakip] goc: {ad}", file=sys.stderr)
     service.rebuild_tree()
