@@ -1,4 +1,4 @@
-"""Arama. FTS5 uzerinden; LIKE '%kelime%' yok (spec/10-kararlar).
+"""Arama. tsvector uzerinden; LIKE '%kelime%' yok (spec/10-kararlar).
 
 Kayit aramasi veritabanindan, dugum aramasi bellekteki agactan gelir.
 Iki sitenin de kullanabilmesi icin burada; bugun mobil kullaniyor.

@@ -1,16 +1,16 @@
 # 20 — Veri şeması
 
-Postgres söz dizimiyle yazılmış **hedef** şema; bugün SQLite'ta karşılığı
-`shared/schema.sql` (taşınabilirlik kuralları: `spec/10-kararlar.md`).
+Yürürlükteki şema PostgreSQL; kaynağı numaralı göçlerdir
+(`shared/gocler/*.sql`, çalıştırma sırası: `spec/80-veritabani.md`).
 
 ## Bugün ne var, ne yok
 
 | Tablo | Durum |
 |---|---|
 | `users`, `nodes`, `items`, `item_participants`, `events` | **kurulu** |
-| `items_fts` (FTS5 + trigger'lar) | **kurulu** — şemada aşağıda yok, SQLite'a özel |
-| `teams`, `team_members` (§2a) | yok — ekipler ekranıyla gelecek (`spec/60-kaynak-uyarlama.md` 2.5) |
-| `actions` (§3a) | yok — kart eylem şeridiyle gelecek (`spec/60-kaynak-uyarlama.md` 2.4) |
+| `items.arama` (tsvector + GIN) | **kurulu** — `001_sema.sql` içinde üretilmiş sütun |
+| `teams`, `team_members` (§2a) | **kurulu** — `002_takimlar_eylemler.sql` |
+| `actions` (§3a) | **kurulu** — `002_takimlar_eylemler.sql` |
 | `change_requests` | yok — kazanım ağacı ekranıyla gelecek |
 | `notifications`, `notification_prefs`, `mutes` | yok — mobil bildirimler bugün `events`'ten türetiliyor |
 | `push_subscriptions` | yok — `spec/40-push.md` |

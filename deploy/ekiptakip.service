@@ -8,9 +8,11 @@
 # User / WorkingDirectory / ExecStart yollarini kendi kurulumuna gore degistir.
 
 [Unit]
-Description=EkipTakip (FastAPI + SQLite)
-After=network-online.target
+Description=EkipTakip (FastAPI + PostgreSQL)
+After=network-online.target postgresql.service
 Wants=network-online.target
+# Ayni makinede degil de uzak sunucudaysa postgresql.service satirini sil.
+Requires=postgresql.service
 
 [Service]
 Type=simple
@@ -18,12 +20,16 @@ User=efe
 Group=efe
 WorkingDirectory=/home/efe/projects/teamtracker
 
-# Sirlar burada: EKIPTAKIP_SECRET_KEY, GOOGLE_CLIENT_ID/SECRET.
+# Sirlar burada: EKIPTAKIP_SECRET_KEY, GOOGLE_CLIENT_ID/SECRET, DATABASE_URL.
 # Basindaki "-" dosya yoksa acilisi engellemez; ama sirlar olmadan uygulama
 # zaten acilmaz (spec/70-guvenlik.md §7). Depo kokundeki .env de okunur.
 EnvironmentFile=-/etc/ekiptakip.env
 
 Environment=EKIPTAKIP_ENV=yayin
+
+# Veritabani. Parola icerdigi icin asil deger /etc/ekiptakip.env'de durmali;
+# asagidaki yalnizca dosya yoksa gecerli olan yerel varsayilandir.
+Environment=DATABASE_URL=postgresql:///ekiptakip
 
 # Iki alan adi ayrimi: app.<alan> mobil siteyi KOKTE servis eder, masaustu
 # sayfalari o alan adindan erisilemez. Bos birakirsan tek alan adi modu (/m).
@@ -49,7 +55,9 @@ ProtectSystem=full
 ProtectKernelTunables=true
 ProtectControlGroups=true
 RestrictSUIDSGID=true
-# Veritabani calisma dizinindeki ekiptakip.db — yazma hakki orada kalmali.
+# Veritabani artik dosya degil, ayri bir surec: calisma dizinine yazma
+# ihtiyaci yok. ProtectSystem=strict'e cikmak istersen once yuklemenin
+# gercekten hicbir yere yazmadigini dogrula.
 
 [Install]
 WantedBy=multi-user.target

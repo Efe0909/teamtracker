@@ -25,7 +25,7 @@ kriterleri düştü, çünkü o iş bitti. Buradaki kurallar hâlâ bağlayıcı
 
 ## Ağaç bellekte, veritabanı sadece kalıcılık
 
-Ağaç SQLite'ta adjacency list (`nodes.parent_id`). Okuma için her istekte SQL'e gidilmez:
+Ağaç veritabanında adjacency list (`nodes.parent_id`). Okuma için her istekte SQL'e gidilmez:
 açılışta tek sorguyla `TreeIndex` kurulur (`shared/tree.py`). Euler tour `tin`/`tout`
 sayesinde yetki kontrolü **O(1)**:
 
@@ -62,7 +62,7 @@ yavaşlığının sebebi buydu. Python'a dönen satır sayısı ekranda gösteri
 - Sıralama her zaman `(son hareket, id)` ikilisiyle biter: deterministik olur, keyset'e
   geçiş engellenmez.
 - Alt ağaç filtresi recursive CTE değil, `tin`/`tout` **aralık taraması**.
-- Metin araması **FTS5** (`items_fts`). `LIKE '%kelime%'` **kullanma** — indeks kullanmaz.
+- Metin araması **tsvector** (`items.arama`, GIN). `LIKE '%kelime%'` **kullanma** — indeks kullanmaz.
 - Sayaçlar tek sorguda toplanır (`SUM(CASE WHEN … )`), yedi ayrı `COUNT(*)` koşturulmaz.
 
 ## Yetki
@@ -123,7 +123,7 @@ bkz. `deploy/README.md`.
 - Ağacı her istekte SQL'den okuma. Bellekteki indeks var.
 - Kısmi indeks güncellemesi yapma. Yapı değişti mi, komple yeniden kur.
 - Tüm kayıtları belleğe çekip Python'da süzme/sıralama.
-- `LIKE '%…%'` ile arama yapma. FTS5 var.
+- `LIKE '%…%'` ile arama yapma. `arama @@ to_tsquery('tr', …)` var.
 - Sıralama sütununu kullanıcı girdisiyle birleştirme.
 - Şablonlara iş mantığı koyma. Yetki, sıralama, gruplama Python'da.
 - Şablonlarda `hx-on=` kullanma: htmx onu `new Function` ile derler, yayındaki CSP

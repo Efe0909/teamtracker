@@ -72,7 +72,7 @@ MODULES = [
     {"slug": "arsiv", "icon": "🗂", "name": "Ekip Arşivi", "ready": False,
      "desc": "Kapanmış kayıtlar, alınan kararlar ve geçmiş dönemlerin kurumsal hafızası.",
      "plan": ["Kapanmış kayıtlar silinmez, arşive düşer (spec/20-sema.md açık nokta 3: deleted_at).",
-              "Tam metin arama FTS5 üzerinden — LIKE '%…%' yok.",
+              "Tam metin arama tsvector üzerinden — LIKE '%…%' yok.",
               "Karar kayıtları kartın olay akışından toplanır."]},
     {"slug": "dosyalar", "icon": "🗄", "name": "Dosyalar / NAS", "ready": False,
      "desc": "Karta ve düğüme bağlı dosyalar; kılavuz/eğitim kütüphanesi de buraya oturur.",
