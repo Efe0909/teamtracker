@@ -1,0 +1,23 @@
+{# Kayit sayfasi — kart tam sayfa (modal degil: URL paylasilabilir, spec/60 2.4). #}
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ item.title }} — EkipTakip</title>
+<link rel="icon" href="/static/icon-192.png">
+<link rel="stylesheet" href="/static/base.css">
+<link rel="stylesheet" href="/static/d/dashboard.css">
+<script src="/static/htmx.min.js"></script>
+</head>
+<body hx-headers='{"X-CSRF-Token": "{{ csrf_token }}"}'>
+{% include "fragments/uyari_mobil.html" %}
+{% with aktif = "gorevler" %}{% include "fragments/rail.html" %}{% endwith %}
+
+<div class="wrapmain" id="main">
+  {% include "fragments/card.html" %}
+</div>
+
+<script src="/static/d/dashboard.js"></script>
+</body>
+</html>

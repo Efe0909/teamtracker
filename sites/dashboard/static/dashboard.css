@@ -17,31 +17,54 @@
              transition:.12s;z-index:40}
   .rbtn:hover .lbl{opacity:1}
 
-  /* ============ 2. UYARLANIR PANEL ============ */
-  .panel{width:300px;flex-shrink:0;background:var(--panel);border-right:1px solid var(--line);
-         display:flex;flex-direction:column;min-height:0}
-  .phead{padding:11px 13px;border-bottom:1px solid var(--line);flex-shrink:0}
-  .ptitle{font-size:12px;text-transform:uppercase;letter-spacing:.7px;color:var(--dim);font-weight:700}
-  .segs{display:flex;gap:3px;background:var(--panel2);border-radius:9px;padding:3px;margin-top:9px}
-  .seg{flex:1;text-align:center;font-size:11.5px;font-weight:600;padding:5px 4px;border-radius:7px;
-       cursor:pointer;color:var(--dim);border:none;background:transparent}
-  .seg.on{background:var(--panel);color:var(--acc);box-shadow:var(--sh)}
-  .pbody{flex:1;overflow:auto;padding:9px}
-  .grp{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;
-       color:var(--dim);margin:12px 5px 7px}
-  .grp:first-child{margin-top:2px}
+  /* ============ 2. GÖREV TABLOSU (spec/60-kaynak-uyarlama.md 2.2) ============ */
+  .tmain{flex:1;overflow:auto;padding:18px 24px;min-width:0}
+  .thead h1{font-size:20px;letter-spacing:-.3px;margin:0}
+  .thead{margin-bottom:12px}
 
-  /* kayıt satırı — son harekete göre sıralı (C'den ödünç) */
-  .rec{border:1px solid var(--line);border-radius:11px;padding:9px 10px;margin-bottom:7px;
-       cursor:pointer;background:var(--panel);transition:.13s}
-  .rec:hover{border-color:var(--acc-s);box-shadow:var(--sh)}
-  .rec.on{border-color:var(--acc);box-shadow:0 0 0 1.5px rgba(124,91,255,.35),var(--sh)}
-  .rec.unread{border-left:3px solid var(--acc);background:#fbfaff}
-  .rec .t{font-weight:600;font-size:13px;margin:4px 0 3px;line-height:1.35}
-  .rec.unread .t{font-weight:700}
-  .rec .last{font-size:11.5px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .rec .meta{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--dim);margin-top:6px}
-  .dotm{width:7px;height:7px;border-radius:50%;background:var(--acc);flex-shrink:0}
+  /* hızlı filtre çipleri — kadans hafta, vardiya yok */
+  .qbar{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:9px}
+  .qbtn{border-radius:999px;padding:5px 13px;font-size:12.5px}
+  .qbtn.on{background:var(--acc);border-color:var(--acc);color:#fff}
+
+  /* boyut filtreleri — shared/filters.py genel döngüyle çizilir */
+  .fbar{margin:0 0 12px}
+  .fset{display:flex;gap:9px;flex-wrap:wrap;align-items:end}
+  .ff{display:flex;flex-direction:column;gap:2px;font-size:11px;color:var(--dim)}
+  .ff select,.ff input{width:auto;min-width:110px;padding:5px 8px;font-size:12.5px}
+
+  /* özet çipleri — filtrelenmiş kümenin öncelik kırılımı */
+  .ozet{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:9px}
+  .ocip{border-radius:9px;padding:6px 13px;font-size:12px;font-weight:600}
+  .ocip b{font-size:14px;margin-left:3px}
+  .o-kritik{background:#fde4e8;color:#d13350}.o-yuksek{background:#fdf0d9;color:#b47a09}
+  .o-orta{background:#fff6e0;color:#9a7d1c}.o-dusuk{background:#e2f5ec;color:#1c8a5b}
+  .osay{font-size:12px;color:var(--dim)}
+
+  .gtable{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);
+          border-radius:12px;overflow:hidden;box-shadow:var(--sh)}
+  .gtable th{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--dim);
+             text-align:left;padding:9px 11px;background:var(--panel2);
+             border-bottom:1px solid var(--line)}
+  .gtable td{padding:9px 11px;border-bottom:1px solid var(--line);font-size:12.5px;
+             vertical-align:middle}
+  .gtable tbody tr:hover{background:var(--tint)}
+  .gtable tbody tr:last-child td{border-bottom:none}
+  .tlink{color:var(--txt);font-weight:600;text-decoration:none}
+  .tlink:hover{color:var(--acc)}
+  .tdot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px}
+  .dim{color:var(--dim)}
+  .gec{color:var(--err);font-weight:700}
+  .c-eyl{background:#f2ecff;color:#6b4de0}
+
+  /* mobil uyarısı — masaüstü site telefonda (fragments/uyari_mobil.html) */
+  .muyari{display:none}
+  @media (max-width:820px){
+    .muyari{display:block;position:fixed;top:0;left:0;right:0;z-index:99;
+            background:#fff6e8;border-bottom:1px solid #f0d5a8;color:#8a6420;
+            padding:9px 14px;font-size:12.5px;line-height:1.5}
+    body{padding-top:52px}
+  }
 
   /* ağaç modu */
   .tnode{display:flex;align-items:center;gap:6px;padding:6px 7px;border-radius:9px;cursor:pointer}
@@ -99,5 +122,43 @@
   .comp input:disabled{opacity:.55}
   .htmx-request.comp button{opacity:.6}
   form.comp{margin:0}
-  .newform{display:none;gap:6px;padding:9px;border-bottom:1px solid var(--line)}
+  .newform{display:none;gap:6px;padding:10px;border:1px solid var(--line);border-radius:12px;
+           background:var(--panel);margin-bottom:12px}
   .newform.on{display:flex;flex-wrap:wrap}
+
+  /* ---- eylem şeridi (spec/20-sema.md §3a): kayıt ne oldu, eylem kim ne yapacak ---- */
+  .acts{padding:9px 18px;border-top:1px solid var(--line);background:var(--panel)}
+  .ahead{font-size:12px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;
+         color:var(--dim);display:flex;align-items:center;gap:7px;margin-bottom:7px}
+  .arow{display:flex;align-items:center;gap:9px;padding:6px 8px;border:1px solid var(--line);
+        border-radius:9px;margin-bottom:5px;background:var(--panel2)}
+  .arow.done{opacity:.55}
+  .arow.done .at{text-decoration:line-through}
+  .arow .at{flex:1;font-size:13px;font-weight:600;min-width:120px}
+  .arow select,.arow input{width:auto;padding:3px 6px;font-size:12px;border:none;
+        background:transparent;font-weight:600}
+  .arow select:focus,.arow input:focus{outline:none;box-shadow:none}
+  .adur{font-size:12px}
+  .akisi{font-size:12px;color:var(--txt)}
+  .atarih{font-size:12px}
+  .atarih.gec,.arow input.gec{color:var(--err)}
+  .aform{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}
+  .aform input[name=title]{flex:1;min-width:150px}
+  .abolum{font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;
+          color:var(--dim);margin:9px 2px 5px}
+  .crumb .sep{color:var(--line)}
+
+  /* ---- kayıt sayfası: sol ~2/3 içerik, sağ dar sohbet (spec/60 2.4) ---- */
+  .kbody{display:flex;flex:1;min-height:0}
+  .ksol{flex:2;min-width:0;overflow:auto;display:flex;flex-direction:column;
+        background:var(--panel)}
+  .ksol .acts,.ksol .ekler{border-top:1px solid var(--line)}
+  .ekler{padding:9px 18px;background:var(--panel)}
+  .ksag{flex:1;min-width:280px;max-width:430px;display:flex;flex-direction:column;
+        min-height:0;border-left:1px solid var(--line);background:var(--bg)}
+  .ksag .msg{max-width:92%}
+  @media (max-width:820px){
+    .kbody{flex-direction:column;overflow:auto}
+    .ksol{overflow:visible;flex:none}
+    .ksag{max-width:none;min-height:320px;border-left:none;border-top:1px solid var(--line)}
+  }
