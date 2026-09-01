@@ -6,12 +6,12 @@
 app.py                        giriş noktası: FastAPI, host ara katmanı, ortak uçlar
 shared/                       iki sitenin ortak çekirdeği
   config.py                   ortam değişkenleri (alan adları, çerez alanı)
-  db.py                       ham SQL + veritabanı yolu (EKIPTAKIP_DB ile değiştirilebilir)
-  schema.sql  seed.py         şema ve tohum veri
+  db.py                       ham SQL + bağlantı havuzu (DATABASE_URL ile değiştirilebilir)
+  gocler/*.sql  seed.py       numaralı şema göçleri ve tohum veri
   tree.py                     TreeIndex (Euler tour, is_descendant O(1))
   auth.py                     current_user, can_edit_item
   service.py                  durum + yazma işleri: mesaj, alan değişikliği, yeni kayıt
-  search.py                   FTS5 araması
+  search.py                   tsvector araması
   render.py                   şablon yükleme (site dizini + ortak parçalar)
   templates/ortak/mesaj.html  iki sitenin paylaştığı tek parça
   static/base.css             palet token'ları + ortak bileşenler
@@ -51,18 +51,20 @@ tıklanabilir bağlantı olarak değil.
 
 ## Veritabanı: bugün ortak, yarın ayrılabilir
 
-Bugün kökte tek SQLite dosyası. İki site aynı kayıtları gösteriyor; mobil, masaüstünün
-cep yüzü. Ayırmak bugün iki kopya `nodes`/`users` senkronu demek — tek dosyanın verdiği
-ucuz JOIN'den pahalı.
+Bugün tek PostgreSQL veritabanı. İki site aynı kayıtları gösteriyor; mobil, masaüstünün
+cep yüzü. Ayırmak bugün iki kopya `nodes`/`users` senkronu demek — tek veritabanının
+verdiği ucuz JOIN'den pahalı.
 
 Ayrılması gereken gün şu olur: mobil tarafta sahaya özel, masaüstünde hiç görünmeyen bir
 veri kütlesi birikirse (vardiya formları, ölçüm kayıtları gibi). O gün:
 
-1. `shared/db.py` içinde bağlantı üretimi **tek yer** — `EKIPTAKIP_DB` zaten oradan okunuyor,
+1. `shared/db.py` içinde havuz üretimi **tek yer** — `DATABASE_URL` zaten oradan okunuyor,
    isim alan bir fabrikaya çevrilir.
 2. Ortak kalması gerekenler (`users`, `nodes`) tek veritabanında kalır; siteye özel tablolar
    ayrılır.
 3. İki ayrı süreç + her birinde `--workers 1`; ağaç indeksi ikisinde de kurulur.
+   (Aynı veritabanına bakan iki sürecin ağaç indeksi ayrı düşer; `nodes` değişince
+   ikisini de yeniden kurmak gerekir — `LISTEN/NOTIFY` bunun için, `spec/80-veritabani.md`.)
 
-Bu yüzden **tüm veritabanı erişimi `shared/db.py`'den geçer**; başka yerde `sqlite3.connect`
+Bu yüzden **tüm veritabanı erişimi `shared/db.py`'den geçer**; başka yerde `psycopg.connect`
 çağrısı yok.

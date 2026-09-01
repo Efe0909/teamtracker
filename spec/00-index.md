@@ -47,7 +47,7 @@ dashboard.<alan>/            ana sayfa (modül seçimi)
 └─ /{modül}                  iskele sayfa (kazanım ağacı, pivot, takvim, …)
 
 app.<alan>/                  yapılacaklar   ← ana ekrana eklenen uygulama
-├─ /ara                      FTS5 arama
+├─ /ara                      tam metin arama (tsvector)
 ├─ /eylemler                 son tarihli açık kayıtlar
 ├─ /bildirimler              kartlarımdaki hareketler
 ├─ /kayit/{id}               sohbet + alan şeridi

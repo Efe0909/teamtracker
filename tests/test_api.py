@@ -12,10 +12,9 @@ from shared import db, seed  # noqa: E402
 
 
 @pytest.fixture(scope="module")
-def client(tmp_path_factory):
-    db.DB_PATH = tmp_path_factory.mktemp("db") / "test.db"
-    db._conn = None
-    seed.run()
+def client():
+    from conftest import test_veritabani  # noqa: E402
+    test_veritabani("api")
     import app  # noqa: E402
     with TestClient(app.app) as c:
         from conftest import csrf_tak  # noqa: E402
@@ -24,11 +23,11 @@ def client(tmp_path_factory):
 
 
 def users(client):
-    return {u["name"]: u["id"] for u in db.q("select id,name from users")}
+    return {u["name"]: str(u["id"]) for u in db.q("select id,name from users")}
 
 
 def item_by_title(title):
-    return db.q1("select * from items where title = ?", (title,))
+    return db.q1("select * from items where title = %s", (title,))
 
 
 def test_home_lists_modules(client):
@@ -72,11 +71,11 @@ def test_table_fragment_on_htmx(client):
 
 def test_message_appends_single_event(client):
     it = item_by_title("Bütçe onayı 6 gündür bekliyor")
-    before = db.q1("select count(*) c from events where subject_id=?", (it["id"],))["c"]
+    before = db.q1("select count(*) c from events where subject_id=%s", (it["id"],))["c"]
     r = client.post(f"/item/{it['id']}/message", data={"body": "test mesajı"},
                     headers={"HX-Request": "true"})
     assert r.status_code == 200 and "test mesajı" in r.text
-    assert db.q1("select count(*) c from events where subject_id=?", (it["id"],))["c"] == before + 1
+    assert db.q1("select count(*) c from events where subject_id=%s", (it["id"],))["c"] == before + 1
 
 
 def test_field_change_writes_system_event_and_oob_feed(client):
@@ -86,7 +85,7 @@ def test_field_change_writes_system_event_and_oob_feed(client):
     assert r.status_code == 200
     assert 'hx-swap-oob="true"' in r.text          # card_fields + card_feed birlikte
     assert item_by_title("Bütçe onayı 6 gündür bekliyor")["status"] == "devam"
-    last = db.q1("select * from events where subject_id=? order by created_at desc, rowid desc"
+    last = db.q1("select * from events where subject_id=%s order by created_at desc"
                  " limit 1", (it["id"],))
     assert last["event_type"] == "sistem" and "Açık → Devam" in last["body"]
 
@@ -135,7 +134,7 @@ def test_out_of_scope_is_403_not_just_hidden(client):
     """Efe'nin kapsami Malzeme Temini; Kapak Unitesi karti Uretim Hatti A'da."""
     u = users(client)
     it = item_by_title("Kapak Ünitesi — tekrar eden kayıp")
-    client.cookies.set("uid", u["Efe"])
+    client.cookies.set("uid", str(u["Efe"]))
     frag = client.get(f"/item/{it['id']}", headers={"HX-Request": "true"}).text
     assert "salt okunur" in frag                                  # arayuzde kilitli
     assert client.patch(f"/item/{it['id']}/field", data={"status": "kapandi"}).status_code == 403
@@ -146,7 +145,7 @@ def test_out_of_scope_is_403_not_just_hidden(client):
 def test_admin_can_edit_anything(client):
     u = users(client)
     it = item_by_title("Kapak Ünitesi — tekrar eden kayıp")
-    client.cookies.set("uid", u["Selin"])                          # admin
+    client.cookies.set("uid", str(u["Selin"]))                          # admin
     assert client.patch(f"/item/{it['id']}/field", data={"priority": "kritik"}).status_code == 200
     client.cookies.delete("uid")
 
@@ -155,7 +154,7 @@ def test_participant_beats_scope(client):
     """Deniz'in kapsami Uretim Hatti A ama Butce Onayi kartina dahil edilmis."""
     u = users(client)
     it = item_by_title("Bütçe onayı 6 gündür bekliyor")
-    client.cookies.set("uid", u["Deniz"])
+    client.cookies.set("uid", str(u["Deniz"]))
     assert client.post(f"/item/{it['id']}/message", data={"body": "dahilim"}).status_code == 200
     # vekalet: Maliye takimi, Deniz uye degil, dahil degil, kapsam disi -> 403
     other = item_by_title("Onay akışına vekalet mekanizması ekle")
@@ -186,12 +185,12 @@ def test_actions_crud_and_close_guard(client):
     # kayit acik eylem varken kapanamaz
     assert client.patch(f"/item/{it['id']}/field", data={"status": "kapandi"}).status_code == 400
     # tum eylemleri kapat, sonra kayit kapanabilsin
-    for a in db.q("select id from actions where item_id=? and status in ('acik','devam')", (it["id"],)):
+    for a in db.q("select id from actions where item_id=%s and status in ('acik','devam')", (it["id"],)):
         assert client.patch(f"/eylem/{a['id']}", data={"status": "kapandi"},
                             headers={"HX-Request": "true"}).status_code == 200
     assert client.patch(f"/item/{it['id']}/field", data={"status": "kapandi"}).status_code == 200
     # sistem olaylari kartin akisina dustu
-    son = db.q("select body from events where subject_id=? order by created_at desc limit 5", (it["id"],))
+    son = db.q("select body from events where subject_id=%s order by created_at desc limit 5", (it["id"],))
     assert any("eylem" in r["body"] for r in son)
 
 
@@ -199,7 +198,7 @@ def test_action_endpoints_respect_card_permission(client):
     """Eylem uclari da kart yetkisinden gecer: kapsam disi kullaniciya 403."""
     u = users(client)
     it = item_by_title("Onay akışına vekalet mekanizması ekle")     # Maliye; Deniz disarida
-    a = db.q1("select id from actions where item_id = ?", (it["id"],))
+    a = db.q1("select id from actions where item_id = %s", (it["id"],))
     client.cookies.set("uid", u["Deniz"])
     assert client.post(f"/item/{it['id']}/eylem", data={"title": "x"}).status_code == 403
     if a:

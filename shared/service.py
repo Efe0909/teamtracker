@@ -23,10 +23,10 @@ AYLAR = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki",
 
 PRIO_SQL = ("case priority when 'kritik' then 0 when 'yuksek' then 1"
             " when 'orta' then 2 else 3 end")
-MINE_SQL = ("(assignee_id = ? or id in"
-            " (select item_id from item_participants where user_id = ?))")
-MINE_SQL_I = ("(i.assignee_id = ? or i.id in"
-              " (select item_id from item_participants where user_id = ?))")   # join'li sorgular
+MINE_SQL = ("(assignee_id = %s or id in"
+            " (select item_id from item_participants where user_id = %s))")
+MINE_SQL_I = ("(i.assignee_id = %s or i.id in"
+              " (select item_id from item_participants where user_id = %s))")   # join'li sorgular
 
 # --- agac indeksi: tek surec, yapi degisince komple yeniden kurulur --------
 
@@ -48,13 +48,13 @@ def teams_by_id() -> dict:
 
 
 def open_action_count(item_id: str) -> int:
-    r = db.q1("select count(*) c from actions where item_id = ?"
+    r = db.q1("select count(*) c from actions where item_id = %s"
               " and status in ('acik','devam')", (item_id,))
     return r["c"] or 0
 
 
 def actions_of(item_id: str) -> list:
-    return db.q("select * from actions where item_id = ?"
+    return db.q("select * from actions where item_id = %s"
                 " order by case status when 'kapandi' then 1 when 'iptal' then 1 else 0 end,"
                 " due_date is null, due_date, created_at", (item_id,))
 
@@ -62,15 +62,15 @@ def actions_of(item_id: str) -> list:
 
 def last_line(item_id: str) -> str:
     r = db.q1("select e.body, u.name from events e left join users u on u.id = e.author_id"
-              " where e.subject_type='item' and e.subject_id=? order by e.created_at desc limit 1",
+              " where e.subject_type='item' and e.subject_id=%s order by e.created_at desc limit 1",
               (item_id,))
     if not r:
         return ""
     return f"{r['name']}: {r['body']}" if r["name"] else r["body"]
 
 
-def group_of(ts: str) -> str:
-    when = datetime.strptime(ts, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+def group_of(when: datetime) -> str:
+    """Zaman artik metin degil timestamptz; ayristirma gerekmiyor."""
     today = datetime.now(timezone.utc).date()
     if when.date() == today:
         return "Bugün"
@@ -79,8 +79,7 @@ def group_of(ts: str) -> str:
     return "Daha eski"
 
 
-def short_time(ts: str) -> str:
-    when = datetime.strptime(ts, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+def short_time(when: datetime) -> str:
     today = datetime.now(timezone.utc).date()
     if when.date() == today:
         return when.strftime("%H:%M")
@@ -89,8 +88,8 @@ def short_time(ts: str) -> str:
     return f"{when.day} {['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'][when.month-1]}"
 
 
-def get_item(item_id: str):
-    r = db.q1("select * from items where id = ?", (item_id,))
+def get_item(item_id):
+    r = db.q1("select * from items where id = %s", (db.uid(item_id),))
     if r is None:
         raise HTTPException(404, "kayıt yok")
     return r
@@ -99,7 +98,7 @@ def get_item(item_id: str):
 
 def log(item_id: str, etype: str, author_id: str | None, body: str) -> None:
     db.x("insert into events (id,subject_type,subject_id,event_type,author_id,body,created_at)"
-         " values (?,'item',?,?,?,?,?)",
+         " values (%s,'item',%s,%s,%s,%s,%s)",
          (db.new_id(), item_id, etype, author_id, body, db.now()))
 
 
@@ -110,7 +109,7 @@ def add_message(user, item, body: str) -> dict | None:
     if not body:
         return None
     log(item["id"], "mesaj", user["id"], body)
-    db.x("update items set updated_at = ? where id = ?", (db.now(), item["id"]))
+    db.x("update items set updated_at = %s where id = %s", (db.now(), item["id"]))
     return {"type": "mesaj", "body": body, "author": user, "mine": True,
             "time": short_time(db.now())}
 
@@ -155,7 +154,7 @@ def change_field(user, item, form) -> bool:
     if old == new:
         return False
 
-    db.x(f"update items set {field} = ?, updated_at = ? where id = ?",
+    db.x(f"update items set {field} = %s, updated_at = %s where id = %s",
          (value, db.now(), item["id"]))
     names = {"status": "durumu", "priority": "önceliği", "assignee_id": "sorumluyu",
              "due_date": "son tarihi", "team_id": "takımı"}
@@ -171,6 +170,7 @@ def new_item(user, node_id: str, kind: str, title: str, description: str = "",
     Kayit istege bagli bir takima tanimlanir (spec/10-kararlar.md 'Kayıt takıma');
     kisi atamasi kayit uzerinde degil eylem uzerinde yapilir.
     """
+    node_id, team_id = db.uid(node_id), db.uid(team_id) if team_id else None
     if node_id not in TREE.nodes:
         raise HTTPException(400, "düğüm zorunlu")
     if kind not in ("hata", "gorev"):
@@ -178,7 +178,7 @@ def new_item(user, node_id: str, kind: str, title: str, description: str = "",
     if not title.strip():
         raise HTTPException(400, "başlık zorunlu")
     team_id = team_id or None
-    if team_id and db.q1("select 1 from teams where id = ?", (team_id,)) is None:
+    if team_id and db.q1("select 1 from teams where id = %s", (team_id,)) is None:
         raise HTTPException(400, "takım yok")
     if not (db.as_bool(user["is_admin"]) or (
             user["scope_node_id"] and TREE.is_descendant(node_id, user["scope_node_id"]))):
@@ -186,10 +186,10 @@ def new_item(user, node_id: str, kind: str, title: str, description: str = "",
     now = db.now()
     item_id = db.new_id()
     db.x("insert into items (id,node_id,kind,title,description,status,priority,team_id,"
-         "assignee_id,created_by,created_at,updated_at) values (?,?,?,?,?,'acik','orta',?,?,?,?,?)",
+         "assignee_id,created_by,created_at,updated_at) values (%s,%s,%s,%s,%s,'acik','orta',%s,%s,%s,%s,%s)",
          (item_id, node_id, kind, title.strip(), description.strip() or None,
           team_id, user["id"], user["id"], now, now))
-    db.x("insert into item_participants (item_id,user_id,added_by,added_at) values (?,?,?,?)",
+    db.x("insert into item_participants (item_id,user_id,added_by,added_at) values (%s,%s,%s,%s)",
          (item_id, user["id"], user["id"], now))
     ek = f", takım: {teams_by_id()[team_id]['name']}" if team_id else ""
     log(item_id, "sistem", user["id"], f"{user['name']} bu kaydı açtı ({TREE.name(node_id)}{ek})")
@@ -204,22 +204,22 @@ def add_action(user, item, title: str, assignee_id: str | None = None,
     if not title.strip():
         raise HTTPException(400, "eylem başlığı zorunlu")
     users = users_by_id()
-    assignee_id = assignee_id or None
+    assignee_id = db.uid(assignee_id) if assignee_id else None
     if assignee_id and assignee_id not in users:
         raise HTTPException(400, "kullanıcı yok")
     now = db.now()
     action_id = db.new_id()
     db.x("insert into actions (id,item_id,title,assignee_id,status,due_date,created_by,created_at)"
-         " values (?,?,?,?,'acik',?,?,?)",
+         " values (%s,%s,%s,%s,'acik',%s,%s,%s)",
          (action_id, item["id"], title.strip(), assignee_id, due_date or None, user["id"], now))
-    db.x("update items set updated_at = ? where id = ?", (now, item["id"]))
+    db.x("update items set updated_at = %s where id = %s", (now, item["id"]))
     kime = f" → {users[assignee_id]['name']}" if assignee_id else " (havuzda, üstlenen bekliyor)"
     log(item["id"], "sistem", user["id"], f"{user['name']} eylem ekledi: {title.strip()}{kime}")
     return action_id
 
 
-def get_action(action_id: str):
-    r = db.q1("select * from actions where id = ?", (action_id,))
+def get_action(action_id):
+    r = db.q1("select * from actions where id = %s", (db.uid(action_id),))
     if r is None:
         raise HTTPException(404, "eylem yok")
     return r
@@ -234,20 +234,22 @@ def change_action(user, item, action, form) -> bool:
     users = users_by_id()
     if field == "status" and value not in EYLEM_DURUM:
         raise HTTPException(400, "geçersiz değer")
-    if field == "assignee_id" and value is not None and value not in users:
-        raise HTTPException(400, "kullanıcı yok")
+    if field == "assignee_id":
+        value = db.uid(value) if value else None     # form metni -> uuid
+        if value is not None and value not in users:
+            raise HTTPException(400, "kullanıcı yok")
     if value == action[field]:
         return False
 
     now = db.now()
     if field == "status":
         biten = value in ("kapandi", "iptal")
-        db.x("update actions set status = ?, resolved_by = ?, resolved_at = ? where id = ?",
+        db.x("update actions set status = %s, resolved_by = %s, resolved_at = %s where id = %s",
              (value, user["id"] if biten else None, now if biten else None, action["id"]))
         log(item["id"], "sistem", user["id"],
             f"{user['name']} \"{action['title']}\" eylemini {EYLEM_DURUM[value]} yaptı")
     else:
-        db.x(f"update actions set {field} = ? where id = ?", (value, action["id"]))
+        db.x(f"update actions set {field} = %s where id = %s", (value, action["id"]))
         if field == "assignee_id":
             kim = users[value]["name"] if value else "—"
             log(item["id"], "sistem", user["id"],
@@ -255,6 +257,6 @@ def change_action(user, item, action, form) -> bool:
         else:
             log(item["id"], "sistem", user["id"],
                 f"{user['name']} \"{action['title']}\" eyleminin son tarihini {value or '—'} yaptı")
-    db.x("update items set updated_at = ? where id = ?", (now, item["id"]))
+    db.x("update items set updated_at = %s where id = %s", (now, item["id"]))
     return True
 

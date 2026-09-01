@@ -93,7 +93,7 @@ async def _reddet(request: Request, scope, receive, send):
     from . import kimlik                                   # dairesel import olmasin
     uid = request.session.get("uid")
     # Yalnizca OTURUMLU red yazilir: aksi hâlde kimliksiz istekler denetim
-    # tablosuna sinirsiz satir yazdirir (her satir senkron bir SQLite commit'i).
+    # tablosuna sinirsiz satir yazdirir (her satir senkron bir veritabani commit'i).
     if uid:
         kimlik.olay(request, "yetki_reddi", actor_id=uid, detay=f"csrf: {scope['path']}")
     kabul = request.headers.get("accept", "")

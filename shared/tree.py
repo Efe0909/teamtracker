@@ -1,6 +1,6 @@
 """Bellekte agac indeksi (spec/10-kararlar.md 'Ağaç bellekte').
 
-SQLite'ta adjacency list durur; okuma icin her istekte SQL'e gidilmez.
+Veritabaninda adjacency list durur; okuma icin her istekte SQL'e gidilmez.
 Yapi degistiginde indeks KOMPLE yeniden kurulur — kismi guncelleme yok.
 Tek surec varsayimi: uvicorn --workers 1.
 """

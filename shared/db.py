@@ -1,108 +1,127 @@
-"""Ham SQL katmani. ORM yok (spec/10-kararlar.md 'Yapma')."""
+"""Ham SQL katmani — PostgreSQL. ORM yok (spec/10-kararlar.md 'Yapma').
+
+Baglanti havuzu psycopg_pool'dan; satirlar dict olarak doner (r["sutun"]).
+Yer tutucu %s'dir — SQLite'in ? isareti degil (spec/80-veritabani.md §2).
+"""
 from __future__ import annotations
 
 import os
-import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
-from uuid import uuid4
+from uuid import UUID, uuid4
 
-# Veritabani depo kokunde, iki site icin ORTAK. Ayrik veritabanina gecis
-# gerekirse (spec/50-yapi.md) degisecek tek yer burasi: EKIPTAKIP_DB.
-DB_PATH = Path(os.getenv("EKIPTAKIP_DB") or Path(__file__).resolve().parents[1] / "ekiptakip.db")
-SCHEMA_PATH = Path(__file__).parent / "schema.sql"
+from psycopg.rows import dict_row
+from psycopg_pool import ConnectionPool
 
-_conn: sqlite3.Connection | None = None
+# Baglanti bilgisi tek yerden. Parola .env'de durur, koda gomulmez.
+DSN = os.getenv("DATABASE_URL") or "postgresql://ekiptakip:ekiptakip@127.0.0.1:5432/ekiptakip"
+GOCLER = Path(__file__).parent / "gocler"
 
-
-def new_id() -> str:
-    """TEXT id — Postgres'e tasindiginda uuid sutununa bire bir oturur."""
-    return uuid4().hex
+_pool: ConnectionPool | None = None
 
 
-def now() -> str:
-    """ISO-8601 UTC. CURRENT_TIMESTAMP kullanilmaz, deger Python'da uretilir."""
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+def new_id() -> UUID:
+    """Kimlikler sunucuda da uretilebilir (gen_random_uuid) ama tohum ve
+    ekleme yollarinda deger Python'da uretiliyor — iliskileri kurarken elde
+    id'ye ihtiyac var."""
+    return uuid4()
+
+
+def uid(x) -> UUID | None:
+    """HTTP'den gelen metni uuid'e cevirir; gecersizse None.
+
+    Yol parametreleri ve form alanlari metindir, sutunlar uuid. Cevrim tek
+    yerde olsun ki bozuk bir deger 500 degil "bulunamadi" versin.
+    """
+    if isinstance(x, UUID):
+        return x
+    try:
+        return UUID(str(x))
+    except (ValueError, AttributeError, TypeError):
+        return None
+
+
+def now() -> datetime:
+    """Zamanlar artik metin degil: timestamptz. Diliminden emin ol, UTC yaz."""
+    return datetime.now(timezone.utc)
 
 
 def as_bool(v) -> bool:
-    """INTEGER 0/1 -> bool cevirimi tek yerde."""
+    """Postgres zaten boolean donuyor; cagri yerleri degismesin diye duruyor."""
     return bool(v)
 
 
-def connect(path: Path | None = None) -> sqlite3.Connection:
-    global _conn
-    if _conn is None:
-        _conn = sqlite3.connect(path or DB_PATH, check_same_thread=False)
-        _conn.row_factory = sqlite3.Row
-        _conn.execute("pragma foreign_keys = on")
-    return _conn
+def havuz() -> ConnectionPool:
+    global _pool
+    if _pool is None:
+        _pool = ConnectionPool(DSN, min_size=1, max_size=8, kwargs={"row_factory": dict_row},
+                               open=True, timeout=10)
+        _pool.wait(timeout=15)
+    return _pool
 
 
-def init(path: Path | None = None) -> sqlite3.Connection:
-    conn = connect(path)
-    conn.executescript(SCHEMA_PATH.read_text(encoding="utf-8"))
-    conn.commit()
-    return conn
+def baglan(dsn: str | None = None) -> ConnectionPool:
+    """Testler ve betikler baska bir veritabanina gecebilsin diye."""
+    global DSN, _pool
+    if dsn:
+        kapat()
+        DSN = dsn
+    return havuz()
 
 
-def gocler() -> list[str]:
-    """Kurulu veritabanini guncel semaya tasir. Acilista calisir, idempotent.
-
-    `create table if not exists` varolan tabloya SUTUN EKLEMEZ; bu yuzden yeni
-    sutunlar burada tek tek eklenir. Alternatifi `make seed` idi, o da butun
-    gercek veriyi siler.
-    """
-    conn = connect()
-    yapildi: list[str] = []
-
-    # ONCE eksik tablolar: schema.sql'in tamami 'create ... if not exists' (tek
-    # insert'ler tetikleyicilerin ICINDE), yani betigi bastan calistirmak varolan
-    # veriye dokunmaz. Tek tek ifade kesmiyoruz: teams'in hemen ardinda index
-    # yok, metin kesimi komsu tablolari da yutuyordu.
-    # Sutun eklemeler bundan SONRA gelir; yoksa hic tablosu olmayan bir
-    # veritabaninda `alter table` bulunmayan tabloya carpar.
-    tablolar = {r["name"] for r in conn.execute(
-        "select name from sqlite_master where type='table'")}
-    eksik = {"guvenlik_olaylari", "teams", "team_members", "actions"} - tablolar
-    if eksik:
-        conn.executescript(SCHEMA_PATH.read_text(encoding="utf-8"))
-        yapildi.extend(sorted(eksik))
-
-    var = {r["name"] for r in conn.execute("pragma table_info(users)")}
-    for sutun, tanim in (("google_sub", "text"),
-                         ("is_active", "integer not null default 1"),
-                         ("last_login_at", "text")):
-        if sutun not in var:
-            conn.execute(f"alter table users add column {sutun} {tanim}")
-            yapildi.append(f"users.{sutun}")
-    conn.execute("create unique index if not exists users_google_sub_idx"
-                 " on users(google_sub) where google_sub is not null")
-    # Eski veritabaninda email sutunu 'collate nocase' DEGIL ve SQLite bunu
-    # sonradan degistirmeye izin vermez. Tekilligi ifade uzerinden garanti et:
-    # 'Efe@x' ile 'efe@x' iki satir olamasin.
-    conn.execute("create unique index if not exists users_email_nocase_idx"
-                 " on users(lower(email))")
-
-    # items.team_id: takim ekrani ile geldi, eski items tablosunda yok.
-    icols = {r["name"] for r in conn.execute("pragma table_info(items)")}
-    if icols and "team_id" not in icols:
-        conn.execute("alter table items add column team_id text references teams(id)")
-        yapildi.append("items.team_id")
-
-    conn.commit()
-    return yapildi
+def kapat() -> None:
+    global _pool
+    if _pool is not None:
+        _pool.close()
+        _pool = None
 
 
-def q(sql: str, args: tuple = ()) -> list[sqlite3.Row]:
-    return connect().execute(sql, args).fetchall()
+# --- sorgular -------------------------------------------------------------
 
 
-def q1(sql: str, args: tuple = ()) -> sqlite3.Row | None:
-    return connect().execute(sql, args).fetchone()
+def q(sql: str, args: tuple = ()) -> list[dict]:
+    with havuz().connection() as c:
+        return c.execute(sql, args).fetchall()
+
+
+def q1(sql: str, args: tuple = ()) -> dict | None:
+    with havuz().connection() as c:
+        return c.execute(sql, args).fetchone()
 
 
 def x(sql: str, args: tuple = ()) -> None:
-    conn = connect()
-    conn.execute(sql, args)
-    conn.commit()
+    """Yazma. Baglam yoneticisi cikista commit eder, hatada geri alir."""
+    with havuz().connection() as c:
+        c.execute(sql, args)
+
+
+def calistir(sql: str) -> None:
+    """Cok ifadeli betik (goc dosyalari)."""
+    with havuz().connection() as c:
+        c.execute(sql)
+
+
+# --- goc ------------------------------------------------------------------
+
+
+def gocler() -> list[str]:
+    """shared/gocler/*.sql dosyalarini sirayla uygular. Idempotent.
+
+    Elle yazilmis alter table'lar yerine numarali dosyalar: hangi surumun
+    uygulandigi veritabaninda yazili durur (spec/80-veritabani.md §4).
+    Her dosya KENDI isleminde kosar; yarim kalan goc kaydedilmez.
+    """
+    with havuz().connection() as c:
+        c.execute("create table if not exists schema_migrations ("
+                  " ad text primary key, uygulandi timestamptz not null default now())")
+        uygulanan = {r["ad"] for r in c.execute("select ad from schema_migrations").fetchall()}
+
+    yapildi: list[str] = []
+    for dosya in sorted(GOCLER.glob("*.sql")):
+        if dosya.name in uygulanan:
+            continue
+        with havuz().connection() as c:
+            c.execute(dosya.read_text(encoding="utf-8"))
+            c.execute("insert into schema_migrations (ad) values (%s)", (dosya.name,))
+        yapildi.append(dosya.name)
+    return yapildi

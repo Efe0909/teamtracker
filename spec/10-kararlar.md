@@ -5,14 +5,18 @@ kriterleri düştü, çünkü o iş bitti. Buradaki kurallar hâlâ bağlayıcı
 
 ## Yığın
 
-**Python 3.12 + FastAPI + Jinja2 + HTMX + SQLite, ham SQL.**
+**Python 3.12 + FastAPI + Jinja2 + HTMX + PostgreSQL, ham SQL.**
+
+> SQLite ile başlandı; taşınabilirlik kuralları bu geçiş için yazılmıştı ve
+> `spec/80-veritabani.md` ile ödendi. Aşağıdaki kurallar geçerliliğini koruyor.
 
 - HTMX: sunucu HTML parçası döndürür, tarayıcı yerine koyar. **JavaScript framework yok.**
   Vanilla JS toplamı iki base şablonda ~10'ar satır.
-- SQLite: kurulum sıfır, tek dosya, yedeği kopyalama. Ekip 5–10 kişiyken yeterli.
+- PostgreSQL: gerçek FK garantisi, `jsonb`, tam metin arama, doğrudan bağlanıp
+  sorgu yazabilme. Dosya/izin/ilişki yükü buraya oturur.
 - **ORM kurma.** Yirmi sorgu için SQLAlchemy fazla.
 
-### SQLite → Postgres taşınabilirlik kuralları
+### Taşınabilirlik kuralları (geçişten sonra da geçerli)
 
 - `id` sütunları **TEXT**, değer Python'da `uuid4().hex`. Otomatik artan sayı yok.
 - Zaman sütunları **TEXT**, ISO-8601 UTC (`2026-08-20T14:03:11Z`). `CURRENT_TIMESTAMP` yok.
@@ -21,7 +25,7 @@ kriterleri düştü, çünkü o iş bitti. Buradaki kurallar hâlâ bağlayıcı
 
 ## Ağaç bellekte, veritabanı sadece kalıcılık
 
-Ağaç SQLite'ta adjacency list (`nodes.parent_id`). Okuma için her istekte SQL'e gidilmez:
+Ağaç veritabanında adjacency list (`nodes.parent_id`). Okuma için her istekte SQL'e gidilmez:
 açılışta tek sorguyla `TreeIndex` kurulur (`shared/tree.py`). Euler tour `tin`/`tout`
 sayesinde yetki kontrolü **O(1)**:
 
@@ -58,7 +62,7 @@ yavaşlığının sebebi buydu. Python'a dönen satır sayısı ekranda gösteri
 - Sıralama her zaman `(son hareket, id)` ikilisiyle biter: deterministik olur, keyset'e
   geçiş engellenmez.
 - Alt ağaç filtresi recursive CTE değil, `tin`/`tout` **aralık taraması**.
-- Metin araması **FTS5** (`items_fts`). `LIKE '%kelime%'` **kullanma** — indeks kullanmaz.
+- Metin araması **tsvector** (`items.arama`, GIN). `LIKE '%kelime%'` **kullanma** — indeks kullanmaz.
 - Sayaçlar tek sorguda toplanır (`SUM(CASE WHEN … )`), yedi ayrı `COUNT(*)` koşturulmaz.
 
 ## Yetki
@@ -119,7 +123,7 @@ bkz. `deploy/README.md`.
 - Ağacı her istekte SQL'den okuma. Bellekteki indeks var.
 - Kısmi indeks güncellemesi yapma. Yapı değişti mi, komple yeniden kur.
 - Tüm kayıtları belleğe çekip Python'da süzme/sıralama.
-- `LIKE '%…%'` ile arama yapma. FTS5 var.
+- `LIKE '%…%'` ile arama yapma. `arama @@ to_tsquery('tr', …)` var.
 - Sıralama sütununu kullanıcı girdisiyle birleştirme.
 - Şablonlara iş mantığı koyma. Yetki, sıralama, gruplama Python'da.
 - Şablonlarda `hx-on=` kullanma: htmx onu `new Function` ile derler, yayındaki CSP

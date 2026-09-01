@@ -18,10 +18,9 @@ from shared import db, kimlik, seed  # noqa: E402
 
 
 @pytest.fixture(scope="module")
-def client(tmp_path_factory):
-    db.DB_PATH = tmp_path_factory.mktemp("db") / "test.db"
-    db._conn = None
-    seed.run()
+def client():
+    from conftest import test_veritabani  # noqa: E402
+    test_veritabani("guvenlik")
     import app  # noqa: E402
     with TestClient(app.app) as c:
         from conftest import csrf_tak  # noqa: E402
@@ -36,7 +35,7 @@ def _alt_surec(env_ek: dict) -> subprocess.CompletedProcess:
     kabul kriteri 8 in-process yazilamaz.
     """
     env = {k: v for k, v in os.environ.items() if not k.startswith("EKIPTAKIP_")}
-    env.update({"PATH": os.environ["PATH"], "EKIPTAKIP_DB": str(db.DB_PATH)})
+    env.update({"PATH": os.environ["PATH"], "DATABASE_URL": db.DSN})
     env.update(env_ek)
     return subprocess.run(
         [sys.executable, "-c",
@@ -133,9 +132,9 @@ def test_pasif_kullanicinin_oturumu_bir_sonraki_istekte_oluh(client):
     client.post(f"/switch/{u['id']}", follow_redirects=False)
     assert client.get("/whoami").json()["name"] == "Selin"
 
-    db.x("update users set is_active = 0 where id = ?", (u["id"],))
+    db.x("update users set is_active = false where id = %s", (u["id"],))
     assert client.get("/whoami").json()["name"] != "Selin"    # duser
-    db.x("update users set is_active = 1 where id = ?", (u["id"],))
+    db.x("update users set is_active = true where id = %s", (u["id"],))
     client.cookies.clear()
     from conftest import csrf_tak
     csrf_tak(client)
@@ -161,18 +160,18 @@ def test_eposta_buyuk_kucuk_harf_ayirmiyor():
 def test_ayni_eposta_farkli_google_hesabi_reddedilir():
     """Hesap devralma vektoru: adres geri donusturulmus olabilir."""
     u = db.q1("select * from users where name = 'Deniz'")
-    db.x("update users set google_sub = ? where id = ?", ("gercek-sub", u["id"]))
+    db.x("update users set google_sub = %s where id = %s", ("gercek-sub", u["id"]))
     bulunan, sebep = kimlik.girebilir(u["email"], "baska-sub")
     assert bulunan is None and sebep == "hesap_uyusmuyor"
-    db.x("update users set google_sub = null where id = ?", (u["id"],))
+    db.x("update users set google_sub = null where id = %s", (u["id"],))
 
 
 def test_pasif_kullanici_giris_yapamaz():
     u = db.q1("select * from users where name = 'Deniz'")
-    db.x("update users set is_active = 0 where id = ?", (u["id"],))
+    db.x("update users set is_active = false where id = %s", (u["id"],))
     bulunan, sebep = kimlik.girebilir(u["email"], "sub-x")
     assert bulunan is None and sebep == "pasif"
-    db.x("update users set is_active = 1 where id = ?", (u["id"],))
+    db.x("update users set is_active = true where id = %s", (u["id"],))
 
 
 def test_donus_adresi_yalnizca_kendi_yolumuz():
@@ -240,7 +239,7 @@ def test_csrf_reddi_denetim_izine_yazilir(client):
 def test_kimliksiz_csrf_reddi_denetime_yazilmaz(client):
     """Aksi hâlde kimliksiz istekler denetim tablosunu sinirsiz sisirir.
 
-    Her satir senkron bir SQLite commit'i; ucuz bir yavaslatma vektoru olurdu.
+    Her satir senkron bir veritabani commit'i; ucuz bir yavaslatma vektoru olurdu.
     """
     from conftest import csrf_tak
 
@@ -255,31 +254,23 @@ def test_kimliksiz_csrf_reddi_denetime_yazilmaz(client):
 # --- goc (denetim bulgusu B3) ---------------------------------------------
 
 
-def test_gocler_eski_veritabanina_sutun_ekler(tmp_path):
-    """Kurulu bir instance yeni sutunlari almazsa her sayfa 500 verirdi."""
-    eski = tmp_path / "eski.db"
-    import sqlite3
-    with sqlite3.connect(eski) as c:
-        c.execute("create table users (id text primary key, email text unique not null,"
-                  " name text not null, color text, is_admin integer not null default 0,"
-                  " is_editor integer not null default 0, scope_node_id text,"
-                  " created_at text not null)")
-        c.execute("insert into users values ('1','a@b.c','A',null,0,0,null,'2026-01-01T00:00:00Z')")
+def test_gocler_idempotent_ve_kayitli():
+    """Goc kosucusu iki kez calisinca ikinci sefer hicbir sey yapmaz (AC-5).
 
-    onceki_yol, onceki_conn = db.DB_PATH, db._conn
-    db.DB_PATH, db._conn = eski, None
-    try:
-        yapildi = db.gocler()
-        assert "users.is_active" in yapildi and "users.google_sub" in yapildi
-        assert db.q1("select is_active from users where id='1'")["is_active"] == 1
-        db.x("insert into guvenlik_olaylari (id,created_at,tur) values ('x','t','giris')")
-        assert db.gocler() == []          # idempotent
-    finally:
-        db._conn.close()
-        db.DB_PATH, db._conn = onceki_yol, onceki_conn
+    Hangi surumun uygulandigi veritabaninda yazili durur; elle alter table
+    tahminine gerek kalmaz (spec/80-veritabani.md §4).
+    """
+    assert db.gocler() == []                       # fixture zaten uygulamisti
+    kayit = {r["ad"] for r in db.q("select ad from schema_migrations")}
+    assert "001_sema.sql" in kayit
 
 
-# --- sertlestirme (AC-9, AC-10, §8) ---------------------------------------
+def test_arama_sutunu_kendini_gunceller():
+    """tsvector generated column: FTS5'teki uc trigger'in yerini aldi."""
+    it = db.q1("select id from items limit 1")
+    db.x("update items set title = %s where id = %s", ("vinç halatı yıprandı", it["id"]))
+    bulunan = db.q("select title from items where arama @@ to_tsquery('tr', %s)", ("vinc:*",))
+    assert any("vinç halatı" in r["title"] for r in bulunan)
 
 
 def test_guvenlik_basliklari_uygulamadan_gelir(client):
@@ -318,7 +309,7 @@ def test_403_denetim_izine_yazilir(client):
     u = db.q1("select id from users where name = 'Efe'")
     client.post(f"/switch/{u['id']}", follow_redirects=False)
     it = db.q1("select * from items where title = 'Kapak Ünitesi — tekrar eden kayıp'")
-    once = db.q1("select count(*) c from guvenlik_olaylari where tur='yetki_reddi'")["c"]
+    once = db.q1("select count(*) c from guvenlik_olaylari where tur=%s", ("yetki_reddi",))["c"]
     r = client.post(f"/item/{it['id']}/message", data={"body": "kapsam disi"})
     assert r.status_code == 403
-    assert db.q1("select count(*) c from guvenlik_olaylari where tur='yetki_reddi'")["c"] == once + 1
+    assert db.q1("select count(*) c from guvenlik_olaylari where tur=%s", ("yetki_reddi",))["c"] == once + 1

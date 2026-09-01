@@ -42,7 +42,7 @@ Alt sekme çubuğu her ekranda sabit; kayıt detayında yerini mesaj kutusu alı
 |---|---|---|
 | `mobile_tabs` | 4 sekme + ortada `+` | `app.MOBILE_TABS`, rozet `notif_badge()` |
 | `mobile_todo` | bana ait kayıt kartları | `items` + `item_participants`, sıralama SQL'de |
-| `mobile_search` | kayıt ve düğüm sonuçları | `items_fts` (FTS5) + bellekteki `TreeIndex` |
+| `mobile_search` | kayıt ve düğüm sonuçları | `items.arama` (tsvector) + bellekteki `TreeIndex` |
 | `mobile_actions` | son tarihli açık kayıtlar | `items.due_date`, gruplama Python'da |
 | `mobile_notifs` | kartlarımdaki başkasının hareketi | `events` + `items` join |
 | `mobile_strip` | durum/öncelik/sorumlu/son tarih | `items`, `PATCH /m/kayit/{id}/alan` |
@@ -67,11 +67,13 @@ Yeni kayıt formunda kapsam dışı dal hiç listelenmiyor — ama asıl kontrol
 
 Mevcut şema üçünü karşıladı, biri eksikti:
 
-- **Arama** için `items_fts` (FTS5) eklendi — `schema.sql`. spec/10-kararlar.md 'Sorgular' zaten
-  istiyordu ("`LIKE '%kelime%'` kullanma"), yazılmamıştı. Trigger'larla senkron;
-  `tokenize="unicode61 remove_diacritics 2"` sayesinde `butce` → **Bütçe** buluyor.
-  Kullanıcı metni MATCH ifadesine birleştirilmiyor: kelimeler ayıklanıp `"kelime"*`
-  biçimine çevriliyor (`fts_query`).
+- **Arama** için `items.arama` üretilmiş `tsvector` sütunu + GIN indeksi var
+  (`shared/gocler/001_sema.sql`). spec/10-kararlar.md 'Sorgular' zaten istiyordu
+  ("`LIKE '%kelime%'` kullanma"), yazılmamıştı. Sütun `stored` olduğu için
+  trigger gerekmiyor; `unaccent` tabanlı `tr` yapılandırması sayesinde
+  `butce` → **Bütçe** buluyor (Türkçe snowball gövdeleyicisi neden seçilmedi:
+  `spec/80-veritabani.md`). Kullanıcı metni sorguya birleştirilmiyor: kelimeler
+  ayıklanıp `kelime:*` biçiminde `to_tsquery`'ye veriliyor.
 - **Bildirimler** Faz 1'de `events`'ten türetiliyor: bana ait kartlarda başkasının yaptığı
   hareket, tarihe göre. Gerçek tablo spec/20-sema.md §6'da (okundu bilgisi, `route`, susturma) —
   o gelene kadar rozet "son 24 saatteki hareket sayısı", okunmamış sayısı **değil**.

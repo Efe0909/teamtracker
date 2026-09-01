@@ -72,7 +72,7 @@ MODULES = [
     {"slug": "arsiv", "icon": "🗂", "name": "Ekip Arşivi", "ready": False,
      "desc": "Kapanmış kayıtlar, alınan kararlar ve geçmiş dönemlerin kurumsal hafızası.",
      "plan": ["Kapanmış kayıtlar silinmez, arşive düşer (spec/20-sema.md açık nokta 3: deleted_at).",
-              "Tam metin arama FTS5 üzerinden — LIKE '%…%' yok.",
+              "Tam metin arama tsvector üzerinden — LIKE '%…%' yok.",
               "Karar kayıtları kartın olay akışından toplanır."]},
     {"slug": "dosyalar", "icon": "🗄", "name": "Dosyalar / NAS", "ready": False,
      "desc": "Karta ve düğüme bağlı dosyalar; kılavuz/eğitim kütüphanesi de buraya oturur.",
@@ -95,9 +95,9 @@ def home_stats(user) -> dict:
         "select"
         " sum(case when status <> 'kapandi' then 1 else 0 end) acik,"
         " sum(case when status <> 'kapandi' and assignee_id is null then 1 else 0 end) atanmamis,"
-        " sum(case when status <> 'kapandi' and assignee_id = ? then 1 else 0 end) bana,"
+        " sum(case when status <> 'kapandi' and assignee_id = %s then 1 else 0 end) bana,"
         " count(*) hepsi from items", (user["id"],))
-    e = db.q1("select count(*) c from actions where assignee_id = ?"
+    e = db.q1("select count(*) c from actions where assignee_id = %s"
               " and status in ('acik','devam')", (user["id"],))
     return {"open": r["acik"] or 0, "unassigned": r["atanmamis"] or 0,
             "mine": r["bana"] or 0, "all": r["hepsi"] or 0,
@@ -127,7 +127,7 @@ def tablo_ctx(request, user) -> dict:
         " sum(case when i.status <> 'kapandi' and i.priority = 'dusuk' then 1 else 0 end) dusuk"
         f" from items i where {where}", tuple(args))
     users = users_by_id()
-    bugun = datetime.now(timezone.utc).date().isoformat()
+    bugun = datetime.now(timezone.utc).date()      # due_date artik date, metin degil
     out = []
     for r in rows:
         out.append({
@@ -159,13 +159,13 @@ def card_ctx(request, item, user) -> dict:
     users = users_by_id()
     teams = service.teams_by_id()
     feed = []
-    for e in db.q("select * from events where subject_type='item' and subject_id=?"
+    for e in db.q("select * from events where subject_type='item' and subject_id=%s"
                   " order by created_at", (item["id"],)):
         a = users.get(e["author_id"])
         feed.append({"type": e["event_type"], "body": e["body"], "author": a,
                      "mine": a is not None and a["id"] == user["id"],
                      "time": short_time(e["created_at"])})
-    bugun = datetime.now(timezone.utc).date().isoformat()
+    bugun = datetime.now(timezone.utc).date()      # due_date artik date, metin degil
     eylemler = []
     for a in service.actions_of(item["id"]):
         eylemler.append({

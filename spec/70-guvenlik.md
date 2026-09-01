@@ -5,7 +5,7 @@ yazan herkes istediği kullanıcı olabiliyor. Yetki mantığı baştan doğru y
 (`shared/auth.py`) değişecek yer dar; bu belge neyin değişeceğini ve **neyin bilerek
 yapılmayacağını** yazar.
 
-Bağlam: öğrenci kulübü, 5–50 kişi, tek süreç, SQLite, cloudflared tüneli arkasında.
+Bağlam: öğrenci kulübü, 5–50 kişi, tek süreç, PostgreSQL, cloudflared tüneli arkasında.
 Depo **public**.
 
 ---
@@ -167,7 +167,7 @@ Kurallar:
   kurban giriş yaptıktan sonra oturumda **saldırganın bildiği token** durur ve asıl
   koruma düşer. Oturum sabitlemesine karşı da doğru olan hareket bu.
 - Karşılaştırma `hmac.compare_digest` ile yapılır.
-- **Kimliksiz CSRF reddi denetim izine yazılmaz:** her satır senkron bir SQLite
+- **Kimliksiz CSRF reddi denetim izine yazılmaz:** her satır senkron bir veritabanı
   `commit()`; yazsaydık adresi bilen herkes sınırsız satır ürettirip diski şişirir ve
   olay döngüsünü yavaşlatırdı.
 - Muafiyet listeleri **tam eşleşme** (yalnız `/static/` önek). Önek eşleşmesi olsaydı,

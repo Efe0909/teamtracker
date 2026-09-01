@@ -74,10 +74,9 @@ async def lifespan(_app: FastAPI):
     # Yanlis yapilandirma calisma aninda degil ACILISTA yakalanir (spec/70 §7).
     for uyari in config.dogrula():
         print(f"[ekiptakip] UYARI: {uyari}", file=sys.stderr)
-    db.connect()
-    # gocler() eksik tablolari da kurar (teams, actions); ayri db.init() gerekmez.
-    for ad in db.gocler():           # kurulu veritabani yeni sutunlari alsin
-        print(f"[ekiptakip] goc: {ad}", file=sys.stderr)
+    db.havuz()
+    for ad in db.gocler():           # uygulanmamis goc dosyalari sirayla kosar
+        print(f"[ekiptakip] goc uygulandi: {ad}", file=sys.stderr)
     service.rebuild_tree()
     yield
 
@@ -176,7 +175,7 @@ def whoami(request: Request):
     u = auth.current_user(request)
     if u is None:                                   # kapi gevserse gurultusuz duralim
         return JSONResponse({"hata": "oturum yok"}, status_code=401)
-    return JSONResponse({"id": u["id"], "name": u["name"], "email": u["email"],
+    return JSONResponse({"id": str(u["id"]), "name": u["name"], "email": u["email"],
                          "is_admin": db.as_bool(u["is_admin"]),
                          "scope": service.TREE.name(u["scope_node_id"]) if u["scope_node_id"] else None})
 

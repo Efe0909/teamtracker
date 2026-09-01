@@ -36,9 +36,8 @@ MOBILE_TABS = [
 ]
 
 
-def rel_time(ts: str) -> str:
+def rel_time(when: datetime) -> str:
     """'19 saat önce' — bildirim akisinda mutlak saat degil, mesafe okunur."""
-    when = datetime.strptime(ts, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
     sec = (datetime.now(timezone.utc) - when).total_seconds()
     if sec < 90:
         return "az önce"
@@ -51,13 +50,12 @@ def rel_time(ts: str) -> str:
     return f"{when.day} {AYLAR[when.month - 1]}"
 
 
-def due_info(due: str | None) -> dict | None:
-    """Son tarih rozeti: metin + gecikti mi + kac gun kaldi."""
-    if not due:
-        return None
-    try:
-        d = datetime.strptime(due, "%Y-%m-%d").date()
-    except ValueError:
+def due_info(d) -> dict | None:
+    """Son tarih rozeti: metin + gecikti mi + kac gun kaldi.
+
+    Sutun tipi `date`; psycopg date nesnesi doner, ayristirma gerekmez.
+    """
+    if not d:
         return None
     left = (d - datetime.now(timezone.utc).date()).days
     return {"label": f"{d.day} {AYLAR[d.month - 1]} {d.year}", "days": left, "late": left < 0}
@@ -75,7 +73,7 @@ def mobile_row(r, users: dict) -> dict:
         "path": " › ".join(service.TREE.name(n) for n in service.TREE.ancestors(r["node_id"])[-2:]),
         "due": due_info(r["due_date"]), "time": rel_time(r["updated_at"]),
         "msgs": db.q1("select count(*) c from events where subject_type='item'"
-                      " and subject_id=? and event_type='mesaj'", (r["id"],))["c"],
+                      " and subject_id=%s and event_type='mesaj'", (r["id"],))["c"],
     }
 
 
@@ -112,8 +110,8 @@ def mobile_notifs(user, limit: int = 40) -> list[dict]:
     rows = db.q(
         "select e.*, i.id item_id, i.title from events e join items i on i.id = e.subject_id"
         f" where e.subject_type='item' and {MINE_SQL_I}"
-        " and (e.author_id is null or e.author_id <> ?)"
-        " order by e.created_at desc limit ?",
+        " and (e.author_id is null or e.author_id <> %s)"
+        " order by e.created_at desc limit %s",
         (user["id"], user["id"], user["id"], limit))
     users = users_by_id()
     return [{"item_id": r["item_id"], "title": r["title"], "type": r["event_type"],
@@ -123,11 +121,11 @@ def mobile_notifs(user, limit: int = 40) -> list[dict]:
 
 def notif_badge(user) -> int:
     """Son 24 saatteki hareket sayisi. Okundu bilgisi Faz 3'te gelir (spec/20-sema.md §6)."""
-    since = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    since = datetime.now(timezone.utc) - timedelta(days=1)
     return db.q1(
         "select count(*) c from events e join items i on i.id = e.subject_id"
         f" where e.subject_type='item' and {MINE_SQL_I}"
-        " and (e.author_id is null or e.author_id <> ?) and e.created_at > ?",
+        " and (e.author_id is null or e.author_id <> %s) and e.created_at > %s",
         (user["id"], user["id"], user["id"], since))["c"]
 
 
@@ -144,7 +142,7 @@ def m_ctx(request, user, tab: str | None, title: str, **extra) -> dict:
 def mobile_card_ctx(request, item, user) -> dict:
     users = users_by_id()
     feed = []
-    for e in db.q("select * from events where subject_type='item' and subject_id=?"
+    for e in db.q("select * from events where subject_type='item' and subject_id=%s"
                   " order by created_at", (item["id"],)):
         a = users.get(e["author_id"])
         feed.append({"type": e["event_type"], "body": e["body"], "author": a,

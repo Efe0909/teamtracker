@@ -14,14 +14,15 @@ from .tree import TreeIndex
 COOKIE = "uid"          # yalnizca sahte kimlik modunda (gelistirme/test)
 
 
-def get_user(user_id: str | None):
-    if not user_id:
+def get_user(user_id):
+    kimlik = db.uid(user_id)
+    if kimlik is None:
         return None
-    return db.q1("select * from users where id = ?", (user_id,))
+    return db.q1("select * from users where id = %s", (kimlik,))
 
 
 def all_users():
-    return db.q("select * from users where is_active = 1 order by name")
+    return db.q("select * from users where is_active order by name")
 
 
 def _aktif(u):
@@ -39,18 +40,20 @@ def current_user(request):
         return u
     if config.sahte_kimlik():
         return _aktif(get_user(request.cookies.get(COOKIE))) or db.q1(
-            "select * from users where is_active = 1 order by created_at limit 1")
+            # created_at esit olabilir; email ikinci olcut olmadan hangi satirin
+            # gelecegi Postgres'te GARANTI DEGIL (SQLite'ta insert sirasi geliyordu).
+            "select * from users where is_active order by created_at, email limit 1")
     return None
 
 
-def participant_ids(item_id: str) -> set[str]:
+def participant_ids(item_id) -> set:
     return {r["user_id"] for r in db.q(
-        "select user_id from item_participants where item_id = ?", (item_id,))}
+        "select user_id from item_participants where item_id = %s", (db.uid(item_id),))}
 
 
 def team_ids(user_id: str) -> set[str]:
     return {r["team_id"] for r in db.q(
-        "select team_id from team_members where user_id = ?", (user_id,))}
+        "select team_id from team_members where user_id = %s", (db.uid(user_id),))}
 
 
 def can_edit_item(user, item, tree: TreeIndex) -> bool:

@@ -20,11 +20,10 @@ from shared import config, db, seed  # noqa: E402
 
 
 @pytest.fixture(scope="module")
-def client(tmp_path_factory):
+def client():
     """AUTH_MODE'u 'google' yapar: sahte kimlik yok, kapi gercekten calisir."""
-    db.DB_PATH = tmp_path_factory.mktemp("db") / "test.db"
-    db._conn = None
-    seed.run()
+    from conftest import test_veritabani  # noqa: E402
+    test_veritabani("kimlik")
     import app as app_mod  # noqa: E402
     onceki = (config.AUTH_MODE, config.GOOGLE_CLIENT_ID, config.GOOGLE_CLIENT_SECRET)
     config.AUTH_MODE = "google"
@@ -47,9 +46,9 @@ def oturum_cerezi(veri: dict) -> str:
 
 
 def giris_yap(client, kullanici_adi: str = "Efe") -> dict:
-    u = db.q1("select * from users where name = ?", (kullanici_adi,))
+    u = db.q1("select * from users where name = %s", (kullanici_adi,))
     client.cookies.clear()
-    client.cookies.set(config.cerez_adi(), oturum_cerezi({"uid": u["id"], "sid": "test"}))
+    client.cookies.set(config.cerez_adi(), oturum_cerezi({"uid": str(u["id"]), "sid": "test"}))
     return u
 
 
@@ -95,7 +94,7 @@ def test_switch_ucu_gercek_modda_yok():
     import subprocess
 
     env = {k: v for k, v in os.environ.items() if not k.startswith("EKIPTAKIP_")}
-    env.update({"PATH": os.environ["PATH"], "EKIPTAKIP_DB": str(db.DB_PATH),
+    env.update({"PATH": os.environ["PATH"], "DATABASE_URL": db.DSN,
                 "EKIPTAKIP_AUTH": "google", "GOOGLE_CLIENT_ID": "x",
                 "GOOGLE_CLIENT_SECRET": "y", "EKIPTAKIP_SECRET_KEY": "k" * 40})
     r = subprocess.run(
@@ -140,7 +139,7 @@ def test_uydurma_oturum_imzasiz_gecmez(client):
     """Imzasiz/yanlis anahtarla imzalanmis cerez kabul edilmemeli."""
     u = db.q1("select * from users where name = 'Selin'")
     sahte = itsdangerous.TimestampSigner("baska-anahtar").sign(
-        base64.b64encode(json.dumps({"uid": u["id"]}).encode())).decode()
+        base64.b64encode(json.dumps({"uid": str(u["id"])}).encode())).decode()
     client.cookies.clear()
     client.cookies.set(config.cerez_adi(), sahte)
     assert client.get("/whoami").status_code == 401
@@ -152,11 +151,11 @@ def test_uydurma_oturum_imzasiz_gecmez(client):
 def test_pasif_kullanici_bir_sonraki_istekte_disari(client):
     u = giris_yap(client, "Deniz")
     assert client.get("/whoami").json()["name"] == "Deniz"
-    db.x("update users set is_active = 0 where id = ?", (u["id"],))
+    db.x("update users set is_active = false where id = %s", (u["id"],))
     try:
         assert client.get("/whoami").status_code == 401      # ayni cerez, artik gecersiz
     finally:
-        db.x("update users set is_active = 1 where id = ?", (u["id"],))
+        db.x("update users set is_active = true where id = %s", (u["id"],))
 
 
 # --- AC-7: state ----------------------------------------------------------
@@ -200,7 +199,8 @@ def test_csrf_token_giris_sinirinda_yenilenir():
     kimlik.oturum_ac(_Sahte, u["id"])
     assert "csrf" not in _Sahte.session          # oturum komple temizlendi
     assert "baska" not in _Sahte.session
-    assert _Sahte.session["uid"] == u["id"] and _Sahte.session["sid"] != "eski"
+    assert _Sahte.session["uid"] == str(u["id"])   # oturum JSON: uuid metne cevrilir
+    assert _Sahte.session["sid"] != "eski"
 
 
 def test_cikis_oturumu_komple_temizler():

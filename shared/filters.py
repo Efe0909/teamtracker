@@ -6,7 +6,7 @@ WHERE parcasi dondurur. Kurallar spec/10-kararlar.md 'Sorgular':
   - suzme/siralama SQL'de, Python'a donen satir ekranda gorunen satirdir
   - siralama sabit sozlukten (SIRALAMA), kullanici girdisiyle birlestirilmez
   - alt agac tin/tout uzerinden bellekteki agactan, recursive CTE yok
-  - metin aramasi FTS5, LIKE '%..%' yok
+  - metin aramasi tsvector/GIN, LIKE '%..%' yok
 """
 from __future__ import annotations
 
@@ -55,7 +55,7 @@ class SecimFiltre(Filtre):
     def clause(self, value, user):
         if value not in self.choices:
             return None
-        return f"i.{self.column} = ?", [value]
+        return f"i.{self.column} = %s", [value]
 
 
 class KisiFiltre(Filtre):
@@ -71,12 +71,16 @@ class KisiFiltre(Filtre):
 
     def clause(self, value, user):
         if value == "ben":
-            return f"i.{self.column} = ?", [user["id"]]
+            return f"i.{self.column} = %s", [user["id"]]
         if value == "yok":
             return f"i.{self.column} is null", []
-        if db.q1("select 1 from users where id = ?", (value,)) is None:
+        # Sutun uuid: gecersiz metin dogrudan sorguya girerse veritabani hata
+        # verir. Once cevir, olmuyorsa filtreyi yok say (bozuk girdi filtreyi
+        # dusurur, istegi dusurmez).
+        kimlik = db.uid(value)
+        if kimlik is None or db.q1("select 1 from users where id = %s", (kimlik,)) is None:
             return None
-        return f"i.{self.column} = ?", [value]
+        return f"i.{self.column} = %s", [kimlik]
 
 
 class TakimFiltre(Filtre):
@@ -84,9 +88,10 @@ class TakimFiltre(Filtre):
         return [(t["id"], t["name"], None) for t in db.q("select id,name from teams order by name")]
 
     def clause(self, value, user):
-        if db.q1("select 1 from teams where id = ?", (value,)) is None:
+        kimlik = db.uid(value)
+        if kimlik is None or db.q1("select 1 from teams where id = %s", (kimlik,)) is None:
             return None
-        return "i.team_id = ?", [value]
+        return "i.team_id = %s", [kimlik]
 
 
 class DugumFiltre(Filtre):
@@ -100,14 +105,15 @@ class DugumFiltre(Filtre):
                 for nid in sirali]
 
     def clause(self, value, user):
-        ids = service.TREE.subtree(value)
+        # subtree() bellekteki agactan; anahtar uuid, gelen deger metin.
+        ids = service.TREE.subtree(db.uid(value)) if db.uid(value) else []
         if not ids:
             return None
-        return f"i.node_id in ({','.join('?' * len(ids))})", list(ids)
+        return "i.node_id = any(%s)", [list(ids)]
 
 
 class AramaFiltre(Filtre):
-    """FTS5 — MATCH ifadesi kullanici metniyle birlestirilmez (shared/search.py)."""
+    """tsvector/GIN — sorgu ifadesi kullanici metniyle birlestirilmez (shared/search.py)."""
 
     def options(self):
         return []          # select degil metin girisi; sablon bunu options() bos diye anlar
@@ -116,7 +122,7 @@ class AramaFiltre(Filtre):
         match = search.fts_query(value)
         if match is None:
             return None
-        return "i.rowid in (select rowid from items_fts where items_fts match ?)", [match]
+        return "i.arama @@ to_tsquery('tr', %s)", [match]
 
 
 def _pillar_secenekleri() -> dict[str, str]:
@@ -141,23 +147,25 @@ def aktif_filtreler() -> list[Filtre]:
 # --- hizli filtreler: kadans hafta (spec/10-kararlar.md 'Kadans hafta') ------
 
 def _hafta():
+    """Tarihler ARTIK METIN DEGIL: sutunlar date/timestamptz, karsilastirma
+    icin gercek nesne gonderilir (isoformat() SQLite doneminden kalmaydi)."""
     bugun = datetime.now(timezone.utc).date()
-    return (bugun - timedelta(days=7)).isoformat(), (bugun + timedelta(days=7)).isoformat()
+    return bugun - timedelta(days=7), bugun + timedelta(days=7)
 
 
 def hizli_clause(key: str, user) -> tuple[str, list] | None:
     once, sonra = _hafta()
-    bugun = datetime.now(timezone.utc).date().isoformat()
+    bugun = datetime.now(timezone.utc).date()
     H = {
         # bu haftanin gundemi: son 7 gunde hareket VEYA son tarihi 7 gun icinde
-        "hafta": ("(i.updated_at >= ? or (i.due_date is not null and i.due_date <= ?"
+        "hafta": ("(i.updated_at >= %s::date or (i.due_date is not null and i.due_date <= %s"
                   " and i.status <> 'kapandi'))", [once, sonra]),
         # acik eylemim: actions tablosundan (spec/20-sema.md §3a)
-        "eylemim": (f"i.id in (select item_id from actions where assignee_id = ?"
+        "eylemim": (f"i.id in (select item_id from actions where assignee_id = %s"
                     " and status in ('acik','devam'))", [user["id"]]),
         # geciken: kaydin ya da acik bir eyleminin son tarihi gecmis
-        "geciken": ("((i.due_date < ? and i.status <> 'kapandi') or i.id in"
-                    " (select item_id from actions where due_date < ?"
+        "geciken": ("((i.due_date < %s and i.status <> 'kapandi') or i.id in"
+                    " (select item_id from actions where due_date < %s"
                     "  and status in ('acik','devam')))", [bugun, bugun]),
         "atanmamis": ("i.assignee_id is null and i.status <> 'kapandi'", []),
     }

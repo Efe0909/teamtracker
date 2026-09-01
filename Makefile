@@ -8,13 +8,14 @@ VENV    ?= .venv
 BIN     := $(VENV)/bin
 HOST    ?= 127.0.0.1
 PORT    ?= 8000
-DB      := ekiptakip.db
+COMPOSE := docker compose
 STAMP   := $(VENV)/.deps-ok
 DEPS    := fastapi uvicorn[standard] jinja2 python-multipart pytest httpx \
-           authlib itsdangerous          # kimlik: OIDC + imzali oturum
+           authlib itsdangerous python-dotenv \
+           psycopg[binary,pool]          # PostgreSQL (spec/80-veritabani.md)
 
 .DEFAULT_GOAL := help
-.PHONY: help up setup seed reseed dev run test check clean distclean
+.PHONY: help up setup db-ac db-kapat seed reseed dev run test check clean distclean
 
 help:  ## bu listeyi goster
 	@echo "EkipTakip — yerel komutlar"
@@ -25,7 +26,7 @@ help:  ## bu listeyi goster
 	@echo "  Degiskenler: PORT=$(PORT) HOST=$(HOST) PY=$(PY)"
 	@echo "  Ornek: make dev PORT=9000"
 
-up: setup $(DB) dev  ## sifirdan kaldir: kurulum + tohum (yoksa) + sunucu
+up: setup db-ac seed dev  ## sifirdan kaldir: bagimliliklar + Postgres + tohum + sunucu
 
 setup: $(STAMP)  ## sanal ortam + bagimliliklar (idempotent)
 
@@ -35,14 +36,20 @@ $(STAMP):
 	uv pip install --python $(BIN)/python $(DEPS)
 	@touch $@
 
-# sadece veritabani YOKKEN tohumlar — varolani sessizce silmez (bunun icin: make reseed)
-$(DB): $(STAMP)
-	@$(MAKE) --no-print-directory seed
+db-ac: ## Postgres'i Docker'da kaldir (veri kalir)
+	$(COMPOSE) up -d
+	@printf "Postgres bekleniyor"; \
+	 for i in $$(seq 1 30); do \
+	   $(COMPOSE) exec -T db pg_isready -U ekiptakip -d ekiptakip >/dev/null 2>&1 && { echo " hazir"; exit 0; }; \
+	   printf "."; sleep 1; done; echo; echo "Postgres acilmadi: docker compose logs db"; exit 1
 
-seed: $(STAMP)  ## veritabanini tohumla (VAROLAN ekiptakip.db SILINIR)
+db-kapat: ## Postgres'i durdur (veri kalir; silmek icin: docker compose down -v)
+	$(COMPOSE) down
+
+seed: $(STAMP)  ## veritabanini tohumla (VAROLAN VERI SILINIR)
 	$(BIN)/python -m shared.seed
 
-reseed: clean seed  ## veritabanini sifirla ve yeniden tohumla
+reseed: seed  ## veritabanini sifirla ve yeniden tohumla
 
 # Gelistirmede kimlik SAHTE: Google anahtari olmadan calissin diye. Yayinda bu
 # degisken acilisi reddettirir (spec/70-guvenlik.md §2.5).
@@ -62,8 +69,7 @@ check: $(STAMP)  ## uclar ayakta mi — sunucu calisirken baska terminalde
 	  printf "%s %s\n" "$$(curl -s -o /dev/null -w '%{http_code}' http://$(HOST):$(PORT)$$u)" "$$u"; \
 	done
 
-clean:  ## veritabanini ve __pycache__ sil
-	rm -f $(DB)
+clean:  ## onbellekleri sil (veritabani Docker'da: docker compose down -v)
 	find . -name __pycache__ -type d -prune -exec rm -rf {} +
 	rm -rf .pytest_cache
 
