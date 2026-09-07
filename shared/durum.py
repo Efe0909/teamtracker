@@ -1,7 +1,9 @@
 """Veritabani durumunu SQL'e cevirir, sifirlar, geri yukler — TEST ARACI.
 
-HTTP yuzu shared/test_uclari.py (yalnizca gelistirmede tanimlanir). Mantik
-burada durur ki betikten de cagrilabilsin ve testi HTTP'siz yazilabilsin.
+Komut satiri yuzu tools/durum.py. Bilerek HTTP UCU DEGIL: uc olsaydi kimlik,
+anahtar, CSRF muafiyeti ve yol hapsi gerekirdi — yani "veriyi silen bir kapi"yi
+yayina cikmasin diye surekli beklemek. Betik olarak bu sorularin hepsi dusuyor:
+calistiran zaten veritabanina erisen kisi.
 
 Uc karar:
 
@@ -22,15 +24,21 @@ Uc karar:
 """
 from __future__ import annotations
 
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
 from psycopg import sql
 
-from . import config, db
+from . import db
 
 # Goc defteri durumun parcasi degil: yuklenen dosya semayi degil veriyi tasir.
 KORUNAN = frozenset({"schema_migrations"})
+
+# Dokumlerin varsayilan yeri; EKIPTAKIP_TOHUMLAR ile baska bir dizine alinir
+# (dokumler depo disinda dursun istenebilir). Modul niteligi: testler yamalar.
+TOHUM_DIZINI = Path(os.getenv("EKIPTAKIP_TOHUMLAR")
+                    or Path(__file__).resolve().parents[1] / "tohumlar")
 
 
 # --- sema kesfi -----------------------------------------------------------
@@ -178,9 +186,9 @@ def disa_aktar() -> str:
         satirlar = [
             "-- EkipTakip durum disa aktarimi — "
             f"{datetime.now(timezone.utc).isoformat(timespec='seconds')}",
-            "-- Ureten: shared/durum.py (GET /test/disa-aktar). YALNIZCA VERI:",
-            "-- sema goclerden gelir, bu dosya gocu yapilmis bos bir veritabani bekler.",
-            "-- Geri yukle: POST /test/yukle?yol=<dosya>",
+            "-- Ureten: tools/durum.py disa-aktar. YALNIZCA VERI: sema goclerden",
+            "-- gelir, bu dosya gocu yapilmis (bos olabilir) bir veritabani bekler.",
+            "-- Geri yukle: .venv/bin/python tools/durum.py yukle <dosya>",
             "",
             "begin;",
         ]
@@ -246,45 +254,40 @@ def sifirla() -> list[str]:
 VARSAYILAN = "varsayilan"          # depodaki tohum (shared/seed.py)
 
 
-def guvenli_yol(yol: str) -> Path:
-    """Verilen yolu tohum dizinine hapseder.
+def coz(yol: str) -> Path:
+    """Verilen yolu dosyaya cevirir; ciplak ad verilirse tohum dizinine bakar.
 
-    Bu uc, dosyadaki SQL'i oldugu gibi kosturur; "hangi dosya" sorusu bu yuzden
-    guvenlik sorusudur. Iki kural: uzanti .sql olacak ve COZULMUS yol tohum
-    dizininin altinda kalacak (resolve() sembolik baglari da cozer, yani disari
-    isaret eden bir baglanti buradan gecmez).
+    `yukle yedek` de `yukle tohumlar/yedek.sql` de ayni dosyayi bulsun diye.
     """
-    kok = Path(config.TOHUM_DIZINI).resolve()
-    p = Path(yol)
-    p = (p if p.is_absolute() else kok / p).resolve()
-    if not p.is_relative_to(kok):
-        raise PermissionError(f"tohum dizini disinda: {yol}")
-    if p.suffix != ".sql":
-        raise ValueError("yalnizca .sql dosyasi yuklenir")
-    if not p.is_file():
-        raise FileNotFoundError(str(p))
-    return p
+    aday = [Path(yol)]
+    if len(Path(yol).parts) == 1:                   # ciplak ad: tohumlarda ara
+        aday += [TOHUM_DIZINI / yol, TOHUM_DIZINI / f"{yol}.sql"]
+    for p in aday:
+        if p.is_file():
+            return p
+    raise FileNotFoundError(f"tohum yok: {yol}  (bakilan: "
+                            + ", ".join(str(p) for p in aday) + ")")
 
 
 def yukle(yol: str) -> dict:
-    """Tohum betigini kosturur ve agac indeksini yeniden kurar.
+    """Tohum betigini kosturur.
 
     `yol == "varsayilan"` ise depodaki shared/seed.py calisir — sifirladiktan
     sonra bilinen bir duruma donmenin kisa yolu.
+
+    Agac indeksi BURADA tazelenmez: agac calisan surecin belleginde durur
+    (spec/10-kararlar.md, --workers 1), betigin tazeledigi kendi kopyasi olurdu.
+    Sunucu ayaktayken yukleme yaptiysan onu yeniden baslat.
     """
-    from . import seed, service                     # dairesel import olmasin
+    from . import seed                              # dairesel import olmasin
 
     if yol == VARSAYILAN:
         seed.run()
         kaynak = "shared/seed.py"
     else:
-        dosya = guvenli_yol(yol)
+        dosya = coz(yol)
         db.calistir(dosya.read_text(encoding="utf-8"))
         kaynak = str(dosya)
-
-    # Agac surec bellegindedir (spec/10-kararlar.md): veri degistiyse yeniden
-    # kurulmali, yoksa sayfalar eski dugum kimlikleriyle bos doner.
-    service.rebuild_tree()
     return {"kaynak": kaynak, "sayimlar": sayimlar()}
 
 
@@ -299,16 +302,13 @@ def sayimlar() -> dict[str, int]:
         return out
 
 
-def kaydet(ad: str, icerik: str) -> Path:
-    """Disa aktarimi tohum dizinine yazar.
-
-    Ad'da ayirici olamaz (yalnizca harf/rakam/-/_), dolayisiyla dosya tohum
-    dizininden disari cikamaz — yazma tarafinda yol cozumlemesine gerek yok.
-    """
-    if not ad or not ad.replace("-", "").replace("_", "").isalnum():
-        raise ValueError("ad yalnizca harf, rakam, '-' ve '_' icerebilir")
-    kok = Path(config.TOHUM_DIZINI)
-    kok.mkdir(parents=True, exist_ok=True)
-    hedef = kok / f"{ad}.sql"
+def kaydet(yol: str, icerik: str) -> Path:
+    """Dokumu dosyaya yazar. Ciplak ad verilirse tohumlar/<ad>.sql olur."""
+    hedef = Path(yol)
+    if len(hedef.parts) == 1 and hedef.suffix != ".sql":
+        hedef = TOHUM_DIZINI / f"{hedef.name}.sql"
+    elif len(hedef.parts) == 1:
+        hedef = TOHUM_DIZINI / hedef.name
+    hedef.parent.mkdir(parents=True, exist_ok=True)
     hedef.write_text(icerik, encoding="utf-8")
     return hedef

@@ -281,8 +281,6 @@ Bu maddeler teste bağlanır:
 9. Yanıt başlıklarında CSP, `X-Content-Type-Options`, `Referrer-Policy` bulunur ve
    `script-src` içinde `unsafe-inline` **yoktur**.
 10. Giriş ucuna dakikada 10'dan fazla istek **429** döner.
-11. Durum uçları (§12) anahtarsız istekte **403** döner, yayın kurulumunda **hiç
-    tanımlanmaz**, ve `tohumlar/` dışındaki bir yol (sembolik bağ dahil) **403** alır.
 
 ---
 
@@ -300,76 +298,3 @@ Her adım ayrı commit, her commit sonrası temiz context'li denetim:
 5. **Testler + belge**: kabul kriterlerinin karşılığı, `deploy/` ve README güncellemesi.
 
 Sıra önemli: kimlik olmadan CSRF token'ının tutunacağı oturum yok.
-
----
-
-## 12. Durum uçları (geliştirme aracı)
-
-Test kurulumunu tekrarlanabilir yapmak için üç uç var. **Ürüne çıkmazlar** ve
-arayüze bağlı değildirler — makine uçları, kullananı bir test koşumu ya da elle
-atılan bir `curl`.
-
-| Uç | Ne yapar |
-|---|---|
-| `GET /test/disa-aktar[?ad=<isim>]` | bütün durumu tek `.sql` tohum betiği olarak verir; `ad` verilirse `tohumlar/<ad>.sql`'e de yazar |
-| `POST /test/sifirla` | bütün veriyi siler (şema ve göç defteri durur) |
-| `POST /test/yukle?yol=<dosya>` | verilen tohum betiğini koşturur; `yol=varsayilan` depodaki `shared/seed.py`'yi çalıştırır |
-
-### Neden bu kadar kapı
-
-Bu uçlar veriyi tek POST'la siler; sahte kimlikle **aynı ispat yükü** uygulanır
-(§2.5): "burası yayın değil" diye çıkarım yapmıyoruz, açıkça söylenmesini
-istiyoruz. Üç şart birden:
-
-1. `EKIPTAKIP_ENV=gelistirme` — açıkça geliştirme,
-2. yayın kurulumu **olmayacak** (alan adı tanımlı değil, `EKIPTAKIP_ENV=yayin` değil),
-3. `EKIPTAKIP_TEST_ANAHTARI` en az 24 karakter.
-
-Şartlardan biri eksikse **router hiç eklenmez** (`app.py`): yollar 404'tür, 403
-bile değil — kapalı kapı değil, olmayan kapı. Anahtar yayın kurulumunda tanımlıysa
-süreç **açılmaz** (`config.dogrula`), yani unutulmuş bir değişken sessizce kapı
-bırakmaz.
-
-Her istek `X-Test-Anahtari` başlığını taşır (sabit zamanlı karşılaştırma). Başlık
-seçildi, sorgu parametresi değil: anahtar tarayıcı geçmişine ve erişim
-günlüklerine düşmesin.
-
-### Giriş kapısı ve CSRF muafiyeti — bilinçli
-
-`sifirla` kullanıcıları da siler; oturuma bağlı bir uç sıfırlamadan sonra kendini
-kilitlerdi (boş veritabanında kimlik yok → giriş kapısı 401). Bu yüzden `/test/*`
-her iki kapıdan da muaf, yerini **test anahtarı** alıyor: tarayıcının
-kendiliğinden gönderemediği bir başlık, yani CSRF'in kapattığı vektör burada da
-kapalı. Muafiyet uçlar kapalıyken **yoktur** (`ACIK_ONEK` koşullu).
-
-### Yol kaçışı
-
-`yukle` dosyadaki SQL'i olduğu gibi koşturur, dolayısıyla "hangi dosya" sorusu bir
-güvenlik sorusudur. İki kural: uzantı `.sql` olacak ve **çözülmüş** yol
-`tohumlar/` altında kalacak. `resolve()` sembolik bağları da çözer — tohum
-dizinine konan, dışarı işaret eden bir kısayol da 403 alır.
-
-### Dışa aktarım ne taşır
-
-Yalnızca **veri**. Şemanın kaynağı numaralı göçlerdir (`spec/80-veritabani.md` §4);
-dump'tan şema yazmak ikinci bir doğruluk kaynağı yaratırdı. Yüklenen dosya, göçü
-yapılmış (ama boş olabilir) bir veritabanı bekler.
-
-Tablo sırası sabit listeden değil, `information_schema`'daki yabancı anahtarlardan
-topolojik olarak çıkar; `users.scope_node_id` ↔ `nodes` döngüsü ve
-`nodes.parent_id` öz-referansı sütunu önce NULL yazıp sonda `UPDATE` ile bağlayarak
-çözülür (`seed.py`'nin elle yaptığı şeyin genelleştirilmiş hali). Şema büyüdüğünde
-`shared/durum.py` düzenlenmez.
-
-**Dökümler `git`'e girmez** (`.gitignore: tohumlar/*.sql`): gerçek kart içeriği ve
-kullanıcı e-postaları taşırlar — veritabanı dosyasıyla aynı hassasiyet.
-
-### Kullanım
-
-```bash
-export K="X-Test-Anahtari: $EKIPTAKIP_TEST_ANAHTARI"
-curl -s -H "$K" "localhost:8000/test/disa-aktar?ad=yedek" -o tohumlar/yedek.sql
-curl -s -X POST -H "$K" localhost:8000/test/sifirla
-curl -s -X POST -H "$K" "localhost:8000/test/yukle?yol=yedek.sql"
-curl -s -X POST -H "$K" "localhost:8000/test/yukle?yol=varsayilan"   # depodaki tohum
-```

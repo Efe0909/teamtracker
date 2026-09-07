@@ -118,3 +118,59 @@ Her adım ayrı commit, aralarda temiz context'li denetim.
 5. Göç koşucusu iki kez çalıştırıldığında ikinci sefer hiçbir şey yapmaz (idempotent).
 6. Uygulama superuser olmayan bir rolle çalışır; o rol `drop table` yapamaz.
 7. `pg_dump` ile alınan yedek boş bir veritabanına geri yüklenir ve uygulama açılır.
+
+---
+
+## 10. Durum anlık görüntüleri (test aracı)
+
+Test kurulumunu tekrarlanabilir yapmak için: ekrandaki durumu bir dosyaya al,
+deneyi yap, dosyadan geri dön. Kod `shared/durum.py`, komut satırı yüzü
+`tools/durum.py`.
+
+```bash
+.venv/bin/python tools/durum.py disa-aktar -o yedek   # tohumlar/yedek.sql
+.venv/bin/python tools/durum.py sifirla --evet        # BÜTÜN VERİYİ SİL
+.venv/bin/python tools/durum.py yukle yedek           # geri yükle
+.venv/bin/python tools/durum.py yukle varsayilan      # depodaki shared/seed.py
+.venv/bin/python tools/durum.py sayimlar              # tablo başına satır
+```
+
+### Neden uç değil, betik
+
+İlk tasarım üç HTTP ucuydu (`/test/disa-aktar`, `/test/sifirla`, `/test/yukle`).
+Uç olunca "veriyi tek POST'la silen bir kapı"nın yayına sızmaması için sürekli
+bekçilik gerekiyordu: ortam bayrağı + anahtar, giriş kapısı ve CSRF muafiyeti
+(sıfırlama kullanıcıları da sildiği için oturuma bağlı bir uç kendini kilitliyor),
+üstüne yol kaçışına karşı dizin hapsi. **Betikte bu soruların hepsi düşüyor** —
+çalıştıran zaten veritabanına erişen kişi; yeni bir yetki sınırı açılmıyor.
+Kaybedilen tek şey "uzaktaki kurulumu HTTP ile sıfırlama"ydı; ihtiyaç değildi.
+
+### Dosya ne taşır
+
+Yalnızca **veri**. Şemanın kaynağı numaralı göçlerdir (§4); dump'tan şema yazmak
+ikinci bir doğruluk kaynağı yaratırdı. Yüklenen dosya, göçü yapılmış (ama boş
+olabilir) bir veritabanı bekler — betik açılışta `db.gocler()` koşturur.
+
+Tablo sırası sabit listeden değil `information_schema`'daki yabancı
+anahtarlardan **topolojik** çıkar. İki döngü var ve ikisi de aynı yolla çözülür —
+sütun önce `NULL` yazılır, dosyanın sonunda `UPDATE` ile bağlanır:
+
+| Döngü | Nasıl |
+|---|---|
+| `users.scope_node_id` ↔ `nodes.created_by` | döngüdeki NULL alabilen bir sütun ertelenir |
+| `nodes.parent_id` (öz-referans) | satır sırasına güvenmemek için baştan ertelenir |
+
+Bu, `seed.py`'nin elle yaptığı şeyin genelleştirilmiş hâli: şema büyüdüğünde
+`shared/durum.py` düzenlenmez. Üretilmiş sütun (`items.arama`) `INSERT`'e girmez;
+değer kaçışları psycopg'nin kendi literal uyarlayıcısından geçer, elle tırnak
+kaçışı yazılmaz.
+
+### Dikkat
+
+- **Ağaç indeksi süreç belleğindedir** (`spec/10-kararlar.md`, `--workers 1`).
+  Sunucu ayaktayken yükleme/sıfırlama yaptıysan sunucuyu **yeniden başlat**;
+  yoksa sayfalar eski düğüm kimlikleriyle boş döner.
+- **Dökümler `git`'e girmez** (`.gitignore: tohumlar/*.sql`): gerçek kart içeriği
+  ve kullanıcı e-postaları taşırlar — veritabanı dosyasıyla aynı hassasiyet.
+  Dizin `EKIPTAKIP_TOHUMLAR` ile depo dışına alınabilir.
+- `sifirla` göç defterini (`schema_migrations`) korur: şema durur, veri gider.

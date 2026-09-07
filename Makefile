@@ -8,6 +8,8 @@ VENV    ?= .venv
 BIN     := $(VENV)/bin
 HOST    ?= 127.0.0.1
 PORT    ?= 8000
+AD      ?= yedek                     # durum-yedek: tohumlar/$(AD).sql
+YOL     ?= varsayilan                # durum-yukle: hangi tohum
 COMPOSE := docker compose
 STAMP   := $(VENV)/.deps-ok
 DEPS    := fastapi uvicorn[standard] jinja2 python-multipart pytest httpx \
@@ -15,7 +17,8 @@ DEPS    := fastapi uvicorn[standard] jinja2 python-multipart pytest httpx \
            psycopg[binary,pool]          # PostgreSQL (spec/80-veritabani.md)
 
 .DEFAULT_GOAL := help
-.PHONY: help up setup db-ac db-kapat seed reseed dev run test check clean distclean
+.PHONY: help up setup db-ac db-kapat seed reseed durum-yedek durum-yukle dev run \
+        test check clean distclean
 
 help:  ## bu listeyi goster
 	@echo "EkipTakip — yerel komutlar"
@@ -50,6 +53,14 @@ seed: $(STAMP)  ## veritabanini tohumla (VAROLAN VERI SILINIR)
 	$(BIN)/python -m shared.seed
 
 reseed: seed  ## veritabanini sifirla ve yeniden tohumla
+
+# Durum anlik goruntuleri (spec/80-veritabani.md §10). Sunucu ayaktayken
+# yukleme yaptiysan sunucuyu yeniden baslat: agac indeksi surec belleginde.
+durum-yedek: $(STAMP)  ## durumu tohumlar/$(AD).sql'e yaz (AD=yedek)
+	$(BIN)/python tools/durum.py disa-aktar -o $(AD)
+
+durum-yukle: $(STAMP)  ## tohum betigini yukle (YOL=yedek ya da varsayilan)
+	$(BIN)/python tools/durum.py yukle $(YOL)
 
 # Gelistirmede kimlik SAHTE: Google anahtari olmadan calissin diye. Yayinda bu
 # degisken acilisi reddettirir (spec/70-guvenlik.md §2.5).
