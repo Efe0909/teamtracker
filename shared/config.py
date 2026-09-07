@@ -102,6 +102,31 @@ def sahte_kimlik() -> bool:
     return AUTH_MODE == "sahte" and gelistirmede()
 
 
+# --- durum uclari (test araci, spec/70-guvenlik.md §12) -------------------
+#
+# Veritabani durumunu disa aktaran / sifirlayan / geri yukleyen uclar. Guclu
+# bir araç: acikken veriyi silmek tek POST. Bu yuzden sahte kimlikle AYNI ispat
+# yuku — "burasi yayin degil" diye cikarim yapmiyoruz, "burasi gelistirme"
+# denmesini ve ayrica bir anahtar verilmesini istiyoruz.
+
+TEST_ANAHTARI = os.getenv("EKIPTAKIP_TEST_ANAHTARI", "")
+TEST_ANAHTAR_MIN = 24
+# Disa aktarilan/yuklenen tohumlarin durdugu tek dizin (yol kacisina karsi kok).
+TOHUM_DIZINI = Path(os.getenv("EKIPTAKIP_TOHUM_DIZINI")
+                    or Path(__file__).resolve().parents[1] / "tohumlar")
+
+
+def durum_uclari() -> bool:
+    """/test/* uclari acik mi — uc sart birden.
+
+    Sartlardan biri bile eksikse rota HIC TANIMLANMAZ (app.py): kapali kapi
+    degil, olmayan kapi. Yayin kurulumunda anahtar tanimliysa acilis reddedilir
+    (dogrula), yani "unutulmus degisken" sessizce acik kapi birakmaz.
+    """
+    return (not yayinda() and gelistirmede()
+            and len(TEST_ANAHTARI) >= TEST_ANAHTAR_MIN)
+
+
 def dogrula() -> list[str]:
     """Acilista calisir. Olumcul eksikte SystemExit, digerlerinde uyari dondurur.
 
@@ -138,6 +163,19 @@ def dogrula() -> list[str]:
     if sahte_kimlik():
         uyarilar.append("KIMLIK SAHTE (EKIPTAKIP_AUTH=sahte): giris yok, ilk kullanici "
                         "olarak calisiliyor. Yalnizca gelistirme icin.")
+
+    if TEST_ANAHTARI and yayinda():
+        olumcul.append("EKIPTAKIP_TEST_ANAHTARI yayin kurulumunda tanimli olamaz: "
+                       "durum uclari (/test/*) veritabanini silebilir.")
+    if TEST_ANAHTARI and not gelistirmede():
+        olumcul.append("EKIPTAKIP_TEST_ANAHTARI yalnizca EKIPTAKIP_ENV=gelistirme ile "
+                       "birlikte kabul edilir.")
+    if TEST_ANAHTARI and gelistirmede() and len(TEST_ANAHTARI) < TEST_ANAHTAR_MIN:
+        uyarilar.append(f"EKIPTAKIP_TEST_ANAHTARI {TEST_ANAHTAR_MIN} karakterden kisa: "
+                        "durum uclari KAPALI kaldi.")
+    if durum_uclari():
+        uyarilar.append("DURUM UCLARI ACIK (/test/disa-aktar, /test/sifirla, /test/yukle): "
+                        "anahtari olan veriyi silebilir. Yalnizca gelistirme icin.")
 
     if yayinda() and not COOKIE_DOMAIN:
         uyarilar.append("EKIPTAKIP_COOKIE_DOMAIN yok: iki alan adinda ayri ayri "

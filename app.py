@@ -94,7 +94,11 @@ class GirisKapisi:
     # gibi) sessizce kimliksiz okunabilir olurdu — /{slug} yakalayicisi var.
     ACIK_TAM = frozenset({"/giris", "/giris/callback", "/sw.js", "/favicon.ico",
                           "/manifest.json"})
-    ACIK_ONEK = ("/static/",)
+    # /test/* (gelistirme): durum uclari oturuma bagli OLAMAZ — sifirlama
+    # kullanicilari da siler, oturumlu bir uc kendini kilitlerdi. Yerine test
+    # anahtari geciyor (shared/test_uclari.py). Uclar kapaliyken bu muafiyet
+    # de yok: yollar zaten tanimli degil.
+    ACIK_ONEK = ("/static/",) + (("/test/",) if config.durum_uclari() else ())
 
     def __init__(self, app):
         self.app = app
@@ -193,6 +197,16 @@ if config.sahte_kimlik():
 
 
 app.include_router(kimlik.router)
+
+if config.durum_uclari():
+    # Durum uclari (/test/disa-aktar, /test/sifirla, /test/yukle) — arayuze
+    # BAGLI DEGIL, makine uclari. Yayinda ya da EKIPTAKIP_ENV=gelistirme
+    # degilken bu satir hic kosmaz: yollar 404'tur (spec/70-guvenlik.md §12).
+    from shared import test_uclari
+
+    app.include_router(test_uclari.router)
+    print("[ekiptakip] UYARI: durum uclari acik — /test/* anahtarla veriyi siler",
+          file=sys.stderr)
 
 # Sira onemli: dashboard'un /{slug} iskele rotasi EN SONDA eslesmeli.
 app.include_router(mobil.router)

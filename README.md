@@ -46,7 +46,8 @@ sites/       dashboard/ ve mobil/ — her biri kendi rotaları, şablonları, CS
 spec/        kararlar, şema, ekran çözümlemeleri
 deploy/      cloudflared + nginx + systemd
 tools/       yardımcı betikler: PWA ikonları, davetli listesi yönetimi
-tests/       69 test: kimlik, oturum, CSRF, yetki (403), FTS, iki alan adı, PWA
+tests/       112 test: kimlik, oturum, CSRF, yetki (403), FTS, iki alan adı, PWA
+tohumlar/    durum anlık görüntüleri (.sql) — git'e girmez, bkz. aşağısı
 ```
 
 Ayrıntı ve gerekçeler: **`spec/50-yapi.md`**.
@@ -62,8 +63,27 @@ Ayrıntı ve gerekçeler: **`spec/50-yapi.md`**.
 | Klasör yapısı | `spec/50-yapi.md` |
 | Veritabanı, göçler, arama | `spec/80-veritabani.md` |
 | Kimlik, yetki, tehdit modeli | `spec/70-guvenlik.md` |
+| Durum uçları (export/sıfırla/yükle) | `spec/70-guvenlik.md` §12 |
 | Yayına alma, Google OAuth kurulumu | `deploy/README.md` |
 | Yeni ekran çözümlemesi nasıl yazılır | `spec/README.md` |
+
+## Durum uçları (yalnızca geliştirme)
+
+Test kurulumunu tekrarlanabilir yapmak için üç makine ucu — **arayüze bağlı
+değil, ürüne çıkmaz**. Açılması `EKIPTAKIP_ENV=gelistirme` + en az 24 karakterlik
+`EKIPTAKIP_TEST_ANAHTARI` ister; şart eksikse yollar **hiç tanımlanmaz**, anahtar
+yayın kurulumunda tanımlıysa süreç açılmaz. Gerekçeler: `spec/70-guvenlik.md` §12.
+
+```bash
+export K="X-Test-Anahtari: $EKIPTAKIP_TEST_ANAHTARI"
+curl -s -H "$K" "localhost:8000/test/disa-aktar?ad=yedek"   # durumu .sql olarak ver + kaydet
+curl -s -X POST -H "$K" localhost:8000/test/sifirla          # bütün veriyi sil
+curl -s -X POST -H "$K" "localhost:8000/test/yukle?yol=yedek.sql"     # geri yükle
+curl -s -X POST -H "$K" "localhost:8000/test/yukle?yol=varsayilan"    # depodaki tohum
+```
+
+Dökümler `tohumlar/` altında durur ve **git'e girmez**: gerçek kart içeriği ve
+e-postalar taşırlar. Yükleme bu dizine hapsedilmiştir.
 
 ## Sahte kullanıcılar (Faz 1)
 

@@ -13,6 +13,9 @@ os.environ.setdefault("EKIPTAKIP_SECRET_KEY", "test-" + "y" * 40)
 # Olumcul yapilandirma kontrolleri testte uyariya doner. Bu bayrak YAYINDA
 # yok sayilir (shared/config._test_kosumu) — arka kapi degil.
 os.environ["EKIPTAKIP_TEST_YAPILANDIRMA"] = "1"
+# Durum uclari (/test/*) testte acik olsun. Anahtar yayinda tanimliysa surec
+# zaten acilmaz (config.dogrula), burada gelistirme modundayiz.
+os.environ.setdefault("EKIPTAKIP_TEST_ANAHTARI", "test-anahtari-" + "z" * 16)
 
 
 import re  # noqa: E402

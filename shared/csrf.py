@@ -20,6 +20,8 @@ from urllib.parse import parse_qs
 from fastapi import Request
 from fastapi.responses import JSONResponse, PlainTextResponse
 
+from . import config
+
 ANAHTAR = "csrf"
 BASLIK = "x-csrf-token"
 ALAN = "csrf"
@@ -40,7 +42,10 @@ class CsrfKapisi:
     # Tam eslesme (yalniz /static/ onek) — bkz. GirisKapisi'ndaki ayni gerekce.
     ACIK_TAM = frozenset({"/giris", "/giris/callback", "/sw.js", "/favicon.ico",
                           "/manifest.json"})
-    ACIK_ONEK = ("/static/",)
+    # /test/* (gelistirme): CSRF token'i oturumda durur, durum uclarinin oturumu
+    # yok. Yerini test anahtari basligi aliyor — tarayicinin kendiliginden
+    # gonderemedigi bir baslik, yani CSRF'in kapattigi vektor burada da kapali.
+    ACIK_ONEK = ("/static/",) + (("/test/",) if config.durum_uclari() else ())
 
     def __init__(self, app):
         self.app = app
