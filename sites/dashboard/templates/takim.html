@@ -1,0 +1,51 @@
+{# Takim sayfasi (spec/60-kaynak-uyarlama.md 2.5). Iskelet kayit sayfasiyla ayni:
+   sol ~2/3 is (uyeler, kayitlar, yeni kayit), sag dar sutun duvar. #}
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ team.name }} — EkipTakip</title>
+<link rel="icon" href="/static/icon-192.png">
+<link rel="stylesheet" href="/static/base.css">
+<link rel="stylesheet" href="/static/d/dashboard.css">
+<script src="/static/htmx.min.js"></script>
+</head>
+<body hx-headers='{"X-CSRF-Token": "{{ csrf_token }}"}'>
+{% include "fragments/uyari_mobil.html" %}
+{% with aktif = "ekipler" %}{% include "fragments/rail.html" %}{% endwith %}
+
+<div class="wrapmain" id="main">
+  <div class="crumb" data-fragment="takim_crumb">
+    <a href="/ekipler">← Ekipler</a><span class="sep">|</span>
+    <span class="cur">{{ team.name }}</span>
+    {% if node %}<span>›</span><span>{{ node }}</span>{% endif %}
+    <span class="sp"></span>
+    <a href="/gorevler?takim={{ team.id }}">Bu takımın tüm kayıtları →</a>
+  </div>
+
+  <div class="kbody">
+    <div class="ksol">
+      <div class="chead">
+        <h1 class="ctitle">
+          <span class="tdot" style="background:{{ team.color }};width:12px;height:12px"></span>
+          {{ team.name }}
+          {% if can_post %}<span class="tb h1">üyesiyim</span>{% endif %}
+        </h1>
+        {% if team.description %}<div class="cdesc">{{ team.description }}</div>{% endif %}
+      </div>
+
+      {% include "fragments/takim_uyeler.html" %}
+      {% include "fragments/takim_kayitlar.html" %}
+    </div>
+
+    <div class="ksag">
+      {% include "fragments/card_feed.html" %}
+      {% include "fragments/takim_composer.html" %}
+    </div>
+  </div>
+</div>
+
+<script src="/static/d/dashboard.js"></script>
+</body>
+</html>

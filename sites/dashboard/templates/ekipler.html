@@ -1,0 +1,58 @@
+{# Ekipler — takim listesi (spec/60-kaynak-uyarlama.md 2.5).
+   Kaynakta takim = ad + uye sayisi; bizde tanim, roller, is yuku ve duvar var. #}
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ekipler — EkipTakip</title>
+<link rel="icon" href="/static/icon-192.png">
+<link rel="stylesheet" href="/static/base.css">
+<link rel="stylesheet" href="/static/d/dashboard.css">
+<script src="/static/htmx.min.js"></script>
+</head>
+<body hx-headers='{"X-CSRF-Token": "{{ csrf_token }}"}'>
+{% include "fragments/uyari_mobil.html" %}
+{% with aktif = "ekipler" %}{% include "fragments/rail.html" %}{% endwith %}
+
+<div class="tmain" id="main">
+  <div class="thead row">
+    <h1>Ekipler</h1>
+    <div style="flex:1"></div>
+    <span class="small muted">Takım ve üyelik yönetimi 🛡 Yönetim Paneli'ne ait (🚧)</span>
+  </div>
+
+  <div class="tkgrid">
+    {% for t in takimlar %}
+    <a class="tkcard{% if t.uyeyim %} benim{% endif %}" href="/ekipler/{{ t.id }}">
+      <div class="tkhead">
+        <span class="tdot" style="background:{{ t.color }}"></span>
+        <span class="tknm">{{ t.name }}</span>
+        {% if t.uyeyim %}<span class="tb h1">üyesiyim</span>{% endif %}
+      </div>
+      {% if t.description %}<div class="tkds">{{ t.description }}</div>{% endif %}
+
+      <div class="stack" title="{{ t.uyeler | map(attribute='name') | join(', ') }}">
+        {% for u in t.uyeler[:6] %}
+        <span class="av" style="background:{{ u.color }}">{{ u.name[0] }}</span>
+        {% endfor %}
+        {% if t.uyeler | length > 6 %}<span class="av" style="background:var(--dim)">
+          +{{ t.uyeler | length - 6 }}</span>{% endif %}
+      </div>
+
+      <div class="tkft">
+        <span>{{ t.uye }} üye</span><span>·</span>
+        <span{% if t.acik %} class="v-acik"{% endif %}>{{ t.acik }} açık kayıt</span>
+        {% if t.acik_eylem %}<span>·</span><span class="chip c-eyl">⚡{{ t.acik_eylem }}</span>{% endif %}
+        <span class="go">→</span>
+      </div>
+    </a>
+    {% else %}
+    <div class="empty">Takım yok — Yönetim Paneli gelene kadar takımlar tohumla açılır.</div>
+    {% endfor %}
+  </div>
+</div>
+
+<script src="/static/d/dashboard.js"></script>
+</body>
+</html>

@@ -61,7 +61,7 @@
       <div class="ft">
         <span class="tag {{ 't-ready' if m.ready else 't-soon' }}">
           {{ 'Hazır' if m.ready else 'Yakında' }}</span>
-        {% if m.ready and m.count is not none %}<span>{{ m.count }} kayıt</span>{% endif %}
+        {% if m.ready and m.count is not none %}<span>{{ m.count }} {{ m.birim }}</span>{% endif %}
         <span class="go">→</span>
       </div>
     </a>

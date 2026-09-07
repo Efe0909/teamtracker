@@ -148,6 +148,30 @@
           color:var(--dim);margin:9px 2px 5px}
   .crumb .sep{color:var(--line)}
 
+  /* ============ 4. EKİPLER (spec/60-kaynak-uyarlama.md 2.5) ============ */
+  /* Liste: modül grid'iyle aynı ritim; takım kartı = tanım + üyeler + iş yükü. */
+  .tkgrid{display:grid;gap:13px;grid-template-columns:repeat(auto-fill,minmax(268px,1fr))}
+  .tkcard{display:flex;flex-direction:column;gap:9px;background:var(--panel);
+          border:1px solid var(--line);border-radius:15px;padding:15px 16px;
+          text-decoration:none;color:inherit;box-shadow:var(--sh);transition:.14s;min-height:150px}
+  .tkcard:hover{border-color:var(--acc-s);box-shadow:var(--sh-lg);transform:translateY(-2px)}
+  .tkcard.benim{background:var(--panel2)}
+  .tkhead{display:flex;align-items:center;gap:7px}
+  .tkcard .tdot{width:10px;height:10px;margin:0}
+  .tknm{font-size:14.5px;font-weight:700;letter-spacing:-.2px}
+  .tkds{font-size:12.5px;color:var(--dim);line-height:1.45;flex:1}
+  .tkft{display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--dim)}
+  .tkft .go{margin-left:auto;color:var(--acc);font-weight:700}
+
+  /* Takım sayfası: üye satırları ve kayıt bloğu, eylem şeridiyle aynı dil. */
+  .uyeler,.tkayit{padding:9px 18px;border-top:1px solid var(--line);background:var(--panel)}
+  .urow{display:flex;align-items:center;gap:9px;padding:6px 8px;border:1px solid var(--line);
+        border-radius:9px;margin-bottom:5px;background:var(--panel2)}
+  .urow .un{font-size:13px;font-weight:600}
+  .tkayit .gtable{margin-bottom:7px}
+  /* dar sütunda tarih satır atlamasın (sağda duvar var, alan kısıtlı) */
+  .tkayit .gtable th:last-child,.tkayit .gtable td:last-child{white-space:nowrap}
+
   /* ---- kayıt sayfası: sol ~2/3 içerik, sağ dar sohbet (spec/60 2.4) ---- */
   .kbody{display:flex;flex:1;min-height:0}
   .ksol{flex:2;min-width:0;overflow:auto;display:flex;flex-direction:column;

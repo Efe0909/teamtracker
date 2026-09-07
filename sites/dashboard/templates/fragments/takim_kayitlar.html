@@ -1,0 +1,57 @@
+{# fragment: takim_kayitlar — takimin acik kayitlari + "bu takima kayit ac".
+   Ikinci bir tablo ekrani DEGIL: tamami gorev tablosunda, ayni suzgecle
+   (/gorevler?takim=...). Burada oncelik sirasinda ilk 20 satir durur. #}
+<div class="tkayit" data-fragment="takim_kayitlar">
+  <div class="ahead">📋 Açık kayıtlar
+    <span class="tb h0">{{ acik }}</span>
+    {% if rows | length < acik %}<span class="small muted" style="font-weight:400">
+      — ilk {{ rows | length }}, tamamı tabloda</span>
+    {% else %}<span class="small muted" style="font-weight:400">
+      — kayıt takıma tanımlanır, eylem kişiye atanır</span>{% endif %}
+  </div>
+
+  <table class="gtable">
+    <thead><tr>
+      <th style="width:46%">Kayıt</th><th>Düğüm</th><th>Öncelik</th>
+      <th>Durum</th><th>Sorumlu</th><th>Son tarih</th>
+    </tr></thead>
+    <tbody>
+    {% for r in rows %}
+      <tr>
+        <td>
+          <span class="chip {% if r.kind == 'hata' %}c-bug{% else %}c-task{% endif %}">
+            {{ 'Hata' if r.kind == 'hata' else 'Görev' }}</span>
+          <a class="tlink" href="/gorevler/{{ r.id }}">{{ r.title }}</a>
+          {% if r.acik_eylem %}<span class="chip c-eyl" title="açık eylem">⚡{{ r.acik_eylem }}</span>{% endif %}
+        </td>
+        <td class="dim">{{ r.path }}</td>
+        <td><span class="v-{{ r.priority }}">{{ priorities[r.priority] }}</span></td>
+        <td><span class="v-{{ r.status }}">{{ statuses[r.status] }}</span></td>
+        <td>{% if r.assignee %}<span class="av" style="background:{{ r.assignee.color }}">
+            {{ r.assignee.name[0] }}</span> {{ r.assignee.name }}{% else %}<span class="dim">—</span>{% endif %}</td>
+        <td>{% if r.due %}<span {% if r.overdue %}class="gec"{% endif %}>{{ r.due }}</span>
+            {% else %}<span class="dim">—</span>{% endif %}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="6"><div class="empty">Bu takımda açık kayıt yok.</div></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+
+  {# "Bu takima kayit ac": takim onceden secili, gerisi normal kayit acma yolu.
+     Dal secimi ve kapsam kontrolu ayni yerde (service.new_item). #}
+  <form class="aform" method="post" action="/item">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <input type="hidden" name="team_id" value="{{ team.id }}">
+    <input name="title" placeholder="Bu takıma kayıt aç…" required style="flex:1;min-width:170px">
+    <select name="node_id" style="width:auto">
+      {% for n in nodes %}
+      <option value="{{ n.id }}">{{ '— ' * n.depth }}{{ n.name }}</option>
+      {% endfor %}
+    </select>
+    <select name="kind" style="width:auto">
+      <option value="hata">Hata</option><option value="gorev">Görev</option>
+    </select>
+    <button class="primary">Aç</button>
+  </form>
+</div>

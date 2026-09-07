@@ -27,7 +27,7 @@ Kaynak sistemden uyarlanacak ekranlar. Sıra, `app.py` içindeki `MODULES` kayd�
 | — | Görev Yöneticisi | `gorevler` | var (git'te değil) | `referans/layout-a.html`, `60` 2.2 | — | **yazıldı** — v2 düzeni `60` 2.2 |
 | 30 | Mobil site (cep) | `app.<alan>` | var (git'te değil) | `spec/30-mobil.md` | — | **yazıldı** |
 | 60 | Kart eylem şeridi | (`gorevler` kartı) | var (git'te değil) | `60-kaynak-uyarlama.md` 2.4 | — | **yazıldı** — sıradaki iş |
-| 60 | Ekipler | `ekipler` | var (git'te değil) | `60-kaynak-uyarlama.md` 2.5 | — | **yazıldı** |
+| 60 | Ekipler | `ekipler` | var (git'te değil) | `60-kaynak-uyarlama.md` 2.5 | — | **yazıldı** — liste + takım sayfası + duvar |
 | | Kazanım Ağacı | `kazanim-agaci` | var (git'te değil) | `60-kaynak-uyarlama.md` 2.6 | | bekliyor |
 | | Pivot & Veri Analizi | `pivot` | var (git'te değil) | `60-kaynak-uyarlama.md` 2.3 | | bekliyor |
 | | Takvim | `takvim` | | | | bekliyor |
@@ -44,6 +44,8 @@ Kaynak sistemden uyarlanacak ekranlar. Sıra, `app.py` içindeki `MODULES` kayd�
 ```
 dashboard.<alan>/            ana sayfa (modül seçimi)
 ├─ /gorevler                 tablo + kart + sohbet
+├─ /ekipler                  takım listesi
+│  └─ /ekipler/{id}          üyeler + roller + açık kayıtlar + takım duvarı
 └─ /{modül}                  iskele sayfa (kazanım ağacı, pivot, takvim, …)
 
 app.<alan>/                  yapılacaklar   ← ana ekrana eklenen uygulama

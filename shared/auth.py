@@ -56,6 +56,20 @@ def team_ids(user_id: str) -> set[str]:
         "select team_id from team_members where user_id = %s", (db.uid(user_id),))}
 
 
+def can_post_team(user, team_id) -> bool:
+    """Takim duvarina YAZMA: uyeler ve admin.
+
+    Okuma herkese acik — kim ne konusuyor ekip icinde saydam kalsin; yazan
+    takimin uyesi olsun (spec/20-sema.md §2a). Kart yetkisiyle karistirma:
+    duvar kartin degil takimin akisi, kapsam (scope_node_id) buraya karismaz.
+    """
+    if user is None:
+        return False
+    if db.as_bool(user["is_admin"]):
+        return True
+    return db.uid(team_id) in team_ids(user["id"])
+
+
 def can_edit_item(user, item, tree: TreeIndex) -> bool:
     """Kart yetkisinin yollari: admin, atanan/açan, karta dahil, kartin takiminin
     uyesi (spec/20-sema.md §2a), ya da dugum kapsam alt agacinda."""
