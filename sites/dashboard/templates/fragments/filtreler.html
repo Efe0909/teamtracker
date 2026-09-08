@@ -1,8 +1,10 @@
 {# fragment: filtreler — hizli cipler + boyut filtreleri (spec/60-kaynak-uyarlama.md 2.2).
    Genel dongu: shared/filters.py'ye yeni Filtre eklemek bu sablonu DEGISTIRMEZ.
    Form GET /gorevler'e gider; sunucu htmx istegine yalnizca #sonuc parcasini doner. #}
+{# Filtreler adres cubuguna YANSIMAZ (hx-push-url yok): dropdown cevirmek
+   gezinme degil, gecmise kayit birakmamali. Arama kutusu istisna — asagida. #}
 <form class="fbar" data-fragment="filtreler" hx-get="/gorevler" hx-target="#sonuc"
-      hx-swap="outerHTML" hx-push-url="true" hx-trigger="change, submit">
+      hx-swap="outerHTML" hx-trigger="change, submit">
 
   <div class="qbar">
     {% for k, et in hizli %}
@@ -34,7 +36,10 @@
       <label class="ff"><span>{{ f.label }}</span>
         <input type="search" name="{{ f.param }}" value="{{ secili.get(f.param, '') }}"
                placeholder="kelime…" hx-trigger="input changed delay:400ms" hx-get="/gorevler"
-               hx-target="#sonuc" hx-swap="outerHTML" hx-push-url="true" hx-include="closest form">
+               hx-target="#sonuc" hx-swap="outerHTML" hx-include="closest form"
+               {# Arama URL'de gorunur (paylasilabilir, yenilemede kalir) ama push
+                  DEGIL replace: her tus duraklamasi ayri bir geri adimi olmasin. #}
+               hx-replace-url="true">
       </label>
       {% endif %}
     {% endfor %}
