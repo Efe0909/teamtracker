@@ -6,9 +6,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>EkipTakip</title>
 <link rel="icon" href="/static/icon-192.png">
-<link rel="stylesheet" href="/static/base.css">
-<link rel="stylesheet" href="/static/d/dashboard.css">
-<link rel="stylesheet" href="/static/d/home.css">
+<link rel="stylesheet" href="{{ statik('/static/base.css') }}">
+<link rel="stylesheet" href="{{ statik('/static/d/dashboard.css') }}">
+<link rel="stylesheet" href="{{ statik('/static/d/home.css') }}">
 </head>
 <body class="home" hx-headers='{"X-CSRF-Token": "{{ csrf_token }}"}'>
 {% include "fragments/uyari_mobil.html" %}
