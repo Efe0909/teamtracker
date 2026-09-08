@@ -39,7 +39,10 @@ self.addEventListener("fetch", (e) => {
 /* --- Faz 3: web push -------------------------------------------------- */
 
 self.addEventListener("push", (e) => {
-  let d = { title: "EkipTakip", body: "Yeni bir hareket var.", url: "/m/bildirimler" };
+  /* Yedek adres KOK: alt alan adinda mobil yuz zaten kokte, '/m' gomulmez
+     (KNOW-49). Sunucu gercek adresi yukte gonderiyor; bu yalnizca o
+     eksikse devreye girer. */
+  let d = { title: "EkipTakip", body: "Yeni bir hareket var.", url: "/" };
   try { d = Object.assign(d, e.data ? e.data.json() : {}); } catch (_) { /* duz metin */ }
   e.waitUntil(self.registration.showNotification(d.title, {
     body: d.body, icon: "/static/icon-192.png", badge: "/static/icon-192.png",

@@ -267,3 +267,43 @@ def test_deneme_ucu_push_kapaliyken_503(deneme_istemcisi, monkeypatch):
     monkeypatch.setattr(config, "VAPID_PRIVATE", "")
     monkeypatch.setattr(config, "VAPID_PUBLIC", "")
     assert deneme_istemcisi.post("/test/bildirim", json={}).status_code == 503
+
+
+# --- bildirim adresi ------------------------------------------------------
+
+
+def test_bildirim_adresi_alt_alan_adinda_m_ICERMEZ(client, monkeypatch):
+    """Alt alan adinda mobil yuz KOKTE (MobileHostPrefix). '/m' gomulurse
+    adres cubuguna sizar ve onek kaldirildigi gun bildirim 404'e goturur."""
+    monkeypatch.setattr(config, "HOST_APP", "app.ornek.com")
+    client.post("/abone", json=abonelik())
+
+    yukler = []
+    monkeypatch.setattr("pywebpush.webpush", lambda **kw: yukler.append(kw["data"]))
+    push.gonder([kullanici()["id"]], "B", "G")
+
+    import json as _json
+    assert _json.loads(yukler[0])["url"] == "/"
+
+
+def test_bildirim_adresi_tek_alan_adi_modunda_m_ICERIR(client, monkeypatch):
+    """Alan adi yokken mobil yuz /m altinda; adres oraya gitmeli."""
+    monkeypatch.setattr(config, "HOST_APP", "")
+    client.post("/abone", json=abonelik())
+
+    yukler = []
+    monkeypatch.setattr("pywebpush.webpush", lambda **kw: yukler.append(kw["data"]))
+    push.gonder([kullanici()["id"]], "B", "G")
+
+    import json as _json
+    assert _json.loads(yukler[0])["url"] == "/m"
+
+
+def test_verilen_adres_ezilmez(client, monkeypatch):
+    client.post("/abone", json=abonelik())
+    yukler = []
+    monkeypatch.setattr("pywebpush.webpush", lambda **kw: yukler.append(kw["data"]))
+    push.gonder([kullanici()["id"]], "B", "G", url="/kayit/123")
+
+    import json as _json
+    assert _json.loads(yukler[0])["url"] == "/kayit/123"

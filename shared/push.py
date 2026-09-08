@@ -74,7 +74,7 @@ def abonelikler(user_ids) -> list[dict]:
 # --- gonderim ------------------------------------------------------------
 
 
-def gonder(user_ids, baslik: str, govde: str, url: str = "/m",
+def gonder(user_ids, baslik: str, govde: str, url: str | None = None,
            tag: str | None = None) -> dict:
     """Verilen kullanicilarin TUM cihazlarina bildirim yollar.
 
@@ -86,6 +86,12 @@ def gonder(user_ids, baslik: str, govde: str, url: str = "/m",
     """
     if not acik():
         return {"gonderildi": 0, "silinen": 0, "hata": 0}
+
+    # '/m' SABIT YAZILMAZ: alt alan adinda mobil yuz kokte duruyor
+    # (config.mobil_yol, KNOW-49). Gomulseydi adres cubuguna sizar ve onek
+    # kaldirildigi gun bildirimler 404'e goturuyor olurdu.
+    if url is None:
+        url = config.mobil_yol("/")
 
     from pywebpush import WebPushException, webpush   # ic import: push kapaliyken
 

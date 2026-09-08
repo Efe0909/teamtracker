@@ -261,7 +261,7 @@ if config.PUSH_TEST:
         sonuc = push.gonder(hedefler,
                             g.get("baslik") or "EkipTakip",
                             g.get("govde") or "Deneme bildirimi",
-                            g.get("url") or "/m",
+                            g.get("url") or config.mobil_yol("/"),
                             g.get("tag"))
         return JSONResponse({"hedef": len(hedefler), **sonuc})
 

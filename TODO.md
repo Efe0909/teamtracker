@@ -150,6 +150,28 @@ Geçişte en güvenli yol: bayrakları kapsamlara çeviren tek yönlü bir göç
 
 ---
 
+## Kural: mobil arayüz `/m` değil, alt alan adı
+
+Mobil yüz **`app.<alan>` alt alan adında, kökte** duruyor —
+`MobileHostPrefix` gelen `/ara` isteğini iç yolda `/m/ara`'ya çeviriyor ama
+adres çubuğunda `/m` görünmüyor. `/m` yalnızca **tek alan adı modunun**
+(alan adı değişkenleri tanımsızken) yedeği.
+
+Bu yüzden:
+
+- Bildirim adresi, e-posta bağlantısı, paylaşılan URL — hiçbirine `/m`
+  **gömme**. `config.mobil_yol()` kullan (istek gerektirmez, yapılandırmadan
+  modu bilir); şablonlarda `config.mp(request)` zaten var.
+- Yeni bir mobil rota eklerken yolu `/m/...` diye yazmak doğru (iç yol öyle),
+  ama kullanıcıya **gösterilen** adres asla `/m` içermemeli.
+- Önek ileride tamamen kaldırılabilir; sabit yazılmış her `/m` o gün 404 olur.
+
+Bir kez ısırdı: push bildiriminin varsayılan hedefi `/m` yazılmıştı, alt alan
+adında adres çubuğuna sızıyordu. `shared/push.py` artık `mobil_yol()`
+kullanıyor, iki mod da testle sabitlendi.
+
+---
+
 ## Notlar
 
 - Yeni bağımlılık `requirements.txt`'e girer (tek kaynak; Makefile ve Dockerfile

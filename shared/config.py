@@ -183,6 +183,22 @@ def mp(request) -> str:
     return "" if is_app_host(request) else "/m"
 
 
+def mobil_yol(yol: str = "/") -> str:
+    """Mobil yuzun yolu — ISTEK OLMADAN (push gonderimi, arka plan isleri).
+
+    mp() istekteki Host'a bakar; buranin oyle bir lüksü yok. Ama mod
+    yapilandirmadan da bilinir: HOST_APP tanimliysa mobil yuz o alan adinda
+    KOKTE duruyor, '/m' oneki YOK (MobileHostPrefix, KNOW-49).
+
+    Bildirim adresine '/m' gomme: alt alan adinda adres cubuguna sizar ve
+    onek kaldirildigi gun 404 olur.
+    """
+    yol = yol if yol.startswith("/") else "/" + yol
+    if HOST_APP:
+        return yol
+    return "/m" if yol == "/" else "/m" + yol
+
+
 def site_adresi(request, app_site: bool) -> str:
     """Diger yuzun adresi — YAZMAK icin, baglanti kurmak icin degil.
 
