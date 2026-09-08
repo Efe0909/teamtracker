@@ -52,6 +52,17 @@ def rebuild_tree() -> TreeIndex:
 # --workers 1 varsayimiyla dogru; ikinci bir isci kendi bayat agaciyla kalir.
 
 
+def _dugum_olayi(node_id, author_id, metin: str) -> None:
+    """Agac gecmisi events'e yazilir — AYRI TABLO YOK.
+
+    003'te takim duvari icin ayni sey yapilmisti: subject_type'a yeni bir
+    deger eklenir, tablo ve indeks paylasilir. Boylece "ne oldu" sorusunun
+    tek kaynagi kalir ve mevcut akis bileseni dugum gecmisini de cizebilir.
+    """
+    log(node_id, "sistem", db.uid(author_id) if author_id else None, metin,
+        subject_type="node")
+
+
 def dugum_ekle(ad: str, node_type: str, parent_id=None, aciklama: str | None = None,
                created_by=None) -> dict | None:
     """Yeni dugum. parent_id None ise kok."""
@@ -74,11 +85,12 @@ def dugum_ekle(ad: str, node_type: str, parent_id=None, aciklama: str | None = N
         (db.new_id(), ust, ad, node_type, sira, (aciklama or "").strip() or None,
          db.uid(created_by) if created_by else None, db.now()))
     rebuild_tree()
+    _dugum_olayi(satir["id"], created_by, f"{ad} eklendi ({node_type})")
     return satir
 
 
 def dugum_guncelle(node_id, ad: str | None = None, node_type: str | None = None,
-                   aciklama: str | None = None) -> bool:
+                   aciklama: str | None = None, degistiren=None) -> bool:
     """Ad / tur / aciklama. Verilmeyen alan DEGISMEZ (None = dokunma)."""
     kimlik = db.uid(node_id)
     if kimlik is None or kimlik not in TREE.nodes:
@@ -99,12 +111,17 @@ def dugum_guncelle(node_id, ad: str | None = None, node_type: str | None = None,
     if not alanlar:
         return False
 
+    onceki_ad = TREE.name(kimlik)
     db.x(f"update nodes set {', '.join(alanlar)} where id = %s", (*degerler, kimlik))
     rebuild_tree()                        # ad degistiyse agactaki etiket de degisti
+    yeni_ad = TREE.name(kimlik)
+    _dugum_olayi(kimlik, degistiren,
+                 f"{onceki_ad} -> {yeni_ad} olarak adlandirildi" if onceki_ad != yeni_ad
+                 else f"{yeni_ad} guncellendi")
     return True
 
 
-def dugum_tasi(node_id, yeni_ust_id) -> bool:
+def dugum_tasi(node_id, yeni_ust_id, tasiyan=None) -> bool:
     """Dugumu baska bir ustun altina alir. yeni_ust_id None ise koke cikarir."""
     kimlik = db.uid(node_id)
     if kimlik is None or kimlik not in TREE.nodes:
@@ -119,12 +136,15 @@ def dugum_tasi(node_id, yeni_ust_id) -> bool:
         if TREE.is_descendant(ust, kimlik):
             return False
 
+    ad = TREE.name(kimlik)
+    nereye = TREE.name(ust) if ust else "köke"
     db.x("update nodes set parent_id = %s where id = %s", (ust, kimlik))
     rebuild_tree()
+    _dugum_olayi(kimlik, tasiyan, f"{ad} {nereye} taşındı")
     return True
 
 
-def dugum_sil(node_id) -> bool:
+def dugum_sil(node_id, silen=None) -> bool:
     """Dugumu ve ALT AGACINI siler (nodes.parent_id on delete cascade).
 
     Kayitlar da gider: items.node_id -> nodes on delete cascade. Bu yuzden
@@ -133,8 +153,14 @@ def dugum_sil(node_id) -> bool:
     kimlik = db.uid(node_id)
     if kimlik is None or kimlik not in TREE.nodes:
         return False
+    # Ad SILMEDEN ONCE okunur: satir gidince gecmis "bir sey silindi" demekten
+    # oteye gitmezdi (events.subject_id FK degil, satir kaliyor ama ad kalmiyor).
+    ad = TREE.name(kimlik)
+    alt_sayi = len(TREE.subtree(kimlik)) - 1
     db.x("delete from nodes where id = %s", (kimlik,))
     rebuild_tree()
+    _dugum_olayi(kimlik, silen,
+                 f"{ad} silindi" + (f" (+{alt_sayi} alt düğüm)" if alt_sayi else ""))
     return True
 
 
