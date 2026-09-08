@@ -1,0 +1,15 @@
+# Bagimliliklarin TEK kaynagi. Hem Makefile ($(DEPS)) hem Dockerfile burayi
+# okur — iki ayri liste tutulursa biri sessizce eskir.
+#
+# Surumler sabitlenmedi: gelistirme akisi bugun boyle. Yayinda tekrarlanabilir
+# imaj isteniyorsa burayi `uv pip compile` ciktisiyla degistir.
+
+fastapi
+uvicorn[standard]
+jinja2
+python-multipart
+httpx
+authlib
+itsdangerous
+python-dotenv
+psycopg[binary,pool]         # PostgreSQL (spec/80-veritabani.md)

@@ -1,0 +1,93 @@
+# EkipTakip — yayin yigini (uygulama + PostgreSQL).
+#
+# Gelistirmedeki docker-compose.yml YALNIZCA Postgres kaldirir; bu dosya
+# uygulamayi da konteynere alir ve makinede kurulu bir Postgres beklemez.
+#
+#   cp .env.ornek .env        ve degerleri doldur (POSTGRES_PASSWORD sart)
+#   docker compose -f docker-compose.prod.yml up -d --build
+#   docker compose -f docker-compose.prod.yml logs -f app
+#
+# Sirlar baska bir dosyadaysa (ornegin agenix: /run/agenix/ekiptakip-env)
+# IKISI BIRDEN gerekir — deploy/DOCKER.md "agenix" bolumu:
+#
+#   docker compose --env-file /run/agenix/ekiptakip-env \
+#     -f docker-compose.prod.yml up -d
+#
+# ...ve EKIPTAKIP_ENV_FILE ayni yolu gostermeli. Sebebi: `--env-file` yalnizca
+# bu dosyadaki ${...} yerine koymalari besler, `env_file:` ise yalnizca
+# konteynerin ortamini doldurur. Ikisi AYRI mekanizma; biri eksikse ya parola
+# bos kalir ya uygulama sirsiz acilir.
+#
+# Kapi disarida: uygulama YALNIZCA 127.0.0.1'e baglanir, onunde makinedeki
+# nginx durur (deploy/nginx-ekiptakip-docker.conf). Uygulamanin kendi kimlik
+# dogrulamasi yok — o katman kaldirilmadan hicbir arayuz disari acilmamali
+# (CLAUDE.md "Kapi").
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: ekiptakip-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ekiptakip}
+      # Varsayilan YOK: parola verilmeden yigin acilmasin. Gelistirmedeki
+      # "ekiptakip/ekiptakip" bir sunucuya kazara tasinmasin diye.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD .env icinde tanimli olmali}
+      POSTGRES_DB: ${POSTGRES_DB:-ekiptakip}
+      LANG: tr_TR.utf8
+    volumes:
+      - ekiptakip-pgdata-yayin:/var/lib/postgresql/data
+    # Port YAYINLANMIYOR: veritabanina yalnizca compose agindan erisilir.
+    # Disaridan psql gerekiyorsa: docker compose -f ... exec db psql -U ekiptakip
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ekiptakip} -d ${POSTGRES_DB:-ekiptakip}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  app:
+    build: .
+    image: ekiptakip:latest
+    container_name: ekiptakip-app
+    restart: unless-stopped
+    # Sirlar (GOOGLE_CLIENT_*, EKIPTAKIP_SECRET_KEY, alan adlari) buradan gelir.
+    # agenix/sops kullaniyorsan EKIPTAKIP_ENV_FILE ile cozulmus dosyayi goster.
+    env_file: ${EKIPTAKIP_ENV_FILE:-.env}
+    environment:
+      # Konteynerler arasinda ana makine adi servis adidir: 127.0.0.1 DEGIL.
+      # .env'deki DATABASE_URL'i kasten EZER — oradaki degeri elle 'db' yapmak
+      # unutuluyor ve hata "connection refused" olarak geliyor.
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ekiptakip}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-ekiptakip}
+    depends_on:
+      db:
+        condition: service_healthy
+    # Yalnizca yerel arayuz: nginx ayni makinede, disari kendi acmaz.
+    ports:
+      - "127.0.0.1:${APP_PORT:-8001}:8000"
+
+  # Tohum veri — TALEP UZERINE. Profilde duruyor ki `up -d` onu calistirmasin.
+  #
+  #   docker compose -f docker-compose.prod.yml --profile tohum run --rm seed
+  #
+  # DIKKAT: users dahil dokuz tabloyu truncate eder. Yayindaki veriyi siler.
+  seed:
+    image: ekiptakip:latest
+    profiles: ["tohum"]
+    env_file: ${EKIPTAKIP_ENV_FILE:-.env}
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ekiptakip}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-ekiptakip}
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["python", "-m", "shared.seed"]
+
+volumes:
+  # Gelistirmedeki docker-compose.yml'den AYRI isim. Ayni isim verilirse iki
+  # yigin ayni veriyi paylasir ve POSTGRES_PASSWORD sessizce yok sayilir:
+  # parola yalnizca volume BOSKEN, ilk kurulumda islenir. Belirtisi sasirtici —
+  # "password authentication failed for user ekiptakip" — cunku veritabani
+  # eski parolayla kurulmustur.
+  #
+  # Parolayi degistirmek: `docker compose -f docker-compose.prod.yml down -v`
+  # (VERI GIDER) ya da `alter user ekiptakip with password '...'` ile elle.
+  ekiptakip-pgdata-yayin:
