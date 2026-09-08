@@ -71,7 +71,7 @@ test: $(STAMP)  ## testleri kosur (pytest)
 	$(BIN)/python -m pytest tests -q
 
 check: $(STAMP)  ## uclar ayakta mi — sunucu calisirken baska terminalde
-	@for u in / /gorevler /kazanim-agaci /pivot /takvim /tanimlar /arsiv /dosyalar /admin /whoami; do \
+	@for u in / /gorevler /ekipler /kazanim-agaci /pivot /takvim /tanimlar /arsiv /dosyalar /admin /whoami; do \
 	  printf "%s %s\n" "$$(curl -s -o /dev/null -w '%{http_code}' http://$(HOST):$(PORT)$$u)" "$$u"; \
 	done
 

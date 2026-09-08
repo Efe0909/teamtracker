@@ -33,6 +33,8 @@ TEAM_MEMBERS = [
     ("tasarim",   "efe",   "lider"),
     ("tasarim",   "selin", "mentor"),
     ("maliye",    "selin", "lider"),
+    ("maliye",    "efe",   "uye"),      # fiyat kilidi eylemi Efe'de: uye + acik eylem
+
     ("satinalim", "deniz", "uye"),
     ("satinalim", "efe",   "uye"),
 ]
@@ -129,6 +131,22 @@ EVENTS = [
 ]
 
 
+TEAM_EVENTS = [
+    # Takim duvari: events.subject_type='team' (spec/20-sema.md §2a, göç 003).
+    # (takim, tur, yazan, govde, zaman)
+    ("maliye", "mesaj", "selin",
+     "Bu hafta önceliğimiz bütçe onayı; vekalet çıkmazsa cuma eskale ediyoruz.",
+     ago(days=2)),
+    ("maliye", "mesaj", "efe", "Fiyat kilidi için tedarikçiyle konuştum, bir hafta daha var.",
+     ago(days=1, hours=4)),
+    ("satinalim", "mesaj", "efe",
+     "Alternatif kargo tekliflerini bugün topluyorum, akşam buraya bırakırım.",
+     ago(hours=6)),
+    ("tasarim", "mesaj", "selin", "Afiş taslakları hazır; ölçüler için Efe'den dönüş bekliyorum.",
+     ago(days=3)),
+]
+
+
 def run() -> None:
     """Semayi kurar (goc) ve tablolari SIFIRDAN doldurur.
 
@@ -193,6 +211,12 @@ def run() -> None:
             " values (%s,'item',%s,%s,%s,%s,%s)",
             (db.new_id(), iid[item_key], etype, uid[author] if author else None, body, created))
 
+    for team_key, etype, author, body, created in TEAM_EVENTS:
+        db.x(
+            "insert into events (id,subject_type,subject_id,event_type,author_id,body,created_at)"
+            " values (%s,'team',%s,%s,%s,%s,%s)",
+            (db.new_id(), tid[team_key], etype, uid[author], body, created))
+
     for item_key, title, assignee, status, due, creator, created in ACTIONS:
         biten = status in ("kapandi", "iptal")
         db.x("insert into actions (id,item_id,title,assignee_id,status,due_date,"
@@ -202,7 +226,8 @@ def run() -> None:
              created if biten else None, created))
 
     print(f"tohumlandi: {len(USERS)} kullanici, {len(TEAMS)} takim, {len(NODES)} dugum, "
-          f"{len(ITEMS)} kayit, {len(ACTIONS)} eylem, {len(EVENTS)} olay")
+          f"{len(ITEMS)} kayit, {len(ACTIONS)} eylem, "
+          f"{len(EVENTS) + len(TEAM_EVENTS)} olay ({len(TEAM_EVENTS)}'i takim duvarinda)")
 
 
 if __name__ == "__main__":

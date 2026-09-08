@@ -11,6 +11,7 @@ Yürürlükteki şema PostgreSQL; kaynağı numaralı göçlerdir
 | `items.arama` (tsvector + GIN) | **kurulu** — `001_sema.sql` içinde üretilmiş sütun |
 | `teams`, `team_members` (§2a) | **kurulu** — `002_takimlar_eylemler.sql` |
 | `actions` (§3a) | **kurulu** — `002_takimlar_eylemler.sql` |
+| `events.subject_type = 'team'` (§2a, §5) | **kurulu** — `003_takim_duvari.sql`; ekran `/ekipler` |
 | `change_requests` | yok — kazanım ağacı ekranıyla gelecek |
 | `notifications`, `notification_prefs`, `mutes` | yok — mobil bildirimler bugün `events`'ten türetiliyor |
 | `push_subscriptions` | yok — `spec/40-push.md` |

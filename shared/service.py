@@ -19,10 +19,16 @@ PRIORITIES = {"kritik": "Kritik", "yuksek": "Yüksek", "orta": "Orta", "dusuk": 
 EDITABLE = {"status": STATUSES, "priority": PRIORITIES, "assignee_id": None, "due_date": None,
             "team_id": None}
 EYLEM_DURUM = {"acik": "Açık", "devam": "Devam", "kapandi": "Kapandı", "iptal": "İptal"}
+TAKIM_ROL = {"lider": "Lider", "mentor": "Mentor", "uye": "Üye"}
 AYLAR = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"]
 
 PRIO_SQL = ("case priority when 'kritik' then 0 when 'yuksek' then 1"
             " when 'orta' then 2 else 3 end")
+PRIO_SQL_I = ("case i.priority when 'kritik' then 0 when 'yuksek' then 1"
+              " when 'orta' then 2 else 3 end")                      # join'li sorgular
+# Rol sirasi ekranda da SQL'de de ayni: once lider, sonra mentor, sonra uye.
+# ("m" = team_members takma adi; iki takim sorgusu da bu adi kullanir.)
+ROL_SIRA = "case m.role when 'lider' then 0 when 'mentor' then 1 else 2 end"
 MINE_SQL = ("(assignee_id = %s or id in"
             " (select item_id from item_participants where user_id = %s))")
 MINE_SQL_I = ("(i.assignee_id = %s or i.id in"
@@ -45,6 +51,82 @@ def users_by_id() -> dict:
 
 def teams_by_id() -> dict:
     return {t["id"]: t for t in db.q("select * from teams order by name")}
+
+
+# --- takimlar (spec/20-sema.md §2a; ekran spec/60-kaynak-uyarlama.md 2.5) ----
+#
+# Takim hiyerarsiden ayri bir varlik: nodes isin NEREDE oldugunu, teams isi
+# KIMIN sahiplendigini tutar. Sayimlar iliskili alt sorgularda: takim basina ayri
+# COUNT atmak N+1 olurdu (spec/10-kararlar.md 'Sorgular').
+
+
+def get_team(team_id):
+    kimlik = db.uid(team_id)
+    r = db.q1("select * from teams where id = %s", (kimlik,)) if kimlik else None
+    if r is None:
+        raise HTTPException(404, "takım yok")
+    return r
+
+
+def team_rows() -> list[dict]:
+    """Ekipler listesi: takim + uye/kayit/eylem sayilari, TEK sorgu."""
+    return db.q(
+        "select t.*,"
+        " (select count(*) from team_members m join users u on u.id = m.user_id"
+        "  where m.team_id = t.id and u.is_active) uye,"
+        " (select count(*) from items i where i.team_id = t.id"
+        "  and i.status <> 'kapandi') acik,"
+        " (select count(*) from items i where i.team_id = t.id) hepsi,"
+        " (select count(*) from actions a join items i on i.id = a.item_id"
+        "  where i.team_id = t.id and a.status in ('acik','devam')) acik_eylem"
+        " from teams t order by t.name")
+
+
+def members_by_team() -> dict:
+    """Tum uyelikler tek sorguda — liste ekrani takim basina sorgu atmasin."""
+    out: dict = {}
+    for r in db.q("select m.team_id, m.role, u.id, u.name, u.color"
+                  " from team_members m join users u on u.id = m.user_id"
+                  f" where u.is_active order by {ROL_SIRA}, u.name"):
+        out.setdefault(r["team_id"], []).append(r)
+    return out
+
+
+def team_members(team_id) -> list[dict]:
+    """Takim detayindaki uye listesi: rol + o takimin isindeki acik eylem sayisi.
+
+    "Pasif uyenin giris kapisi" (spec/60 2.5): duvar + kendine dusen eylemler.
+    """
+    return db.q(
+        "select u.id, u.name, u.email, u.color, m.role,"
+        " (select count(*) from actions a join items i on i.id = a.item_id"
+        "  where i.team_id = m.team_id and a.assignee_id = u.id"
+        "  and a.status in ('acik','devam')) acik_eylem"
+        " from team_members m join users u on u.id = m.user_id"
+        f" where m.team_id = %s and u.is_active order by {ROL_SIRA}, u.name",
+        (db.uid(team_id),))
+
+
+def team_open_count(team_id) -> int:
+    """Takimin acik kayit sayisi — team_items kirpilmis olabilir, rozet tami soyler."""
+    r = db.q1("select count(*) c from items where team_id = %s and status <> 'kapandi'",
+              (db.uid(team_id),))
+    return r["c"] or 0
+
+
+def team_items(team_id, limit: int = 20) -> list[dict]:
+    """Takimin acik kayitlari — oncelik sirasinda, ilk `limit` satir.
+
+    Tamami gorev tablosunda: /gorevler?takim=<id> (ayni suzgec, ikinci tablo yok).
+    """
+    return db.q(
+        "select i.*, t.name team_name, t.color team_color,"
+        " (select count(*) from actions a where a.item_id = i.id"
+        "  and a.status in ('acik','devam')) acik_eylem"
+        " from items i left join teams t on t.id = i.team_id"
+        " where i.team_id = %s and i.status <> 'kapandi'"
+        f" order by {PRIO_SQL_I}, i.updated_at desc limit %s",
+        (db.uid(team_id), limit))
 
 
 def open_action_count(item_id: str) -> int:
@@ -96,11 +178,28 @@ def get_item(item_id):
 
 
 
-def log(item_id: str, etype: str, author_id: str | None, body: str) -> None:
+def log(subject_id: str, etype: str, author_id: str | None, body: str,
+        subject_type: str = "item") -> None:
     db.x("insert into events (id,subject_type,subject_id,event_type,author_id,body,created_at)"
-         " values (%s,'item',%s,%s,%s,%s,%s)",
-         (db.new_id(), item_id, etype, author_id, body, db.now()))
+         " values (%s,%s,%s,%s,%s,%s,%s)",
+         (db.new_id(), subject_type, subject_id, etype, author_id, body, db.now()))
 
+
+def feed_of(subject_type: str, subject_id, user) -> list[dict]:
+    """Olay akisi (sistem + mesaj, tek kronoloji).
+
+    Kart akisi ve takim duvari AYNI tablodan okur (spec/20-sema.md §5); sablon
+    da ayni (fragments/card_feed.html) — akis nerede gosterildigini bilmez.
+    """
+    users = users_by_id()
+    out = []
+    for e in db.q("select * from events where subject_type = %s and subject_id = %s"
+                  " order by created_at", (subject_type, db.uid(subject_id))):
+        a = users.get(e["author_id"])
+        out.append({"type": e["event_type"], "body": e["body"], "author": a,
+                    "mine": a is not None and a["id"] == user["id"],
+                    "time": short_time(e["created_at"])})
+    return out
 
 
 def add_message(user, item, body: str) -> dict | None:
@@ -110,6 +209,20 @@ def add_message(user, item, body: str) -> dict | None:
         return None
     log(item["id"], "mesaj", user["id"], body)
     db.x("update items set updated_at = %s where id = %s", (db.now(), item["id"]))
+    return {"type": "mesaj", "body": body, "author": user, "mine": True,
+            "time": short_time(db.now())}
+
+
+def add_team_message(user, team, body: str) -> dict | None:
+    """Takim duvarina mesaj. Yetki cagiran ucta (auth.can_post_team).
+
+    Kartin aksine `updated_at` dokunulmaz: takimin "son hareket"i diye bir
+    siralama yok, duvar kendi kronolojisinde akar.
+    """
+    body = body.strip()
+    if not body:
+        return None
+    log(team["id"], "mesaj", user["id"], body, subject_type="team")
     return {"type": "mesaj", "body": body, "author": user, "mine": True,
             "time": short_time(db.now())}
 

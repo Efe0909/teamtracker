@@ -5,7 +5,7 @@ Ekip için hata/görev takibi: hiyerarşi + kayıtlar + kart içi sohbet + alan 
 
 | Site | Ne | Yayında |
 |---|---|---|
-| **Masaüstü** | ana sayfa (modül seçimi), görev yöneticisi (tablo + kart + sohbet) | `dashboard.<alan>` |
+| **Masaüstü** | ana sayfa (modül seçimi), görev yöneticisi (tablo + kart + sohbet), ekipler (takım sayfası + duvar) | `dashboard.<alan>` |
 | **Mobil** | yapılacaklar, arama, eylemler, bildirimler — ana ekrana eklenebilir (PWA) | `app.<alan>` |
 
 Yığın: Python 3.12 + FastAPI + Jinja2 + HTMX + **PostgreSQL**, ham SQL. ORM yok, JS framework yok.
@@ -46,7 +46,7 @@ sites/       dashboard/ ve mobil/ — her biri kendi rotaları, şablonları, CS
 spec/        kararlar, şema, ekran çözümlemeleri
 deploy/      cloudflared + nginx + systemd
 tools/       yardımcı betikler: PWA ikonları, davetli listesi yönetimi
-tests/       69 test: kimlik, oturum, CSRF, yetki (403), FTS, iki alan adı, PWA
+tests/       110 test: kimlik, oturum, CSRF, yetki (403), FTS, iki alan adı, PWA, ekipler
 ```
 
 Ayrıntı ve gerekçeler: **`spec/50-yapi.md`**.

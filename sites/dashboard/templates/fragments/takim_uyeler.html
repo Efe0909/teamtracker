@@ -1,0 +1,24 @@
+{# fragment: takim_uyeler — uyeler, rolleri ve uzerlerindeki acik eylem sayisi.
+   Kayit takima tanimlanir, eylem KISIYE atanir (spec/10-kararlar.md): bu liste
+   "bu takimin isi kimin uzerinde" sorusunun cevabi. #}
+<div class="uyeler" data-fragment="takim_uyeler">
+  <div class="ahead">👥 Üyeler
+    <span class="tb h0">{{ uyeler | length }}</span>
+    {% if acik_eylem %}<span class="tb h2">{{ acik_eylem }} açık eylem</span>{% endif %}
+  </div>
+
+  {% for u in uyeler %}
+  <div class="urow">
+    <span class="av" style="background:{{ u.color }}">{{ u.name[0] }}</span>
+    <span class="un">{{ u.name }}</span>
+    <span class="tb {{ 'h3' if u.role == 'lider' else ('h2' if u.role == 'mentor' else 'h0') }}">
+      {{ roller[u.role] }}</span>
+    <span class="small muted">{{ u.email }}</span>
+    <span style="flex:1"></span>
+    {% if u.acik_eylem %}<span class="chip c-eyl" title="bu takımın işindeki açık eylemi">
+      ⚡{{ u.acik_eylem }}</span>{% else %}<span class="small muted">—</span>{% endif %}
+  </div>
+  {% else %}
+  <div class="empty small" style="padding:8px">Üye yok — üyelikler Yönetim Paneli'nden (🚧) tanımlanacak.</div>
+  {% endfor %}
+</div>

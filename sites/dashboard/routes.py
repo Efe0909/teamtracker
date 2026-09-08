@@ -35,12 +35,10 @@ MODULES = [
      "desc": "Tüm kayıtlar tek tabloda: özet çipleri, hızlı filtreler, boyut filtreleri. "
              "Satır kayıt sayfasına gider; eylemler orada.",
      "plan": []},
-    {"slug": "ekipler", "icon": "👥", "name": "Ekipler", "ready": False,
-     "desc": "Takımlar, roller (lider/mentor/üye), takım duvarı ve \"bu takıma kayıt aç\".",
-     "plan": ["Takım kartı: tanım, üyeler, açık kayıt sayısı (spec/60-kaynak-uyarlama.md 2.5).",
-              "Takım duvarı events.subject_type='team' üstünden — kart akışıyla aynı bileşen.",
-              "Kayıt takıma tanımlanır, eylem kişiye atanır (spec/10-kararlar.md).",
-              "Pasif üyenin giriş kapısı: duvar + kendine düşen eylemler."]},
+    {"slug": "ekipler", "icon": "👥", "name": "Ekipler", "ready": True,
+     "desc": "Takımlar, roller (lider/mentor/üye), takım duvarı ve \"bu takıma kayıt aç\". "
+             "Takım/üyelik yönetimi Yönetim Paneli'ne ait.",
+     "plan": []},
     {"slug": "kazanim-agaci", "icon": "🌳", "name": "Kazanım Ağacı", "ready": False,
      "desc": "Cell / makine kırılımını düzenlediğin ekran: düğüm ekle, adlandır, taşı, sil.",
      "plan": ["Ağaç düzenleme nodes üzerinde çalışır; değişiklik anında uygulanır.",
@@ -97,14 +95,36 @@ def home_stats(user) -> dict:
         " sum(case when status <> 'kapandi' and assignee_id is null then 1 else 0 end) atanmamis,"
         " sum(case when status <> 'kapandi' and assignee_id = %s then 1 else 0 end) bana,"
         " count(*) hepsi from items", (user["id"],))
-    e = db.q1("select count(*) c from actions where assignee_id = %s"
-              " and status in ('acik','devam')", (user["id"],))
+    # items disindaki iki sayi tek sorguda: ayri ayri atmanin bir faydasi yok.
+    e = db.q1("select (select count(*) from actions where assignee_id = %s"
+              "         and status in ('acik','devam')) eylem,"
+              " (select count(*) from teams) takim", (user["id"],))
     return {"open": r["acik"] or 0, "unassigned": r["atanmamis"] or 0,
             "mine": r["bana"] or 0, "all": r["hepsi"] or 0,
-            "my_actions": e["c"] or 0, "nodes": len(service.TREE.nodes)}
+            "my_actions": e["eylem"] or 0, "nodes": len(service.TREE.nodes),
+            "teams": e["takim"] or 0}
 
 
 # --- gorev tablosu (spec/60-kaynak-uyarlama.md 2.2) -------------------------
+
+
+def kayit_satiri(r, users: dict, bugun) -> dict:
+    """Bir kayit satirinin ekran bicimi.
+
+    Gorev tablosu ve takim sayfasi ayni satiri cizer (fragments/tablo satirlari);
+    bicim tek yerde dursun ki "geciken" tanimi iki ekranda ayrismasin.
+    """
+    return {
+        "id": r["id"], "kind": r["kind"], "title": r["title"],
+        "status": r["status"], "priority": r["priority"],
+        "team": {"name": r["team_name"], "color": r["team_color"]} if r["team_name"] else None,
+        "assignee": users.get(r["assignee_id"]),
+        "path": " › ".join(service.TREE.name(n)
+                           for n in service.TREE.ancestors(r["node_id"])[-2:]),
+        "due": r["due_date"], "overdue": bool(r["due_date"]) and r["due_date"] < bugun
+                and r["status"] != "kapandi",
+        "acik_eylem": r["acik_eylem"], "time": short_time(r["updated_at"]),
+    }
 
 
 def tablo_ctx(request, user) -> dict:
@@ -128,19 +148,7 @@ def tablo_ctx(request, user) -> dict:
         f" from items i where {where}", tuple(args))
     users = users_by_id()
     bugun = datetime.now(timezone.utc).date()      # due_date artik date, metin degil
-    out = []
-    for r in rows:
-        out.append({
-            "id": r["id"], "kind": r["kind"], "title": r["title"],
-            "status": r["status"], "priority": r["priority"],
-            "team": {"name": r["team_name"], "color": r["team_color"]} if r["team_name"] else None,
-            "assignee": users.get(r["assignee_id"]),
-            "path": " › ".join(service.TREE.name(n)
-                               for n in service.TREE.ancestors(r["node_id"])[-2:]),
-            "due": r["due_date"], "overdue": bool(r["due_date"]) and r["due_date"] < bugun
-                    and r["status"] != "kapandi",
-            "acik_eylem": r["acik_eylem"], "time": short_time(r["updated_at"]),
-        })
+    out = [kayit_satiri(r, users, bugun) for r in rows]
     return {"rows": out, "oz": oz, "secili": secili,
             "filtreler": filters.aktif_filtreler(), "hizli": filters.HIZLI,
             "siralama": {"hareket": "Son hareket", "tarih": "Son tarih",
@@ -158,13 +166,7 @@ def node_options() -> list[dict]:
 def card_ctx(request, item, user) -> dict:
     users = users_by_id()
     teams = service.teams_by_id()
-    feed = []
-    for e in db.q("select * from events where subject_type='item' and subject_id=%s"
-                  " order by created_at", (item["id"],)):
-        a = users.get(e["author_id"])
-        feed.append({"type": e["event_type"], "body": e["body"], "author": a,
-                     "mine": a is not None and a["id"] == user["id"],
-                     "time": short_time(e["created_at"])})
+    feed = service.feed_of("item", item["id"], user)
     bugun = datetime.now(timezone.utc).date()      # due_date artik date, metin degil
     eylemler = []
     for a in service.actions_of(item["id"]):
@@ -200,8 +202,12 @@ def home(request: Request):
     """Ana sayfa: modul secimi (panolar grid'i — spec/60-kaynak-uyarlama.md 2.1)."""
     user = auth.current_user(request)
     stats = home_stats(user)
+    # Kart altindaki sayi: hazir modul kendi biriminde ne kadar veri tuttugunu
+    # soyler. Yeni modul geldiginde buraya bir satir eklenir, sablon degismez.
+    sayilar = {"gorevler": (stats["all"], "kayıt"), "ekipler": (stats["teams"], "takım")}
     mods = [dict(m, href=("/" + m["slug"]),
-                 count=stats["all"] if m["slug"] == "gorevler" else None) for m in MODULES]
+                 count=sayilar.get(m["slug"], (None, ""))[0],
+                 birim=sayilar.get(m["slug"], (None, ""))[1]) for m in MODULES]
     return render(request, "home.html", {
         "user": user, "all_users": auth.all_users(), "modules": mods, "stats": stats,
         "app_adres": site_adresi(request, app_site=True),
@@ -290,6 +296,65 @@ async def patch_action(request: Request, action_id: str):
     ctx = card_ctx(request, get_item(item["id"]), user)
     ctx["oob_feed"] = changed
     return render(request, "fragments/card_actions.html", ctx)
+
+
+# --- ekipler (spec/60-kaynak-uyarlama.md 2.5, sema spec/20-sema.md §2a) -----
+
+
+def takim_ctx(request, team, user) -> dict:
+    """Takim sayfasi: sol sutun uyeler + isler, sag sutun duvar (kayit sayfasiyla
+    ayni iskelet — .kbody/.ksol/.ksag, spec/60 2.4 duzeni)."""
+    users = users_by_id()
+    bugun = datetime.now(timezone.utc).date()
+    kayitlar = [kayit_satiri(r, users, bugun) for r in service.team_items(team["id"])]
+    uyeler = service.team_members(team["id"])
+    return {
+        "request": request, "user": user, "team": team, "uyeler": uyeler,
+        "rows": kayitlar, "acik": service.team_open_count(team["id"]),
+        "acik_eylem": sum(u["acik_eylem"] for u in uyeler),
+        "feed": service.feed_of("team", team["id"], user),
+        "can_post": auth.can_post_team(user, team["id"]),
+        "roller": service.TAKIM_ROL,
+        "statuses": STATUSES, "priorities": PRIORITIES,
+        "node": service.TREE.name(team["node_id"]) if team["node_id"] else None,
+    }
+
+
+@router.get("/ekipler", response_class=HTMLResponse)
+def teams(request: Request):
+    """Takim listesi: tanim, uyeler, acik is sayilari (spec/60 2.5)."""
+    user = auth.current_user(request)
+    uyeliklerim = auth.team_ids(user["id"])
+    uyeler = service.members_by_team()
+    takimlar = [dict(t, uyeler=uyeler.get(t["id"], []), uyeyim=t["id"] in uyeliklerim)
+                for t in service.team_rows()]
+    return render(request, "ekipler.html", {
+        "user": user, "all_users": auth.all_users(), "takimlar": takimlar,
+        "roller": service.TAKIM_ROL, "app_adres": site_adresi(request, app_site=True),
+    })
+
+
+@router.get("/ekipler/{team_id}", response_class=HTMLResponse)
+def team_page(request: Request, team_id: str):
+    user = auth.current_user(request)
+    team = service.get_team(team_id)
+    ctx = takim_ctx(request, team, user)
+    ctx["all_users"] = auth.all_users()
+    ctx["nodes"] = node_options()
+    ctx["app_adres"] = site_adresi(request, app_site=True)
+    return render(request, "takim.html", ctx)
+
+
+@router.post("/takim/{team_id}/mesaj", response_class=HTMLResponse)
+def post_team_message(request: Request, team_id: str, body: str = Form("")):
+    user = auth.current_user(request)
+    team = service.get_team(team_id)
+    if not auth.can_post_team(user, team["id"]):
+        raise HTTPException(403, "bu takımın üyesi değilsin")
+    m = service.add_team_message(user, team, body)
+    if m is None:
+        return HTMLResponse("")
+    return render(request, "ortak/mesaj.html", {"m": m})
 
 
 @router.post("/item")
