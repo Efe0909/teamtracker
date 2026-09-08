@@ -45,6 +45,105 @@ def rebuild_tree() -> TreeIndex:
     return TREE
 
 
+# --- dugum duzenleme (veri yonetimi ekrani) ------------------------------
+#
+# Her degisiklikten sonra TreeIndex KOMPLE yeniden kurulur — kismi guncelleme
+# yok (shared/tree.py). Agac surec bellegindedir, yani bu islevler yalnizca
+# --workers 1 varsayimiyla dogru; ikinci bir isci kendi bayat agaciyla kalir.
+
+
+def dugum_ekle(ad: str, node_type: str, parent_id=None, aciklama: str | None = None,
+               created_by=None) -> dict | None:
+    """Yeni dugum. parent_id None ise kok."""
+    ad = (ad or "").strip()
+    node_type = (node_type or "").strip()
+    if not ad or not node_type:
+        return None
+
+    ust = db.uid(parent_id) if parent_id else None
+    if ust is not None and ust not in TREE.nodes:
+        return None                       # olmayan ustun altina yazma
+
+    # Kardeslerin sonuna: sira numarasi elle verilmiyor, ekleme sirasi korunuyor.
+    kardesler = TREE.children.get(ust, []) if ust else TREE.roots
+    sira = max((TREE.nodes[k].sort_order for k in kardesler), default=-1) + 1
+
+    satir = db.q1(
+        "insert into nodes (id,parent_id,name,node_type,sort_order,description,created_by,created_at)"
+        " values (%s,%s,%s,%s,%s,%s,%s,%s) returning *",
+        (db.new_id(), ust, ad, node_type, sira, (aciklama or "").strip() or None,
+         db.uid(created_by) if created_by else None, db.now()))
+    rebuild_tree()
+    return satir
+
+
+def dugum_guncelle(node_id, ad: str | None = None, node_type: str | None = None,
+                   aciklama: str | None = None) -> bool:
+    """Ad / tur / aciklama. Verilmeyen alan DEGISMEZ (None = dokunma)."""
+    kimlik = db.uid(node_id)
+    if kimlik is None or kimlik not in TREE.nodes:
+        return False
+
+    alanlar, degerler = [], []
+    if ad is not None:
+        if not ad.strip():
+            return False                  # adsiz dugum agacta okunmaz olur
+        alanlar.append("name = %s"); degerler.append(ad.strip())
+    if node_type is not None:
+        if not node_type.strip():
+            return False
+        alanlar.append("node_type = %s"); degerler.append(node_type.strip())
+    if aciklama is not None:
+        # Bos metin "aciklamayi sil" demek; None ile karistirma.
+        alanlar.append("description = %s"); degerler.append(aciklama.strip() or None)
+    if not alanlar:
+        return False
+
+    db.x(f"update nodes set {', '.join(alanlar)} where id = %s", (*degerler, kimlik))
+    rebuild_tree()                        # ad degistiyse agactaki etiket de degisti
+    return True
+
+
+def dugum_tasi(node_id, yeni_ust_id) -> bool:
+    """Dugumu baska bir ustun altina alir. yeni_ust_id None ise koke cikarir."""
+    kimlik = db.uid(node_id)
+    if kimlik is None or kimlik not in TREE.nodes:
+        return False
+
+    ust = db.uid(yeni_ust_id) if yeni_ust_id else None
+    if ust is not None:
+        if ust not in TREE.nodes:
+            return False
+        # DONGU KORUMASI: hedef, tasinan dugumun alt agacinda olamaz. Olsaydi
+        # agac bir halkaya donerdi ve Euler turu sonsuz donerdi.
+        if TREE.is_descendant(ust, kimlik):
+            return False
+
+    db.x("update nodes set parent_id = %s where id = %s", (ust, kimlik))
+    rebuild_tree()
+    return True
+
+
+def dugum_sil(node_id) -> bool:
+    """Dugumu ve ALT AGACINI siler (nodes.parent_id on delete cascade).
+
+    Kayitlar da gider: items.node_id -> nodes on delete cascade. Bu yuzden
+    cagiran taraf once kac kayit etkilenecegini gostermeli.
+    """
+    kimlik = db.uid(node_id)
+    if kimlik is None or kimlik not in TREE.nodes:
+        return False
+    db.x("delete from nodes where id = %s", (kimlik,))
+    rebuild_tree()
+    return True
+
+
+def dugum_kayit_sayilari() -> dict:
+    """Dugum basina kayit sayisi — silmeden once ne kaybedilecegi gorunsun."""
+    return {r["node_id"]: r["c"]
+            for r in db.q("select node_id, count(*) c from items group by node_id")}
+
+
 def users_by_id() -> dict:
     return {u["id"]: u for u in auth.all_users()}
 

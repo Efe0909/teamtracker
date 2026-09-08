@@ -34,7 +34,7 @@ def test_home_lists_modules(client):
     """Ana sayfa modul secimi: hazir olan calisir, digerleri iskele sayfaya gider."""
     r = client.get("/")
     assert r.status_code == 200
-    assert "Görev Yöneticisi" in r.text and "Kazanım Ağacı" in r.text
+    assert "Görev Yöneticisi" in r.text and "Veri Yönetimi" in r.text
     assert 'href="/gorevler"' in r.text and 'href="/kazanim-agaci"' in r.text
     assert "Bütçe onayı 6 gündür bekliyor" not in r.text        # ana sayfa tablo degil
 
