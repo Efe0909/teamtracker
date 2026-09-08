@@ -221,6 +221,51 @@ async def abone(request: Request):
     return JSONResponse({"ok": True})
 
 
+if config.PUSH_TEST:
+    # Bildirim deneme ucu. Rota YALNIZCA EKIPTAKIP_PUSH_TEST=1 iken kayit
+    # edilir — kapatildiginda 403 degil 404 doner, cunku hic yoktur.
+    #
+    #   curl -X POST https://app.polonyum.com/test/bildirim \
+    #     -H 'Content-Type: application/json' \
+    #     -d '{"user_id":"<uuid>","baslik":"Deneme","govde":"Merhaba"}'
+    #
+    # user_id verilmezse ABONELIGI OLAN HERKESE gider.
+
+    @app.post("/test/bildirim")
+    async def test_bildirim(request: Request):
+        if not push.acik():
+            return JSONResponse({"hata": "push kurulmamis (VAPID yok)"}, status_code=503)
+        try:
+            g = await request.json()
+        except Exception:
+            return JSONResponse({"hata": "govde JSON olmali"}, status_code=400)
+
+        kimlik = g.get("user_id")
+        if kimlik:
+            if db.uid(kimlik) is None:
+                return JSONResponse({"hata": "gecersiz user_id"}, status_code=400)
+            hedefler = [kimlik]
+        else:
+            hedefler = [r["user_id"] for r in
+                        db.q("select distinct user_id from push_subscriptions")]
+
+        # Deneme ucunun isi hata ayiklamak: "0 gonderildi" deyip birakmak
+        # "neden gelmedi" sorusunu cevapsiz birakir. Abonelik yoklugunu
+        # ACIKCA soyle — telefon henuz abone olmamis demektir.
+        if not push.abonelikler(hedefler):
+            return JSONResponse(
+                {"hata": "bu kullanicinin abonelik kaydi yok"
+                         " — telefondan 'Bildirimleri aç' yapilmis mi?"},
+                status_code=404)
+
+        sonuc = push.gonder(hedefler,
+                            g.get("baslik") or "EkipTakip",
+                            g.get("govde") or "Deneme bildirimi",
+                            g.get("url") or "/m",
+                            g.get("tag"))
+        return JSONResponse({"hedef": len(hedefler), **sonuc})
+
+
 if config.sahte_kimlik():
     # Kullanici degistirme YALNIZCA gelistirme modunda var; yayin kurulumunda
     # bu rota hic tanimlanmaz (sahte kimlik zaten acilisi reddettirir).

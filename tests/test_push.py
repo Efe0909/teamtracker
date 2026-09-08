@@ -191,3 +191,79 @@ def test_push_kapaliyken_gonderim_sessiz(monkeypatch):
     monkeypatch.setattr(config, "VAPID_PRIVATE", "")
     assert push.gonder(["00000000-0000-0000-0000-000000000000"], "B", "G") == {
         "gonderildi": 0, "silinen": 0, "hata": 0}
+
+
+# --- deneme ucu -----------------------------------------------------------
+#
+# Uc yalnizca EKIPTAKIP_PUSH_TEST=1 iken KAYIT EDILIR. Bu yuzden testler ayri
+# bir uygulama ornegi kuruyor: bayrak import aninda okunuyor, sonradan
+# yamalanamaz (sahte kimlik rotasiyla ayni desen).
+
+
+@pytest.fixture(scope="module")
+def deneme_istemcisi():
+    import importlib
+    import os
+
+    from conftest import test_veritabani  # noqa: E402
+    test_veritabani("pushdeneme")
+    os.environ["EKIPTAKIP_PUSH_TEST"] = "1"
+    try:
+        import app
+        importlib.reload(config)
+        importlib.reload(app)
+        with TestClient(app.app) as c:
+            yield c
+    finally:
+        os.environ.pop("EKIPTAKIP_PUSH_TEST", None)
+        importlib.reload(config)
+        import app
+        importlib.reload(app)
+
+
+def test_uc_bayrak_yokken_HIC_YOK():
+    """Kapatildiginda 403 degil 404: rota tablosunda bulunmuyor."""
+    import app
+    yollar = [getattr(r, "path", "") for r in app.app.routes]
+    assert "/test/bildirim" not in yollar
+
+
+def test_deneme_ucu_bildirim_gonderir(deneme_istemcisi, monkeypatch):
+    monkeypatch.setattr(config, "VAPID_PRIVATE", "test-gizli")
+    monkeypatch.setattr(config, "VAPID_PUBLIC", "test-acik")
+
+    u = db.q1("select * from users order by created_at limit 1")
+    push.abone_ol(u["id"], abonelik("https://push.ornek/deneme"))
+
+    gidenler = []
+    monkeypatch.setattr("pywebpush.webpush",
+                        lambda **kw: gidenler.append(kw["data"]))
+
+    r = deneme_istemcisi.post("/test/bildirim", json={
+        "user_id": str(u["id"]), "baslik": "Deneme", "govde": "Merhaba"})
+    assert r.status_code == 200, r.text
+    assert r.json()["gonderildi"] == 1
+    assert "Deneme" in gidenler[0] and "Merhaba" in gidenler[0]
+    db.x("delete from push_subscriptions")
+
+
+def test_deneme_ucu_csrf_ISTEMEZ(deneme_istemcisi, monkeypatch):
+    """curl'den cagrilabilmesi bunun sarti; kimlik cerezden gelmiyor."""
+    monkeypatch.setattr(config, "VAPID_PRIVATE", "x")
+    monkeypatch.setattr(config, "VAPID_PUBLIC", "y")
+    r = deneme_istemcisi.post("/test/bildirim", json={"user_id": "bozuk"})
+    assert r.status_code == 400          # 403 CSRF DEGIL
+    assert "user_id" in r.text
+
+
+def test_deneme_ucu_abonelik_yoksa_404(deneme_istemcisi, monkeypatch):
+    monkeypatch.setattr(config, "VAPID_PRIVATE", "x")
+    monkeypatch.setattr(config, "VAPID_PUBLIC", "y")
+    db.x("delete from push_subscriptions")
+    assert deneme_istemcisi.post("/test/bildirim", json={}).status_code == 404
+
+
+def test_deneme_ucu_push_kapaliyken_503(deneme_istemcisi, monkeypatch):
+    monkeypatch.setattr(config, "VAPID_PRIVATE", "")
+    monkeypatch.setattr(config, "VAPID_PUBLIC", "")
+    assert deneme_istemcisi.post("/test/bildirim", json={}).status_code == 503

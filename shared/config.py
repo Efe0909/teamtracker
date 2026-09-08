@@ -54,6 +54,17 @@ VAPID_PRIVATE = os.getenv("VAPID_PRIVATE", "")
 VAPID_PUBLIC = os.getenv("VAPID_PUBLIC", "")
 VAPID_SUB = os.getenv("VAPID_SUB", "mailto:yonetici@polonyum.com")
 
+# --- push deneme ucu ------------------------------------------------------
+# EKIPTAKIP_PUSH_TEST=1 verilmedikce /test/bildirim ucu HIC KAYIT EDILMEZ —
+# devre disi degil, rota tablosunda yok (sahte kimlik rotasiyla ayni desen).
+# Boylece "yayinda kapatiriz" bir soz degil, bir anahtar.
+#
+# Kimlik yok, kullanici id'si yeterli sayiliyor: deneme ucu, acik karar.
+# Acikken bilinen bir id'ye rasgele baslik/govde ile bildirim gonderilebilir —
+# yani kilit ekranina metin yazdirmak isteyen biri icin bir yol. Yayinda acik
+# birakma.
+PUSH_TEST = os.getenv("EKIPTAKIP_PUSH_TEST") == "1"
+
 SESSION_COOKIE = "ekiptakip"          # yayinda __Secure- onekiyle (bkz. cerez_adi)
 SESSION_MAX_AGE = 30 * 24 * 3600            # 30 gun: telefondaki uygulama surekli sormasin
 
@@ -64,7 +75,7 @@ SESSION_MAX_AGE = 30 * 24 * 3600            # 30 gun: telefondaki uygulama surek
 SHARED_PATHS = ("/static/", "/sw.js", "/favicon.ico", "/manifest.json",
                 "/giris", "/cikis", "/whoami", "/switch/",
                 # Push: iki yuz de ayni uctan abone olur, mobil onekine girmez.
-                "/vapid", "/abone")
+                "/vapid", "/abone", "/test/bildirim")
 
 
 def yayinda() -> bool:

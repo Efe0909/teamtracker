@@ -38,8 +38,11 @@ def token(request: Request) -> str:
 class CsrfKapisi:
     # Giris akisi muaf: oturum henuz yok, kendi state parametresi var.
     # Tam eslesme (yalniz /static/ onek) — bkz. GirisKapisi'ndaki ayni gerekce.
+    # /test/bildirim: kimlik CEREZDEN gelmiyor (uc zaten yalnizca
+    # EKIPTAKIP_PUSH_TEST=1 iken var). CSRF ambient cerezle yapilan istegi
+    # korur; burada cerez kullanilmadigi icin korunacak sey yok.
     ACIK_TAM = frozenset({"/giris", "/giris/callback", "/sw.js", "/favicon.ico",
-                          "/manifest.json"})
+                          "/manifest.json", "/test/bildirim"})
     ACIK_ONEK = ("/static/",)
 
     def __init__(self, app):
