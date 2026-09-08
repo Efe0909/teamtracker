@@ -3,7 +3,11 @@
   <div class="sys">{{ m.body }} · {{ m.time }}</div>
 {% else %}
   <div class="msg{% if m.mine %} me{% endif %}">
-    {% if not m.mine and m.author %}<span class="av" style="background:{{ m.author.color }}">{{ m.author.name[0] }}</span>{% endif %}
+    {% if not m.mine and m.author %}
+    <span class="avw{% if cevrimici(m.author) %} on{% endif %}">
+      <span class="av" style="background:{{ m.author.color }}">{{ m.author.name[0] }}</span>
+    </span>
+    {% endif %}
     <div class="bub">
       {% if not m.mine and m.author %}<div class="nm">{{ m.author.name }}</div>{% endif %}
       {{ m.body }}
