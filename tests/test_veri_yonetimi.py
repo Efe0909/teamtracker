@@ -37,6 +37,15 @@ def _agac(client):
     service.rebuild_tree()
 
 
+def _gec(client, user_id):
+    """Kullanici degistir VE CSRF token'ini tazele — switch oturumu
+    temizledigi icin eski token gecersiz kalir ve 403'u YETKI degil CSRF
+    uretir."""
+    from conftest import csrf_tak
+    client.post(f"/switch/{user_id}", follow_redirects=False)
+    csrf_tak(client)
+
+
 def kok_sayisi():
     return len(service.TREE.roots)
 
@@ -205,24 +214,22 @@ def test_yetkisiz_kullanici_yapiyi_degistiremez(client):
     kontrol ucun kendisinde (spec/70-guvenlik.md: yetki sunucuda)."""
     deniz = db.q1("select id from users where name = 'Deniz'")   # is_editor=false
     assert deniz, "tohumda yetkisiz kullanıcı olmalı"
-    client.post(f"/switch/{deniz['id']}", follow_redirects=False)
+    _gec(client, deniz["id"])
     try:
         assert client.post("/dugum", data={"ad": "T-Yasak", "tur": "X"}).status_code == 403
         assert db.q1("select 1 from nodes where name = %s", ("T-Yasak",)) is None
     finally:
-        efe = db.q1("select id from users where name = 'Efe'")
-        client.post(f"/switch/{efe['id']}", follow_redirects=False)
+        _gec(client, db.q1("select id from users where name = 'Efe'")["id"])
 
 
 def test_yetkisiz_kullanici_sayfayi_gorur_ama_form_yok(client):
     """Yapıyı okumak herkese açık; değiştirmek değil."""
     deniz = db.q1("select id from users where name = 'Deniz'")
-    client.post(f"/switch/{deniz['id']}", follow_redirects=False)
+    _gec(client, deniz["id"])
     try:
         metin = client.get("/kazanim-agaci").text
         assert "Veri Yönetimi" in metin
         assert 'hx-post="/dugum"' not in metin
         assert "editör yetkisi gerekiyor" in metin
     finally:
-        efe = db.q1("select id from users where name = 'Efe'")
-        client.post(f"/switch/{efe['id']}", follow_redirects=False)
+        _gec(client, db.q1("select id from users where name = 'Efe'")["id"])
