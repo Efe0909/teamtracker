@@ -13,7 +13,7 @@ from pathlib import Path
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from shared import auth, db, filters, service
+from shared import auth, db, filters, kapsam, service
 from shared.config import site_adresi
 from shared.render import is_htmx, site_templates
 from shared.service import (EYLEM_DURUM, PRIORITIES, STATUSES, add_action, add_message,
@@ -372,13 +372,28 @@ def create_item(request: Request, node_id: str = Form(...), title: str = Form(..
 # service.* islevleri rebuild_tree() cagiriyor — rota katmani bunu
 # tekrarlamaz, yoksa iki kaynak olur.
 #
-# YETKI: yapiyi degistirmek is_editor ya da is_admin ister. Bugun
-# is_editor olmayanin degisikligi change_requests'e DUSMUYOR (spec/20-sema.md
-# §4) — o kuyruk henuz yok; simdilik 403. TODO.md'de duruyor.
+# YETKI iki parcali (goc 007, shared/kapsam.py):
+#   - "dugum_duzenle" KAPSAMI  -> ne yapabilir
+#   - user_node_scopes izni    -> hangi dalda; alt agaca miras kalir
+# Admin ikisini de atlar. Kok islemleri yalnizca admin: dugum izni bir DALI
+# kapsar, kok hicbir dala girmez.
+#
+# is_editor bayragi GECIS DONEMI icin kabul ediliyor — eski kullanicilar
+# kapsam satiri kazanana kadar kilitlenmesin. TODO.md'de bayraklarin kapsama
+# cevrilmesi duruyor.
 
 
 def _yapiyi_degistirebilir(u) -> bool:
-    return bool(u) and (db.as_bool(u["is_admin"]) or db.as_bool(u["is_editor"]))
+    """Ekranda form gosterilsin mi — kaba kontrol."""
+    return bool(u) and (db.as_bool(u["is_admin"]) or db.as_bool(u["is_editor"])
+                        or kapsam.var_mi(u, "dugum_duzenle"))
+
+
+def _dugumde_yetkili(u, node_id) -> bool:
+    """Belirli bir dugumde islem yetkisi — asil kontrol."""
+    if u and db.as_bool(u["is_editor"]) and not kapsam.izinli_dugumler(u):
+        return True                       # gecis: kapsam satiri olmayan eski editor
+    return kapsam.dugumde_yetkili(u, node_id)
 
 
 def _agac_ctx(user) -> dict:
@@ -413,8 +428,11 @@ def veri_yonetimi(request: Request):
 def dugum_ekle(request: Request, ad: str = Form(...), tur: str = Form(...),
                ust: str = Form(""), aciklama: str = Form("")):
     user = auth.current_user(request)
-    if not _yapiyi_degistirebilir(user):
-        raise HTTPException(403, "yapiyi degistirme yetkisi yok")
+    if ust:
+        if not _dugumde_yetkili(user, ust):
+            raise HTTPException(403, "bu dalda düzenleme yetkisi yok")
+    elif not (kapsam.kok_islemi_yapabilir(user) or _yapiyi_degistirebilir(user)):
+        raise HTTPException(403, "kök düğüm eklemek yönetici yetkisi ister")
     service.dugum_ekle(ad, tur, ust or None, aciklama, created_by=user["id"])
     return render(request, "fragments/agac.html", {"user": user, **_agac_ctx(user)})
 
@@ -422,24 +440,32 @@ def dugum_ekle(request: Request, ad: str = Form(...), tur: str = Form(...),
 @router.patch("/dugum/{node_id}", response_class=HTMLResponse)
 async def dugum_guncelle(request: Request, node_id: str):
     user = auth.current_user(request)
-    if not _yapiyi_degistirebilir(user):
-        raise HTTPException(403, "yapiyi degistirme yetkisi yok")
+    if not _dugumde_yetkili(user, node_id):
+        raise HTTPException(403, "bu düğümde düzenleme yetkisi yok")
     form = await request.form()
     # Alan gonderilmediyse None: "dokunma" ile "bosalt" farkli seyler.
     service.dugum_guncelle(
         node_id,
-        ad=form.get("ad"), node_type=form.get("tur"), aciklama=form.get("aciklama"))
+        ad=form.get("ad"), node_type=form.get("tur"), aciklama=form.get("aciklama"),
+        degistiren=user["id"])
     if "ust" in form:
-        service.dugum_tasi(node_id, form.get("ust") or None)
+        # Hedef dalda da yetki gerekir, yoksa yetkili oldugu dugumu
+        # yetkisiz oldugu bir dala tasiyabilirdi.
+        hedef = form.get("ust") or None
+        if hedef is None:
+            if kapsam.kok_islemi_yapabilir(user):
+                service.dugum_tasi(node_id, None, tasiyan=user["id"])
+        elif _dugumde_yetkili(user, hedef):
+            service.dugum_tasi(node_id, hedef, tasiyan=user["id"])
     return render(request, "fragments/agac.html", {"user": user, **_agac_ctx(user)})
 
 
 @router.delete("/dugum/{node_id}", response_class=HTMLResponse)
 def dugum_sil(request: Request, node_id: str):
     user = auth.current_user(request)
-    if not _yapiyi_degistirebilir(user):
-        raise HTTPException(403, "yapiyi degistirme yetkisi yok")
-    service.dugum_sil(node_id)
+    if not _dugumde_yetkili(user, node_id):
+        raise HTTPException(403, "bu düğümde silme yetkisi yok")
+    service.dugum_sil(node_id, silen=user["id"])
     return render(request, "fragments/agac.html", {"user": user, **_agac_ctx(user)})
 
 
