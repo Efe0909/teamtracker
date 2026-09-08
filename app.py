@@ -23,7 +23,7 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
-from shared import auth, config, csrf, db, kimlik, sertlestirme, service
+from shared import auth, config, csrf, db, kimlik, push, sertlestirme, service
 from sites.dashboard import routes as dashboard
 from sites.mobil import routes as mobil
 
@@ -178,6 +178,47 @@ def whoami(request: Request):
     return JSONResponse({"id": str(u["id"]), "name": u["name"], "email": u["email"],
                          "is_admin": db.as_bool(u["is_admin"]),
                          "scope": service.TREE.name(u["scope_node_id"]) if u["scope_node_id"] else None})
+
+
+# --- web push (spec/40-push.md) -------------------------------------------
+#
+# Iki uc de config.SHARED_PATHS icinde: mobil onekine girmezler, iki alan
+# adinda da ayni yoldan calisirlar.
+
+
+@app.get("/vapid")
+def vapid(request: Request):
+    """Tarayicinin abone olurken ihtiyac duydugu ACIK anahtar.
+
+    Gizli anahtar burada DEGIL — o yalnizca sunucuda imza atarken kullanilir.
+    Push kurulmamissa 503: istemci "kapali" diye anlar ve dugmeyi gostermez.
+    """
+    if not push.acik():
+        return JSONResponse({"hata": "push kurulmamis"}, status_code=503)
+    return JSONResponse({"publicKey": config.VAPID_PUBLIC})
+
+
+@app.post("/abone")
+async def abone(request: Request):
+    """Tarayicidan gelen PushSubscription'i kaydeder.
+
+    Kimlik zorunlu: abonelik bir kullaniciya baglanir, yoksa kime gonderilecegi
+    bilinmez. CSRF kapisindan gecer (guvensiz metot) — istemci token'i
+    <body hx-headers> icinden okuyup basliga koyar.
+    """
+    u = auth.current_user(request)
+    if u is None:
+        return JSONResponse({"hata": "oturum yok"}, status_code=401)
+    if not push.acik():
+        return JSONResponse({"hata": "push kurulmamis"}, status_code=503)
+    try:
+        govde = await request.json()
+    except Exception:
+        return JSONResponse({"hata": "gecersiz govde"}, status_code=400)
+
+    if not push.abone_ol(u["id"], govde, request.headers.get("user-agent")):
+        return JSONResponse({"hata": "eksik abonelik"}, status_code=400)
+    return JSONResponse({"ok": True})
 
 
 if config.sahte_kimlik():

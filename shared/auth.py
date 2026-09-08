@@ -8,6 +8,8 @@ Yetki modeli degismedi (spec/10-kararlar.md 'Yetki').
 """
 from __future__ import annotations
 
+from datetime import timedelta
+
 from . import config, db
 from .tree import TreeIndex
 
@@ -29,6 +31,43 @@ def _aktif(u):
     return u if u is not None and db.as_bool(u["is_active"]) else None
 
 
+# --- varlik (presence) ----------------------------------------------------
+#
+# "Cevrimici" ayri bir durum degil, turetilmis bir soru: son gorulme
+# yeterince yakin mi? Bu yuzden oturum tablosu yok, tek sutun var
+# (users.last_seen_at, goc 004).
+
+CEVRIMICI_ESIGI = timedelta(minutes=2)     # bundan yeniyse cevrimici sayilir
+_ISARET_ARALIGI = timedelta(seconds=60)    # ayni kullanici icin en sik yazma
+
+# Kullanici basina son YAZMA ani. Surec bellegi yeterli: agac indeksi de oyle
+# tutuluyor ve --workers 1 zaten sart (spec/10-kararlar.md). Ikinci bir isci
+# olsaydi en kotu ihtimalle biraz fazla UPDATE olurdu, veri bozulmazdi.
+_son_isaret: dict = {}
+
+
+def _varligi_isaretle(u) -> None:
+    """last_seen_at'i gunceller — ama her istekte DEGIL.
+
+    current_user her istekte cagriliyor; her seferinde UPDATE atmak sayfa
+    basina birkac gereksiz yazma demekti. Kullanici basina dakikada bir
+    yeterli: esik iki dakika, yani gecikme goruntuyu bozmuyor.
+    """
+    simdi = db.now()
+    kimlik = u["id"]
+    onceki = _son_isaret.get(kimlik)
+    if onceki is not None and simdi - onceki < _ISARET_ARALIGI:
+        return
+    _son_isaret[kimlik] = simdi
+    db.x("update users set last_seen_at = %s where id = %s", (simdi, kimlik))
+
+
+def cevrimici(u) -> bool:
+    """Satirdaki last_seen_at'e gore: su an cevrimici mi?"""
+    an = u.get("last_seen_at") if hasattr(u, "get") else None
+    return an is not None and db.now() - an < CEVRIMICI_ESIGI
+
+
 def current_user(request):
     """Oturumdaki kullanici, yoksa None.
 
@@ -36,14 +75,17 @@ def current_user(request):
     `uid` cerezine, o da yoksa ilk kullaniciya duser — gelistirme kolayligi.
     """
     u = _aktif(get_user(request.session.get("uid") if hasattr(request, "session") else None))
-    if u is not None:
-        return u
-    if config.sahte_kimlik():
-        return _aktif(get_user(request.cookies.get(COOKIE))) or db.q1(
+    if u is None and config.sahte_kimlik():
+        u = _aktif(get_user(request.cookies.get(COOKIE))) or db.q1(
             # created_at esit olabilir; email ikinci olcut olmadan hangi satirin
             # gelecegi Postgres'te GARANTI DEGIL (SQLite'ta insert sirasi geliyordu).
             "select * from users where is_active order by created_at, email limit 1")
-    return None
+    if u is not None:
+        # Varlik damgasi TAM BURADA: kimlik cozulen her istek bir hayat
+        # belirtisidir. Ayri bir "ben buradayim" ucu yok — o hem fazladan
+        # istek hem de kapatilabilir bir yol olurdu.
+        _varligi_isaretle(u)
+    return u
 
 
 def participant_ids(item_id) -> set:

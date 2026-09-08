@@ -132,3 +132,8 @@ body.m{display:block;height:auto;min-height:100dvh;overflow:auto;background:var(
   padding:10px 12px;font-size:12px;line-height:1.55}
 .a2hs b{color:#6b4c12}
 @media (display-mode:standalone){.a2hs{display:none}}
+
+/* Bildirim izni dugmesi — yalnizca izin verilmemisken JS ekler (mobil.js). */
+.pushbtn{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(64px + env(safe-area-inset-bottom));
+  z-index:40;padding:9px 16px;border-radius:999px;border:1px solid var(--line);
+  background:var(--panel);color:var(--ink);font:600 13px/1 inherit;box-shadow:var(--sh-lg)}

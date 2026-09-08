@@ -41,6 +41,19 @@ SECRET_KEY = os.getenv("EKIPTAKIP_SECRET_KEY", "")
 SECRET_URETILDI = not SECRET_KEY
 if SECRET_URETILDI:
     SECRET_KEY = secrets.token_urlsafe(32)
+# --- web push (spec/40-push.md) -------------------------------------------
+# Anahtarlar .env'de, koda gomulmez. Tanimli degilse push sessizce kapali
+# kalir — uygulama push olmadan da calisir (shared/push.py: acik()).
+#
+# Uretim:
+#   .venv/bin/python tools/vapid_uret.py
+#
+# DIKKAT: anahtar degisirse MEVCUT TUM ABONELIKLER gecersizlesir; herkesin
+# telefondan yeniden abone olmasi gerekir.
+VAPID_PRIVATE = os.getenv("VAPID_PRIVATE", "")
+VAPID_PUBLIC = os.getenv("VAPID_PUBLIC", "")
+VAPID_SUB = os.getenv("VAPID_SUB", "mailto:yonetici@polonyum.com")
+
 SESSION_COOKIE = "ekiptakip"          # yayinda __Secure- onekiyle (bkz. cerez_adi)
 SESSION_MAX_AGE = 30 * 24 * 3600            # 30 gun: telefondaki uygulama surekli sormasin
 
@@ -49,7 +62,9 @@ SESSION_MAX_AGE = 30 * 24 * 3600            # 30 gun: telefondaki uygulama surek
 # Iki alan adinda da AYNI yoldan servis edilenler: mobil onegine girmezler.
 # /giris burada olmazsa app.<alan>/giris -> /m/giris olur ve giris yapilamaz.
 SHARED_PATHS = ("/static/", "/sw.js", "/favicon.ico", "/manifest.json",
-                "/giris", "/cikis", "/whoami", "/switch/")
+                "/giris", "/cikis", "/whoami", "/switch/",
+                # Push: iki yuz de ayni uctan abone olur, mobil onekine girmez.
+                "/vapid", "/abone")
 
 
 def yayinda() -> bool:
