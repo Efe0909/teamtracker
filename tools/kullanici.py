@@ -26,7 +26,9 @@ RENKLER = ["#5b8cff", "#e5484d", "#d99a2b", "#22a06b", "#7c5bff", "#b4501a"]
 
 
 def _kullanici(email: str):
-    return db.q1("select * from users where email = %s", (email,))
+    # Tekillik lower(email) indeksinde (shared/gocler/001_sema.sql); arama da
+    # oyle olmali, yoksa "Ayse@..." ile "ayse@..." ayri kullanici sanilir.
+    return db.q1("select * from users where lower(email) = lower(%s)", (email,))
 
 
 def listele() -> None:
@@ -55,9 +57,9 @@ def ekle(email: str, ad: str, kapsam: str | None, admin: bool, editor: bool) -> 
         node_id = n["id"]
     sayi = db.q1("select count(*) c from users")["c"]
     db.x("insert into users (id,email,name,color,is_admin,is_editor,scope_node_id,"
-         "created_at,is_active) values (%s,%s,%s,%s,%s,%s,%s,%s,1)",
+         "created_at,is_active) values (%s,%s,%s,%s,%s,%s,%s,%s,true)",
          (db.new_id(), email, ad, RENKLER[sayi % len(RENKLER)],
-          int(admin), int(editor or admin), node_id, db.now()))
+          bool(admin), bool(editor or admin), node_id, db.now()))
     print(f"eklendi: {email} ({ad})"
           f"{' · admin' if admin else ''}{' · kapsam: ' + kapsam if kapsam else ''}")
     print("Not: kişi Google ile ilk girdiğinde hesabı bu satıra bağlanır.")
@@ -67,7 +69,7 @@ def durum(email: str, aktif: bool) -> None:
     u = _kullanici(email.strip().lower())
     if u is None:
         sys.exit(f"kullanici yok: {email}")
-    db.x("update users set is_active = %s where id = %s", (int(aktif), u["id"]))
+    db.x("update users set is_active = %s where id = %s", (bool(aktif), u["id"]))
     db.x("insert into guvenlik_olaylari (id,created_at,tur,actor_id,email,detay)"
          " values (%s,%s,'pasiflestirme',null,%s,%s)",
          (db.new_id(), db.now(), u["email"], "acildi" if aktif else "kapatildi"))
