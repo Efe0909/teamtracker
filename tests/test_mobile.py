@@ -141,6 +141,8 @@ def test_pwa_files_are_served(client):
     sw = client.get("/sw.js")
     assert sw.status_code == 200 and sw.headers["service-worker-allowed"] == "/"
     man = client.get("/manifest.json")
-    assert man.status_code == 200 and man.json()["start_url"] == "/m"
+    # start_url her zaman KOK: manifest hangi alan adindan istendiyse onun
+    # kokune isaret eder. Eskiden tek alan adi modunda "/m" donuyordu.
+    assert man.status_code == 200 and man.json()["start_url"] == "/"
     assert client.get("/static/icon-180.png").status_code == 200
     assert 'rel="apple-touch-icon"' in client.get("/m").text

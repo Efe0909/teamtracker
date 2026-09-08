@@ -105,9 +105,11 @@ def test_login_paths_are_not_rewritten_on_app_host(client):
         assert app_host(client, path).status_code != 404, path
 
 
-def test_manifest_start_url_follows_host(client):
+def test_manifest_start_url_her_zaman_KOK(client):
+    """Eskiden dashboard host'unda "/m" donuyordu — ana ekrana eklenen
+    uygulama artik 404'e acilan bir adrese gidiyordu."""
     assert app_host(client, "/manifest.json").json()["start_url"] == "/"
-    assert dash_host(client, "/manifest.json").json()["start_url"] == "/m"
+    assert dash_host(client, "/manifest.json").json()["start_url"] == "/"
 
 
 def test_session_cookie_is_configured_for_both_subdomains(client):
@@ -159,7 +161,13 @@ def test_detail_and_write_paths_work_at_root(client):
 
 
 def test_unknown_host_keeps_single_domain_behaviour(client):
-    """Baska bir Host ile gelen istek eski davranisi gorur: /m ve /gorevler."""
-    r = client.get("/m", headers={"host": "baska.example"})
-    assert r.status_code == 200 and 'data-fragment="mobile_todo"' in r.text
+    """Bilinmeyen Host masaustu yuzu gorur; /m ILE ULASIM YOK.
+
+    Eskiden bu test '/m 200 doner' diyordu. Kural degisti: alan adi ayrimi
+    kuruluyken mobil yuze YALNIZCA app.<alan> kokunden ulasilir. Aksi halde
+    'Host: baska.example' yazan biri mobil yuzu yol uzerinden aliyordu — ayrim
+    bir arayuz siniri, guvenlik siniri degil, ama ikinci bir adres olmasi
+    paylasilan linkleri boluyor ve PWA kapsamini karistiriyordu.
+    """
+    assert client.get("/m", headers={"host": "baska.example"}).status_code == 404
     assert client.get("/gorevler", headers={"host": "baska.example"}).status_code == 200

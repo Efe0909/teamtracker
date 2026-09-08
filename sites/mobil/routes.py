@@ -164,12 +164,17 @@ def mobile_card_ctx(request, item, user) -> dict:
 
 @router.get("/manifest.json", include_in_schema=False)
 def manifest(request: Request):
-    """Statik degil: start_url/scope alan adina gore degisir.
+    """Statik degil ama start_url her zaman KOK.
 
-    app.<alan> altinda mobil site kokte durur -> start_url "/". Tek alan adi
-    modunda "/m". Yanlis start_url ana ekrandaki uygulamayi bos sayfaya acar.
+    Mobil yuz app.<alan> altinda kokte durur. Eskiden burada mp(request)
+    kullaniliyordu ve tek alan adi modunda "/m" donuyordu; alan adi ayrimi
+    kurulunca dashboard.<alan>/manifest.json hala "/m" gosteriyordu, yani ana
+    ekrana eklenen uygulama 404'e aciliyordu.
+
+    "/" iki durumda da dogru: manifest hangi alan adindan istendiyse o alan
+    adinin kokune isaret eder.
     """
-    root = mp(request) or "/"          # app alan adinda "/", tek alan adinda "/m"
+    root = "/"
     return JSONResponse({
         "name": "EkipTakip", "short_name": "EkipTakip",
         "description": "Ekibin kayıtları, eylemleri ve bildirimleri — cepte.",

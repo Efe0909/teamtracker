@@ -52,7 +52,9 @@ self.addEventListener("push", (e) => {
 
 self.addEventListener("notificationclick", (e) => {
   e.notification.close();
-  const url = (e.notification.data && e.notification.data.url) || "/m";
+  /* Yedek adres KOK — mobil yuz app.<alan> altinda kokte durur, '/m' diye bir
+     adres YOKTUR. Sunucu gercek adresi bildirim yukunde gonderiyor. */
+  const url = (e.notification.data && e.notification.data.url) || "/";
   e.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((wins) => {
     for (const w of wins) if (w.url.includes(url) && "focus" in w) return w.focus();
     return self.clients.openWindow(url);

@@ -19,7 +19,8 @@ from urllib.parse import quote
 
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.exception_handlers import http_exception_handler
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from fastapi.responses import (FileResponse, JSONResponse, PlainTextResponse,
+                               RedirectResponse)
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -58,14 +59,31 @@ class MobileHostPrefix:
         self.app = app
 
     async def __call__(self, scope, receive, send):
-        if scope["type"] == "http" and config.HOST_APP and _host_of(scope) == config.HOST_APP:
-            path = scope["path"]
-            # Ortak yollar onege girmez — /giris burada olmazsa mobil alan adinda
-            # giris /m/giris'e cevrilir ve 404 doner (yani hic girilemez).
-            ortak = path.startswith(config.SHARED_PATHS)
-            mobil_yol = path == "/m" or path.startswith("/m/")
-            if not ortak and not mobil_yol:
-                scope["path"] = "/m" + ("" if path == "/" else path.rstrip("/"))
+        if scope["type"] != "http" or not config.HOST_APP:
+            # Tek alan adi modu (alan adi tanimsiz): /m TEK erisim yolu, dokunma.
+            # Yalnizca gelistirme/yerel kurulum boyle calisir.
+            return await self.app(scope, receive, send)
+
+        path = scope["path"]
+        # Ortak yollar onege girmez — /giris burada olmazsa mobil alan adinda
+        # giris /m/giris'e cevrilir ve 404 doner (yani hic girilemez).
+        ortak = path.startswith(config.SHARED_PATHS)
+        m_yolu = path == "/m" or path.startswith("/m/")
+
+        # /m ILE ERISIM YOK: mobil yuz app.<alan> altinda KOKTE durur, baska
+        # adresi yoktur. Iki sebeple kapali:
+        #   1. app.<alan>/m ayni icerige ikinci bir adres olurdu — paylasilan
+        #      linkler bolunur, PWA kapsami karisir, adres cubugunda '/m' sizar.
+        #   2. dashboard.<alan>/m mobil yuzu MASAUSTU alan adindan aciyordu;
+        #      onek yalnizca app host'unda yazildigi icin ham rotalar oradan
+        #      dogrudan servis ediliyordu.
+        # Ic yol hala /m/... — degisen sey disaridan gorunen adres.
+        if m_yolu:
+            return await PlainTextResponse("sayfa yok", status_code=404)(
+                scope, receive, send)
+
+        if _host_of(scope) == config.HOST_APP and not ortak:
+            scope["path"] = "/m" + ("" if path == "/" else path.rstrip("/"))
         await self.app(scope, receive, send)
 
 
