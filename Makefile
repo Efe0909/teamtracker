@@ -30,9 +30,14 @@ up: setup db-ac seed dev  ## sifirdan kaldir: bagimliliklar + Postgres + tohum +
 
 setup: $(STAMP)  ## sanal ortam + bagimliliklar (idempotent)
 
+# Damga silinip bagimliliklar tazelenmek istendiginde (ya da $(VENV) yeni bir
+# bagimliliktan eskiyse) buraya varolan bir sanal ortamla gelinir. Saglam ortam
+# oldugu gibi birakilir; yarim kalmis bir dizin --allow-existing ile tamamlanir
+# (`uv venv` yalin haliyle "A virtual environment already exists" deyip cikardi).
+# --clear KULLANILMAZ: varolan ortami sessizce siler.
 $(STAMP):
 	@command -v uv >/dev/null || { echo "uv yok: https://docs.astral.sh/uv/ (curl -LsSf https://astral.sh/uv/install.sh | sh)"; exit 1; }
-	uv venv --python $(PY) $(VENV)
+	@test -x $(BIN)/python || uv venv --python $(PY) --allow-existing $(VENV)
 	uv pip install --python $(BIN)/python $(DEPS)
 	@touch $@
 
