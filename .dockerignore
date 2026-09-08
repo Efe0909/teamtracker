@@ -1,0 +1,39 @@
+# Imaj baglami: kucuk tut, sir sizdirma.
+
+.git/
+.gitignore
+.venv/
+__pycache__/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Sirlar imaja GIRMEZ — degerler calisma aninda env_file ile gelir.
+.env
+.env.*
+!.env.ornek
+
+# SQLite doneminden kalan yerel veritabani dosyalari
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Uygulamanin calismasi icin gerekmeyenler
+tests/
+spec/
+reference/
+deploy/
+Makefile
+README.md
+CLAUDE.md
+docker-compose*.yml
+Dockerfile
+
+# Ajan/arac dizinleri
+.claude/
+.codegraph/
+.stele/
+.mcp.json
+
+.DS_Store

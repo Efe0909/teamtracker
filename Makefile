@@ -10,12 +10,13 @@ HOST    ?= 127.0.0.1
 PORT    ?= 8000
 COMPOSE := docker compose
 STAMP   := $(VENV)/.deps-ok
-DEPS    := fastapi uvicorn[standard] jinja2 python-multipart pytest httpx \
-           authlib itsdangerous python-dotenv \
-           psycopg[binary,pool]          # PostgreSQL (spec/80-veritabani.md)
+# Bagimlilik listesi burada DEGIL: requirements.txt (imaj da onu okuyor).
+# requirements-dev.txt onu -r ile icerir ve ustune pytest ekler.
+REQ     := requirements.txt requirements-dev.txt
 
 .DEFAULT_GOAL := help
-.PHONY: help up setup db-ac db-kapat seed reseed dev run test check clean distclean
+.PHONY: help up setup db-ac db-kapat seed reseed dev run test check clean distclean \
+        imaj yayin-ac yayin-kapat yayin-log yayin-tohum
 
 help:  ## bu listeyi goster
 	@echo "EkipTakip — yerel komutlar"
@@ -30,10 +31,15 @@ up: setup db-ac seed dev  ## sifirdan kaldir: bagimliliklar + Postgres + tohum +
 
 setup: $(STAMP)  ## sanal ortam + bagimliliklar (idempotent)
 
-$(STAMP):
+# Damga silinip bagimliliklar tazelenmek istendiginde (ya da $(VENV) yeni bir
+# bagimliliktan eskiyse) buraya varolan bir sanal ortamla gelinir. Saglam ortam
+# oldugu gibi birakilir; yarim kalmis bir dizin --allow-existing ile tamamlanir
+# (`uv venv` yalin haliyle "A virtual environment already exists" deyip cikardi).
+# --clear KULLANILMAZ: varolan ortami sessizce siler.
+$(STAMP): $(REQ)
 	@command -v uv >/dev/null || { echo "uv yok: https://docs.astral.sh/uv/ (curl -LsSf https://astral.sh/uv/install.sh | sh)"; exit 1; }
-	uv venv --python $(PY) $(VENV)
-	uv pip install --python $(BIN)/python $(DEPS)
+	@test -x $(BIN)/python || uv venv --python $(PY) --allow-existing $(VENV)
+	uv pip install --python $(BIN)/python -r requirements-dev.txt
 	@touch $@
 
 db-ac: ## Postgres'i Docker'da kaldir (veri kalir)
@@ -68,6 +74,25 @@ check: $(STAMP)  ## uclar ayakta mi — sunucu calisirken baska terminalde
 	@for u in / /gorevler /kazanim-agaci /pivot /takvim /tanimlar /arsiv /dosyalar /admin /whoami; do \
 	  printf "%s %s\n" "$$(curl -s -o /dev/null -w '%{http_code}' http://$(HOST):$(PORT)$$u)" "$$u"; \
 	done
+
+# --- konteyner yigini (docker-compose.prod.yml) ---------------------------
+# Bunlar UYGULAMAYI da konteynere alir; yukaridaki db-ac yalnizca Postgres'ti.
+PROD := $(COMPOSE) -f docker-compose.prod.yml
+
+imaj:  ## uygulama imajini kur (docker build)
+	docker build -t ekiptakip:latest .
+
+yayin-ac: ## konteyner yigini: uygulama + Postgres (127.0.0.1:$${APP_PORT:-8001})
+	$(PROD) up -d --build
+
+yayin-kapat: ## yigini durdur (veri kalir; silmek icin: ... down -v)
+	$(PROD) down
+
+yayin-log: ## uygulama gunlugunu izle
+	$(PROD) logs -f app
+
+yayin-tohum: ## yigindaki veritabanini tohumla (VAROLAN VERI SILINIR)
+	$(PROD) --profile tohum run --rm seed
 
 clean:  ## onbellekleri sil (veritabani Docker'da: docker compose down -v)
 	find . -name __pycache__ -type d -prune -exec rm -rf {} +
