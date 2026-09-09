@@ -1,10 +1,10 @@
 {# fragment: takim_kayitlar — takimin acik kayitlari + "bu takima kayit ac".
    Ikinci bir tablo ekrani DEGIL: tamami gorev tablosunda, ayni suzgecle
-   (/gorevler?takim=...). Burada oncelik sirasinda ilk 20 satir durur. #}
+   (/tasks?team=...). Burada oncelik sirasinda ilk 20 satir durur. #}
 <div class="tkayit" data-fragment="takim_kayitlar">
   <div class="ahead">📋 Açık kayıtlar
-    <span class="tb h0">{{ acik }}</span>
-    {% if rows | length < acik %}<span class="small muted" style="font-weight:400">
+    <span class="tb h0">{{ open }}</span>
+    {% if rows | length < open %}<span class="small muted" style="font-weight:400">
       — ilk {{ rows | length }}, tamamı tabloda</span>
     {% else %}<span class="small muted" style="font-weight:400">
       — kayıt takıma tanımlanır, eylem kişiye atanır</span>{% endif %}
@@ -19,10 +19,10 @@
     {% for r in rows %}
       <tr>
         <td>
-          <span class="chip {% if r.kind == 'hata' %}c-bug{% else %}c-task{% endif %}">
-            {{ 'Hata' if r.kind == 'hata' else 'Görev' }}</span>
-          <a class="tlink" href="/gorevler/{{ r.id }}">{{ r.title }}</a>
-          {% if r.acik_eylem %}<span class="chip c-eyl" title="açık eylem">⚡{{ r.acik_eylem }}</span>{% endif %}
+          <span class="chip {% if r.kind == 'issue' %}c-bug{% else %}c-task{% endif %}">
+            {{ 'Hata' if r.kind == 'issue' else 'Görev' }}</span>
+          <a class="tlink" href="/tasks/{{ r.id }}">{{ r.title }}</a>
+          {% if r.open_action_count %}<span class="chip c-eyl" title="açık eylem">⚡{{ r.open_action_count }}</span>{% endif %}
         </td>
         <td class="dim">{{ r.path }}</td>
         <td><span class="v-{{ r.priority }}">{{ priorities[r.priority] }}</span></td>
@@ -50,7 +50,7 @@
       {% endfor %}
     </select>
     <select name="kind" style="width:auto">
-      <option value="hata">Hata</option><option value="gorev">Görev</option>
+      <option value="issue">Hata</option><option value="task">Görev</option>
     </select>
     <button class="primary">Aç</button>
   </form>

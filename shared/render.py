@@ -13,8 +13,8 @@ from fastapi.templating import Jinja2Templates
 
 from . import auth, config, csrf
 
-ORTAK = Path(__file__).parent / "templates"
-KOK = Path(__file__).resolve().parents[1]
+SHARED_DIR = Path(__file__).parent / "templates"
+ROOT = Path(__file__).resolve().parents[1]
 
 # --- statik surum damgasi -------------------------------------------------
 #
@@ -30,29 +30,29 @@ KOK = Path(__file__).resolve().parents[1]
 # sw.js ve manifest.json BILEREK disarida: service worker sabit bir adresten
 # kaydedilmeli (surum eklenirse her dagitimda ikinci bir SW kaydolur) ve ikisi
 # icin nginx zaten no-cache yaziyor.
-_STATIK_DIZINLER = (KOK / "shared/static",
-                    KOK / "sites/dashboard/static",
-                    KOK / "sites/mobil/static")
+_STATIC_DIRS = (ROOT / "shared/static",
+                ROOT / "sites/dashboard/static",
+                ROOT / "sites/mobil/static")
 
 
-def _statik_surum() -> str:
-    ozet = hashlib.sha256()
-    for dizin in _STATIK_DIZINLER:
-        if not dizin.is_dir():
+def _static_version() -> str:
+    digest = hashlib.sha256()
+    for directory in _STATIC_DIRS:
+        if not directory.is_dir():
             continue
-        for yol in sorted(dizin.rglob("*")):
-            if yol.is_file():
-                bilgi = yol.stat()
-                ozet.update(f"{yol.relative_to(KOK)}:{bilgi.st_mtime_ns}:{bilgi.st_size}".encode())
-    return ozet.hexdigest()[:8]
+        for path in sorted(directory.rglob("*")):
+            if path.is_file():
+                info = path.stat()
+                digest.update(f"{path.relative_to(ROOT)}:{info.st_mtime_ns}:{info.st_size}".encode())
+    return digest.hexdigest()[:8]
 
 
-STATIK_SURUM = _statik_surum()
+STATIC_VERSION = _static_version()
 
 
-def statik(yol: str) -> str:
+def static_url(path: str) -> str:
     """/static/... adresine surum damgasi ekler."""
-    return f"{yol}?v={STATIK_SURUM}"
+    return f"{path}?v={STATIC_VERSION}"
 
 
 def _csrf_ctx(request):
@@ -60,14 +60,14 @@ def _csrf_ctx(request):
     return {"csrf_token": csrf.token(request) if hasattr(request, "session") else ""}
 
 
-def site_templates(dizin: Path) -> Jinja2Templates:
-    t = Jinja2Templates(directory=[dizin, ORTAK], context_processors=[_csrf_ctx])
+def site_templates(directory: Path) -> Jinja2Templates:
+    t = Jinja2Templates(directory=[directory, SHARED_DIR], context_processors=[_csrf_ctx])
     # Sablon "kimlik sahte mi" bilsin: kullanici degistirme listesi yalnizca
     # gelistirmede gorunur, yayinda yerine cikis dugmesi durur.
-    t.env.globals["sahte_kimlik"] = config.sahte_kimlik
-    t.env.globals["statik"] = statik
+    t.env.globals["fake_identity"] = config.fake_identity
+    t.env.globals["static"] = static_url
     # Varlik: balonlardaki avatar noktasi bunu okuyor (shared/auth.py).
-    t.env.globals["cevrimici"] = auth.cevrimici
+    t.env.globals["online"] = auth.online
     return t
 
 

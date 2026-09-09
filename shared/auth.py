@@ -17,17 +17,17 @@ COOKIE = "uid"          # yalnizca sahte kimlik modunda (gelistirme/test)
 
 
 def get_user(user_id):
-    kimlik = db.uid(user_id)
-    if kimlik is None:
+    id_ = db.uid(user_id)
+    if id_ is None:
         return None
-    return db.q1("select * from users where id = %s", (kimlik,))
+    return db.q1("select * from users where id = %s", (id_,))
 
 
 def all_users():
     return db.q("select * from users where is_active order by name")
 
 
-def _aktif(u):
+def _active(u):
     return u if u is not None and db.as_bool(u["is_active"]) else None
 
 
@@ -37,35 +37,35 @@ def _aktif(u):
 # yeterince yakin mi? Bu yuzden oturum tablosu yok, tek sutun var
 # (users.last_seen_at, goc 004).
 
-CEVRIMICI_ESIGI = timedelta(minutes=2)     # bundan yeniyse cevrimici sayilir
-_ISARET_ARALIGI = timedelta(seconds=60)    # ayni kullanici icin en sik yazma
+ONLINE_THRESHOLD = timedelta(minutes=2)     # bundan yeniyse cevrimici sayilir
+_MARK_INTERVAL = timedelta(seconds=60)      # ayni kullanici icin en sik yazma
 
 # Kullanici basina son YAZMA ani. Surec bellegi yeterli: agac indeksi de oyle
 # tutuluyor ve --workers 1 zaten sart (spec/10-kararlar.md). Ikinci bir isci
 # olsaydi en kotu ihtimalle biraz fazla UPDATE olurdu, veri bozulmazdi.
-_son_isaret: dict = {}
+_last_mark: dict = {}
 
 
-def _varligi_isaretle(u) -> None:
+def _mark_presence(u) -> None:
     """last_seen_at'i gunceller — ama her istekte DEGIL.
 
     current_user her istekte cagriliyor; her seferinde UPDATE atmak sayfa
     basina birkac gereksiz yazma demekti. Kullanici basina dakikada bir
     yeterli: esik iki dakika, yani gecikme goruntuyu bozmuyor.
     """
-    simdi = db.now()
-    kimlik = u["id"]
-    onceki = _son_isaret.get(kimlik)
-    if onceki is not None and simdi - onceki < _ISARET_ARALIGI:
+    now = db.now()
+    id_ = u["id"]
+    previous = _last_mark.get(id_)
+    if previous is not None and now - previous < _MARK_INTERVAL:
         return
-    _son_isaret[kimlik] = simdi
-    db.x("update users set last_seen_at = %s where id = %s", (simdi, kimlik))
+    _last_mark[id_] = now
+    db.x("update users set last_seen_at = %s where id = %s", (now, id_))
 
 
-def cevrimici(u) -> bool:
+def online(u) -> bool:
     """Satirdaki last_seen_at'e gore: su an cevrimici mi?"""
-    an = u.get("last_seen_at") if hasattr(u, "get") else None
-    return an is not None and db.now() - an < CEVRIMICI_ESIGI
+    seen = u.get("last_seen_at") if hasattr(u, "get") else None
+    return seen is not None and db.now() - seen < ONLINE_THRESHOLD
 
 
 def current_user(request):
@@ -74,9 +74,9 @@ def current_user(request):
     Sahte kimlik modunda (EKIPTAKIP_AUTH=sahte, yayinda acilmaz) oturum yoksa
     `uid` cerezine, o da yoksa ilk kullaniciya duser — gelistirme kolayligi.
     """
-    u = _aktif(get_user(request.session.get("uid") if hasattr(request, "session") else None))
-    if u is None and config.sahte_kimlik():
-        u = _aktif(get_user(request.cookies.get(COOKIE))) or db.q1(
+    u = _active(get_user(request.session.get("uid") if hasattr(request, "session") else None))
+    if u is None and config.fake_identity():
+        u = _active(get_user(request.cookies.get(COOKIE))) or db.q1(
             # created_at esit olabilir; email ikinci olcut olmadan hangi satirin
             # gelecegi Postgres'te GARANTI DEGIL (SQLite'ta insert sirasi geliyordu).
             "select * from users where is_active order by created_at, email limit 1")
@@ -84,7 +84,7 @@ def current_user(request):
         # Varlik damgasi TAM BURADA: kimlik cozulen her istek bir hayat
         # belirtisidir. Ayri bir "ben buradayim" ucu yok — o hem fazladan
         # istek hem de kapatilabilir bir yol olurdu.
-        _varligi_isaretle(u)
+        _mark_presence(u)
     return u
 
 

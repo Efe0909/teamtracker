@@ -19,7 +19,7 @@ CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';
        "img-src 'self' data:; connect-src 'self'; font-src 'self'; "
        "form-action 'self'; frame-ancestors 'none'; base-uri 'none'; object-src 'none'")
 
-BASLIKLAR = {
+HEADERS = {
     "Content-Security-Policy": CSP,
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
@@ -28,7 +28,7 @@ BASLIKLAR = {
 }
 
 
-class GuvenlikBasliklari:
+class SecurityHeaders:
     """Her yanita ekler; yaniti uretenin unutma ihtimali kalmasin."""
 
     def __init__(self, app):
@@ -38,25 +38,25 @@ class GuvenlikBasliklari:
         if scope["type"] != "http":
             return await self.app(scope, receive, send)
 
-        async def gonder(mesaj):
-            if mesaj["type"] == "http.response.start":
-                var = {k.lower() for k, _ in mesaj["headers"]}
-                mesaj["headers"] = list(mesaj["headers"]) + [
+        async def send_wrapper(message):
+            if message["type"] == "http.response.start":
+                have = {k.lower() for k, _ in message["headers"]}
+                message["headers"] = list(message["headers"]) + [
                     (k.lower().encode(), v.encode())
-                    for k, v in BASLIKLAR.items() if k.lower().encode() not in var]
-            await send(mesaj)
+                    for k, v in HEADERS.items() if k.lower().encode() not in have]
+            await send(message)
 
-        await self.app(scope, receive, gonder)
+        await self.app(scope, receive, send_wrapper)
 
 
 # --- giris hiz siniri -----------------------------------------------------
 
-PENCERE = 60          # saniye
-SINIR = 10            # ayni IP'den dakikada en fazla giris denemesi
-_gecmis: dict[str, deque] = defaultdict(deque)
+WINDOW = 60          # saniye
+LIMIT = 10           # ayni IP'den dakikada en fazla giris denemesi
+_history: dict[str, deque] = defaultdict(deque)
 
 
-def istemci_ip(request: Request) -> str:
+def client_ip(request: Request) -> str:
     """Vekil arkasindayken gercek IP.
 
     nginx `proxy_set_header X-Real-IP $remote_addr` yazar (deploy/). Bu baslik
@@ -64,20 +64,20 @@ def istemci_ip(request: Request) -> str:
     butun kulubu kilitler. Bu yuzden vekil yapilandirmasi bu kuralin parcasidir.
     """
     return (request.headers.get("x-real-ip")
-            or (request.client.host if request.client else "bilinmeyen"))
+            or (request.client.host if request.client else "unknown"))
 
 
-def sinir_asildi(request: Request) -> bool:
-    simdi = time.monotonic()
-    kuyruk = _gecmis[istemci_ip(request)]
-    while kuyruk and simdi - kuyruk[0] > PENCERE:
-        kuyruk.popleft()
-    if len(kuyruk) >= SINIR:
+def limit_exceeded(request: Request) -> bool:
+    now = time.monotonic()
+    queue = _history[client_ip(request)]
+    while queue and now - queue[0] > WINDOW:
+        queue.popleft()
+    if len(queue) >= LIMIT:
         return True
-    kuyruk.append(simdi)
+    queue.append(now)
     return False
 
 
-def cok_deneme() -> PlainTextResponse:
+def too_many_attempts() -> PlainTextResponse:
     return PlainTextResponse("Çok fazla deneme. Bir dakika sonra tekrar dene.",
-                             status_code=429, headers={"Retry-After": str(PENCERE)})
+                             status_code=429, headers={"Retry-After": str(WINDOW)})

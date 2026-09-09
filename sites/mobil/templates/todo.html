@@ -1,13 +1,13 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="msearch">
-  <form class="box" action="{{ mp }}/ara" method="get">
+  <form class="box" action="{{ mp }}/search" method="get">
     <span class="ic">🔎</span>
     <input name="q" placeholder="Başlık veya kayıt ara…" autocomplete="off">
   </form>
   <div class="segs">
-    <a class="seg{% if not done %} on{% endif %}" href="{{ mroot }}?sekme=acik">Yapılacak</a>
-    <a class="seg{% if done %} on{% endif %}" href="{{ mroot }}?sekme=kapali">Tamamlandı</a>
+    <a class="seg{% if not done %} on{% endif %}" href="{{ mroot }}?tab=open">Yapılacak</a>
+    <a class="seg{% if done %} on{% endif %}" href="{{ mroot }}?tab=closed">Tamamlandı</a>
   </div>
 </div>
 

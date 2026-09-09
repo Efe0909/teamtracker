@@ -20,87 +20,87 @@ from urllib.parse import parse_qs
 from fastapi import Request
 from fastapi.responses import JSONResponse, PlainTextResponse
 
-ANAHTAR = "csrf"
-BASLIK = "x-csrf-token"
-ALAN = "csrf"
-GUVENSIZ = {"POST", "PATCH", "PUT", "DELETE"}
+KEY = "csrf"
+HEADER = "x-csrf-token"
+FIELD = "csrf"
+UNSAFE_METHODS = {"POST", "PATCH", "PUT", "DELETE"}
 
 
 def token(request: Request) -> str:
     """Oturuma bagli token; yoksa uretilir. Oturum yenilenince yenilenir."""
-    t = request.session.get(ANAHTAR)
+    t = request.session.get(KEY)
     if not t:
         t = secrets.token_urlsafe(32)
-        request.session[ANAHTAR] = t
+        request.session[KEY] = t
     return t
 
 
-class CsrfKapisi:
+class CsrfGate:
     # Giris akisi muaf: oturum henuz yok, kendi state parametresi var.
-    # Tam eslesme (yalniz /static/ onek) — bkz. GirisKapisi'ndaki ayni gerekce.
-    # /test/bildirim: kimlik CEREZDEN gelmiyor (uc zaten yalnizca
+    # Tam eslesme (yalniz /static/ onek) — bkz. LoginGate'deki ayni gerekce.
+    # /test/notification: kimlik CEREZDEN gelmiyor (uc zaten yalnizca
     # EKIPTAKIP_PUSH_TEST=1 iken var). CSRF ambient cerezle yapilan istegi
     # korur; burada cerez kullanilmadigi icin korunacak sey yok.
-    ACIK_TAM = frozenset({"/giris", "/giris/callback", "/sw.js", "/favicon.ico",
-                          "/manifest.json", "/test/bildirim"})
-    ACIK_ONEK = ("/static/",)
+    EXEMPT_EXACT = frozenset({"/login", "/login/callback", "/sw.js", "/favicon.ico",
+                             "/manifest.json", "/test/notification"})
+    EXEMPT_PREFIX = ("/static/",)
 
     def __init__(self, app):
         self.app = app
 
     async def __call__(self, scope, receive, send):
-        if scope["type"] != "http" or scope["method"] not in GUVENSIZ:
+        if scope["type"] != "http" or scope["method"] not in UNSAFE_METHODS:
             return await self.app(scope, receive, send)
-        if scope["path"] in self.ACIK_TAM or scope["path"].startswith(self.ACIK_ONEK):
+        if scope["path"] in self.EXEMPT_EXACT or scope["path"].startswith(self.EXEMPT_PREFIX):
             return await self.app(scope, receive, send)
 
         request = Request(scope, receive)
-        beklenen = request.session.get(ANAHTAR)
-        gelen = request.headers.get(BASLIK) or None   # bos baslik = yok say
+        expected = request.session.get(KEY)
+        given = request.headers.get(HEADER) or None   # bos baslik = yok say
 
-        if gelen is None:
+        if given is None:
             # Baslik yok: duz form olabilir. Govdeyi oku, sonra geri oynat.
-            govde = await request.body()
-            gelen = _formdan(govde, request.headers.get("content-type", ""))
-            receive = _tekrar(govde)
+            body = await request.body()
+            given = _from_form(body, request.headers.get("content-type", ""))
+            receive = _replay(body)
 
-        if not beklenen or not gelen or not hmac.compare_digest(str(beklenen), str(gelen)):
-            return await _reddet(request, scope, receive, send)
+        if not expected or not given or not hmac.compare_digest(str(expected), str(given)):
+            return await _reject(request, scope, receive, send)
         await self.app(scope, receive, send)
 
 
-def _formdan(govde: bytes, ctype: str) -> str | None:
+def _from_form(body: bytes, ctype: str) -> str | None:
     if "application/x-www-form-urlencoded" not in ctype:
         return None                       # multipart/json: baslik kullanilmali
     try:
-        return parse_qs(govde.decode("utf-8"))[ALAN][0]
+        return parse_qs(body.decode("utf-8"))[FIELD][0]
     except Exception:
         return None
 
 
-def _tekrar(govde: bytes):
+def _replay(body: bytes):
     """Okunan govdeyi asagiya bir kez daha veren receive."""
-    verildi = False
+    given = False
 
     async def receive():
-        nonlocal verildi
-        if verildi:
+        nonlocal given
+        if given:
             return {"type": "http.disconnect"}
-        verildi = True
-        return {"type": "http.request", "body": govde, "more_body": False}
+        given = True
+        return {"type": "http.request", "body": body, "more_body": False}
 
     return receive
 
 
-async def _reddet(request: Request, scope, receive, send):
-    from . import kimlik                                   # dairesel import olmasin
+async def _reject(request: Request, scope, receive, send):
+    from . import identity                                   # dairesel import olmasin
     uid = request.session.get("uid")
     # Yalnizca OTURUMLU red yazilir: aksi hâlde kimliksiz istekler denetim
     # tablosuna sinirsiz satir yazdirir (her satir senkron bir veritabani commit'i).
     if uid:
-        kimlik.olay(request, "yetki_reddi", actor_id=uid, detay=f"csrf: {scope['path']}")
-    kabul = request.headers.get("accept", "")
-    yanit = (JSONResponse({"hata": "csrf"}, status_code=403) if "json" in kabul
+        identity.log_event(request, "permission_denied", actor_id=uid, detail=f"csrf: {scope['path']}")
+    accept = request.headers.get("accept", "")
+    response = (JSONResponse({"hata": "csrf"}, status_code=403) if "json" in accept
              else PlainTextResponse("Oturumun tazelenmiş olabilir. Sayfayı yenile.",
                                     status_code=403))
-    await yanit(scope, receive, send)
+    await response(scope, receive, send)

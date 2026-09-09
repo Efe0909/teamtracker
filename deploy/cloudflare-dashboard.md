@@ -68,7 +68,7 @@ Zincirin alt katmanlarını yine yerelden bakabilirsin (tünelden bağımsız):
 
 ```bash
 curl -s -H "Host: app.polonyum.com"       http://127.0.0.1:8080/         -o /dev/null -w '%{http_code}\n'
-curl -s -H "Host: dashboard.polonyum.com" http://127.0.0.1:8080/gorevler -o /dev/null -w '%{http_code}\n'
+curl -s -H "Host: dashboard.polonyum.com" http://127.0.0.1:8080/tasks -o /dev/null -w '%{http_code}\n'
 curl -s -H "Host: rastgele.host"          http://127.0.0.1:8080/         -o /dev/null -w '%{http_code}\n'   # 000 = 444, doğru
 ```
 

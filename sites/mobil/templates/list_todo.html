@@ -1,12 +1,12 @@
 {# fragment: mobile_todo — yapilacak kartlari. Siralama Python'da yapildi. #}
 <div class="mlist" id="liste" data-fragment="mobile_todo">
   {% for r in rows %}
-  <a class="tcard{% if r.status == 'kapandi' %} done{% endif %}" href="{{ mp }}/kayit/{{ r.id }}">
+  <a class="tcard{% if r.status == 'closed' %} done{% endif %}" href="{{ mp }}/record/{{ r.id }}">
     <div class="body">
       <div class="chips">
-        <span class="chip {% if r.kind == 'hata' %}c-bug{% else %}c-task{% endif %}">
-          {{ 'Hata' if r.kind == 'hata' else 'Görev' }}</span>
-        {% if r.priority == 'kritik' %}<span class="chip c-crit">Kritik</span>{% endif %}
+        <span class="chip {% if r.kind == 'issue' %}c-bug{% else %}c-task{% endif %}">
+          {{ 'Hata' if r.kind == 'issue' else 'Görev' }}</span>
+        {% if r.priority == 'critical' %}<span class="chip c-crit">Kritik</span>{% endif %}
         {% if r.dms %}<span class="chip c-dms">{{ r.dms }}</span>{% endif %}
         {% if r.pillar %}<span class="chip c-pil">{{ r.pillar }}</span>{% endif %}
       </div>
@@ -19,8 +19,8 @@
       </div>
     </div>
     <div class="act">
-      <span class="circ">{{ '✓' if r.status == 'kapandi' else '▶' }}</span>
-      <span class="lbl">{{ 'Aç' if r.status == 'kapandi' else 'Devam et' }}</span>
+      <span class="circ">{{ '✓' if r.status == 'closed' else '▶' }}</span>
+      <span class="lbl">{{ 'Aç' if r.status == 'closed' else 'Devam et' }}</span>
     </div>
   </a>
   {% else %}

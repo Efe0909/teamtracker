@@ -13,7 +13,7 @@
 </head>
 <body hx-headers='{"X-CSRF-Token": "{{ csrf_token }}"}'>
 {% include "fragments/uyari_mobil.html" %}
-{% with aktif = "ekipler" %}{% include "fragments/rail.html" %}{% endwith %}
+{% with aktif = "teams" %}{% include "fragments/rail.html" %}{% endwith %}
 
 <div class="tmain" id="main">
   <div class="thead row">
@@ -23,27 +23,27 @@
   </div>
 
   <div class="tkgrid">
-    {% for t in takimlar %}
-    <a class="tkcard{% if t.uyeyim %} benim{% endif %}" href="/ekipler/{{ t.id }}">
+    {% for t in teams %}
+    <a class="tkcard{% if t.is_member %} benim{% endif %}" href="/teams/{{ t.id }}">
       <div class="tkhead">
         <span class="tdot" style="background:{{ t.color }}"></span>
         <span class="tknm">{{ t.name }}</span>
-        {% if t.uyeyim %}<span class="tb h1">üyesiyim</span>{% endif %}
+        {% if t.is_member %}<span class="tb h1">üyesiyim</span>{% endif %}
       </div>
       {% if t.description %}<div class="tkds">{{ t.description }}</div>{% endif %}
 
-      <div class="stack" title="{{ t.uyeler | map(attribute='name') | join(', ') }}">
-        {% for u in t.uyeler[:6] %}
+      <div class="stack" title="{{ t.members | map(attribute='name') | join(', ') }}">
+        {% for u in t.members[:6] %}
         <span class="av" style="background:{{ u.color }}">{{ u.name[0] }}</span>
         {% endfor %}
-        {% if t.uyeler | length > 6 %}<span class="av" style="background:var(--dim)">
-          +{{ t.uyeler | length - 6 }}</span>{% endif %}
+        {% if t.members | length > 6 %}<span class="av" style="background:var(--dim)">
+          +{{ t.members | length - 6 }}</span>{% endif %}
       </div>
 
       <div class="tkft">
-        <span>{{ t.uye }} üye</span><span>·</span>
-        <span{% if t.acik %} class="v-acik"{% endif %}>{{ t.acik }} açık kayıt</span>
-        {% if t.acik_eylem %}<span>·</span><span class="chip c-eyl">⚡{{ t.acik_eylem }}</span>{% endif %}
+        <span>{{ t.member_count }} üye</span><span>·</span>
+        <span{% if t.open_count %} class="v-open"{% endif %}>{{ t.open_count }} açık kayıt</span>
+        {% if t.open_action_count %}<span>·</span><span class="chip c-eyl">⚡{{ t.open_action_count }}</span>{% endif %}
         <span class="go">→</span>
       </div>
     </a>

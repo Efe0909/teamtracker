@@ -31,29 +31,29 @@ document.body.addEventListener("htmx:afterRequest", e => {
   if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
   if (Notification.permission === "denied") return;          // kullanici kapatmis
 
-  const anahtar = await fetch("/vapid")
+  const keys = await fetch("/vapid")
     .then(r => (r.ok ? r.json() : null)).catch(() => null);
-  if (!anahtar) return;                                       // push kurulmamis (503)
+  if (!keys) return;                                          // push kurulmamis (503)
 
-  const kayit = await navigator.serviceWorker.ready;
+  const registration = await navigator.serviceWorker.ready;
 
-  async function aboneOl() {
-    const mevcut = await kayit.pushManager.getSubscription();
-    const abonelik = mevcut || await kayit.pushManager.subscribe({
+  async function subscribe() {
+    const existing = await registration.pushManager.getSubscription();
+    const subscription = existing || await registration.pushManager.subscribe({
       userVisibleOnly: true,                                  // tarayici sart kosuyor
-      applicationServerKey: b64ToBytes(anahtar.publicKey),
+      applicationServerKey: b64ToBytes(keys.publicKey),
     });
     // Sunucuya HER acilista yollanir: abonelik tarayicida dururken sunucudaki
     // satir silinmis olabilir (olu diye budanmis, veritabani sifirlanmis).
     // Upsert oldugu icin tekrar gondermek zararsiz.
-    await fetch("/abone", {
+    await fetch("/subscribe", {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken() },
-      body: JSON.stringify(abonelik),
+      body: JSON.stringify(subscription),
     });
   }
 
-  if (Notification.permission === "granted") { aboneOl().catch(() => {}); return; }
+  if (Notification.permission === "granted") { subscribe().catch(() => {}); return; }
 
   // Izin yok: kullanici hareketi bekleyen kucuk bir dugme.
   const d = document.createElement("button");
@@ -62,7 +62,7 @@ document.body.addEventListener("htmx:afterRequest", e => {
   d.addEventListener("click", async () => {
     d.disabled = true;
     if (await Notification.requestPermission() === "granted") {
-      await aboneOl().catch(() => {});
+      await subscribe().catch(() => {});
       d.remove();
     } else { d.remove(); }                                    // reddettiyse israr etme
   });
@@ -74,7 +74,7 @@ document.body.addEventListener("htmx:afterRequest", e => {
   }
   /* applicationServerKey ham bayt ister; anahtar b64url metin olarak geliyor. */
   function b64ToBytes(s) {
-    const dolgulu = (s + "=".repeat((4 - s.length % 4) % 4)).replace(/-/g, "+").replace(/_/g, "/");
-    return Uint8Array.from(atob(dolgulu), c => c.charCodeAt(0));
+    const padded = (s + "=".repeat((4 - s.length % 4) % 4)).replace(/-/g, "+").replace(/_/g, "/");
+    return Uint8Array.from(atob(padded), c => c.charCodeAt(0));
   }
 })();

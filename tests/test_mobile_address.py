@@ -1,8 +1,8 @@
 """Mobil yüze YALNIZCA kendi alan adından, kökten erişilir.
 
 `/m` diye bir rota YOKTUR — gizlenmiş değil, tanımlı değil. Mobil rotalar
-kökte (`/`, `/ara`, `/eylemler`…), masaüstü rotaları da kökte; ayrım Host'a
-göre yapılır (app.py: sadece_mobil / sadece_masaustu).
+kökte (`/`, `/search`, `/actions`…), masaüstü rotaları da kökte; ayrım Host'a
+göre yapılır (app.py: mobile_only / desktop_only).
 
 Bu dosyadaki "/m" dizgeleri kasıtlı: o yolun ARTIK OLMADIĞINI sınıyorlar.
 
@@ -29,62 +29,62 @@ APP, DASH = "app.test", "dash.test"
 
 @pytest.fixture(scope="module")
 def client():
-    from conftest import test_veritabani  # noqa: E402
-    test_veritabani("mobiladres")
+    from conftest import setup_database  # noqa: E402
+    setup_database("mobileaddress")
     import app  # noqa: E402
     with TestClient(app.app) as c:
         yield c
 
 
 @pytest.fixture
-def iki_alan(monkeypatch):
+def two_hosts(monkeypatch):
     """Alan adlarını MODÜL NİTELİĞİ olarak yamala.
 
-    Ortam değişkeni verilirse yayinda() true olur ve sahte kimlik açılışı
+    Ortam değişkeni verilirse in_production() true olur ve sahte kimlik açılışı
     reddedilir; nitelik yaması o kapıyı tetiklemez (shared/config.py'nin
     kendi notu: nitelikler yamalanabilir, ortam yamalanamaz)."""
     monkeypatch.setattr(config, "HOST_APP", APP)
     monkeypatch.setattr(config, "HOST_DASH", DASH)
 
 
-def al(client, host, yol):
-    return client.get(yol, headers={"host": host}, follow_redirects=False)
+def get(client, host, path):
+    return client.get(path, headers={"host": host}, follow_redirects=False)
 
 
 # --- iki alan adı modu ----------------------------------------------------
 
 
-@pytest.mark.parametrize("yol", ["/m", "/m/eylemler", "/m/ara", "/m/yeni"])
-def test_app_alan_adinda_m_yolu_404(client, iki_alan, yol):
+@pytest.mark.parametrize("path", ["/m", "/m/actions", "/m/search", "/m/new"])
+def test_app_alan_adinda_m_yolu_404(client, two_hosts, path):
     """'/m' diye bir rota ARTIK YOK — tanimli degil, gizlenmis degil."""
-    assert al(client, APP, yol).status_code == 404
+    assert get(client, APP, path).status_code == 404
 
 
-@pytest.mark.parametrize("yol", ["/m", "/m/eylemler"])
-def test_dashboard_alan_adinda_m_yolu_404(client, iki_alan, yol):
+@pytest.mark.parametrize("path", ["/m", "/m/actions"])
+def test_dashboard_alan_adinda_m_yolu_404(client, two_hosts, path):
     """En ciddi sızıntı buydu: mobil yüz masaüstü alan adından açılıyordu."""
-    assert al(client, DASH, yol).status_code == 404
+    assert get(client, DASH, path).status_code == 404
 
 
-def test_app_alan_adinda_mobil_KOKTE(client, iki_alan):
-    assert al(client, APP, "/").status_code == 200
-    assert al(client, APP, "/eylemler").status_code == 200
+def test_app_alan_adinda_mobil_KOKTE(client, two_hosts):
+    assert get(client, APP, "/").status_code == 200
+    assert get(client, APP, "/actions").status_code == 200
 
 
-def test_masaustu_yollari_app_alan_adinda_yok(client, iki_alan):
-    """Ayrım iki yönlü: /gorevler mobil alan adında görünmez (kasten)."""
-    assert al(client, APP, "/gorevler").status_code == 404
+def test_masaustu_yollari_app_alan_adinda_yok(client, two_hosts):
+    """Ayrım iki yönlü: /tasks mobil alan adında görünmez (kasten)."""
+    assert get(client, APP, "/tasks").status_code == 404
 
 
-def test_ortak_yollar_engellenmez(client, iki_alan):
-    """/giris önekten muaf — olmasaydı mobil alan adında hiç girilemezdi."""
-    assert al(client, APP, "/giris").status_code == 200
-    assert al(client, APP, "/static/base.css").status_code == 200
+def test_ortak_yollar_engellenmez(client, two_hosts):
+    """/login önekten muaf — olmasaydı mobil alan adında hiç girilemezdi."""
+    assert get(client, APP, "/login").status_code == 200
+    assert get(client, APP, "/static/base.css").status_code == 200
 
 
-def test_bildirim_adresi_m_icermez(iki_alan):
-    assert config.mobil_yol("/") == "/"
-    assert config.mobil_yol("/bildirimler") == "/bildirimler"
+def test_bildirim_adresi_m_icermez(two_hosts):
+    assert config.mobile_path("/") == "/"
+    assert config.mobile_path("/notifications") == "/notifications"
 
 
 # --- tek alan adı modu (yedek) --------------------------------------------
@@ -99,11 +99,11 @@ def test_alan_adi_yokken_de_m_YOK(client, monkeypatch):
     """
     monkeypatch.setattr(config, "HOST_APP", "")
     assert client.get("/m").status_code == 404
-    assert config.mobil_yol("/") == "/"
+    assert config.mobile_path("/") == "/"
 
 
 def test_alan_adi_yokken_app_etiketi_mobili_verir(client, monkeypatch):
     """Yerel geliştirme: app.localhost:8000 mobil, localhost:8000 masaüstü."""
     monkeypatch.setattr(config, "HOST_APP", "")
-    assert 'data-fragment="mobile_todo"' in al(client, "app.localhost", "/").text
-    assert "Görev Yöneticisi" in al(client, "localhost", "/").text
+    assert 'data-fragment="mobile_todo"' in get(client, "app.localhost", "/").text
+    assert "Görev Yöneticisi" in get(client, "localhost", "/").text

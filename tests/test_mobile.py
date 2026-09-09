@@ -19,20 +19,20 @@ from shared import db, seed  # noqa: E402
 
 @pytest.fixture(scope="module")
 def client():
-    from conftest import test_veritabani  # noqa: E402
-    test_veritabani("mobil")
+    from conftest import setup_database  # noqa: E402
+    setup_database("mobile")
     import app  # noqa: E402
     from shared import config  # noqa: E402
 
     # Alan adi ayrimi kuruluyken mobil yuz app.<alan> kokunde durur.
     # base_url bu yuzden app host'u: yollar '/m' ile degil kokten yazilir.
-    onceki = config.HOST_APP
+    previous = config.HOST_APP
     config.HOST_APP = "app.test"
     with TestClient(app.app, base_url="http://app.test") as c:
-        from conftest import csrf_tak  # noqa: E402
-        csrf_tak(c)                    # yazma istekleri token tasisin
+        from conftest import csrf_attach  # noqa: E402
+        csrf_attach(c)                    # yazma istekleri token tasisin
         yield c
-    config.HOST_APP = onceki
+    config.HOST_APP = previous
 
 
 def users():
@@ -52,37 +52,37 @@ def test_todo_lists_my_open_items(client):
 
 
 def test_todo_done_tab_is_separate(client):
-    acik = client.get("/?sekme=acik").text
-    kapali = client.get("/?sekme=kapali").text
-    assert "Bütçe onayı 6 gündür bekliyor" in acik
-    assert "Bütçe onayı 6 gündür bekliyor" not in kapali
+    open_ = client.get("/?tab=open").text
+    closed = client.get("/?tab=closed").text
+    assert "Bütçe onayı 6 gündür bekliyor" in open_
+    assert "Bütçe onayı 6 gündür bekliyor" not in closed
 
 
 def test_search_uses_fts_and_folds_turkish(client):
     """'butce' -> 'Bütçe': unicode61 remove_diacritics 2. LIKE '%..%' yok."""
-    r = client.get("/ara?q=butce")
+    r = client.get("/search?q=butce")
     assert r.status_code == 200 and "Bütçe onayı 6 gündür bekliyor" in r.text
     assert "Tedarikçi teklifleri karşılaştırılamıyor" not in r.text
 
 
 def test_search_finds_nodes_too(client):
-    r = client.get("/ara?q=kapak")
+    r = client.get("/search?q=kapak")
     assert "Kapak Ünitesi" in r.text and "Düğümler" in r.text
 
 
 def test_search_htmx_returns_fragment(client):
-    r = client.get("/ara?q=sevkiyat", headers={"HX-Request": "true"})
+    r = client.get("/search?q=sevkiyat", headers={"HX-Request": "true"})
     assert "<html" not in r.text and 'data-fragment="mobile_search"' in r.text
 
 
 def test_search_ignores_fts_syntax(client):
     """Kullanici metni MATCH ifadesine birlestirilmez — 500 degil bos sonuc."""
     for q in ['"', 'a AND OR *', 'NEAR("x"']:
-        assert client.get("/ara", params={"q": q}).status_code == 200
+        assert client.get("/search", params={"q": q}).status_code == 200
 
 
 def test_actions_group_by_due_date(client):
-    r = client.get("/eylemler")
+    r = client.get("/actions")
     assert r.status_code == 200 and 'data-fragment="mobile_actions"' in r.text
 
 
@@ -90,7 +90,7 @@ def test_notifications_exclude_my_own_events(client):
     """Bildirim = bana ait kartta BASKASININ yaptigi hareket."""
     u = users()
     client.cookies.set("uid", str(u["Deniz"]))
-    r = client.get("/bildirimler")
+    r = client.get("/notifications")
     assert "Selin" in r.text
     assert "Deniz mesaj yazdı" not in r.text
     client.cookies.delete("uid")
@@ -98,11 +98,11 @@ def test_notifications_exclude_my_own_events(client):
 
 def test_item_detail_and_message(client):
     it = item_by_title("Bütçe onayı 6 gündür bekliyor")
-    r = client.get(f"/kayit/{it['id']}")
+    r = client.get(f"/record/{it['id']}")
     assert r.status_code == 200 and 'data-fragment="mobile_strip"' in r.text
 
     before = db.q1("select count(*) c from events where subject_id=%s", (it["id"],))["c"]
-    r = client.post(f"/kayit/{it['id']}/mesaj", data={"body": "mobilden yazdım"},
+    r = client.post(f"/record/{it['id']}/message", data={"body": "mobilden yazdım"},
                     headers={"HX-Request": "true"})
     assert r.status_code == 200 and "mobilden yazdım" in r.text
     assert db.q1("select count(*) c from events where subject_id=%s", (it["id"],))["c"] == before + 1
@@ -110,49 +110,49 @@ def test_item_detail_and_message(client):
 
 def test_field_change_refreshes_strip_and_feed(client):
     it = item_by_title("Bütçe onayı 6 gündür bekliyor")
-    r = client.patch(f"/kayit/{it['id']}/alan", data={"priority": "yuksek"},
+    r = client.patch(f"/record/{it['id']}/field", data={"priority": "high"},
                      headers={"HX-Request": "true"})
     assert r.status_code == 200
     assert 'hx-swap-oob="true"' in r.text                       # serit + akis birlikte
-    assert item_by_title("Bütçe onayı 6 gündür bekliyor")["priority"] == "yuksek"
+    assert item_by_title("Bütçe onayı 6 gündür bekliyor")["priority"] == "high"
     last = db.q1("select * from events where subject_id=%s order by created_at desc"
                  " limit 1", (it["id"],))
-    assert last["event_type"] == "sistem" and "Kritik → Yüksek" in last["body"]
+    assert last["event_type"] == "system" and "Kritik → Yüksek" in last["body"]
 
 
 def test_out_of_scope_is_403_on_mobile_too(client):
     """Efe'nin kapsami Malzeme Temini; Kapak Unitesi karti Uretim Hatti A'da."""
     it = item_by_title("Kapak Ünitesi — tekrar eden kayıp")
-    assert "salt okunur" in client.get(f"/kayit/{it['id']}").text
-    assert client.post(f"/kayit/{it['id']}/mesaj", data={"body": "x"}).status_code == 403
-    assert client.patch(f"/kayit/{it['id']}/alan", data={"status": "kapandi"}).status_code == 403
+    assert "salt okunur" in client.get(f"/record/{it['id']}").text
+    assert client.post(f"/record/{it['id']}/message", data={"body": "x"}).status_code == 403
+    assert client.patch(f"/record/{it['id']}/field", data={"status": "closed"}).status_code == 403
 
 
 def test_new_item_respects_scope(client):
     node = db.q1("select id from nodes where name = 'Bütçe Onayı'")
     bad = db.q1("select id from nodes where name = 'Kapak Ünitesi'")
-    r = client.post("/yeni", data={"node_id": node["id"], "title": "mobilden kayıt"},
+    r = client.post("/new", data={"node_id": node["id"], "title": "mobilden kayıt"},
                     follow_redirects=False)
-    assert r.status_code == 303 and r.headers["location"].startswith("/kayit/")
-    assert client.post("/yeni", data={"node_id": bad["id"], "title": "olmaz"}).status_code == 403
+    assert r.status_code == 303 and r.headers["location"].startswith("/record/")
+    assert client.post("/new", data={"node_id": bad["id"], "title": "olmaz"}).status_code == 403
     # kapsam disindaki dal formda hic listelenmez
-    assert "Kapak Ünitesi" not in client.get("/yeni").text
+    assert "Kapak Ünitesi" not in client.get("/new").text
 
 
 def test_new_item_is_searchable_immediately(client):
     """FTS trigger'i: insert edilen kayit ayni anda aramada cikar."""
     node = db.q1("select id from nodes where name = 'Bütçe Onayı'")
-    client.post("/yeni", data={"node_id": node["id"], "title": "vinç halatı yıprandı"},
+    client.post("/new", data={"node_id": node["id"], "title": "vinç halatı yıprandı"},
                 follow_redirects=False)
-    assert "vinç halatı yıprandı" in client.get("/ara?q=vinc").text
+    assert "vinç halatı yıprandı" in client.get("/search?q=vinc").text
 
 
 def test_pwa_files_are_served(client):
     sw = client.get("/sw.js")
     assert sw.status_code == 200 and sw.headers["service-worker-allowed"] == "/"
-    man = client.get("/manifest.json")
+    manifest = client.get("/manifest.json")
     # start_url her zaman KOK: manifest hangi alan adindan istendiyse onun
     # kokune isaret eder. Eskiden tek alan adi modunda "/m" donuyordu.
-    assert man.status_code == 200 and man.json()["start_url"] == "/"
+    assert manifest.status_code == 200 and manifest.json()["start_url"] == "/"
     assert client.get("/static/icon-180.png").status_code == 200
     assert 'rel="apple-touch-icon"' in client.get("/").text

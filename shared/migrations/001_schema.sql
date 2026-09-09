@@ -1,4 +1,4 @@
--- EkipTakip sema (PostgreSQL 16). spec/80-veritabani.md
+-- EkipTakip schema (PostgreSQL 16). spec/80-veritabani.md
 --
 -- Uzantilar kurulum isidir, goc isi degil: yayinda bir kez superuser ile
 -- kurulur (deploy/README.md). Gelistirmede compose superuser verdigi icin
@@ -19,7 +19,7 @@ begin
   end if;
 end $$;
 
--- --- kullanicilar ---------------------------------------------------------
+-- --- users ------------------------------------------------------------
 create table if not exists users (
   id             uuid primary key default gen_random_uuid(),
   -- citext yerine 'collate nocase' yok; tekillik lower(email) indeksiyle
@@ -36,7 +36,7 @@ create table if not exists users (
 );
 create unique index if not exists users_email_nocase_idx on users (lower(email));
 
--- --- hiyerarsi ------------------------------------------------------------
+-- --- hierarchy ------------------------------------------------------------
 create table if not exists nodes (
   id             uuid primary key default gen_random_uuid(),
   parent_id      uuid references nodes(id) on delete cascade,
@@ -54,17 +54,17 @@ alter table users drop constraint if exists users_scope_fk;
 alter table users add constraint users_scope_fk
   foreign key (scope_node_id) references nodes(id) on delete set null;
 
--- --- kayitlar -------------------------------------------------------------
+-- --- items -------------------------------------------------------------
 create table if not exists items (
   id          uuid primary key default gen_random_uuid(),
   node_id     uuid not null references nodes(id) on delete cascade,
-  kind        text not null check (kind in ('hata','gorev')),
+  kind        text not null check (kind in ('issue','task')),
   title       text not null,
   description text,
-  status      text not null default 'acik'
-              check (status in ('acik','devam','beklemede','kapandi')),
-  priority    text not null default 'orta'
-              check (priority in ('kritik','yuksek','orta','dusuk')),
+  status      text not null default 'open'
+              check (status in ('open','in_progress','pending','closed')),
+  priority    text not null default 'medium'
+              check (priority in ('critical','high','medium','low')),
   assignee_id uuid references users(id) on delete set null,
   created_by  uuid not null references users(id),
   due_date    date,
@@ -74,14 +74,14 @@ create table if not exists items (
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now(),
   -- Arama sutunu: generated column, kendini gunceller. FTS5'teki uc trigger dustu.
-  arama       tsvector generated always as (
+  search_vector tsvector generated always as (
                 to_tsvector('tr', coalesce(title,'') || ' ' || coalesce(description,''))
               ) stored
 );
 create index if not exists items_node_idx     on items(node_id);
 create index if not exists items_assignee_idx on items(assignee_id);
-create index if not exists items_arama_idx    on items using gin (arama);
-create index if not exists items_acik_idx     on items(updated_at desc) where status <> 'kapandi';
+create index if not exists items_search_idx   on items using gin (search_vector);
+create index if not exists items_open_idx     on items(updated_at desc) where status <> 'closed';
 
 create table if not exists item_participants (
   item_id  uuid not null references items(id) on delete cascade,
@@ -91,28 +91,28 @@ create table if not exists item_participants (
   primary key (item_id, user_id)
 );
 
--- --- olay akisi -----------------------------------------------------------
+-- --- event feed -----------------------------------------------------------
 create table if not exists events (
   id           uuid primary key default gen_random_uuid(),
   subject_type text not null check (subject_type in ('item','change_request')),
   subject_id   uuid not null,
-  event_type   text not null check (event_type in ('mesaj','sistem')),
+  event_type   text not null check (event_type in ('message','system')),
   author_id    uuid references users(id),
   body         text not null,
   created_at   timestamptz not null default now()
 );
 create index if not exists events_subject_idx on events(subject_type, subject_id, created_at);
 
--- --- guvenlik olaylari ----------------------------------------------------
-create table if not exists guvenlik_olaylari (
+-- --- security events ----------------------------------------------------
+create table if not exists security_events (
   id         uuid primary key default gen_random_uuid(),
   created_at timestamptz not null default now(),
-  tur        text not null check (tur in
-             ('giris','giris_reddi','cikis','yetki_reddi','pasiflestirme')),
+  event_type text not null check (event_type in
+             ('login','login_denied','logout','permission_denied','deactivation')),
   actor_id   uuid references users(id) on delete set null,
   email      text,
   ip         inet,
-  detay      text
+  detail     text
 );
-create index if not exists guvenlik_zaman_idx on guvenlik_olaylari(created_at desc);
-create index if not exists guvenlik_tur_idx   on guvenlik_olaylari(tur, created_at desc);
+create index if not exists security_events_time_idx on security_events(created_at desc);
+create index if not exists security_events_type_idx on security_events(event_type, created_at desc);

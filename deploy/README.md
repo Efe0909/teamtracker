@@ -13,8 +13,8 @@ Uygulama **hiçbir zaman** 0.0.0.0'a bağlanmaz; dışarıya çıkan tek şey t�
 
 | Alan adı | Ne servis eder | Yollar |
 |---|---|---|
-| `app.polonyum.com` | mobil site, **kökte** | `/`, `/ara`, `/eylemler`, `/bildirimler`, `/kayit/{id}`, `/yeni` |
-| `dashboard.polonyum.com` | masaüstü | `/` (ana sayfa), `/gorevler`, modül sayfaları |
+| `app.polonyum.com` | mobil site, **kökte** | `/`, `/search`, `/actions`, `/notifications`, `/record/{id}`, `/new` |
+| `dashboard.polonyum.com` | masaüstü | `/` (ana sayfa), `/tasks`, modül sayfaları |
 
 Ayrımı nginx `server_name` ile yapar; uygulama `Host` başlığına bakıp mobil siteyi kökte
 servis eder. Bunun için systemd biriminde üç değişken var:
@@ -30,7 +30,7 @@ böyle çalışıyor, testler ikisini de kapsıyor.
 
 Üç ayrıntı, üçü de kasıtlı:
 
-- **Masaüstü sayfaları `app` alan adından erişilemez** (`/gorevler` → 404). İki alan adına
+- **Masaüstü sayfaları `app` alan adından erişilemez** (`/tasks` → 404). İki alan adına
   ayrı Cloudflare Access politikası yazabilesin diye; yoksa dashboard'a koyduğun sıkı
   politikayı `app` üzerinden dolanmak mümkün olurdu.
 - **Çerez `.polonyum.com`'a yazılır**, yoksa kimlik iki alt alan adında ayrı ayrı seçilir.
@@ -47,8 +47,8 @@ Credentials → *Create credentials* → *OAuth client ID* → **Web application
 Yetkili redirect URI olarak iki siteyi de ekle:
 
 ```
-https://dashboard.<alan>/giris/callback
-https://app.<alan>/giris/callback
+https://dashboard.<alan>/login/callback
+https://app.<alan>/login/callback
 ```
 
 Kapsam yalnızca `openid email profile` — hassas kapsam isteme, Google doğrulama

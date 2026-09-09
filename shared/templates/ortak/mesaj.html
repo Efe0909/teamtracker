@@ -1,10 +1,10 @@
 {# fragment: card_message — TEK olay. Akisa beforeend olarak eklenir. #}
-{% if m.type == 'sistem' %}
+{% if m.type == 'system' %}
   <div class="sys">{{ m.body }} · {{ m.time }}</div>
 {% else %}
   <div class="msg{% if m.mine %} me{% endif %}">
     {% if not m.mine and m.author %}
-    <span class="avw{% if cevrimici(m.author) %} on{% endif %}">
+    <span class="avw{% if online(m.author) %} on{% endif %}">
       <span class="av" style="background:{{ m.author.color }}">{{ m.author.name[0] }}</span>
     </span>
     {% endif %}

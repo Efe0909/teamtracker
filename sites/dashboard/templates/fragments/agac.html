@@ -5,7 +5,7 @@
    turu sirasinda geliyor (tin), yani liste sirasi dogru gorunumu veriyor. #}
 <div id="agac" data-fragment="agac">
 
-  {% if not dugumler %}
+  {% if not nodes %}
   <div class="bos">
     <p>Henüz düğüm yok.</p>
     <p class="muted">Yapının en üstünden başla — örneğin bir bölüm ya da etkinlik.</p>
@@ -13,51 +13,51 @@
   {% endif %}
 
   <ul class="tree">
-    {% for d in dugumler %}
-    <li class="tnode" style="--derinlik:{{ d.derinlik }}">
+    {% for d in nodes %}
+    <li class="tnode" style="--derinlik:{{ d.depth }}">
       <div class="trow">
-        <span class="tkol">{% if d.cocuk_var %}▾{% else %}·{% endif %}</span>
-        <span class="tad">{{ d.ad }}</span>
-        <span class="ttur">{{ d.tur }}</span>
-        {% if d.kayit %}<span class="tkayit" title="bu düğümdeki kayıt sayısı">{{ d.kayit }}</span>{% endif %}
-        {% if yazabilir %}
+        <span class="tkol">{% if d.has_children %}▾{% else %}·{% endif %}</span>
+        <span class="tad">{{ d.name }}</span>
+        <span class="ttur">{{ d.type }}</span>
+        {% if d.record_count %}<span class="tkayit" title="bu düğümdeki kayıt sayısı">{{ d.record_count }}</span>{% endif %}
+        {% if can_write %}
         <span class="teylem">
           <button class="tmini" data-toggle="#duzenle-{{ d.id }}" title="Düzenle">✎</button>
           <button class="tmini" data-toggle="#ekle-{{ d.id }}" title="Alt düğüm ekle">＋</button>
           <button class="tmini tsil"
-                  hx-delete="/dugum/{{ d.id }}" hx-target="#agac" hx-swap="outerHTML"
-                  hx-confirm="{{ d.ad }} ve TÜM alt düğümleri silinecek{% if d.kayit %}, {{ d.kayit }} kayıt da gidecek{% endif %}. Emin misin?"
+                  hx-delete="/node/{{ d.id }}" hx-target="#agac" hx-swap="outerHTML"
+                  hx-confirm="{{ d.name }} ve TÜM alt düğümleri silinecek{% if d.record_count %}, {{ d.record_count }} kayıt da gidecek{% endif %}. Emin misin?"
                   title="Sil">✕</button>
         </span>
         {% endif %}
       </div>
 
-      {% if d.aciklama %}<div class="taciklama">{{ d.aciklama }}</div>{% endif %}
+      {% if d.description %}<div class="taciklama">{{ d.description }}</div>{% endif %}
 
-      {% if yazabilir %}
+      {% if can_write %}
       {# --- duzenleme: ad, tur, aciklama, ust --- #}
       <form id="duzenle-{{ d.id }}" class="tform"
-            hx-patch="/dugum/{{ d.id }}" hx-target="#agac" hx-swap="outerHTML">
-        <input name="ad" value="{{ d.ad }}" placeholder="ad" required>
-        <input name="tur" value="{{ d.tur }}" placeholder="tür" required>
-        <select name="ust" title="üst düğüm">
+            hx-patch="/node/{{ d.id }}" hx-target="#agac" hx-swap="outerHTML">
+        <input name="name" value="{{ d.name }}" placeholder="ad" required>
+        <input name="type" value="{{ d.type }}" placeholder="tür" required>
+        <select name="parent" title="üst düğüm">
           <option value="">— kök —</option>
-          {% for u in dugumler if u.id != d.id %}
-          <option value="{{ u.id }}">{{ "· " * u.derinlik }}{{ u.ad }}</option>
+          {% for u in nodes if u.id != d.id %}
+          <option value="{{ u.id }}">{{ "· " * u.depth }}{{ u.name }}</option>
           {% endfor %}
         </select>
-        <textarea name="aciklama" rows="2"
-                  placeholder="açıklama — bu düğüm ne kapsıyor?">{{ d.aciklama or "" }}</textarea>
+        <textarea name="description" rows="2"
+                  placeholder="açıklama — bu düğüm ne kapsıyor?">{{ d.description or "" }}</textarea>
         <button class="tkaydet">Kaydet</button>
       </form>
 
       {# --- alt dugum ekleme --- #}
       <form id="ekle-{{ d.id }}" class="tform"
-            hx-post="/dugum" hx-target="#agac" hx-swap="outerHTML">
-        <input type="hidden" name="ust" value="{{ d.id }}">
-        <input name="ad" placeholder="alt düğüm adı" required>
-        <input name="tur" placeholder="tür (Adım, Ünite…)" required>
-        <textarea name="aciklama" rows="2" placeholder="açıklama (isteğe bağlı)"></textarea>
+            hx-post="/node" hx-target="#agac" hx-swap="outerHTML">
+        <input type="hidden" name="parent" value="{{ d.id }}">
+        <input name="name" placeholder="alt düğüm adı" required>
+        <input name="type" placeholder="tür (Adım, Ünite…)" required>
+        <textarea name="description" rows="2" placeholder="açıklama (isteğe bağlı)"></textarea>
         <button class="tkaydet">Ekle</button>
       </form>
       {% endif %}

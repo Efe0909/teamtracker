@@ -74,8 +74,8 @@
        border:1px solid var(--line);border-radius:999px;padding:4px 14px;box-shadow:var(--sh)}
 
   /* ---- durum/öncelik renkleri + küçük durumlar ---- */
-  .v-acik,.v-kritik{color:var(--err)} .v-devam{color:var(--acc)}
-  .v-beklemede,.v-yuksek{color:var(--warn)} .v-kapandi{color:var(--ok)}
+  .v-open,.v-critical{color:var(--err)} .v-in_progress{color:var(--acc)}
+  .v-pending,.v-high{color:var(--warn)} .v-closed{color:var(--ok)}
   .lock{font-size:11px;color:var(--dim);border:1px dashed var(--line);border-radius:8px;
         padding:3px 8px}
   .empty{color:var(--dim);font-size:13px;padding:18px;text-align:center}

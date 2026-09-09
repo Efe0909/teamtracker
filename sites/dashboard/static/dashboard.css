@@ -37,8 +37,8 @@
   .ozet{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:9px}
   .ocip{border-radius:9px;padding:6px 13px;font-size:12px;font-weight:600}
   .ocip b{font-size:14px;margin-left:3px}
-  .o-kritik{background:#fde4e8;color:#d13350}.o-yuksek{background:#fdf0d9;color:#b47a09}
-  .o-orta{background:#fff6e0;color:#9a7d1c}.o-dusuk{background:#e2f5ec;color:#1c8a5b}
+  .o-critical{background:#fde4e8;color:#d13350}.o-high{background:#fdf0d9;color:#b47a09}
+  .o-medium{background:#fff6e0;color:#9a7d1c}.o-low{background:#e2f5ec;color:#1c8a5b}
   .osay{font-size:12px;color:var(--dim)}
 
   .gtable{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);

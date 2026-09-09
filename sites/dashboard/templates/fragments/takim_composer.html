@@ -1,7 +1,7 @@
 {# fragment: takim_composer — takim duvarina mesaj (spec/20-sema.md §2a).
-   Kart kompozeriyle ayni bicim, hedefi farkli: uc /takim/{id}/mesaj.
+   Kart kompozeriyle ayni bicim, hedefi farkli: uc /team/{id}/message.
    Yetki: sablon kutuyu kilitler, asil kontrol POST ucunda (403). #}
-<form class="comp" data-fragment="takim_composer" hx-post="/takim/{{ team.id }}/mesaj"
+<form class="comp" data-fragment="takim_composer" hx-post="/team/{{ team.id }}/message"
       hx-target="#feed" hx-swap="beforeend">
   <input name="body" placeholder="{{ 'Takıma yaz…' if can_post else 'Bu takımın üyesi değilsin — duvar salt okunur' }}"
          autocomplete="off" {% if not can_post %}disabled{% endif %}>

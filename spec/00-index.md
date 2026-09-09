@@ -11,6 +11,7 @@
 | `60-kaynak-uyarlama.md` | kaynak panoların çözümlemesi |
 | `61-arastirma-sentezi.md` | araştırma sentezi |
 | `70-guvenlik.md` | tehdit modeli, kimlik, yetki, CSRF, sırlar, denetim izi |
+| `71-yonetim-paneli.md` | admin ekranı: kullanıcı/scope/rol yönetimi, kilitlenme koruması |
 | `60-kaynak-uyarlama.md` | kaynak panoların çözümlemesi: veri hattı, ekran ekran uyarlama, alınmayacaklar |
 | `61-arastirma-sentezi.md` | IWS ve ekip araçları kaynak taraması — bizim ölçeğe uyan/uymayan pratikler |
 | `referans/` | kaynak arayüz dosyaları (`spec/referans/layout-a.html`) |
@@ -35,7 +36,7 @@ Kaynak sistemden uyarlanacak ekranlar. Sıra, `app.py` içindeki `MODULES` kayd�
 | | Ekip Arşivi | `arsiv` | | | | bekliyor |
 | | Dosyalar / NAS | `dosyalar` | var (git'te değil) | `60-kaynak-uyarlama.md` 2.7 | | 🚧 ek kararına bağlı |
 | | WDS panosu | `wds` | var (git'te değil) | `60-kaynak-uyarlama.md` 2.9 | | 🚧 rutin kararına bağlı |
-| | Yönetim Paneli | `admin` | | | | bekliyor |
+| | Yönetim Paneli | `admin` | yok — kaynakta karşılığı yok | `71-yonetim-paneli.md` | `iskelet/admin.html` | çözümlendi, rota yazılmadı |
 
 ## Akış haritası
 

@@ -4,7 +4,7 @@
 -- Ayri bir mesajlasma altyapisi KURULMAZ: kart akisiyla ayni tablo, ayni indeks
 -- (events_subject_idx zaten (subject_type, subject_id, created_at)), ayni sablon.
 --
--- Kisit adi 001_sema.sql'de otomatik uretildi. Once dusur sonra genis haliyle
+-- Kisit adi 001_schema.sql'de otomatik uretildi. Once dusur sonra genis haliyle
 -- geri koy: dosya yeniden kosarsa da ayni yere varir (goc idempotent kalsin).
 alter table events drop constraint if exists events_subject_type_check;
 alter table events add constraint events_subject_type_check

@@ -6,18 +6,18 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{ item.title }} — EkipTakip</title>
 <link rel="icon" href="/static/icon-192.png">
-<link rel="stylesheet" href="{{ statik('/static/base.css') }}">
-<link rel="stylesheet" href="{{ statik('/static/d/dashboard.css') }}">
-<script src="{{ statik('/static/htmx.min.js') }}"></script>
+<link rel="stylesheet" href="{{ static('/static/base.css') }}">
+<link rel="stylesheet" href="{{ static('/static/d/dashboard.css') }}">
+<script src="{{ static('/static/htmx.min.js') }}"></script>
 </head>
 <body hx-headers='{"X-CSRF-Token": "{{ csrf_token }}"}'>
 {% include "fragments/uyari_mobil.html" %}
-{% with aktif = "gorevler" %}{% include "fragments/rail.html" %}{% endwith %}
+{% with aktif = "tasks" %}{% include "fragments/rail.html" %}{% endwith %}
 
 <div class="wrapmain" id="main">
   {% include "fragments/card.html" %}
 </div>
 
-<script src="{{ statik('/static/d/dashboard.js') }}"></script>
+<script src="{{ static('/static/d/dashboard.js') }}"></script>
 </body>
 </html>

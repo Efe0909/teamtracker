@@ -13,7 +13,7 @@ create table if not exists teams (
 create table if not exists team_members (
   team_id  uuid not null references teams(id) on delete cascade,
   user_id  uuid not null references users(id) on delete cascade,
-  role     text not null default 'uye' check (role in ('lider','mentor','uye')),
+  role     text not null default 'member' check (role in ('lead','mentor','member')),
   added_at timestamptz not null default now(),
   primary key (team_id, user_id)
 );
@@ -23,8 +23,8 @@ create table if not exists actions (
   item_id     uuid not null references items(id) on delete cascade,
   title       text not null,
   assignee_id uuid references users(id) on delete set null,
-  status      text not null default 'acik'
-              check (status in ('acik','devam','kapandi','iptal')),
+  status      text not null default 'open'
+              check (status in ('open','in_progress','closed','cancelled')),
   due_date    date,
   created_by  uuid not null references users(id),
   resolved_by uuid references users(id),
@@ -33,7 +33,7 @@ create table if not exists actions (
 );
 create index if not exists actions_item_idx on actions(item_id);
 -- "acik eylemi olan kayitlar" sorgusu bunun uzerinden doner
-create index if not exists actions_acik_idx on actions(item_id) where status in ('acik','devam');
+create index if not exists actions_open_idx on actions(item_id) where status in ('open','in_progress');
 
 alter table items add column if not exists team_id uuid references teams(id) on delete set null;
 create index if not exists items_team_idx on items(team_id);
