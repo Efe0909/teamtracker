@@ -273,8 +273,7 @@ def test_deneme_ucu_push_kapaliyken_503(deneme_istemcisi, monkeypatch):
 
 
 def test_bildirim_adresi_alt_alan_adinda_m_ICERMEZ(client, monkeypatch):
-    """Alt alan adinda mobil yuz KOKTE (MobileHostPrefix). '/m' gomulurse
-    adres cubuguna sizar ve onek kaldirildigi gun bildirim 404'e goturur."""
+    """Mobil yuz kendi alan adinda KOKTE; '/m' diye bir adres yok."""
     monkeypatch.setattr(config, "HOST_APP", "app.ornek.com")
     client.post("/abone", json=abonelik())
 
@@ -286,8 +285,8 @@ def test_bildirim_adresi_alt_alan_adinda_m_ICERMEZ(client, monkeypatch):
     assert _json.loads(yukler[0])["url"] == "/"
 
 
-def test_bildirim_adresi_tek_alan_adi_modunda_m_ICERIR(client, monkeypatch):
-    """Alan adi yokken mobil yuz /m altinda; adres oraya gitmeli."""
+def test_bildirim_adresi_alan_adi_yokken_de_m_ICERMEZ(client, monkeypatch):
+    """'/m' diye bir yol yok — hicbir kipte."""
     monkeypatch.setattr(config, "HOST_APP", "")
     client.post("/abone", json=abonelik())
 
@@ -296,7 +295,7 @@ def test_bildirim_adresi_tek_alan_adi_modunda_m_ICERIR(client, monkeypatch):
     push.gonder([kullanici()["id"]], "B", "G")
 
     import json as _json
-    assert _json.loads(yukler[0])["url"] == "/m"
+    assert _json.loads(yukler[0])["url"] == "/"
 
 
 def test_verilen_adres_ezilmez(client, monkeypatch):

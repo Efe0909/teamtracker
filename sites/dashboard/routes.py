@@ -194,7 +194,7 @@ def card_ctx(request, item, user) -> dict:
 
 # --- uclar ---------------------------------------------------------------
 
-@router.get("/", response_class=HTMLResponse)
+# Kok rota BURADA KAYITLI DEGIL — bkz. app.py kok(): '/' iki yuzde de var.
 def home(request: Request):
     """Ana sayfa: modul secimi (panolar grid'i — spec/60-kaynak-uyarlama.md 2.1)."""
     user = auth.current_user(request)

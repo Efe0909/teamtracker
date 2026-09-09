@@ -87,9 +87,8 @@ def gonder(user_ids, baslik: str, govde: str, url: str | None = None,
     if not acik():
         return {"gonderildi": 0, "silinen": 0, "hata": 0}
 
-    # '/m' SABIT YAZILMAZ: alt alan adinda mobil yuz kokte duruyor
-    # (config.mobil_yol, KNOW-49). Gomulseydi adres cubuguna sizar ve onek
-    # kaldirildigi gun bildirimler 404'e goturuyor olurdu.
+    # Yol oneki SABIT YAZILMAZ: mobil yuz kendi alan adinda kokte duruyor
+    # (config.mobil_yol). Gomulseydi bildirimler yanlis adrese goturuyor olurdu.
     if url is None:
         url = config.mobil_yol("/")
 

@@ -71,7 +71,8 @@ SESSION_MAX_AGE = 30 * 24 * 3600            # 30 gun: telefondaki uygulama surek
 # --- ortak yollar (mobil onekine girmezler) -------------------------------
 
 # Iki alan adinda da AYNI yoldan servis edilenler: mobil onegine girmezler.
-# /giris burada olmazsa app.<alan>/giris -> /m/giris olur ve giris yapilamaz.
+# Ortak yollar iki yuzde de ayni adresten calisir; Host kapisina takilmazlar
+# (app.py: sadece_mobil). /giris burada olmazsa mobil alan adindan girilemez.
 SHARED_PATHS = ("/static/", "/sw.js", "/favicon.ico", "/manifest.json",
                 "/giris", "/cikis", "/whoami", "/switch/",
                 # Push: iki yuz de ayni uctan abone olur, mobil onekine girmez.
@@ -179,8 +180,13 @@ def is_app_host(request) -> bool:
 
 
 def mp(request) -> str:
-    """Mobil yol oneki: app alan adinda bos, tek alan adi modunda '/m'."""
-    return "" if is_app_host(request) else "/m"
+    """Mobil yol oneki — ARTIK HER ZAMAN BOS.
+
+    Mobil yuz kendi alan adinda KOKTE duruyor; yol oneki YOK. Islev duruyor
+    cunku sablonlar cagiriyor ve ileride baska bir onek gerekirse tek yer
+    burasi olsun. Sabit "" yazmak yerine burayi cagirmaya devam edin.
+    """
+    return ""
 
 
 def mobil_yol(yol: str = "/") -> str:
@@ -188,15 +194,12 @@ def mobil_yol(yol: str = "/") -> str:
 
     mp() istekteki Host'a bakar; buranin oyle bir lüksü yok. Ama mod
     yapilandirmadan da bilinir: HOST_APP tanimliysa mobil yuz o alan adinda
-    KOKTE duruyor, '/m' oneki YOK (MobileHostPrefix, KNOW-49).
+    KOKTE duruyor, yol oneki YOK.
 
-    Bildirim adresine '/m' gomme: alt alan adinda adres cubuguna sizar ve
-    onek kaldirildigi gun 404 olur.
+    Bildirim adresine onek gomme: adres cubuguna sizar ve yanlis alan adinda
+    404 olur.
     """
-    yol = yol if yol.startswith("/") else "/" + yol
-    if HOST_APP:
-        return yol
-    return "/m" if yol == "/" else "/m" + yol
+    return yol if yol.startswith("/") else "/" + yol
 
 
 def site_adresi(request, app_site: bool) -> str:
@@ -206,5 +209,5 @@ def site_adresi(request, app_site: bool) -> str:
     """
     host = HOST_APP if app_site else HOST_DASH
     if not host:
-        return "/m" if app_site else "/"
+        return "/" 
     return host

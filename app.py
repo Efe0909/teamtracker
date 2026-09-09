@@ -17,9 +17,9 @@ from urllib.parse import urlparse
 
 from urllib.parse import quote
 
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.exception_handlers import http_exception_handler
-from fastapi.responses import (FileResponse, JSONResponse, PlainTextResponse,
+from fastapi.responses import (FileResponse, HTMLResponse, JSONResponse,
                                RedirectResponse)
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
@@ -43,48 +43,39 @@ def _host_of(scope) -> str:
     return ""
 
 
-class MobileHostPrefix:
-    """app.<alan> altinda /ara -> ic yolda /m/ara.
+def _mobil_host(request) -> bool:
+    """Bu istek mobil yuze mi ait?
 
-    Sablonlar da ayni oneki kullanir (config.mp), boylece adres cubugunda /m
-    gorunmez. Masaustu sayfalari bu alan adindan gorunmez (/gorevler -> 404).
-
-    DIKKAT: bu bir ARAYUZ ayrimidir, yetki siniri DEGIL. Ayrim istemcinin
-    gonderdigi Host basligina bakar; surece dogrudan erisen biri baska bir Host
-    yazarak diger yuzu alir. Gercek sinir kimlik + yetki kontrolleridir
-    (spec/70-guvenlik.md §9: uygulama onundeki katmana guvenerek atlamaz).
+    Alan adi ayrimi kuruluyken: Host == HOST_APP.
+    Alan adi tanimsizken (yerel gelistirme): ilk etiket "app" ise — yani
+    app.localhost:8000 mobil, localhost:8000 masaustu. Boylece yapilandirma
+    olmadan da iki yuz ayri adreste durur; yol onegine gerek kalmaz.
     """
+    host = (request.url.hostname or "").lower()
+    if config.HOST_APP:
+        return host == config.HOST_APP
+    return host.split(".")[0] == "app"
 
-    def __init__(self, app):
-        self.app = app
 
-    async def __call__(self, scope, receive, send):
-        if scope["type"] != "http" or not config.HOST_APP:
-            # Tek alan adi modu (alan adi tanimsiz): /m TEK erisim yolu, dokunma.
-            # Yalnizca gelistirme/yerel kurulum boyle calisir.
-            return await self.app(scope, receive, send)
+def sadece_mobil(request: Request):
+    """Mobil rotalar yalnizca mobil host'ta gorunur.
 
-        path = scope["path"]
-        # Ortak yollar onege girmez — /giris burada olmazsa mobil alan adinda
-        # giris /m/giris'e cevrilir ve 404 doner (yani hic girilemez).
-        ortak = path.startswith(config.SHARED_PATHS)
-        m_yolu = path == "/m" or path.startswith("/m/")
+    ORTAK yollar muaf: /manifest.json ve /sw.js mobil router'da tanimli ama
+    iki yuzun de kullandigi seyler (config.SHARED_PATHS). Muaf olmasalardi
+    masaustu alan adinda 404 donerlerdi — ve /giris de mobil router'da
+    olsaydi mobil alan adindan hic girilemezdi (KNOW-25 ile ayni tuzak).
+    """
+    if request.url.path.startswith(config.SHARED_PATHS):
+        return
+    if not _mobil_host(request):
+        raise HTTPException(404, "sayfa yok")
 
-        # /m ILE ERISIM YOK: mobil yuz app.<alan> altinda KOKTE durur, baska
-        # adresi yoktur. Iki sebeple kapali:
-        #   1. app.<alan>/m ayni icerige ikinci bir adres olurdu — paylasilan
-        #      linkler bolunur, PWA kapsami karisir, adres cubugunda '/m' sizar.
-        #   2. dashboard.<alan>/m mobil yuzu MASAUSTU alan adindan aciyordu;
-        #      onek yalnizca app host'unda yazildigi icin ham rotalar oradan
-        #      dogrudan servis ediliyordu.
-        # Ic yol hala /m/... — degisen sey disaridan gorunen adres.
-        if m_yolu:
-            return await PlainTextResponse("sayfa yok", status_code=404)(
-                scope, receive, send)
 
-        if _host_of(scope) == config.HOST_APP and not ortak:
-            scope["path"] = "/m" + ("" if path == "/" else path.rstrip("/"))
-        await self.app(scope, receive, send)
+def sadece_masaustu(request: Request):
+    """Masaustu rotalari mobil host'ta gorunmez — iki alan adina ayri Access
+    politikasi yazilabilsin diye kasten 404 (spec/50-yapi.md)."""
+    if _mobil_host(request):
+        raise HTTPException(404, "sayfa yok")
 
 
 @asynccontextmanager
@@ -142,8 +133,11 @@ class GirisKapisi:
 app = FastAPI(title="EkipTakip", version="0.1.0-alpha", lifespan=lifespan)
 
 # Ara katman sirasi: EN SON eklenen EN DISTA calisir.
-#   MobileHostPrefix (yolu duzeltir) -> SessionMiddleware (oturumu acar)
-#     -> GirisKapisi (kimligi arar) -> GuvenlikBasliklari -> CsrfKapisi -> rotalar
+#   SessionMiddleware (oturumu acar) -> GirisKapisi (kimligi arar)
+#     -> GuvenlikBasliklari -> CsrfKapisi -> rotalar
+#
+# Yol yeniden yazan bir katman YOK: mobil rotalar kokte tanimli, ayrim
+# Host'a gore bagimlilikla yapiliyor (sadece_mobil / sadece_masaustu).
 app.add_middleware(csrf.CsrfKapisi)
 app.add_middleware(sertlestirme.GuvenlikBasliklari)
 app.add_middleware(GirisKapisi)
@@ -156,7 +150,6 @@ app.add_middleware(
     https_only=config.yayinda(),     # yayinda yalnizca HTTPS
     domain=config.COOKIE_DOMAIN,     # bir giris, iki site
 )
-app.add_middleware(MobileHostPrefix)
 
 # Statik: ortak kokte, site dosyalari kendi alt yolunda (nginx de boyle ayirir).
 app.mount("/static/d", StaticFiles(directory=BASE / "sites/dashboard/static"), name="statik-d")
@@ -298,6 +291,23 @@ if config.sahte_kimlik():
 
 app.include_router(kimlik.router)
 
-# Sira onemli: dashboard'un /{slug} iskele rotasi EN SONDA eslesmeli.
-app.include_router(mobil.router)
-app.include_router(dashboard.router)
+# Iki yuz de KOKTE tanimli; '/m' gibi bir yol yok. Ayrim Host'a gore, rota
+# seviyesinde bagimlilikla. Cakisan tek yol '/' — o yuzden iki router'daki
+# kok rotalari asagida tek bir dagiticiya baglaniyor.
+#
+# Sira onemli: dashboard'un /{slug} iskele rotasi EN SONDA eslesmeli, yoksa
+# /ara, /eylemler gibi mobil yollari yutar.
+@app.get("/", response_class=HTMLResponse)
+def kok(request: Request, sekme: str = "acik"):
+    """Iki yuzun cakistigi TEK yol.
+
+    Mobil yuz de masaustu yuzu de kokte duruyor ('/m' yok), o yuzden '/'
+    iki router'da birden tanimlanamaz — burada Host'a gore dagitiliyor.
+    """
+    if _mobil_host(request):
+        return mobil.m_todo(request, sekme)
+    return dashboard.home(request)
+
+
+app.include_router(mobil.router, dependencies=[Depends(sadece_mobil)])
+app.include_router(dashboard.router, dependencies=[Depends(sadece_masaustu)])

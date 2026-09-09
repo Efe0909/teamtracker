@@ -150,25 +150,22 @@ Geçişte en güvenli yol: bayrakları kapsamlara çeviren tek yönlü bir göç
 
 ---
 
-## Kural: mobil arayüz `/m` değil, alt alan adı
+## Kural: mobil arayüz kendi alan adında, kökte
 
-Mobil yüz **`app.<alan>` alt alan adında, kökte** duruyor —
-`MobileHostPrefix` gelen `/ara` isteğini iç yolda `/m/ara`'ya çeviriyor ama
-adres çubuğunda `/m` görünmüyor. `/m` yalnızca **tek alan adı modunun**
-(alan adı değişkenleri tanımsızken) yedeği.
+`/m` diye bir yol **yoktur** — ne dışarıda ne kodda. Mobil rotalar kökte
+tanımlıdır (`/`, `/ara`, `/eylemler`…), masaüstü rotaları da öyle; ayrım
+**Host'a göre** yapılır (`app.py`: `sadece_mobil` / `sadece_masaustu`).
 
-Bu yüzden:
+- Yayında: `app.<alan>` mobil, `dashboard.<alan>` masaüstü.
+- Yerelde yapılandırma olmadan: Host'un ilk etiketi `app` ise mobil —
+  yani `app.localhost:8000` mobil, `localhost:8000` masaüstü.
+- Çakışan tek yol `/`; onu `app.py`'deki `kok()` Host'a göre dağıtır.
+- Ortak yollar (`/giris`, `/manifest.json`, `/sw.js`, `/static/…`, `/vapid`,
+  `/abone`) Host kapısından muaftır — olmasalardı mobil alan adından giriş
+  yapılamazdı.
 
-- Bildirim adresi, e-posta bağlantısı, paylaşılan URL — hiçbirine `/m`
-  **gömme**. `config.mobil_yol()` kullan (istek gerektirmez, yapılandırmadan
-  modu bilir); şablonlarda `config.mp(request)` zaten var.
-- Yeni bir mobil rota eklerken yolu `/m/...` diye yazmak doğru (iç yol öyle),
-  ama kullanıcıya **gösterilen** adres asla `/m` içermemeli.
-- Önek ileride tamamen kaldırılabilir; sabit yazılmış her `/m` o gün 404 olur.
-
-Bir kez ısırdı: push bildiriminin varsayılan hedefi `/m` yazılmıştı, alt alan
-adında adres çubuğuna sızıyordu. `shared/push.py` artık `mobil_yol()`
-kullanıyor, iki mod da testle sabitlendi.
+Yeni bir mobil rota eklerken yolu **kökten** yaz. Kullanıcıya gösterilen
+adreste de, rota tanımında da önek yoktur.
 
 ---
 

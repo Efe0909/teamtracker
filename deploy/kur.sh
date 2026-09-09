@@ -44,7 +44,8 @@ Sırayla:
      cd $REPO && make setup && make seed        # veritabanı yoksa
      sudo cp $OUT/ekiptakip.service /etc/systemd/system/
      sudo systemctl daemon-reload && sudo systemctl enable --now ekiptakip
-     curl -s -o /dev/null -w '%{http_code}\\n' http://127.0.0.1:$PORT_APP/m      # 200 bekle
+     curl -s -o /dev/null -w '%{http_code}\\n' -H 'Host: app.$ALAN' \\
+       http://127.0.0.1:$PORT_APP/      # 200 bekle
 
   2) kapı + nginx   (Cloudflare Access kurduysan conf'taki auth_basic'i kapat)
      sudo htpasswd -c /etc/nginx/.htpasswd-ekiptakip $USER_NAME

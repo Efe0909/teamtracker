@@ -39,9 +39,9 @@ self.addEventListener("fetch", (e) => {
 /* --- Faz 3: web push -------------------------------------------------- */
 
 self.addEventListener("push", (e) => {
-  /* Yedek adres KOK: alt alan adinda mobil yuz zaten kokte, '/m' gomulmez
-     (KNOW-49). Sunucu gercek adresi yukte gonderiyor; bu yalnizca o
-     eksikse devreye girer. */
+  /* Yedek adres KOK: mobil yuz kendi alan adinda zaten kokte, yol oneki
+     gomulmez. Sunucu gercek adresi yukte gonderiyor; bu yalnizca o eksikse
+     devreye girer. */
   let d = { title: "EkipTakip", body: "Yeni bir hareket var.", url: "/" };
   try { d = Object.assign(d, e.data ? e.data.json() : {}); } catch (_) { /* duz metin */ }
   e.waitUntil(self.registration.showNotification(d.title, {
@@ -52,8 +52,8 @@ self.addEventListener("push", (e) => {
 
 self.addEventListener("notificationclick", (e) => {
   e.notification.close();
-  /* Yedek adres KOK — mobil yuz app.<alan> altinda kokte durur, '/m' diye bir
-     adres YOKTUR. Sunucu gercek adresi bildirim yukunde gonderiyor. */
+  /* Yedek adres KOK — mobil yuz kendi alan adinda kokte durur, yol oneki
+     YOKTUR. Sunucu gercek adresi bildirim yukunde gonderiyor. */
   const url = (e.notification.data && e.notification.data.url) || "/";
   e.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((wins) => {
     for (const w of wins) if (w.url.includes(url) && "focus" in w) return w.focus();

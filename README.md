@@ -31,7 +31,8 @@ Sonraki günler `make dev` yeter. `make` yazınca komut listesi çıkar:
 | `make check` | sunucu ayaktayken uçların durum kodlarını basar |
 | `make clean` / `make distclean` | veritabanı + önbellek / üstüne sanal ortam |
 
-Tek alan adı modunda masaüstü `/`, mobil `/m` altındadır. İki alan adına ayırmak ve
+Masaüstü ve mobil AYRI alan adlarında, ikisi de kökte — `/m` gibi bir yol yoktur.
+Yerelde `localhost` masaüstü, `app.localhost` mobil. İki alan adına ayırmak ve
 yayına almak: `deploy/README.md`.
 
 `--workers 1` şart: ağaç indeksi süreç belleğinde (`spec/10-kararlar.md`).

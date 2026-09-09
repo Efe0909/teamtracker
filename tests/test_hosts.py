@@ -95,11 +95,12 @@ def test_shared_paths_work_on_app_host(client):
         assert app_host(client, path).status_code == 200, path
 
 
-def test_login_paths_are_not_rewritten_on_app_host(client):
-    """/giris mobil onegine girmemeli.
+def test_ortak_yollar_host_kapisindan_muaf(client):
+    """/giris iki alan adinda da acilmali.
 
-    Girseydi app.<alan>/giris -> /m/giris olur, 404 doner ve mobil alan adindan
-    HIC giris yapilamazdi (spec/70-guvenlik.md §2.2).
+    Ortak yollar Host kapisindan MUAF (app.py: sadece_mobil). Muaf
+    olmasalardi mobil alan adindan hic giris yapilamazdi
+    (spec/70-guvenlik.md §2.2, KNOW-25).
     """
     for path in ("/giris", "/manifest.json", "/whoami"):
         assert app_host(client, path).status_code != 404, path

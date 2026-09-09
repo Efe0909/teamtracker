@@ -27,7 +27,7 @@ ekiptakip.db                  ORTAK veritabanı (git'e girmez)
 
 Statik URL'ler: `/static/…` ortak, `/static/d/…` masaüstü, `/static/m/…` mobil —
 nginx de aynı üç dizine ayırıyor (`deploy/nginx-ekiptakip-ortak.conf`).
-`/sw.js` kök kapsamdan servis edilir (PWA şartı: `/static/…` altından verilirse `/m`'yi
+`/sw.js` kök kapsamdan servis edilir (PWA şartı: `/static/…` altından verilirse sayfaları
 kontrol edemez).
 
 ## Neden bu ayrım

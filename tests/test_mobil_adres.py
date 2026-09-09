@@ -1,14 +1,16 @@
-"""Mobil yüze YALNIZCA alt alan adından, kökten erişilir — '/m' ile değil.
+"""Mobil yüze YALNIZCA kendi alan adından, kökten erişilir.
 
-Mobil yüz `app.<alan>` altında kökte durur. `/m` iç yoldur (MobileHostPrefix
-gelen `/eylemler`'i `/m/eylemler`'e çevirir), dışarıdan görünen bir adres
-DEĞİLDİR.
+`/m` diye bir rota YOKTUR — gizlenmiş değil, tanımlı değil. Mobil rotalar
+kökte (`/`, `/ara`, `/eylemler`…), masaüstü rotaları da kökte; ayrım Host'a
+göre yapılır (app.py: sadece_mobil / sadece_masaustu).
 
-Kapatılmadan önce iki sızıntı vardı:
+Bu dosyadaki "/m" dizgeleri kasıtlı: o yolun ARTIK OLMADIĞINI sınıyorlar.
+
+Kaldırılmadan önce iki sızıntı vardı:
   1. app.<alan>/m aynı içeriğe ikinci bir adresti — paylaşılan link bölünür,
-     PWA kapsamı karışır, adres çubuğunda '/m' sızar.
-  2. dashboard.<alan>/m mobil yüzü MASAÜSTÜ alan adından açıyordu; önek
-     yalnızca app host'unda yazıldığı için ham rotalar oradan doğrudan
+     PWA kapsamı karışır, adres çubuğunda önek sızar.
+  2. dashboard.<alan>/m mobil yüzü MASAÜSTÜ alan adından açıyordu; yol yeniden
+     yazma yalnızca app host'unda çalıştığı için ham rotalar oradan doğrudan
      servis ediliyordu.
 """
 import sys
@@ -52,8 +54,9 @@ def al(client, host, yol):
 # --- iki alan adı modu ----------------------------------------------------
 
 
-@pytest.mark.parametrize("yol", ["/m", "/m/", "/m/eylemler", "/m/ara"])
+@pytest.mark.parametrize("yol", ["/m", "/m/eylemler", "/m/ara", "/m/yeni"])
 def test_app_alan_adinda_m_yolu_404(client, iki_alan, yol):
+    """'/m' diye bir rota ARTIK YOK — tanimli degil, gizlenmis degil."""
     assert al(client, APP, yol).status_code == 404
 
 
@@ -87,9 +90,20 @@ def test_bildirim_adresi_m_icermez(iki_alan):
 # --- tek alan adı modu (yedek) --------------------------------------------
 
 
-def test_alan_adi_yokken_m_TEK_yoldur(client, monkeypatch):
-    """Yerel/geliştirme kurulumu: alt alan adı yok, mobil yüze başka türlü
-    ulaşılamaz. Bu yüzden orada /m kapatılmıyor."""
+def test_alan_adi_yokken_de_m_YOK(client, monkeypatch):
+    """Tek alan adı kipi kaldırıldı.
+
+    Alan adı değişkeni tanımsızken bile ayrım Host'un ilk etiketine bakar:
+    app.localhost mobil, localhost masaüstü. Böylece yapılandırma olmadan da
+    iki yüz ayrı adreste durur ve '/m' gibi bir yola gerek kalmaz.
+    """
     monkeypatch.setattr(config, "HOST_APP", "")
-    assert client.get("/m").status_code == 200
-    assert config.mobil_yol("/") == "/m"
+    assert client.get("/m").status_code == 404
+    assert config.mobil_yol("/") == "/"
+
+
+def test_alan_adi_yokken_app_etiketi_mobili_verir(client, monkeypatch):
+    """Yerel geliştirme: app.localhost:8000 mobil, localhost:8000 masaüstü."""
+    monkeypatch.setattr(config, "HOST_APP", "")
+    assert 'data-fragment="mobile_todo"' in al(client, "app.localhost", "/").text
+    assert "Görev Yöneticisi" in al(client, "localhost", "/").text

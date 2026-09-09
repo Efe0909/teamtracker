@@ -24,7 +24,9 @@ Alan adları (zon `polonyum.com`, push demosuyla ortak):
 - `dashboard.polonyum.com` → masaüstü
 - bilinmeyen Host → `444` (`default_server` bloğu)
 
-Uvicorn bu üç değişken olmadan tek alan adı moduna düşer (`/m`):
+Bu üç değişken yayında tanımlıdır. Tanımsızken ayrım Host'un ilk etiketine
+bakar: `app.localhost` mobil, `localhost` masaüstü — yol öneki hiçbir
+durumda yoktur:
 
 ```bash
 EKIPTAKIP_HOST_APP=app.polonyum.com \
