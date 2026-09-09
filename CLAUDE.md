@@ -20,7 +20,7 @@ telefon ──https──> Cloudflare ──tünel "temp"──> cloudflared (ro
 
 Alan adları (zon `polonyum.com`, push demosuyla ortak):
 
-- `app.polonyum.com` → mobil, kökte (`/`, `/ara`, `/eylemler`); `/gorevler` **404**, kasten
+- `app.polonyum.com` → mobil, kökte (`/`, `/search`, `/actions`); `/tasks` **404**, kasten
 - `dashboard.polonyum.com` → masaüstü
 - bilinmeyen Host → `444` (`default_server` bloğu)
 
@@ -71,11 +71,16 @@ Faz 2 (Google OAuth) gelene kadar kimlik sahte; `auth.current_user` tek değişe
 ## Kod dili: İngilizce. İstisna yok.
 
 Kaynak koddaki **her tanımlayıcı İngilizce**: değişken, fonksiyon, sınıf, modül
-ve dosya adı, tablo ve sütun adı, kapsam/izin anahtarı, sözlük anahtarı, test adı.
+ve dosya adı, tablo ve sütun adı, kapsam/izin anahtarı, sözlük anahtarı, test adı,
+**URL yolu ve query parametre adı**. Rota kayıtlarındaki (`@router.get(...)`),
+form alanı `name=` özniteliklerindeki ve `hx-get`/`hx-post`/`hx-patch` hedeflerindeki
+yol dizgeleri de bu kurala girer — `/gorevler` değil `/tasks`, `?takim=` değil
+`?team=`.
 
 Türkçe kalan tek şey **kullanıcının gördüğü metin**: şablonlardaki yazılar, hata
-mesajları, etiketler, `SCOPES` sözlüğünün *değerleri*. Yorumlar, docstring'ler,
-`spec/` ve commit mesajları da Türkçe kalır — onlar kod değil, anlatı.
+mesajları, etiketler, `SCOPES` sözlüğünün *değerleri*, tohum verisindeki (`shared/seed.py`)
+takım/düğüm adları ve açıklamaları. Yorumlar, docstring'ler, `spec/` ve commit
+mesajları da Türkçe kalır — onlar kod değil, anlatı.
 
 ```python
 SCOPES = {
@@ -87,15 +92,19 @@ SCOPES = {
 **Neden:** iki ay sonra `kapsam` / `gocler` / `var_mi` açıldığında ne olduğu
 okunmuyor. Terimi çevirme — `scope` scope'tur, `kapsam` değil.
 
-### Bugünkü kod bu kurala uymuyor
+### Depo bu kurala uyuyor (2026-09-09'da tamamlandı)
 
-Depo Türkçe yazılmış (`shared/kapsam.py`, `shared/gocler/`, `db.havuz()`,
-`service.dugum_ekle`, Türkçe test adları). Kural **yeni kod için bağlayıcı**;
-mevcut adlar ayrı bir yeniden adlandırma kararıdır, kendiliğinden yapılmaz.
+Kod tabanı baştan sona İngilizceye çevrildi: `shared/kapsam.py` → `shared/scope.py`,
+`shared/kimlik.py` → `shared/identity.py`, `shared/sertlestirme.py` → `shared/hardening.py`,
+`db.havuz()` → `db.pool()`, `db.gocler()` → `db.migrate()`, `service.dugum_ekle` →
+`service.add_node`, Türkçe test adları da dahil tüm rotalar, form alanları, DB
+tablo/sütun adları ve durum/öncelik/rol gibi sabit değerler (`acik`→`open`,
+`kritik`→`critical`, `lider`→`lead`…) çevrildi. `spec/` belgeleri ve commit
+geçmişi hâlâ eski (Türkçe) adları anabilir — kod referans alınmalı.
 
-**Göç dosyası adını değiştirirken dikkat.** `gocler()` uygulanan göçü *dosya
-adıyla* `schema_migrations`'a yazıyor (`shared/db.py`); kurulu bir veritabanında
-`001_sema.sql` yeniden adlandırılırsa uygulanmamış sayılır ve **yeniden koşar** —
-001 idempotent değil (`alter table ... add constraint`, `if not exists`i yok),
-bu da açılışta kalıcı hataya düşürür. Bugün kurulu veritabanı yok, o yüzden
-dosya adları şu an serbest; canlıya ilk kurulumdan sonra donarlar.
+**Göç dosyası adları artık donuk.** `db.migrate()` uygulanan göçü *dosya
+adıyla* `schema_migrations`'a yazıyor (`shared/db.py`); `shared/migrations/`
+içindeki `001_schema.sql`…`007_scopes.sql` bir daha yeniden adlandırılmamalı —
+kurulu bir veritabanında yeniden adlandırılırsa uygulanmamış sayılır ve
+**yeniden koşar**. Rename bu geçişte serbestti çünkü henüz canlıya hiç
+kurulmamıştı (veritabanı boştu); artık ilk gerçek kurulumdan sonra donarlar.

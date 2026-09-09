@@ -2,8 +2,8 @@
 {% block content %}
 <div class="mlist" data-fragment="mobile_notifs">
   {% for r in rows %}
-  <a class="ncard{% if r.type == 'sistem' %} n-sys{% endif %}" href="{{ mp }}/kayit/{{ r.item_id }}">
-    {% if r.type == 'sistem' %}
+  <a class="ncard{% if r.type == 'system' %} n-sys{% endif %}" href="{{ mp }}/record/{{ r.item_id }}">
+    {% if r.type == 'system' %}
       <span class="av">⚙</span>
     {% else %}
       <span class="av" style="background:{{ r.author.color if r.author else '#7d75a0' }}">
@@ -11,7 +11,7 @@
     {% endif %}
     <span style="flex:1;min-width:0">
       <span class="t">
-        {% if r.type == 'sistem' %}{{ r.body }}
+        {% if r.type == 'system' %}{{ r.body }}
         {% else %}<b>{{ r.author.name if r.author else 'Bilinmeyen' }}</b> mesaj yazdı: {{ r.body }}
         {% endif %}
       </span>

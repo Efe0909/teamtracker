@@ -33,7 +33,7 @@ dosyaya değil tabloya girecek.
       geçersizleşir**, tabloyu temizlemek gerekir.
 - [ ] `GET /vapid` — public key. Kimlik gerektirmez, `config.SHARED_PATHS`
       mantığına girer.
-- [ ] `POST /abone` — abonelik kaydı, `endpoint`'e göre upsert. CSRF kapısından
+- [ ] `POST /subscribe` — abonelik kaydı, `endpoint`'e göre upsert. CSRF kapısından
       geçer (güvensiz metot).
 - [ ] Gönderim tarafı: hangi olay bildirim doğurur? En dar başlangıç — sana
       atanan eylem. Bildirim üretimi olay akışına bağlanmalı, ayrı bir "bildirim
@@ -185,15 +185,15 @@ Geçişte en güvenli yol: bayrakları kapsamlara çeviren tek yönlü bir göç
 ## Kural: mobil arayüz kendi alan adında, kökte
 
 `/m` diye bir yol **yoktur** — ne dışarıda ne kodda. Mobil rotalar kökte
-tanımlıdır (`/`, `/ara`, `/eylemler`…), masaüstü rotaları da öyle; ayrım
+tanımlıdır (`/`, `/search`, `/actions`…), masaüstü rotaları da öyle; ayrım
 **Host'a göre** yapılır (`app.py`: `sadece_mobil` / `sadece_masaustu`).
 
 - Yayında: `app.<alan>` mobil, `dashboard.<alan>` masaüstü.
 - Yerelde yapılandırma olmadan: Host'un ilk etiketi `app` ise mobil —
   yani `app.localhost:8000` mobil, `localhost:8000` masaüstü.
 - Çakışan tek yol `/`; onu `app.py`'deki `kok()` Host'a göre dağıtır.
-- Ortak yollar (`/giris`, `/manifest.json`, `/sw.js`, `/static/…`, `/vapid`,
-  `/abone`) Host kapısından muaftır — olmasalardı mobil alan adından giriş
+- Ortak yollar (`/login`, `/manifest.json`, `/sw.js`, `/static/…`, `/vapid`,
+  `/subscribe`) Host kapısından muaftır — olmasalardı mobil alan adından giriş
   yapılamazdı.
 
 Yeni bir mobil rota eklerken yolu **kökten** yaz. Kullanıcıya gösterilen

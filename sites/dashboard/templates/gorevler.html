@@ -7,13 +7,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Görev Yöneticisi — EkipTakip</title>
 <link rel="icon" href="/static/icon-192.png">
-<link rel="stylesheet" href="{{ statik('/static/base.css') }}">
-<link rel="stylesheet" href="{{ statik('/static/d/dashboard.css') }}">
-<script src="{{ statik('/static/htmx.min.js') }}"></script>
+<link rel="stylesheet" href="{{ static('/static/base.css') }}">
+<link rel="stylesheet" href="{{ static('/static/d/dashboard.css') }}">
+<script src="{{ static('/static/htmx.min.js') }}"></script>
 </head>
 <body hx-headers='{"X-CSRF-Token": "{{ csrf_token }}"}'>
 {% include "fragments/uyari_mobil.html" %}
-{% with aktif = "gorevler" %}{% include "fragments/rail.html" %}{% endwith %}
+{% with aktif = "tasks" %}{% include "fragments/rail.html" %}{% endwith %}
 
 <div class="tmain" id="main">
   <div class="thead row">
@@ -31,11 +31,11 @@
       {% endfor %}
     </select>
     <select name="kind" style="width:auto">
-      <option value="hata">Hata</option><option value="gorev">Görev</option>
+      <option value="issue">Hata</option><option value="task">Görev</option>
     </select>
     <select name="team_id" style="width:auto">
       <option value="">Takım yok</option>
-      {% for f in filtreler if f.param == "takim" %}
+      {% for f in filters if f.param == "team" %}
         {% for v, et, _g in f.options() %}<option value="{{ v }}">{{ et }}</option>{% endfor %}
       {% endfor %}
     </select>
@@ -47,6 +47,6 @@
   {% include "fragments/tablo.html" %}
 </div>
 
-<script src="{{ statik('/static/d/dashboard.js') }}"></script>
+<script src="{{ static('/static/d/dashboard.js') }}"></script>
 </body>
 </html>

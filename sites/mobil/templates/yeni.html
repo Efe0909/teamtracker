@@ -5,7 +5,7 @@
 {% endblock %}
 
 {% block content %}
-<form class="mform" method="post" action="{{ mp }}/yeni">
+<form class="mform" method="post" action="{{ mp }}/new">
   <input type="hidden" name="csrf" value="{{ csrf_token }}">
   <div>
     <label>Düğüm (zorunlu)</label>
@@ -16,8 +16,8 @@
   <div>
     <label>Tür</label>
     <select name="kind">
-      <option value="hata">Hata</option>
-      <option value="gorev">Görev</option>
+      <option value="issue">Hata</option>
+      <option value="task">Görev</option>
     </select>
   </div>
   <div>

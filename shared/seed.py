@@ -30,13 +30,13 @@ TEAMS = [
 
 TEAM_MEMBERS = [
     # (takim, kullanici, rol)
-    ("tasarim",   "efe",   "lider"),
+    ("tasarim",   "efe",   "lead"),
     ("tasarim",   "selin", "mentor"),
-    ("maliye",    "selin", "lider"),
-    ("maliye",    "efe",   "uye"),      # fiyat kilidi eylemi Efe'de: uye + acik eylem
+    ("maliye",    "selin", "lead"),
+    ("maliye",    "efe",   "member"),      # fiyat kilidi eylemi Efe'de: uye + acik eylem
 
-    ("satinalim", "deniz", "uye"),
-    ("satinalim", "efe",   "uye"),
+    ("satinalim", "deniz", "member"),
+    ("satinalim", "efe",   "member"),
 ]
 
 NODES = [
@@ -57,41 +57,41 @@ NODES = [
 ]
 
 ITEMS = [
-    dict(key="butce_onay", node="butce", kind="hata", team="maliye",
+    dict(key="butce_onay", node="butce", kind="issue", team="maliye",
          title="Bütçe onayı 6 gündür bekliyor",
          description="Finans departmanı onay vermeden tedarikçi ile sözleşme "
                      "imzalanamıyor. Zincirin tamamı bekliyor.",
-         status="acik", priority="kritik", assignee="deniz", created_by="selin",
+         status="open", priority="critical", assignee="deniz", created_by="selin",
          due="2026-09-04", dms="DH", pillar="SN", parts=["deniz", "selin", "efe"],
          created=ago(days=12), updated=ago(minutes=20)),
-    dict(key="sevkiyat_tarih", node="sevkiyat", kind="hata", team="satinalim",
+    dict(key="sevkiyat_tarih", node="sevkiyat", kind="issue", team="satinalim",
          title="Sevkiyat tarihi etkinlikten sonraya düşüyor",
          description="Tedarikçi teslim tarihi 3 Eylül; etkinlik 28 Ağustos.",
-         status="devam", priority="kritik", assignee="efe", created_by="efe",
+         status="in_progress", priority="critical", assignee="efe", created_by="efe",
          due="2026-09-10", dms=None, pillar="SN", parts=["efe", "selin"],
          created=ago(days=11), updated=ago(hours=3)),
-    dict(key="kapak_kayip", node="kapak", kind="gorev", team=None,
+    dict(key="kapak_kayip", node="kapak", kind="task", team=None,
          title="Kapak Ünitesi — tekrar eden kayıp",
          description="3 DMS kaydından açıldı. Tekrar eden duruş, LE'ye taşınması "
                      "değerlendiriliyor.",
-         status="beklemede", priority="yuksek", assignee="deniz", created_by="selin",
+         status="pending", priority="high", assignee="deniz", created_by="selin",
          due=None, dms="LE", pillar=None, parts=["deniz"],
          created=ago(days=8), updated=ago(hours=5)),
-    dict(key="vekalet", node="butce", kind="gorev", team="maliye",
+    dict(key="vekalet", node="butce", kind="task", team="maliye",
          title="Onay akışına vekalet mekanizması ekle",
          description="CFO izindeyken onay zinciri duruyor; vekalet tanımı gerekiyor.",
-         status="devam", priority="orta", assignee="efe", created_by="selin",
+         status="in_progress", priority="medium", assignee="efe", created_by="selin",
          due=None, dms="UPS", pillar=None, parts=["efe", "selin"],
          created=ago(days=6), updated=ago(days=1, hours=2)),
-    dict(key="teklif", node="tedarik", kind="hata", team="satinalim",
+    dict(key="teklif", node="tedarik", kind="issue", team="satinalim",
          title="Tedarikçi teklifleri karşılaştırılamıyor",
          description="Üç teklif farklı formatta geldi; kıyas tablosu çıkarılamıyor.",
-         status="acik", priority="orta", assignee="efe", created_by="efe",
+         status="open", priority="medium", assignee="efe", created_by="efe",
          due=None, dms="IPS", pillar=None, parts=["efe"],
          created=ago(days=7), updated=ago(days=2)),
 ]
 
-def gun(delta: int) -> str:
+def day(delta: int) -> str:
     """Bugune gore tarih (YYYY-AA-GG) — eylem son tarihleri icin."""
     return (datetime.now(timezone.utc).date() + timedelta(days=delta)).isoformat()
 
@@ -99,50 +99,50 @@ def gun(delta: int) -> str:
 ACTIONS = [
     # (kayit, baslik, atanan, durum, son tarih, acan, olusturma)
     ("butce_onay", "CFO vekalet onayını IT üzerinden tamamlat",
-     "deniz", "acik", gun(2), "selin", ago(days=11)),
+     "deniz", "open", day(2), "selin", ago(days=11)),
     ("butce_onay", "Tedarikçiden fiyat kilidi uzatması iste",
-     "efe", "devam", gun(-1), "selin", ago(days=10)),              # son tarihi gecti
+     "efe", "in_progress", day(-1), "selin", ago(days=10)),              # son tarihi gecti
     ("teklif", "Teklifleri tek şablona geçir",
-     "efe", "kapandi", None, "efe", ago(days=6)),
+     "efe", "closed", None, "efe", ago(days=6)),
     ("sevkiyat_tarih", "Alternatif kargo firmalarından süre al",
-     None, "acik", gun(4), "efe", ago(days=2)),                    # havuzda, ustlenen yok
+     None, "open", day(4), "efe", ago(days=2)),                    # havuzda, ustlenen yok
 ]
 
 EVENTS = [
-    ("butce_onay", "sistem", "selin", "Selin bu hatayı açtı ve Deniz'e atadı", ago(days=12)),
-    ("butce_onay", "mesaj", "selin",
+    ("butce_onay", "system", "selin", "Selin bu hatayı açtı ve Deniz'e atadı", ago(days=12)),
+    ("butce_onay", "message", "selin",
      "Deniz, finanstan dönüş var mı? Tedarikçi fiyat kilidi cuma bitiyor.", ago(days=12, minutes=-8)),
-    ("butce_onay", "mesaj", "deniz",
+    ("butce_onay", "message", "deniz",
      "CFO izinde, vekaleten onay için IT'den yetki devri istedim.", ago(days=11, hours=-3)),
-    ("butce_onay", "sistem", None, "Durum \"Açık\" olarak kaldı — 3 gündür hareket yok",
+    ("butce_onay", "system", None, "Durum \"Açık\" olarak kaldı — 3 gündür hareket yok",
      ago(days=9)),
-    ("butce_onay", "mesaj", "efe",
+    ("butce_onay", "message", "efe",
      "Bu bir DH kaydı ama üçüncü tekrar. Kapak Ünitesi'ndeki gibi LE'ye taşıyalım mı?",
      ago(minutes=20)),
-    ("sevkiyat_tarih", "sistem", "efe", "Efe bu hatayı açtı", ago(days=11)),
-    ("sevkiyat_tarih", "mesaj", "efe", "Bu aslında bütçe onayının türevi; zinciri o tutuyor.",
+    ("sevkiyat_tarih", "system", "efe", "Efe bu hatayı açtı", ago(days=11)),
+    ("sevkiyat_tarih", "message", "efe", "Bu aslında bütçe onayının türevi; zinciri o tutuyor.",
      ago(hours=3)),
-    ("kapak_kayip", "sistem", "selin", "Selin bu görevi açtı ve Deniz'e atadı",
+    ("kapak_kayip", "system", "selin", "Selin bu görevi açtı ve Deniz'e atadı",
      ago(days=8)),
-    ("kapak_kayip", "mesaj", "deniz", "3 DMS kaydından açıldı, kök neden analizi bekliyor.",
+    ("kapak_kayip", "message", "deniz", "3 DMS kaydından açıldı, kök neden analizi bekliyor.",
      ago(hours=5)),
-    ("vekalet", "mesaj", "selin", "Standart şablon hazırlıyorum.", ago(days=1, hours=2)),
-    ("teklif", "mesaj", "efe", "Üç teklif farklı formatta geldi.", ago(days=2)),
+    ("vekalet", "message", "selin", "Standart şablon hazırlıyorum.", ago(days=1, hours=2)),
+    ("teklif", "message", "efe", "Üç teklif farklı formatta geldi.", ago(days=2)),
 ]
 
 
 TEAM_EVENTS = [
     # Takim duvari: events.subject_type='team' (spec/20-sema.md §2a, göç 003).
     # (takim, tur, yazan, govde, zaman)
-    ("maliye", "mesaj", "selin",
+    ("maliye", "message", "selin",
      "Bu hafta önceliğimiz bütçe onayı; vekalet çıkmazsa cuma eskale ediyoruz.",
      ago(days=2)),
-    ("maliye", "mesaj", "efe", "Fiyat kilidi için tedarikçiyle konuştum, bir hafta daha var.",
+    ("maliye", "message", "efe", "Fiyat kilidi için tedarikçiyle konuştum, bir hafta daha var.",
      ago(days=1, hours=4)),
-    ("satinalim", "mesaj", "efe",
+    ("satinalim", "message", "efe",
      "Alternatif kargo tekliflerini bugün topluyorum, akşam buraya bırakırım.",
      ago(hours=6)),
-    ("tasarim", "mesaj", "selin", "Afiş taslakları hazır; ölçüler için Efe'den dönüş bekliyorum.",
+    ("tasarim", "message", "selin", "Afiş taslakları hazır; ölçüler için Efe'den dönüş bekliyorum.",
      ago(days=3)),
 ]
 
@@ -152,10 +152,10 @@ def run() -> None:
 
     Dosya silmek yerine truncate: veritabani bir sunucuda, dosya degil.
     """
-    db.gocler()
-    db.calistir("truncate table actions, events, item_participants, items,"
-                " team_members, teams, nodes, guvenlik_olaylari, users"
-                " restart identity cascade")
+    db.migrate()
+    db.execute_script("truncate table actions, events, item_participants, items,"
+                      " team_members, teams, nodes, security_events, users"
+                      " restart identity cascade")
     now = db.now()
 
     uid = {k: db.new_id() for k, *_ in USERS}
@@ -166,11 +166,11 @@ def run() -> None:
     # Sira: users.scope_node_id -> nodes, nodes.created_by -> users (dongusel).
     # Once kapsamsiz yazilir, dugumlerden sonra guncellenir.
     # created_at'ler AYRI: esit zamanda "ilk kullanici" secimi belirsiz kalirdi.
-    for sira, (key, email, name, color, admin, editor, _s) in enumerate(USERS):
+    for order, (key, email, name, color, admin, editor, _s) in enumerate(USERS):
         db.x("insert into users (id,email,name,color,is_admin,is_editor,"
              "created_at,is_active) values (%s,%s,%s,%s,%s,%s,%s,true)",
              (uid[key], email, name, color, bool(admin), bool(editor),
-              now + timedelta(seconds=sira)))
+              now + timedelta(seconds=order)))
 
     for order, (key, parent, name, ntype) in enumerate(NODES):
         db.x(
@@ -218,12 +218,12 @@ def run() -> None:
             (db.new_id(), tid[team_key], etype, uid[author], body, created))
 
     for item_key, title, assignee, status, due, creator, created in ACTIONS:
-        biten = status in ("kapandi", "iptal")
+        done = status in ("closed", "cancelled")
         db.x("insert into actions (id,item_id,title,assignee_id,status,due_date,"
             "created_by,resolved_by,resolved_at,created_at) values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
             (db.new_id(), iid[item_key], title, uid[assignee] if assignee else None,
-             status, due, uid[creator], uid[assignee] if biten else None,
-             created if biten else None, created))
+             status, due, uid[creator], uid[assignee] if done else None,
+             created if done else None, created))
 
     print(f"tohumlandi: {len(USERS)} kullanici, {len(TEAMS)} takim, {len(NODES)} dugum, "
           f"{len(ITEMS)} kayit, {len(ACTIONS)} eylem, "

@@ -1,10 +1,10 @@
 """Gorev tablosu filtreleri — taban sinif + turevler (spec/60-kaynak-uyarlama.md 2.2).
 
-Yeni bir boyut eklemek = buraya bir Filtre ornegi eklemek; rota ve sablon degismez
+Yeni bir boyut eklemek = buraya bir Filter ornegi eklemek; rota ve sablon degismez
 (sablon filtreleri genel dongueyle cizer). Abartma: ORM/DSL yok, her filtre tek
 WHERE parcasi dondurur. Kurallar spec/10-kararlar.md 'Sorgular':
   - suzme/siralama SQL'de, Python'a donen satir ekranda gorunen satirdir
-  - siralama sabit sozlukten (SIRALAMA), kullanici girdisiyle birlestirilmez
+  - siralama sabit sozlukten (ORDERINGS), kullanici girdisiyle birlestirilmez
   - alt agac tin/tout uzerinden bellekteki agactan, recursive CTE yok
   - metin aramasi tsvector/GIN, LIKE '%..%' yok
 """
@@ -16,19 +16,19 @@ from . import db, search, service
 
 # Sorgular items'i "i" takma adiyla kullanir; tum clause'lar buna gore yazilir.
 
-SIRALAMA = {  # anahtar disaridan gelir ama SQL sabit buradan okunur
-    "hareket": "i.updated_at desc",
-    "tarih":   "i.due_date is null, i.due_date",
-    "oncelik": ("case i.priority when 'kritik' then 0 when 'yuksek' then 1"
-                " when 'orta' then 2 else 3 end"),
-    "yeni":    "i.created_at desc",
+ORDERINGS = {  # anahtar disaridan gelir ama SQL sabit buradan okunur
+    "activity": "i.updated_at desc",
+    "date":     "i.due_date is null, i.due_date",
+    "priority": ("case i.priority when 'critical' then 0 when 'high' then 1"
+                 " when 'medium' then 2 else 3 end"),
+    "newest":   "i.created_at desc",
 }
-VARSAYILAN_SIRA = "hareket"
+DEFAULT_ORDER = "activity"
 
-ACIK_EYLEM = "select item_id from actions where status in ('acik','devam')"
+OPEN_ACTION = "select item_id from actions where status in ('open','in_progress')"
 
 
-class Filtre:
+class Filter:
     """Taban sinif. options() sablondaki select'i besler, clause() SQL uretir."""
 
     def __init__(self, param: str, label: str):
@@ -42,7 +42,7 @@ class Filtre:
         raise NotImplementedError
 
 
-class SecimFiltre(Filtre):
+class SelectFilter(Filter):
     """Sabit sozluklu sutun esitligi: tur, durum, oncelik, pillar."""
 
     def __init__(self, param: str, label: str, column: str, choices: dict[str, str]):
@@ -58,7 +58,7 @@ class SecimFiltre(Filtre):
         return f"i.{self.column} = %s", [value]
 
 
-class KisiFiltre(Filtre):
+class PersonFilter(Filter):
     """Kullanici sutunu; 'ben' ve 'yok' ozel degerleri."""
 
     def __init__(self, param: str, label: str, column: str):
@@ -66,43 +66,43 @@ class KisiFiltre(Filtre):
         self.column = column
 
     def options(self):
-        ozel = [("ben", "Ben", None), ("yok", "Atanmamış", None)]
-        return ozel + [(u["id"], u["name"], None) for u in db.q("select id,name from users order by name")]
+        special = [("me", "Ben", None), ("none", "Atanmamış", None)]
+        return special + [(u["id"], u["name"], None) for u in db.q("select id,name from users order by name")]
 
     def clause(self, value, user):
-        if value == "ben":
+        if value == "me":
             return f"i.{self.column} = %s", [user["id"]]
-        if value == "yok":
+        if value == "none":
             return f"i.{self.column} is null", []
         # Sutun uuid: gecersiz metin dogrudan sorguya girerse veritabani hata
         # verir. Once cevir, olmuyorsa filtreyi yok say (bozuk girdi filtreyi
         # dusurur, istegi dusurmez).
-        kimlik = db.uid(value)
-        if kimlik is None or db.q1("select 1 from users where id = %s", (kimlik,)) is None:
+        id_ = db.uid(value)
+        if id_ is None or db.q1("select 1 from users where id = %s", (id_,)) is None:
             return None
-        return f"i.{self.column} = %s", [kimlik]
+        return f"i.{self.column} = %s", [id_]
 
 
-class TakimFiltre(Filtre):
+class TeamFilter(Filter):
     def options(self):
         return [(t["id"], t["name"], None) for t in db.q("select id,name from teams order by name")]
 
     def clause(self, value, user):
-        kimlik = db.uid(value)
-        if kimlik is None or db.q1("select 1 from teams where id = %s", (kimlik,)) is None:
+        id_ = db.uid(value)
+        if id_ is None or db.q1("select 1 from teams where id = %s", (id_,)) is None:
             return None
-        return "i.team_id = %s", [kimlik]
+        return "i.team_id = %s", [id_]
 
 
-class DugumFiltre(Filtre):
+class NodeFilter(Filter):
     """Alt agac suzmesi. Secenekler bellekteki agactan, veri yonetiminde tanimlanan
     turlere (node_type) gore gruplanir — sema degisince filtre kendiliginden uyar."""
 
     def options(self):
         tree = service.TREE
-        sirali = sorted(tree.nodes, key=lambda n: tree.tin[n])
+        ordered = sorted(tree.nodes, key=lambda n: tree.tin[n])
         return [(nid, "· " * tree.depth[nid] + tree.name(nid), tree.nodes[nid].node_type)
-                for nid in sirali]
+                for nid in ordered]
 
     def clause(self, value, user):
         # subtree() bellekteki agactan; anahtar uuid, gelen deger metin.
@@ -112,7 +112,7 @@ class DugumFiltre(Filtre):
         return "i.node_id = any(%s)", [list(ids)]
 
 
-class AramaFiltre(Filtre):
+class SearchFilter(Filter):
     """tsvector/GIN — sorgu ifadesi kullanici metniyle birlestirilmez (shared/search.py)."""
 
     def options(self):
@@ -122,68 +122,68 @@ class AramaFiltre(Filtre):
         match = search.fts_query(value)
         if match is None:
             return None
-        return "i.arama @@ to_tsquery('tr', %s)", [match]
+        return "i.search_vector @@ to_tsquery('tr', %s)", [match]
 
 
-def _pillar_secenekleri() -> dict[str, str]:
+def _pillar_options() -> dict[str, str]:
     return {r["pillar"]: r["pillar"] for r in
             db.q("select distinct pillar from items where pillar is not null order by pillar")}
 
 
-def aktif_filtreler() -> list[Filtre]:
+def active_filters() -> list[Filter]:
     """Her istekte kurulur: pillar secenekleri veriden, dugumler agactan gelir."""
     return [
-        SecimFiltre("tur", "Tür", "kind", {"hata": "Hata", "gorev": "Görev"}),
-        SecimFiltre("durum", "Durum", "status", dict(service.STATUSES)),
-        SecimFiltre("oncelik", "Öncelik", "priority", dict(service.PRIORITIES)),
-        TakimFiltre("takim", "Takım"),
-        KisiFiltre("kisi", "Sorumlu", "assignee_id"),
-        DugumFiltre("dugum", "Düğüm"),
-        SecimFiltre("pillar", "Pillar", "pillar", _pillar_secenekleri()),
-        AramaFiltre("ara", "Ara"),
+        SelectFilter("kind", "Tür", "kind", {"issue": "Hata", "task": "Görev"}),
+        SelectFilter("status", "Durum", "status", dict(service.STATUSES)),
+        SelectFilter("priority", "Öncelik", "priority", dict(service.PRIORITIES)),
+        TeamFilter("team", "Takım"),
+        PersonFilter("person", "Sorumlu", "assignee_id"),
+        NodeFilter("node", "Düğüm"),
+        SelectFilter("pillar", "Pillar", "pillar", _pillar_options()),
+        SearchFilter("search", "Ara"),
     ]
 
 
 # --- hizli filtreler: kadans hafta (spec/10-kararlar.md 'Kadans hafta') ------
 
-def _hafta():
+def _week_range():
     """Tarihler ARTIK METIN DEGIL: sutunlar date/timestamptz, karsilastirma
     icin gercek nesne gonderilir (isoformat() SQLite doneminden kalmaydi)."""
-    bugun = datetime.now(timezone.utc).date()
-    return bugun - timedelta(days=7), bugun + timedelta(days=7)
+    today = datetime.now(timezone.utc).date()
+    return today - timedelta(days=7), today + timedelta(days=7)
 
 
-def hizli_clause(key: str, user) -> tuple[str, list] | None:
-    once, sonra = _hafta()
-    bugun = datetime.now(timezone.utc).date()
-    H = {
+def quick_clause(key: str, user) -> tuple[str, list] | None:
+    before, after = _week_range()
+    today = datetime.now(timezone.utc).date()
+    Q = {
         # bu haftanin gundemi: son 7 gunde hareket VEYA son tarihi 7 gun icinde
-        "hafta": ("(i.updated_at >= %s::date or (i.due_date is not null and i.due_date <= %s"
-                  " and i.status <> 'kapandi'))", [once, sonra]),
+        "week": ("(i.updated_at >= %s::date or (i.due_date is not null and i.due_date <= %s"
+                 " and i.status <> 'closed'))", [before, after]),
         # acik eylemim: actions tablosundan (spec/20-sema.md §3a)
-        "eylemim": (f"i.id in (select item_id from actions where assignee_id = %s"
-                    " and status in ('acik','devam'))", [user["id"]]),
+        "my_actions": (f"i.id in (select item_id from actions where assignee_id = %s"
+                       " and status in ('open','in_progress'))", [user["id"]]),
         # geciken: kaydin ya da acik bir eyleminin son tarihi gecmis
-        "geciken": ("((i.due_date < %s and i.status <> 'kapandi') or i.id in"
+        "overdue": ("((i.due_date < %s and i.status <> 'closed') or i.id in"
                     " (select item_id from actions where due_date < %s"
-                    "  and status in ('acik','devam')))", [bugun, bugun]),
-        "atanmamis": ("i.assignee_id is null and i.status <> 'kapandi'", []),
+                    "  and status in ('open','in_progress')))", [today, today]),
+        "unassigned": ("i.assignee_id is null and i.status <> 'closed'", []),
     }
-    return H.get(key)
+    return Q.get(key)
 
 
-HIZLI = [("hepsi", "Hepsi"), ("hafta", "Bu hafta"), ("eylemim", "Açık eylemim"),
-         ("geciken", "Geciken"), ("atanmamis", "Atanmamış")]
+QUICK_FILTERS = [("all", "Hepsi"), ("week", "Bu hafta"), ("my_actions", "Açık eylemim"),
+                 ("overdue", "Geciken"), ("unassigned", "Atanmamış")]
 
 
-def sorgu_kur(params, user) -> tuple[str, list, str, dict]:
+def build_query(params, user) -> tuple[str, list, str, dict]:
     """Istek parametrelerinden (where, args, order by, secili) uretir.
 
-    secili: sablonun select'leri isaretlemesi icin {param: deger} — yalnizca
+    selected: sablonun select'leri isaretlemesi icin {param: deger} — yalnizca
     gecerli clause ureten degerler girer, yansitilan ham girdi degil.
     """
-    where, args, secili = ["1=1"], [], {}
-    for f in aktif_filtreler():
+    where, args, selected = ["1=1"], [], {}
+    for f in active_filters():
         v = (params.get(f.param) or "").strip()
         if not v:
             continue
@@ -192,18 +192,18 @@ def sorgu_kur(params, user) -> tuple[str, list, str, dict]:
             continue
         where.append(c[0])
         args.extend(c[1])
-        secili[f.param] = v
+        selected[f.param] = v
 
-    hizli = params.get("hizli") or "hepsi"
-    c = hizli_clause(hizli, user)
+    quick = params.get("quick") or "all"
+    c = quick_clause(quick, user)
     if c is not None:
         where.append(c[0])
         args.extend(c[1])
     else:
-        hizli = "hepsi"
-    secili["hizli"] = hizli
+        quick = "all"
+    selected["quick"] = quick
 
-    sirala = params.get("sirala") if params.get("sirala") in SIRALAMA else VARSAYILAN_SIRA
-    secili["sirala"] = sirala
+    sort = params.get("sort") if params.get("sort") in ORDERINGS else DEFAULT_ORDER
+    selected["sort"] = sort
     # deterministik kuyruk: (secilen sutun, id) — spec/10-kararlar.md
-    return " and ".join(where), args, f"{SIRALAMA[sirala]}, i.id", secili
+    return " and ".join(where), args, f"{ORDERINGS[sort]}, i.id", selected

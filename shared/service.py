@@ -14,21 +14,21 @@ from fastapi import HTTPException
 from . import auth, db
 from .tree import TreeIndex
 
-STATUSES = {"acik": "Açık", "devam": "Devam", "beklemede": "Beklemede", "kapandi": "Kapandı"}
-PRIORITIES = {"kritik": "Kritik", "yuksek": "Yüksek", "orta": "Orta", "dusuk": "Düşük"}
+STATUSES = {"open": "Açık", "in_progress": "Devam", "pending": "Beklemede", "closed": "Kapandı"}
+PRIORITIES = {"critical": "Kritik", "high": "Yüksek", "medium": "Orta", "low": "Düşük"}
 EDITABLE = {"status": STATUSES, "priority": PRIORITIES, "assignee_id": None, "due_date": None,
             "team_id": None}
-EYLEM_DURUM = {"acik": "Açık", "devam": "Devam", "kapandi": "Kapandı", "iptal": "İptal"}
-TAKIM_ROL = {"lider": "Lider", "mentor": "Mentor", "uye": "Üye"}
-AYLAR = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"]
+ACTION_STATUS = {"open": "Açık", "in_progress": "Devam", "closed": "Kapandı", "cancelled": "İptal"}
+TEAM_ROLE = {"lead": "Lider", "mentor": "Mentor", "member": "Üye"}
+MONTHS = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"]
 
-PRIO_SQL = ("case priority when 'kritik' then 0 when 'yuksek' then 1"
-            " when 'orta' then 2 else 3 end")
-PRIO_SQL_I = ("case i.priority when 'kritik' then 0 when 'yuksek' then 1"
-              " when 'orta' then 2 else 3 end")                      # join'li sorgular
-# Rol sirasi ekranda da SQL'de de ayni: once lider, sonra mentor, sonra uye.
+PRIO_SQL = ("case priority when 'critical' then 0 when 'high' then 1"
+            " when 'medium' then 2 else 3 end")
+PRIO_SQL_I = ("case i.priority when 'critical' then 0 when 'high' then 1"
+              " when 'medium' then 2 else 3 end")                      # join'li sorgular
+# Rol sirasi ekranda da SQL'de de ayni: once lead, sonra mentor, sonra member.
 # ("m" = team_members takma adi; iki takim sorgusu da bu adi kullanir.)
-ROL_SIRA = "case m.role when 'lider' then 0 when 'mentor' then 1 else 2 end"
+ROLE_ORDER = "case m.role when 'lead' then 0 when 'mentor' then 1 else 2 end"
 MINE_SQL = ("(assignee_id = %s or id in"
             " (select item_id from item_participants where user_id = %s))")
 MINE_SQL_I = ("(i.assignee_id = %s or i.id in"
@@ -52,119 +52,119 @@ def rebuild_tree() -> TreeIndex:
 # --workers 1 varsayimiyla dogru; ikinci bir isci kendi bayat agaciyla kalir.
 
 
-def _dugum_olayi(node_id, author_id, metin: str) -> None:
+def _node_event(node_id, author_id, text: str) -> None:
     """Agac gecmisi events'e yazilir — AYRI TABLO YOK.
 
     003'te takim duvari icin ayni sey yapilmisti: subject_type'a yeni bir
     deger eklenir, tablo ve indeks paylasilir. Boylece "ne oldu" sorusunun
     tek kaynagi kalir ve mevcut akis bileseni dugum gecmisini de cizebilir.
     """
-    log(node_id, "sistem", db.uid(author_id) if author_id else None, metin,
+    log(node_id, "system", db.uid(author_id) if author_id else None, text,
         subject_type="node")
 
 
-def dugum_ekle(ad: str, node_type: str, parent_id=None, aciklama: str | None = None,
-               created_by=None) -> dict | None:
+def add_node(name: str, node_type: str, parent_id=None, description: str | None = None,
+             created_by=None) -> dict | None:
     """Yeni dugum. parent_id None ise kok."""
-    ad = (ad or "").strip()
+    name = (name or "").strip()
     node_type = (node_type or "").strip()
-    if not ad or not node_type:
+    if not name or not node_type:
         return None
 
-    ust = db.uid(parent_id) if parent_id else None
-    if ust is not None and ust not in TREE.nodes:
+    parent = db.uid(parent_id) if parent_id else None
+    if parent is not None and parent not in TREE.nodes:
         return None                       # olmayan ustun altina yazma
 
     # Kardeslerin sonuna: sira numarasi elle verilmiyor, ekleme sirasi korunuyor.
-    kardesler = TREE.children.get(ust, []) if ust else TREE.roots
-    sira = max((TREE.nodes[k].sort_order for k in kardesler), default=-1) + 1
+    siblings = TREE.children.get(parent, []) if parent else TREE.roots
+    order = max((TREE.nodes[k].sort_order for k in siblings), default=-1) + 1
 
-    satir = db.q1(
+    row = db.q1(
         "insert into nodes (id,parent_id,name,node_type,sort_order,description,created_by,created_at)"
         " values (%s,%s,%s,%s,%s,%s,%s,%s) returning *",
-        (db.new_id(), ust, ad, node_type, sira, (aciklama or "").strip() or None,
+        (db.new_id(), parent, name, node_type, order, (description or "").strip() or None,
          db.uid(created_by) if created_by else None, db.now()))
     rebuild_tree()
-    _dugum_olayi(satir["id"], created_by, f"{ad} eklendi ({node_type})")
-    return satir
+    _node_event(row["id"], created_by, f"{name} eklendi ({node_type})")
+    return row
 
 
-def dugum_guncelle(node_id, ad: str | None = None, node_type: str | None = None,
-                   aciklama: str | None = None, degistiren=None) -> bool:
+def update_node(node_id, name: str | None = None, node_type: str | None = None,
+                description: str | None = None, changed_by=None) -> bool:
     """Ad / tur / aciklama. Verilmeyen alan DEGISMEZ (None = dokunma)."""
-    kimlik = db.uid(node_id)
-    if kimlik is None or kimlik not in TREE.nodes:
+    id_ = db.uid(node_id)
+    if id_ is None or id_ not in TREE.nodes:
         return False
 
-    alanlar, degerler = [], []
-    if ad is not None:
-        if not ad.strip():
+    fields, values = [], []
+    if name is not None:
+        if not name.strip():
             return False                  # adsiz dugum agacta okunmaz olur
-        alanlar.append("name = %s"); degerler.append(ad.strip())
+        fields.append("name = %s"); values.append(name.strip())
     if node_type is not None:
         if not node_type.strip():
             return False
-        alanlar.append("node_type = %s"); degerler.append(node_type.strip())
-    if aciklama is not None:
+        fields.append("node_type = %s"); values.append(node_type.strip())
+    if description is not None:
         # Bos metin "aciklamayi sil" demek; None ile karistirma.
-        alanlar.append("description = %s"); degerler.append(aciklama.strip() or None)
-    if not alanlar:
+        fields.append("description = %s"); values.append(description.strip() or None)
+    if not fields:
         return False
 
-    onceki_ad = TREE.name(kimlik)
-    db.x(f"update nodes set {', '.join(alanlar)} where id = %s", (*degerler, kimlik))
+    previous_name = TREE.name(id_)
+    db.x(f"update nodes set {', '.join(fields)} where id = %s", (*values, id_))
     rebuild_tree()                        # ad degistiyse agactaki etiket de degisti
-    yeni_ad = TREE.name(kimlik)
-    _dugum_olayi(kimlik, degistiren,
-                 f"{onceki_ad} -> {yeni_ad} olarak adlandirildi" if onceki_ad != yeni_ad
-                 else f"{yeni_ad} guncellendi")
+    new_name = TREE.name(id_)
+    _node_event(id_, changed_by,
+                f"{previous_name} -> {new_name} olarak adlandirildi" if previous_name != new_name
+                else f"{new_name} guncellendi")
     return True
 
 
-def dugum_tasi(node_id, yeni_ust_id, tasiyan=None) -> bool:
-    """Dugumu baska bir ustun altina alir. yeni_ust_id None ise koke cikarir."""
-    kimlik = db.uid(node_id)
-    if kimlik is None or kimlik not in TREE.nodes:
+def move_node(node_id, new_parent_id, moved_by=None) -> bool:
+    """Dugumu baska bir ustun altina alir. new_parent_id None ise koke cikarir."""
+    id_ = db.uid(node_id)
+    if id_ is None or id_ not in TREE.nodes:
         return False
 
-    ust = db.uid(yeni_ust_id) if yeni_ust_id else None
-    if ust is not None:
-        if ust not in TREE.nodes:
+    parent = db.uid(new_parent_id) if new_parent_id else None
+    if parent is not None:
+        if parent not in TREE.nodes:
             return False
         # DONGU KORUMASI: hedef, tasinan dugumun alt agacinda olamaz. Olsaydi
         # agac bir halkaya donerdi ve Euler turu sonsuz donerdi.
-        if TREE.is_descendant(ust, kimlik):
+        if TREE.is_descendant(parent, id_):
             return False
 
-    ad = TREE.name(kimlik)
-    nereye = TREE.name(ust) if ust else "köke"
-    db.x("update nodes set parent_id = %s where id = %s", (ust, kimlik))
+    name = TREE.name(id_)
+    destination = TREE.name(parent) if parent else "köke"
+    db.x("update nodes set parent_id = %s where id = %s", (parent, id_))
     rebuild_tree()
-    _dugum_olayi(kimlik, tasiyan, f"{ad} {nereye} taşındı")
+    _node_event(id_, moved_by, f"{name} {destination} taşındı")
     return True
 
 
-def dugum_sil(node_id, silen=None) -> bool:
+def delete_node(node_id, deleted_by=None) -> bool:
     """Dugumu ve ALT AGACINI siler (nodes.parent_id on delete cascade).
 
     Kayitlar da gider: items.node_id -> nodes on delete cascade. Bu yuzden
     cagiran taraf once kac kayit etkilenecegini gostermeli.
     """
-    kimlik = db.uid(node_id)
-    if kimlik is None or kimlik not in TREE.nodes:
+    id_ = db.uid(node_id)
+    if id_ is None or id_ not in TREE.nodes:
         return False
     # Ad SILMEDEN ONCE okunur: satir gidince gecmis "bir sey silindi" demekten
     # oteye gitmezdi (events.subject_id FK degil, satir kaliyor ama ad kalmiyor).
-    ad = TREE.name(kimlik)
-    alt_sayi = len(TREE.subtree(kimlik)) - 1
-    db.x("delete from nodes where id = %s", (kimlik,))
+    name = TREE.name(id_)
+    child_count = len(TREE.subtree(id_)) - 1
+    db.x("delete from nodes where id = %s", (id_,))
     rebuild_tree()
-    _dugum_olayi(kimlik, silen,
-                 f"{ad} silindi" + (f" (+{alt_sayi} alt düğüm)" if alt_sayi else ""))
+    _node_event(id_, deleted_by,
+                f"{name} silindi" + (f" (+{child_count} alt düğüm)" if child_count else ""))
     return True
 
 
-def dugum_kayit_sayilari() -> dict:
+def node_record_counts() -> dict:
     """Dugum basina kayit sayisi — silmeden once ne kaybedilecegi gorunsun."""
     return {r["node_id"]: r["c"]
             for r in db.q("select node_id, count(*) c from items group by node_id")}
@@ -186,8 +186,8 @@ def teams_by_id() -> dict:
 
 
 def get_team(team_id):
-    kimlik = db.uid(team_id)
-    r = db.q1("select * from teams where id = %s", (kimlik,)) if kimlik else None
+    id_ = db.uid(team_id)
+    r = db.q1("select * from teams where id = %s", (id_,)) if id_ else None
     if r is None:
         raise HTTPException(404, "takım yok")
     return r
@@ -198,12 +198,12 @@ def team_rows() -> list[dict]:
     return db.q(
         "select t.*,"
         " (select count(*) from team_members m join users u on u.id = m.user_id"
-        "  where m.team_id = t.id and u.is_active) uye,"
+        "  where m.team_id = t.id and u.is_active) member_count,"
         " (select count(*) from items i where i.team_id = t.id"
-        "  and i.status <> 'kapandi') acik,"
-        " (select count(*) from items i where i.team_id = t.id) hepsi,"
+        "  and i.status <> 'closed') open_count,"
+        " (select count(*) from items i where i.team_id = t.id) all_count,"
         " (select count(*) from actions a join items i on i.id = a.item_id"
-        "  where i.team_id = t.id and a.status in ('acik','devam')) acik_eylem"
+        "  where i.team_id = t.id and a.status in ('open','in_progress')) open_action_count"
         " from teams t order by t.name")
 
 
@@ -212,7 +212,7 @@ def members_by_team() -> dict:
     out: dict = {}
     for r in db.q("select m.team_id, m.role, u.id, u.name, u.color"
                   " from team_members m join users u on u.id = m.user_id"
-                  f" where u.is_active order by {ROL_SIRA}, u.name"):
+                  f" where u.is_active order by {ROLE_ORDER}, u.name"):
         out.setdefault(r["team_id"], []).append(r)
     return out
 
@@ -226,15 +226,15 @@ def team_members(team_id) -> list[dict]:
         "select u.id, u.name, u.email, u.color, m.role,"
         " (select count(*) from actions a join items i on i.id = a.item_id"
         "  where i.team_id = m.team_id and a.assignee_id = u.id"
-        "  and a.status in ('acik','devam')) acik_eylem"
+        "  and a.status in ('open','in_progress')) open_action_count"
         " from team_members m join users u on u.id = m.user_id"
-        f" where m.team_id = %s and u.is_active order by {ROL_SIRA}, u.name",
+        f" where m.team_id = %s and u.is_active order by {ROLE_ORDER}, u.name",
         (db.uid(team_id),))
 
 
 def team_open_count(team_id) -> int:
     """Takimin acik kayit sayisi — team_items kirpilmis olabilir, rozet tami soyler."""
-    r = db.q1("select count(*) c from items where team_id = %s and status <> 'kapandi'",
+    r = db.q1("select count(*) c from items where team_id = %s and status <> 'closed'",
               (db.uid(team_id),))
     return r["c"] or 0
 
@@ -242,27 +242,27 @@ def team_open_count(team_id) -> int:
 def team_items(team_id, limit: int = 20) -> list[dict]:
     """Takimin acik kayitlari — oncelik sirasinda, ilk `limit` satir.
 
-    Tamami gorev tablosunda: /gorevler?takim=<id> (ayni suzgec, ikinci tablo yok).
+    Tamami gorev tablosunda: /tasks?team=<id> (ayni suzgec, ikinci tablo yok).
     """
     return db.q(
         "select i.*, t.name team_name, t.color team_color,"
         " (select count(*) from actions a where a.item_id = i.id"
-        "  and a.status in ('acik','devam')) acik_eylem"
+        "  and a.status in ('open','in_progress')) open_action_count"
         " from items i left join teams t on t.id = i.team_id"
-        " where i.team_id = %s and i.status <> 'kapandi'"
+        " where i.team_id = %s and i.status <> 'closed'"
         f" order by {PRIO_SQL_I}, i.updated_at desc limit %s",
         (db.uid(team_id), limit))
 
 
 def open_action_count(item_id: str) -> int:
     r = db.q1("select count(*) c from actions where item_id = %s"
-              " and status in ('acik','devam')", (item_id,))
+              " and status in ('open','in_progress')", (item_id,))
     return r["c"] or 0
 
 
 def actions_of(item_id: str) -> list:
     return db.q("select * from actions where item_id = %s"
-                " order by case status when 'kapandi' then 1 when 'iptal' then 1 else 0 end,"
+                " order by case status when 'closed' then 1 when 'cancelled' then 1 else 0 end,"
                 " due_date is null, due_date, created_at", (item_id,))
 
 
@@ -332,9 +332,9 @@ def add_message(user, item, body: str) -> dict | None:
     body = body.strip()
     if not body:
         return None
-    log(item["id"], "mesaj", user["id"], body)
+    log(item["id"], "message", user["id"], body)
     db.x("update items set updated_at = %s where id = %s", (db.now(), item["id"]))
-    return {"type": "mesaj", "body": body, "author": user, "mine": True,
+    return {"type": "message", "body": body, "author": user, "mine": True,
             "time": short_time(db.now())}
 
 
@@ -347,8 +347,8 @@ def add_team_message(user, team, body: str) -> dict | None:
     body = body.strip()
     if not body:
         return None
-    log(team["id"], "mesaj", user["id"], body, subject_type="team")
-    return {"type": "mesaj", "body": body, "author": user, "mine": True,
+    log(team["id"], "message", user["id"], body, subject_type="team")
+    return {"type": "message", "body": body, "author": user, "mine": True,
             "time": short_time(db.now())}
 
 
@@ -372,7 +372,7 @@ def change_field(user, item, form) -> bool:
     if field == "team_id" and value is not None and value not in teams:
         raise HTTPException(400, "takım yok")
     # kayit acik eylemi varken kapanamaz (spec/20-sema.md §3a)
-    if field == "status" and value == "kapandi":
+    if field == "status" and value == "closed":
         n = open_action_count(item["id"])
         if n:
             raise HTTPException(400, f"önce açık eylemleri kapat ({n} açık eylem var)")
@@ -396,7 +396,7 @@ def change_field(user, item, form) -> bool:
          (value, db.now(), item["id"]))
     names = {"status": "durumu", "priority": "önceliği", "assignee_id": "sorumluyu",
              "due_date": "son tarihi", "team_id": "takımı"}
-    log(item["id"], "sistem", user["id"], f"{user['name']} {names[field]} {old} → {new} yaptı")
+    log(item["id"], "system", user["id"], f"{user['name']} {names[field]} {old} → {new} yaptı")
     return True
 
 
@@ -411,7 +411,7 @@ def new_item(user, node_id: str, kind: str, title: str, description: str = "",
     node_id, team_id = db.uid(node_id), db.uid(team_id) if team_id else None
     if node_id not in TREE.nodes:
         raise HTTPException(400, "düğüm zorunlu")
-    if kind not in ("hata", "gorev"):
+    if kind not in ("issue", "task"):
         raise HTTPException(400, "geçersiz tür")
     if not title.strip():
         raise HTTPException(400, "başlık zorunlu")
@@ -424,13 +424,13 @@ def new_item(user, node_id: str, kind: str, title: str, description: str = "",
     now = db.now()
     item_id = db.new_id()
     db.x("insert into items (id,node_id,kind,title,description,status,priority,team_id,"
-         "assignee_id,created_by,created_at,updated_at) values (%s,%s,%s,%s,%s,'acik','orta',%s,%s,%s,%s,%s)",
+         "assignee_id,created_by,created_at,updated_at) values (%s,%s,%s,%s,%s,'open','medium',%s,%s,%s,%s,%s)",
          (item_id, node_id, kind, title.strip(), description.strip() or None,
           team_id, user["id"], user["id"], now, now))
     db.x("insert into item_participants (item_id,user_id,added_by,added_at) values (%s,%s,%s,%s)",
          (item_id, user["id"], user["id"], now))
-    ek = f", takım: {teams_by_id()[team_id]['name']}" if team_id else ""
-    log(item_id, "sistem", user["id"], f"{user['name']} bu kaydı açtı ({TREE.name(node_id)}{ek})")
+    extra = f", takım: {teams_by_id()[team_id]['name']}" if team_id else ""
+    log(item_id, "system", user["id"], f"{user['name']} bu kaydı açtı ({TREE.name(node_id)}{extra})")
     return item_id
 
 
@@ -448,11 +448,11 @@ def add_action(user, item, title: str, assignee_id: str | None = None,
     now = db.now()
     action_id = db.new_id()
     db.x("insert into actions (id,item_id,title,assignee_id,status,due_date,created_by,created_at)"
-         " values (%s,%s,%s,%s,'acik',%s,%s,%s)",
+         " values (%s,%s,%s,%s,'open',%s,%s,%s)",
          (action_id, item["id"], title.strip(), assignee_id, due_date or None, user["id"], now))
     db.x("update items set updated_at = %s where id = %s", (now, item["id"]))
-    kime = f" → {users[assignee_id]['name']}" if assignee_id else " (havuzda, üstlenen bekliyor)"
-    log(item["id"], "sistem", user["id"], f"{user['name']} eylem ekledi: {title.strip()}{kime}")
+    to_whom = f" → {users[assignee_id]['name']}" if assignee_id else " (havuzda, üstlenen bekliyor)"
+    log(item["id"], "system", user["id"], f"{user['name']} eylem ekledi: {title.strip()}{to_whom}")
     return action_id
 
 
@@ -470,7 +470,7 @@ def change_action(user, item, action, form) -> bool:
         raise HTTPException(400, "bilinmeyen alan")
     value = (form[field] or "").strip() or None
     users = users_by_id()
-    if field == "status" and value not in EYLEM_DURUM:
+    if field == "status" and value not in ACTION_STATUS:
         raise HTTPException(400, "geçersiz değer")
     if field == "assignee_id":
         value = db.uid(value) if value else None     # form metni -> uuid
@@ -481,20 +481,19 @@ def change_action(user, item, action, form) -> bool:
 
     now = db.now()
     if field == "status":
-        biten = value in ("kapandi", "iptal")
+        done = value in ("closed", "cancelled")
         db.x("update actions set status = %s, resolved_by = %s, resolved_at = %s where id = %s",
-             (value, user["id"] if biten else None, now if biten else None, action["id"]))
-        log(item["id"], "sistem", user["id"],
-            f"{user['name']} \"{action['title']}\" eylemini {EYLEM_DURUM[value]} yaptı")
+             (value, user["id"] if done else None, now if done else None, action["id"]))
+        log(item["id"], "system", user["id"],
+            f"{user['name']} \"{action['title']}\" eylemini {ACTION_STATUS[value]} yaptı")
     else:
         db.x(f"update actions set {field} = %s where id = %s", (value, action["id"]))
         if field == "assignee_id":
-            kim = users[value]["name"] if value else "—"
-            log(item["id"], "sistem", user["id"],
-                f"{user['name']} \"{action['title']}\" eylemini {kim} kişisine atadı")
+            who = users[value]["name"] if value else "—"
+            log(item["id"], "system", user["id"],
+                f"{user['name']} \"{action['title']}\" eylemini {who} kişisine atadı")
         else:
-            log(item["id"], "sistem", user["id"],
+            log(item["id"], "system", user["id"],
                 f"{user['name']} \"{action['title']}\" eyleminin son tarihini {value or '—'} yaptı")
     db.x("update items set updated_at = %s where id = %s", (now, item["id"]))
     return True
-

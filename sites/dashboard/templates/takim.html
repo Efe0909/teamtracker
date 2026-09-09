@@ -13,15 +13,15 @@
 </head>
 <body hx-headers='{"X-CSRF-Token": "{{ csrf_token }}"}'>
 {% include "fragments/uyari_mobil.html" %}
-{% with aktif = "ekipler" %}{% include "fragments/rail.html" %}{% endwith %}
+{% with aktif = "teams" %}{% include "fragments/rail.html" %}{% endwith %}
 
 <div class="wrapmain" id="main">
   <div class="crumb" data-fragment="takim_crumb">
-    <a href="/ekipler">← Ekipler</a><span class="sep">|</span>
+    <a href="/teams">← Ekipler</a><span class="sep">|</span>
     <span class="cur">{{ team.name }}</span>
     {% if node %}<span>›</span><span>{{ node }}</span>{% endif %}
     <span class="sp"></span>
-    <a href="/gorevler?takim={{ team.id }}">Bu takımın tüm kayıtları →</a>
+    <a href="/tasks?team={{ team.id }}">Bu takımın tüm kayıtları →</a>
   </div>
 
   <div class="kbody">

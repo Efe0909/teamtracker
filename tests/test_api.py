@@ -13,12 +13,12 @@ from shared import db, seed  # noqa: E402
 
 @pytest.fixture(scope="module")
 def client():
-    from conftest import test_veritabani  # noqa: E402
-    test_veritabani("api")
+    from conftest import setup_database  # noqa: E402
+    setup_database("api")
     import app  # noqa: E402
     with TestClient(app.app) as c:
-        from conftest import csrf_tak  # noqa: E402
-        csrf_tak(c)                    # yazma istekleri token tasisin
+        from conftest import csrf_attach  # noqa: E402
+        csrf_attach(c)                    # yazma istekleri token tasisin
         yield c
 
 
@@ -35,20 +35,20 @@ def test_home_lists_modules(client):
     r = client.get("/")
     assert r.status_code == 200
     assert "Görev Yöneticisi" in r.text and "Veri Yönetimi" in r.text
-    assert 'href="/gorevler"' in r.text and 'href="/kazanim-agaci"' in r.text
+    assert 'href="/tasks"' in r.text and 'href="/outcome-tree"' in r.text
     assert "Bütçe onayı 6 gündür bekliyor" not in r.text        # ana sayfa tablo degil
 
 
 def test_module_stub_pages(client):
-    assert client.get("/kazanim-agaci").status_code == 200
+    assert client.get("/outcome-tree").status_code == 200
     assert client.get("/pivot").status_code == 200
-    assert client.get("/gorevler2").status_code == 404          # kayitli olmayan slug
-    r = client.get("/gorevler", follow_redirects=False)          # hazir modul iskele degil
+    assert client.get("/tasks2").status_code == 404          # kayitli olmayan slug
+    r = client.get("/tasks", follow_redirects=False)          # hazir modul iskele degil
     assert r.status_code == 200 and "Yakında" not in r.text
 
 
 def test_tasks_lists_my_items(client):
-    r = client.get("/gorevler")
+    r = client.get("/tasks")
     assert r.status_code == 200
     assert "Bütçe onayı 6 gündür bekliyor" in r.text
 
@@ -57,14 +57,14 @@ def test_item_redirects_to_task_page(client):
     """Eski /item ucu kayit sayfasina yonlendirir; sayfa URL'si paylasilabilir (spec/60 2.4)."""
     it = item_by_title("Bütçe onayı 6 gündür bekliyor")
     r = client.get(f"/item/{it['id']}", follow_redirects=False)
-    assert r.status_code == 303 and r.headers["location"] == f"/gorevler/{it['id']}"
-    page = client.get(f"/gorevler/{it['id']}").text
+    assert r.status_code == 303 and r.headers["location"] == f"/tasks/{it['id']}"
+    page = client.get(f"/tasks/{it['id']}").text
     assert 'data-fragment="card_feed"' in page and 'data-fragment="card_actions"' in page
 
 
 def test_table_fragment_on_htmx(client):
     """Filtre degisince tam sayfa degil yalnizca #sonuc parcasi doner."""
-    r = client.get("/gorevler", headers={"HX-Request": "true"})
+    r = client.get("/tasks", headers={"HX-Request": "true"})
     assert r.status_code == 200
     assert "<html" not in r.text and 'data-fragment="tablo"' in r.text
 
@@ -80,20 +80,20 @@ def test_message_appends_single_event(client):
 
 def test_field_change_writes_system_event_and_oob_feed(client):
     it = item_by_title("Bütçe onayı 6 gündür bekliyor")
-    r = client.patch(f"/item/{it['id']}/field", data={"status": "devam"},
+    r = client.patch(f"/item/{it['id']}/field", data={"status": "in_progress"},
                      headers={"HX-Request": "true"})
     assert r.status_code == 200
     assert 'hx-swap-oob="true"' in r.text          # card_fields + card_feed birlikte
-    assert item_by_title("Bütçe onayı 6 gündür bekliyor")["status"] == "devam"
+    assert item_by_title("Bütçe onayı 6 gündür bekliyor")["status"] == "in_progress"
     last = db.q1("select * from events where subject_id=%s order by created_at desc"
                  " limit 1", (it["id"],))
-    assert last["event_type"] == "sistem" and "Açık → Devam" in last["body"]
+    assert last["event_type"] == "system" and "Açık → Devam" in last["body"]
 
 
 def test_node_filter_includes_subtree(client):
-    """dugum filtresi alt agaci kapsar (tin/tout, shared/filters.DugumFiltre)."""
+    """dugum filtresi alt agaci kapsar (tin/tout, shared/filters.NodeFilter)."""
     node = db.q1("select id from nodes where name = 'Malzeme Temini'")
-    r = client.get(f"/gorevler?dugum={node['id']}")
+    r = client.get(f"/tasks?node={node['id']}")
     assert "Bütçe onayı 6 gündür bekliyor" in r.text
     assert "Tedarikçi teklifleri karşılaştırılamıyor" in r.text
     assert "Kapak Ünitesi — tekrar eden kayıp" not in r.text   # baska kok
@@ -101,7 +101,7 @@ def test_node_filter_includes_subtree(client):
 
 def test_team_filter(client):
     team = db.q1("select id from teams where name = 'Maliye'")
-    r = client.get(f"/gorevler?takim={team['id']}")
+    r = client.get(f"/tasks?team={team['id']}")
     assert "Bütçe onayı 6 gündür bekliyor" in r.text
     assert "Onay akışına vekalet mekanizması ekle" in r.text
     assert "Sevkiyat tarihi etkinlikten sonraya düşüyor" not in r.text  # Satın Alım
@@ -109,7 +109,7 @@ def test_team_filter(client):
 
 def test_quick_filter_overdue_via_action(client):
     """geciken: kaydin kendisi degil, acik bir eyleminin son tarihi gecmis olsa da dusmeli."""
-    r = client.get("/gorevler?hizli=geciken")
+    r = client.get("/tasks?quick=overdue")
     assert "Bütçe onayı 6 gündür bekliyor" in r.text        # eylemi dun'e gecikmis
     assert "Kapak Ünitesi — tekrar eden kayıp" not in r.text
 
@@ -117,7 +117,7 @@ def test_quick_filter_overdue_via_action(client):
 def test_quick_filter_my_open_actions(client):
     u = users(client)
     client.cookies.set("uid", u["Deniz"])
-    r = client.get("/gorevler?hizli=eylemim")
+    r = client.get("/tasks?quick=my_actions")
     assert "Bütçe onayı 6 gündür bekliyor" in r.text        # CFO vekalet eylemi Deniz'de
     assert "Tedarikçi teklifleri karşılaştırılamıyor" not in r.text  # eylemi kapali
     client.cookies.delete("uid")
@@ -125,7 +125,7 @@ def test_quick_filter_my_open_actions(client):
 
 def test_bad_filter_values_fall_back(client):
     """Gecersiz filtre degeri sorguya sizmaz, sessizce yok sayilir."""
-    r = client.get("/gorevler?takim=xx&sirala='; drop table items;--&hizli=bilinmez")
+    r = client.get("/tasks?team=xx&sort='; drop table items;--&quick=bilinmez")
     assert r.status_code == 200
     assert "Bütçe onayı 6 gündür bekliyor" in r.text
 
@@ -137,16 +137,16 @@ def test_out_of_scope_is_403_not_just_hidden(client):
     client.cookies.set("uid", str(u["Efe"]))
     frag = client.get(f"/item/{it['id']}", headers={"HX-Request": "true"}).text
     assert "salt okunur" in frag                                  # arayuzde kilitli
-    assert client.patch(f"/item/{it['id']}/field", data={"status": "kapandi"}).status_code == 403
+    assert client.patch(f"/item/{it['id']}/field", data={"status": "closed"}).status_code == 403
     assert client.post(f"/item/{it['id']}/message", data={"body": "x"}).status_code == 403
-    assert item_by_title("Kapak Ünitesi — tekrar eden kayıp")["status"] == "beklemede"
+    assert item_by_title("Kapak Ünitesi — tekrar eden kayıp")["status"] == "pending"
 
 
 def test_admin_can_edit_anything(client):
     u = users(client)
     it = item_by_title("Kapak Ünitesi — tekrar eden kayıp")
     client.cookies.set("uid", str(u["Selin"]))                          # admin
-    assert client.patch(f"/item/{it['id']}/field", data={"priority": "kritik"}).status_code == 200
+    assert client.patch(f"/item/{it['id']}/field", data={"priority": "critical"}).status_code == 200
     client.cookies.delete("uid")
 
 
@@ -178,20 +178,20 @@ def test_actions_crud_and_close_guard(client):
     """Eylem ekle -> kayit kapanamaz -> eylemleri kapat -> kayit kapanir (spec/20 §3a)."""
     it = item_by_title("Sevkiyat tarihi etkinlikten sonraya düşüyor")
     u = users(client)
-    r = client.post(f"/item/{it['id']}/eylem", data={"title": "Nakliye planını revize et",
-                                                     "assignee_id": u["Deniz"]},
+    r = client.post(f"/item/{it['id']}/action", data={"title": "Nakliye planını revize et",
+                                                       "assignee_id": u["Deniz"]},
                     headers={"HX-Request": "true"})
     assert r.status_code == 200 and "Nakliye planını revize et" in r.text
     # kayit acik eylem varken kapanamaz
-    assert client.patch(f"/item/{it['id']}/field", data={"status": "kapandi"}).status_code == 400
+    assert client.patch(f"/item/{it['id']}/field", data={"status": "closed"}).status_code == 400
     # tum eylemleri kapat, sonra kayit kapanabilsin
-    for a in db.q("select id from actions where item_id=%s and status in ('acik','devam')", (it["id"],)):
-        assert client.patch(f"/eylem/{a['id']}", data={"status": "kapandi"},
+    for a in db.q("select id from actions where item_id=%s and status in ('open','in_progress')", (it["id"],)):
+        assert client.patch(f"/action/{a['id']}", data={"status": "closed"},
                             headers={"HX-Request": "true"}).status_code == 200
-    assert client.patch(f"/item/{it['id']}/field", data={"status": "kapandi"}).status_code == 200
+    assert client.patch(f"/item/{it['id']}/field", data={"status": "closed"}).status_code == 200
     # sistem olaylari kartin akisina dustu
-    son = db.q("select body from events where subject_id=%s order by created_at desc limit 5", (it["id"],))
-    assert any("eylem" in r["body"] for r in son)
+    recent = db.q("select body from events where subject_id=%s order by created_at desc limit 5", (it["id"],))
+    assert any("eylem" in r["body"] for r in recent)
 
 
 def test_action_endpoints_respect_card_permission(client):
@@ -200,9 +200,9 @@ def test_action_endpoints_respect_card_permission(client):
     it = item_by_title("Onay akışına vekalet mekanizması ekle")     # Maliye; Deniz disarida
     a = db.q1("select id from actions where item_id = %s", (it["id"],))
     client.cookies.set("uid", u["Deniz"])
-    assert client.post(f"/item/{it['id']}/eylem", data={"title": "x"}).status_code == 403
+    assert client.post(f"/item/{it['id']}/action", data={"title": "x"}).status_code == 403
     if a:
-        assert client.patch(f"/eylem/{a['id']}", data={"status": "kapandi"}).status_code == 403
+        assert client.patch(f"/action/{a['id']}", data={"status": "closed"}).status_code == 403
     client.cookies.delete("uid")
 
 

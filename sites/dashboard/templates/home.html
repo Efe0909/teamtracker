@@ -6,9 +6,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>EkipTakip</title>
 <link rel="icon" href="/static/icon-192.png">
-<link rel="stylesheet" href="{{ statik('/static/base.css') }}">
-<link rel="stylesheet" href="{{ statik('/static/d/dashboard.css') }}">
-<link rel="stylesheet" href="{{ statik('/static/d/home.css') }}">
+<link rel="stylesheet" href="{{ static('/static/base.css') }}">
+<link rel="stylesheet" href="{{ static('/static/d/dashboard.css') }}">
+<link rel="stylesheet" href="{{ static('/static/d/home.css') }}">
 </head>
 <body class="home" hx-headers='{"X-CSRF-Token": "{{ csrf_token }}"}'>
 {% include "fragments/uyari_mobil.html" %}
@@ -61,7 +61,7 @@
       <div class="ft">
         <span class="tag {{ 't-ready' if m.ready else 't-soon' }}">
           {{ 'Hazır' if m.ready else 'Yakında' }}</span>
-        {% if m.ready and m.count is not none %}<span>{{ m.count }} {{ m.birim }}</span>{% endif %}
+        {% if m.ready and m.count is not none %}<span>{{ m.count }} {{ m.unit }}</span>{% endif %}
         <span class="go">→</span>
       </div>
     </a>
@@ -74,7 +74,7 @@
      align-items:center;gap:12px;cursor:default">
     <div class="ic">📱</div>
     <div style="flex:1">
-      <div class="nm">Cepte: <code>{{ app_adres }}</code></div>
+      <div class="nm">Cepte: <code>{{ app_address }}</code></div>
       <div class="ds">Yapılacaklar, arama, eylemler ve bildirimler. Telefonda Safari'de
         aç, <b>Paylaş → Ana Ekrana Ekle</b> de: uygulama gibi durur.</div>
     </div>

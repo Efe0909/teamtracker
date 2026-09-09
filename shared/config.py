@@ -33,20 +33,20 @@ COOKIE_DOMAIN = os.getenv("EKIPTAKIP_COOKIE_DOMAIN") or None
 AUTH_MODE = os.getenv("EKIPTAKIP_AUTH", "google").lower()   # "google" | "sahte"
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
-GOOGLE_KESIF = "https://accounts.google.com/.well-known/openid-configuration"
+GOOGLE_DISCOVERY = "https://accounts.google.com/.well-known/openid-configuration"
 
 # Fallback burada olmali: SessionMiddleware bu degeri IMPORT aninda okuyor.
-# dogrula() icinde uretilseydi oturumlar bos anahtarla imzalanirdi.
+# validate() icinde uretilseydi oturumlar bos anahtarla imzalanirdi.
 SECRET_KEY = os.getenv("EKIPTAKIP_SECRET_KEY", "")
-SECRET_URETILDI = not SECRET_KEY
-if SECRET_URETILDI:
+SECRET_GENERATED = not SECRET_KEY
+if SECRET_GENERATED:
     SECRET_KEY = secrets.token_urlsafe(32)
 # --- web push (spec/40-push.md) -------------------------------------------
 # Anahtarlar .env'de, koda gomulmez. Tanimli degilse push sessizce kapali
-# kalir — uygulama push olmadan da calisir (shared/push.py: acik()).
+# kalir — uygulama push olmadan da calisir (shared/push.py: enabled()).
 #
 # Uretim:
-#   .venv/bin/python tools/vapid_uret.py
+#   .venv/bin/python tools/vapid_gen.py
 #
 # DIKKAT: anahtar degisirse MEVCUT TUM ABONELIKLER gecersizlesir; herkesin
 # telefondan yeniden abone olmasi gerekir.
@@ -55,7 +55,7 @@ VAPID_PUBLIC = os.getenv("VAPID_PUBLIC", "")
 VAPID_SUB = os.getenv("VAPID_SUB", "mailto:yonetici@polonyum.com")
 
 # --- push deneme ucu ------------------------------------------------------
-# EKIPTAKIP_PUSH_TEST=1 verilmedikce /test/bildirim ucu HIC KAYIT EDILMEZ —
+# EKIPTAKIP_PUSH_TEST=1 verilmedikce /test/notification ucu HIC KAYIT EDILMEZ —
 # devre disi degil, rota tablosunda yok (sahte kimlik rotasiyla ayni desen).
 # Boylece "yayinda kapatiriz" bir soz degil, bir anahtar.
 #
@@ -65,21 +65,21 @@ VAPID_SUB = os.getenv("VAPID_SUB", "mailto:yonetici@polonyum.com")
 # birakma.
 PUSH_TEST = os.getenv("EKIPTAKIP_PUSH_TEST") == "1"
 
-SESSION_COOKIE = "ekiptakip"          # yayinda __Secure- onekiyle (bkz. cerez_adi)
+SESSION_COOKIE = "ekiptakip"          # yayinda __Secure- onekiyle (bkz. cookie_name)
 SESSION_MAX_AGE = 30 * 24 * 3600            # 30 gun: telefondaki uygulama surekli sormasin
 
 # --- ortak yollar (mobil onekine girmezler) -------------------------------
 
 # Iki alan adinda da AYNI yoldan servis edilenler: mobil onegine girmezler.
 # Ortak yollar iki yuzde de ayni adresten calisir; Host kapisina takilmazlar
-# (app.py: sadece_mobil). /giris burada olmazsa mobil alan adindan girilemez.
+# (app.py: desktop_only). /login burada olmazsa mobil alan adindan girilemez.
 SHARED_PATHS = ("/static/", "/sw.js", "/favicon.ico", "/manifest.json",
-                "/giris", "/cikis", "/whoami", "/switch/",
+                "/login", "/logout", "/whoami", "/switch/",
                 # Push: iki yuz de ayni uctan abone olur, mobil onekine girmez.
-                "/vapid", "/abone", "/test/bildirim")
+                "/vapid", "/subscribe", "/test/notification")
 
 
-def yayinda() -> bool:
+def in_production() -> bool:
     """Yayin kurulumu mu — kurallarin sertlestigi yer.
 
     Iki isaret: acikca EKIPTAKIP_ENV=yayin, ya da alan adi ORTAM DEGISKENIYLE
@@ -94,7 +94,7 @@ def yayinda() -> bool:
             or bool(os.getenv("EKIPTAKIP_HOST_APP") or os.getenv("EKIPTAKIP_HOST_DASHBOARD")))
 
 
-def _test_kosumu() -> bool:
+def _test_run() -> bool:
     """Testte olumcul kontroller uyariya doner.
 
     Acik bayrak: yalnizca tests/conftest.py koyar. Onceki surum "pytest
@@ -103,19 +103,19 @@ def _test_kosumu() -> bool:
 
     YAYINDA BU BAYRAK YOK SAYILIR — arka kapi olmasin diye.
     """
-    return os.getenv("EKIPTAKIP_TEST_YAPILANDIRMA") == "1" and not yayinda()
+    return os.getenv("EKIPTAKIP_TEST_CONFIG") == "1" and not in_production()
 
 
-def cerez_adi() -> str:
+def cookie_name() -> str:
     """Yayinda __Secure- oneki: cerez yalnizca HTTPS uzerinden yazilabilir.
 
     __Host- kullanamiyoruz: o onek Domain niteligini yasaklar, biz ise iki alt
     alan adinda tek oturum icin Domain'e muhtaciz (spec/70-guvenlik.md §2.4).
     """
-    return ("__Secure-" + SESSION_COOKIE) if yayinda() else SESSION_COOKIE
+    return ("__Secure-" + SESSION_COOKIE) if in_production() else SESSION_COOKIE
 
 
-def gelistirmede() -> bool:
+def in_development() -> bool:
     """Sahte kimligin kabul edildigi TEK durum: acikca gelistirme denmis olmasi.
 
     Onceki surum tersini yapiyordu (yayin oldugunu cikarmaya calisiyordu) ve
@@ -125,54 +125,54 @@ def gelistirmede() -> bool:
     return os.getenv("EKIPTAKIP_ENV", "").lower() == "gelistirme"
 
 
-def sahte_kimlik() -> bool:
-    return AUTH_MODE == "sahte" and gelistirmede()
+def fake_identity() -> bool:
+    return AUTH_MODE == "sahte" and in_development()
 
 
-def dogrula() -> list[str]:
+def validate() -> list[str]:
     """Acilista calisir. Olumcul eksikte SystemExit, digerlerinde uyari dondurur.
 
     Amac: yanlis yapilandirmayi calisma aninda degil ACILISTA yakalamak.
     """
-    uyarilar: list[str] = []
-    olumcul: list[str] = []
+    warnings: list[str] = []
+    fatal: list[str] = []
 
     if AUTH_MODE not in ("google", "sahte"):
-        olumcul.append(f"EKIPTAKIP_AUTH gecersiz: {AUTH_MODE!r}. "
-                       "Yalnizca 'google' ya da 'sahte' olabilir.")
+        fatal.append(f"EKIPTAKIP_AUTH gecersiz: {AUTH_MODE!r}. "
+                     "Yalnizca 'google' ya da 'sahte' olabilir.")
 
-    if AUTH_MODE == "sahte" and not gelistirmede():
-        olumcul.append("EKIPTAKIP_AUTH=sahte yalnizca EKIPTAKIP_ENV=gelistirme ile "
-                       "birlikte kabul edilir. Gercek kurulumda gercek kimlik sart.")
-    if AUTH_MODE == "sahte" and yayinda():
-        olumcul.append("EKIPTAKIP_AUTH=sahte ile yayin kurulumu acilamaz.")
+    if AUTH_MODE == "sahte" and not in_development():
+        fatal.append("EKIPTAKIP_AUTH=sahte yalnizca EKIPTAKIP_ENV=gelistirme ile "
+                     "birlikte kabul edilir. Gercek kurulumda gercek kimlik sart.")
+    if AUTH_MODE == "sahte" and in_production():
+        fatal.append("EKIPTAKIP_AUTH=sahte ile yayin kurulumu acilamaz.")
 
     if AUTH_MODE == "google" and not (GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET):
-        olumcul.append("GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET tanimli degil. "
-                       "Ya .env'e koy ya da gelistirme icin "
-                       "EKIPTAKIP_AUTH=sahte EKIPTAKIP_ENV=gelistirme kullan.")
+        fatal.append("GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET tanimli degil. "
+                     "Ya .env'e koy ya da gelistirme icin "
+                     "EKIPTAKIP_AUTH=sahte EKIPTAKIP_ENV=gelistirme kullan.")
 
-    if SECRET_URETILDI:
-        if yayinda():
-            olumcul.append("EKIPTAKIP_SECRET_KEY tanimli degil — yayinda acilmaz.")
-        uyarilar.append("EKIPTAKIP_SECRET_KEY yok: gecici anahtar uretildi, "
+    if SECRET_GENERATED:
+        if in_production():
+            fatal.append("EKIPTAKIP_SECRET_KEY tanimli degil — yayinda acilmaz.")
+        warnings.append("EKIPTAKIP_SECRET_KEY yok: gecici anahtar uretildi, "
                         "surec kapaninca butun oturumlar duser.")
     elif len(SECRET_KEY) < 32:
-        mesaj = ("EKIPTAKIP_SECRET_KEY 32 karakterden kisa; uret: "
-                 "python -c \"import secrets;print(secrets.token_urlsafe(32))\"")
-        (olumcul if yayinda() else uyarilar).append(mesaj)
+        msg = ("EKIPTAKIP_SECRET_KEY 32 karakterden kisa; uret: "
+              "python -c \"import secrets;print(secrets.token_urlsafe(32))\"")
+        (fatal if in_production() else warnings).append(msg)
 
-    if sahte_kimlik():
-        uyarilar.append("KIMLIK SAHTE (EKIPTAKIP_AUTH=sahte): giris yok, ilk kullanici "
+    if fake_identity():
+        warnings.append("KIMLIK SAHTE (EKIPTAKIP_AUTH=sahte): giris yok, ilk kullanici "
                         "olarak calisiliyor. Yalnizca gelistirme icin.")
 
-    if yayinda() and not COOKIE_DOMAIN:
-        uyarilar.append("EKIPTAKIP_COOKIE_DOMAIN yok: iki alan adinda ayri ayri "
+    if in_production() and not COOKIE_DOMAIN:
+        warnings.append("EKIPTAKIP_COOKIE_DOMAIN yok: iki alan adinda ayri ayri "
                         "giris yapmak gerekir.")
 
-    if olumcul and not _test_kosumu():
-        raise SystemExit("GUVENLIK yapilandirmasi eksik:\n  - " + "\n  - ".join(olumcul))
-    return uyarilar + [f"(testte uyariya cevrildi) {m}" for m in olumcul]
+    if fatal and not _test_run():
+        raise SystemExit("GUVENLIK yapilandirmasi eksik:\n  - " + "\n  - ".join(fatal))
+    return warnings + [f"(testte uyariya cevrildi) {m}" for m in fatal]
 
 
 def is_app_host(request) -> bool:
@@ -189,7 +189,7 @@ def mp(request) -> str:
     return ""
 
 
-def mobil_yol(yol: str = "/") -> str:
+def mobile_path(path: str = "/") -> str:
     """Mobil yuzun yolu — ISTEK OLMADAN (push gonderimi, arka plan isleri).
 
     mp() istekteki Host'a bakar; buranin oyle bir lüksü yok. Ama mod
@@ -199,15 +199,15 @@ def mobil_yol(yol: str = "/") -> str:
     Bildirim adresine onek gomme: adres cubuguna sizar ve yanlis alan adinda
     404 olur.
     """
-    return yol if yol.startswith("/") else "/" + yol
+    return path if path.startswith("/") else "/" + path
 
 
-def site_adresi(request, app_site: bool) -> str:
+def site_address(request, app_site: bool) -> str:
     """Diger yuzun adresi — YAZMAK icin, baglanti kurmak icin degil.
 
     Tasarim karari (spec/50-yapi.md): iki site birbirine hyperlink vermez.
     """
     host = HOST_APP if app_site else HOST_DASH
     if not host:
-        return "/" 
+        return "/"
     return host

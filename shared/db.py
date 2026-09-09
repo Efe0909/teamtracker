@@ -15,7 +15,7 @@ from psycopg_pool import ConnectionPool
 
 # Baglanti bilgisi tek yerden. Parola .env'de durur, koda gomulmez.
 DSN = os.getenv("DATABASE_URL") or "postgresql://ekiptakip:ekiptakip@127.0.0.1:5432/ekiptakip"
-GOCLER = Path(__file__).parent / "gocler"
+MIGRATIONS_DIR = Path(__file__).parent / "migrations"
 
 _pool: ConnectionPool | None = None
 
@@ -51,7 +51,7 @@ def as_bool(v) -> bool:
     return bool(v)
 
 
-def havuz() -> ConnectionPool:
+def pool() -> ConnectionPool:
     global _pool
     if _pool is None:
         _pool = ConnectionPool(DSN, min_size=1, max_size=8, kwargs={"row_factory": dict_row},
@@ -60,16 +60,16 @@ def havuz() -> ConnectionPool:
     return _pool
 
 
-def baglan(dsn: str | None = None) -> ConnectionPool:
+def connect(dsn: str | None = None) -> ConnectionPool:
     """Testler ve betikler baska bir veritabanina gecebilsin diye."""
     global DSN, _pool
     if dsn:
-        kapat()
+        close()
         DSN = dsn
-    return havuz()
+    return pool()
 
 
-def kapat() -> None:
+def close() -> None:
     global _pool
     if _pool is not None:
         _pool.close()
@@ -80,48 +80,48 @@ def kapat() -> None:
 
 
 def q(sql: str, args: tuple = ()) -> list[dict]:
-    with havuz().connection() as c:
+    with pool().connection() as c:
         return c.execute(sql, args).fetchall()
 
 
 def q1(sql: str, args: tuple = ()) -> dict | None:
-    with havuz().connection() as c:
+    with pool().connection() as c:
         return c.execute(sql, args).fetchone()
 
 
 def x(sql: str, args: tuple = ()) -> None:
     """Yazma. Baglam yoneticisi cikista commit eder, hatada geri alir."""
-    with havuz().connection() as c:
+    with pool().connection() as c:
         c.execute(sql, args)
 
 
-def calistir(sql: str) -> None:
+def execute_script(sql: str) -> None:
     """Cok ifadeli betik (goc dosyalari)."""
-    with havuz().connection() as c:
+    with pool().connection() as c:
         c.execute(sql)
 
 
-# --- goc ------------------------------------------------------------------
+# --- migrations -------------------------------------------------------------
 
 
-def gocler() -> list[str]:
-    """shared/gocler/*.sql dosyalarini sirayla uygular. Idempotent.
+def migrate() -> list[str]:
+    """shared/migrations/*.sql dosyalarini sirayla uygular. Idempotent.
 
     Elle yazilmis alter table'lar yerine numarali dosyalar: hangi surumun
     uygulandigi veritabaninda yazili durur (spec/80-veritabani.md §4).
     Her dosya KENDI isleminde kosar; yarim kalan goc kaydedilmez.
     """
-    with havuz().connection() as c:
+    with pool().connection() as c:
         c.execute("create table if not exists schema_migrations ("
-                  " ad text primary key, uygulandi timestamptz not null default now())")
-        uygulanan = {r["ad"] for r in c.execute("select ad from schema_migrations").fetchall()}
+                  " name text primary key, applied_at timestamptz not null default now())")
+        applied = {r["name"] for r in c.execute("select name from schema_migrations").fetchall()}
 
-    yapildi: list[str] = []
-    for dosya in sorted(GOCLER.glob("*.sql")):
-        if dosya.name in uygulanan:
+    done: list[str] = []
+    for file in sorted(MIGRATIONS_DIR.glob("*.sql")):
+        if file.name in applied:
             continue
-        with havuz().connection() as c:
-            c.execute(dosya.read_text(encoding="utf-8"))
-            c.execute("insert into schema_migrations (ad) values (%s)", (dosya.name,))
-        yapildi.append(dosya.name)
-    return yapildi
+        with pool().connection() as c:
+            c.execute(file.read_text(encoding="utf-8"))
+            c.execute("insert into schema_migrations (name) values (%s)", (file.name,))
+        done.append(file.name)
+    return done

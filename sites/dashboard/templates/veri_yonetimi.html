@@ -7,18 +7,18 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Veri Yönetimi — EkipTakip</title>
 <link rel="icon" href="/static/icon-192.png">
-<link rel="stylesheet" href="{{ statik('/static/base.css') }}">
-<link rel="stylesheet" href="{{ statik('/static/d/dashboard.css') }}">
-<script src="{{ statik('/static/htmx.min.js') }}"></script>
+<link rel="stylesheet" href="{{ static('/static/base.css') }}">
+<link rel="stylesheet" href="{{ static('/static/d/dashboard.css') }}">
+<script src="{{ static('/static/htmx.min.js') }}"></script>
 </head>
 <body hx-headers='{"X-CSRF-Token": "{{ csrf_token }}"}'>
 {% include "fragments/uyari_mobil.html" %}
-{% with aktif = "kazanim-agaci" %}{% include "fragments/rail.html" %}{% endwith %}
+{% with aktif = "outcome-tree" %}{% include "fragments/rail.html" %}{% endwith %}
 
 <div class="tmain" id="main">
   <div class="thead row">
     <h1>Veri Yönetimi</h1>
-    {% if yazabilir %}
+    {% if can_write %}
     <button class="btn" data-toggle="#yeni-kok">＋ Kök düğüm</button>
     {% endif %}
   </div>
@@ -28,13 +28,13 @@
     Değişiklik anında uygulanır ve ağaç yeniden kurulur.
   </p>
 
-  {% if yazabilir %}
+  {% if can_write %}
   {# Kok dugum ekleme — agac bosken tek giris noktasi. #}
-  <form id="yeni-kok" class="tform tkok" hx-post="/dugum"
+  <form id="yeni-kok" class="tform tkok" hx-post="/node"
         hx-target="#agac" hx-swap="outerHTML">
-    <input name="ad" placeholder="düğüm adı (ör. Maliye)" required>
-    <input name="tur" placeholder="tür (ör. Bölüm)" required>
-    <textarea name="aciklama" rows="2"
+    <input name="name" placeholder="düğüm adı (ör. Maliye)" required>
+    <input name="type" placeholder="tür (ör. Bölüm)" required>
+    <textarea name="description" rows="2"
               placeholder="açıklama — bu düğüm ne kapsıyor?"></textarea>
     <button class="tkaydet">Ekle</button>
   </form>
@@ -46,6 +46,6 @@
 
   {% include "fragments/agac.html" %}
 </div>
-<script src="{{ statik('/static/d/dashboard.js') }}"></script>
+<script src="{{ static('/static/d/dashboard.js') }}"></script>
 </body>
 </html>

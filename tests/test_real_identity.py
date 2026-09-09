@@ -22,33 +22,33 @@ from shared import config, db, seed  # noqa: E402
 @pytest.fixture(scope="module")
 def client():
     """AUTH_MODE'u 'google' yapar: sahte kimlik yok, kapi gercekten calisir."""
-    from conftest import test_veritabani  # noqa: E402
-    test_veritabani("kimlik")
+    from conftest import setup_database  # noqa: E402
+    setup_database("identity")
     import app as app_mod  # noqa: E402
-    onceki = (config.AUTH_MODE, config.GOOGLE_CLIENT_ID, config.GOOGLE_CLIENT_SECRET)
+    previous = (config.AUTH_MODE, config.GOOGLE_CLIENT_ID, config.GOOGLE_CLIENT_SECRET)
     config.AUTH_MODE = "google"
     config.GOOGLE_CLIENT_ID = config.GOOGLE_CLIENT_ID or "test-istemci"
     config.GOOGLE_CLIENT_SECRET = config.GOOGLE_CLIENT_SECRET or "test-sir"
     with TestClient(app_mod.app) as c:
         yield c
-    (config.AUTH_MODE, config.GOOGLE_CLIENT_ID, config.GOOGLE_CLIENT_SECRET) = onceki
+    (config.AUTH_MODE, config.GOOGLE_CLIENT_ID, config.GOOGLE_CLIENT_SECRET) = previous
 
 
-def oturum_cerezi(veri: dict) -> str:
+def session_cookie(data: dict) -> str:
     """SessionMiddleware'in yazdigi bicimde GECERLI bir oturum cerezi uretir.
 
     Testin kendisi imzayi taklit ediyor; boylece "giris yapmis kullanici"
     senaryolarini OAuth'a cikmadan kurabiliyoruz.
     """
-    imzalayici = itsdangerous.TimestampSigner(str(config.SECRET_KEY))
-    ham = base64.b64encode(json.dumps(veri).encode())
-    return imzalayici.sign(ham).decode()
+    signer = itsdangerous.TimestampSigner(str(config.SECRET_KEY))
+    raw = base64.b64encode(json.dumps(data).encode())
+    return signer.sign(raw).decode()
 
 
-def giris_yap(client, kullanici_adi: str = "Efe") -> dict:
-    u = db.q1("select * from users where name = %s", (kullanici_adi,))
+def login(client, user_name: str = "Efe") -> dict:
+    u = db.q1("select * from users where name = %s", (user_name,))
     client.cookies.clear()
-    client.cookies.set(config.cerez_adi(), oturum_cerezi({"uid": str(u["id"]), "sid": "test"}))
+    client.cookies.set(config.cookie_name(), session_cookie({"uid": str(u["id"]), "sid": "test"}))
     return u
 
 
@@ -57,31 +57,31 @@ def giris_yap(client, kullanici_adi: str = "Efe") -> dict:
 
 def test_oturumsuz_html_istegi_girise_yonlenir(client):
     client.cookies.clear()
-    r = client.get("/gorevler", headers={"accept": "text/html"}, follow_redirects=False)
-    assert r.status_code == 303 and r.headers["location"].startswith("/giris")
+    r = client.get("/tasks", headers={"accept": "text/html"}, follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"].startswith("/login")
 
 
 def test_oturumsuz_htmx_istegi_401_ve_hx_redirect(client):
     client.cookies.clear()
     r = client.get("/panel/tree", headers={"HX-Request": "true"})
     assert r.status_code == 401
-    assert r.headers["hx-redirect"].startswith("/giris")
+    assert r.headers["hx-redirect"].startswith("/login")
 
 
 def test_oturumsuz_yazma_401(client):
     client.cookies.clear()
     it = db.q1("select id from items limit 1")
-    for yol, metot in ((f"/item/{it['id']}/message", "post"),
-                       (f"/kayit/{it['id']}/alan", "patch"),
-                       ("/item", "post")):
-        r = getattr(client, metot)(yol, data={"body": "x"})
-        assert r.status_code == 401, yol
+    for path, method in ((f"/item/{it['id']}/message", "post"),
+                         (f"/record/{it['id']}/field", "patch"),
+                         ("/item", "post")):
+        r = getattr(client, method)(path, data={"body": "x"})
+        assert r.status_code == 401, path
 
 
 def test_korumasiz_yollar_acik_kalir(client):
     client.cookies.clear()
-    for yol in ("/giris", "/static/base.css", "/sw.js", "/favicon.ico", "/manifest.json"):
-        assert client.get(yol, follow_redirects=False).status_code in (200, 302, 303), yol
+    for path in ("/login", "/static/base.css", "/sw.js", "/favicon.ico", "/manifest.json"):
+        assert client.get(path, follow_redirects=False).status_code in (200, 302, 303), path
 
 
 def test_switch_ucu_gercek_modda_yok():
@@ -100,8 +100,8 @@ def test_switch_ucu_gercek_modda_yok():
     r = subprocess.run(
         [sys.executable, "-c",
          "import app;"
-         "yollar=[getattr(r,'path','') for r in app.app.routes];"
-         "print('SWITCH_VAR' if any(y.startswith('/switch') for y in yollar) else 'YOK')"],
+         "paths=[getattr(r,'path','') for r in app.app.routes];"
+         "print('SWITCH_VAR' if any(p.startswith('/switch') for p in paths) else 'YOK')"],
         cwd=ROOT, env=env, capture_output=True, text=True, timeout=60)
     assert "YOK" in r.stdout, r.stdout + r.stderr[-500:]
 
@@ -109,28 +109,28 @@ def test_switch_ucu_gercek_modda_yok():
 def test_izin_listesi_onek_hilesine_kapali(client):
     """/{slug} yakalayicisi var; izin listesi tam eslesme olmali."""
     client.cookies.clear()
-    for yol in ("/girisXYZ", "/giris-raporu", "/manifest.json.map", "/sw.js.map"):
-        r = client.get(yol, headers={"accept": "text/html"}, follow_redirects=False)
-        assert r.status_code in (303, 401, 404), yol
+    for path in ("/loginXYZ", "/login-raporu", "/manifest.json.map", "/sw.js.map"):
+        r = client.get(path, headers={"accept": "text/html"}, follow_redirects=False)
+        assert r.status_code in (303, 401, 404), path
         if r.status_code == 200:
-            raise AssertionError(f"{yol} kimliksiz acildi")
+            raise AssertionError(f"{path} kimliksiz acildi")
 
 
 # --- AC-2: kurcalanan cerez -----------------------------------------------
 
 
 def test_gecerli_oturum_calisir(client):
-    giris_yap(client, "Selin")
+    login(client, "Selin")
     assert client.get("/whoami").json()["name"] == "Selin"
 
 
 def test_kurcalanan_cerez_oturumu_dusurur(client):
-    giris_yap(client, "Selin")
-    ad = config.cerez_adi()
-    bozuk = client.cookies[ad][:-6] + "aaaaaa"
+    login(client, "Selin")
+    name = config.cookie_name()
+    tampered = client.cookies[name][:-6] + "aaaaaa"
     client.cookies.clear()
-    client.cookies.set(ad, bozuk)
-    r = client.get("/gorevler", headers={"accept": "text/html"}, follow_redirects=False)
+    client.cookies.set(name, tampered)
+    r = client.get("/tasks", headers={"accept": "text/html"}, follow_redirects=False)
     assert r.status_code == 303                    # oturum yok sayildi
     assert client.get("/whoami").status_code == 401
 
@@ -138,10 +138,10 @@ def test_kurcalanan_cerez_oturumu_dusurur(client):
 def test_uydurma_oturum_imzasiz_gecmez(client):
     """Imzasiz/yanlis anahtarla imzalanmis cerez kabul edilmemeli."""
     u = db.q1("select * from users where name = 'Selin'")
-    sahte = itsdangerous.TimestampSigner("baska-anahtar").sign(
+    fake = itsdangerous.TimestampSigner("baska-anahtar").sign(
         base64.b64encode(json.dumps({"uid": str(u["id"])}).encode())).decode()
     client.cookies.clear()
-    client.cookies.set(config.cerez_adi(), sahte)
+    client.cookies.set(config.cookie_name(), fake)
     assert client.get("/whoami").status_code == 401
 
 
@@ -149,7 +149,7 @@ def test_uydurma_oturum_imzasiz_gecmez(client):
 
 
 def test_pasif_kullanici_bir_sonraki_istekte_disari(client):
-    u = giris_yap(client, "Deniz")
+    u = login(client, "Deniz")
     assert client.get("/whoami").json()["name"] == "Deniz"
     db.x("update users set is_active = false where id = %s", (u["id"],))
     try:
@@ -163,20 +163,20 @@ def test_pasif_kullanici_bir_sonraki_istekte_disari(client):
 
 def test_state_uyusmayan_callback_reddedilir(client):
     client.cookies.clear()
-    once = db.q1("select count(*) c from guvenlik_olaylari where tur='giris_reddi'")["c"]
-    r = client.get("/giris/callback?code=sahte&state=uydurma", follow_redirects=False)
+    before = db.q1("select count(*) c from security_events where event_type='login_denied'")["c"]
+    r = client.get("/login/callback?code=sahte&state=uydurma", follow_redirects=False)
     assert r.status_code == 400
-    assert db.q1("select count(*) c from guvenlik_olaylari where tur='giris_reddi'")["c"] == once + 1
+    assert db.q1("select count(*) c from security_events where event_type='login_denied'")["c"] == before + 1
 
 
 def test_giris_google_a_yonlendirir(client):
     client.cookies.clear()
-    r = client.get("/giris", follow_redirects=False)
+    r = client.get("/login", follow_redirects=False)
     assert r.status_code in (302, 303)
-    hedef = r.headers["location"]
-    assert hedef.startswith("https://accounts.google.com/")
-    assert "state=" in hedef and "nonce=" in hedef        # ikisi de authlib'den
-    assert "scope=openid+email+profile" in hedef or "scope=openid%20email%20profile" in hedef
+    target = r.headers["location"]
+    assert target.startswith("https://accounts.google.com/")
+    assert "state=" in target and "nonce=" in target        # ikisi de authlib'den
+    assert "scope=openid+email+profile" in target or "scope=openid%20email%20profile" in target
 
 
 # --- CSRF token'i giris sinirinda yenilenir (denetim bulgusu) -------------
@@ -189,26 +189,26 @@ def test_csrf_token_giris_sinirinda_yenilenir():
     kurbanin tarayicisina yazdirabiliyordu (alt alan adi paylasimi). Giriste
     oturum komple yenilenince o token cope gidiyor.
     """
-    from shared import kimlik
+    from shared import identity
 
     u = db.q1("select * from users where name = 'Efe'")
 
-    class _Sahte:
+    class _Fake:
         session = {"csrf": "saldirganin-token-i", "sid": "eski", "baska": "sey"}
 
-    kimlik.oturum_ac(_Sahte, u["id"])
-    assert "csrf" not in _Sahte.session          # oturum komple temizlendi
-    assert "baska" not in _Sahte.session
-    assert _Sahte.session["uid"] == str(u["id"])   # oturum JSON: uuid metne cevrilir
-    assert _Sahte.session["sid"] != "eski"
+    identity.open_session(_Fake, u["id"])
+    assert "csrf" not in _Fake.session          # oturum komple temizlendi
+    assert "baska" not in _Fake.session
+    assert _Fake.session["uid"] == str(u["id"])   # oturum JSON: uuid metne cevrilir
+    assert _Fake.session["sid"] != "eski"
 
 
 def test_cikis_oturumu_komple_temizler():
-    from shared import kimlik
-    class _Sahte:
+    from shared import identity
+    class _Fake:
         session = {"uid": "x", "csrf": "t", "sid": "s"}
-    kimlik.oturum_kapat(_Sahte)
-    assert _Sahte.session == {}
+    identity.close_session(_Fake)
+    assert _Fake.session == {}
 
 
 # --- bildirim deneme ucu: OTURUMSUZ calismali ----------------------------
@@ -217,32 +217,32 @@ def test_cikis_oturumu_komple_temizler():
 # ve curl ile alinamiyor. Yani "oturumsuz erisilebilir" bir kolaylik degil,
 # ucun tek varlik sebebi.
 #
-# Bir kez ısırdı: uc CSRF muafiyetine eklenmisti ama GirisKapisi.ACIK_TAM'e
+# Bir kez ısırdı: uc CSRF muafiyetine eklenmisti ama LoginGate.EXEMPT_EXACT'e
 # EKLENMEMISTI. Diger butun testler sahte kimlik kipinde kostugu icin orada
 # oturum olmasa da kullanici cozuluyor ve 401 hic gorunmuyordu; uretimde
 # ilk curl 401 dondu.
 
 
 @pytest.fixture(scope="module")
-def push_deneme_istemcisi():
+def push_test_client():
     """Gercek kimlik + EKIPTAKIP_PUSH_TEST=1."""
     import importlib
     import os
 
-    from conftest import test_veritabani  # noqa: E402
-    test_veritabani("kimlikpush")
+    from conftest import setup_database  # noqa: E402
+    setup_database("identitypush")
     os.environ["EKIPTAKIP_PUSH_TEST"] = "1"
     try:
         importlib.reload(config)
         import app as app_mod
         importlib.reload(app_mod)
-        onceki = config.AUTH_MODE
+        previous = config.AUTH_MODE
         config.AUTH_MODE = "google"
         config.GOOGLE_CLIENT_ID = config.GOOGLE_CLIENT_ID or "test-istemci"
         config.GOOGLE_CLIENT_SECRET = config.GOOGLE_CLIENT_SECRET or "test-sir"
         with TestClient(app_mod.app) as c:
             yield c
-        config.AUTH_MODE = onceki
+        config.AUTH_MODE = previous
     finally:
         os.environ.pop("EKIPTAKIP_PUSH_TEST", None)
         importlib.reload(config)
@@ -250,25 +250,25 @@ def push_deneme_istemcisi():
         importlib.reload(app_mod)
 
 
-def test_deneme_ucu_OTURUMSUZ_erisilebilir(push_deneme_istemcisi, monkeypatch):
+def test_deneme_ucu_OTURUMSUZ_erisilebilir(push_test_client, monkeypatch):
     """401 DONMEMELI — giris kapisi bu ucu gecirmeli."""
     monkeypatch.setattr(config, "VAPID_PRIVATE", "x")
     monkeypatch.setattr(config, "VAPID_PUBLIC", "y")
-    r = push_deneme_istemcisi.post("/test/bildirim", json={"user_id": "bozuk-uuid"})
+    r = push_test_client.post("/test/notification", json={"user_id": "bozuk-uuid"})
     assert r.status_code != 401, "giris kapisi ucu kesiyor — curl'den cagrilamaz"
     assert r.status_code == 400          # uc calisti, govdeyi reddetti
 
 
-def test_deneme_ucu_vapid_yokken_de_401_DEGIL(push_deneme_istemcisi, monkeypatch):
+def test_deneme_ucu_vapid_yokken_de_401_DEGIL(push_test_client, monkeypatch):
     """Kurulum eksikse 503 der — ama yine giris kapisina takilmaz."""
     monkeypatch.setattr(config, "VAPID_PRIVATE", "")
     monkeypatch.setattr(config, "VAPID_PUBLIC", "")
-    r = push_deneme_istemcisi.post("/test/bildirim", json={})
+    r = push_test_client.post("/test/notification", json={})
     assert r.status_code == 503
 
 
-def test_deneme_ucu_disinda_kapi_hala_kapali(push_deneme_istemcisi):
+def test_deneme_ucu_disinda_kapi_hala_kapali(push_test_client):
     """Muafiyet TAM ESLESME: yakin bir yol acilmis olmamali."""
-    for yol in ("/", "/gorevler", "/test/bildirimx", "/test/"):
-        r = push_deneme_istemcisi.get(yol, follow_redirects=False)
-        assert r.status_code in (401, 303, 404), yol
+    for path in ("/", "/tasks", "/test/notificationx", "/test/"):
+        r = push_test_client.get(path, follow_redirects=False)
+        assert r.status_code in (401, 303, 404), path

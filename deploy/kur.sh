@@ -56,7 +56,7 @@ Sırayla:
      sudo nginx -t && sudo systemctl reload nginx
      curl -s  -H "Host: $HOST_APP" http://127.0.0.1:$PORT_NGINX/ -o /dev/null -w '%{http_code}\\n'  # 401
      curl -su $USER_NAME -H "Host: $HOST_APP"  http://127.0.0.1:$PORT_NGINX/         -o /dev/null -w '%{http_code}\\n'  # 200 mobil
-     curl -su $USER_NAME -H "Host: $HOST_DASH" http://127.0.0.1:$PORT_NGINX/gorevler -o /dev/null -w '%{http_code}\\n'  # 200 masaüstü
+     curl -su $USER_NAME -H "Host: $HOST_DASH" http://127.0.0.1:$PORT_NGINX/tasks -o /dev/null -w '%{http_code}\\n'  # 200 masaüstü
      curl -su $USER_NAME -H "Host: bilinmeyen.host" http://127.0.0.1:$PORT_NGINX/    -o /dev/null -w '%{http_code}\\n'  # 000 (444)
 
   3) tünel — $OUT/cloudflared-ornek.yml içindeki kuralı kendi ~/.cloudflared/config.yml

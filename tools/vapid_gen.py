@@ -1,6 +1,6 @@
 """VAPID anahtar cifti uretir (spec/40-push.md).
 
-  .venv/bin/python tools/vapid_uret.py
+  .venv/bin/python tools/vapid_gen.py
 
 Ciktiyi .env'e yapistir. Sunucuda .env agenix ile sifreli duruyor
 (deploy/DOCKER.md "agenix"), yani orada sirri yeniden sifrelemen gerekir.
@@ -20,24 +20,24 @@ import base64
 from cryptography.hazmat.primitives.asymmetric import ec
 
 
-def b64(ham: bytes) -> str:
+def b64(raw: bytes) -> str:
     """base64url, dolgu ('=') YOK — web push bicimi."""
-    return base64.urlsafe_b64encode(ham).rstrip(b"=").decode()
+    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
 
 
 def main() -> None:
-    anahtar = ec.generate_private_key(ec.SECP256R1())
+    key = ec.generate_private_key(ec.SECP256R1())
 
     # Gizli: 32 baytlik ham skaler.
-    gizli = anahtar.private_numbers().private_value.to_bytes(32, "big")
+    private_bytes = key.private_numbers().private_value.to_bytes(32, "big")
 
     # Acik: 65 baytlik sikistirilmamis P-256 noktasi (0x04 + X + Y).
-    sayilar = anahtar.public_key().public_numbers()
-    acik = b"\x04" + sayilar.x.to_bytes(32, "big") + sayilar.y.to_bytes(32, "big")
+    numbers = key.public_key().public_numbers()
+    public_bytes = b"\x04" + numbers.x.to_bytes(32, "big") + numbers.y.to_bytes(32, "big")
 
     print("# .env'e ekle — bu degerler ASLA depoya girmez")
-    print(f"VAPID_PRIVATE={b64(gizli)}")
-    print(f"VAPID_PUBLIC={b64(acik)}")
+    print(f"VAPID_PRIVATE={b64(private_bytes)}")
+    print(f"VAPID_PUBLIC={b64(public_bytes)}")
     print("VAPID_SUB=mailto:kadirefeatcali@gmail.com")
 
 

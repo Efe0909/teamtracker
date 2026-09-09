@@ -1,9 +1,9 @@
 {# fragment: breadcrumb — kayit ustu yol. Dala tiklamak tabloya o dugum suzgeciyle doner. #}
 <div class="crumb" data-fragment="breadcrumb">
-  <a href="/gorevler">← Görev Yöneticisi</a><span class="sep">|</span>
+  <a href="/tasks">← Görev Yöneticisi</a><span class="sep">|</span>
   {% for c in crumbs %}
     {% if loop.last %}<span class="cur">{{ c.name }}</span>
-    {% else %}<a href="/gorevler?dugum={{ c.id }}">{{ c.name }}</a><span>›</span>
+    {% else %}<a href="/tasks?node={{ c.id }}">{{ c.name }}</a><span>›</span>
     {% endif %}
   {% endfor %}
   <span class="sp"></span>

@@ -2,13 +2,13 @@
    Sayilar filtrelenmis kumeyi ozetler; sorgu tek SUM(CASE) (spec/10-kararlar.md). #}
 <div id="sonuc" data-fragment="tablo">
   <div class="ozet">
-    {% if oz.kritik %}<span class="ocip o-kritik">Kritik <b>{{ oz.kritik }}</b></span>{% endif %}
-    {% if oz.yuksek %}<span class="ocip o-yuksek">Yüksek <b>{{ oz.yuksek }}</b></span>{% endif %}
-    {% if oz.orta %}<span class="ocip o-orta">Orta <b>{{ oz.orta }}</b></span>{% endif %}
-    {% if oz.dusuk %}<span class="ocip o-dusuk">Düşük <b>{{ oz.dusuk }}</b></span>{% endif %}
+    {% if summary.critical %}<span class="ocip o-critical">Kritik <b>{{ summary.critical }}</b></span>{% endif %}
+    {% if summary.high %}<span class="ocip o-high">Yüksek <b>{{ summary.high }}</b></span>{% endif %}
+    {% if summary.medium %}<span class="ocip o-medium">Orta <b>{{ summary.medium }}</b></span>{% endif %}
+    {% if summary.low %}<span class="ocip o-low">Düşük <b>{{ summary.low }}</b></span>{% endif %}
     <span style="flex:1"></span>
-    <span class="osay">Açık <b>{{ oz.acik or 0 }}</b> · Kapalı <b>{{ oz.kapali or 0 }}</b> ·
-      Tümü <b>{{ oz.hepsi or 0 }}</b></span>
+    <span class="osay">Açık <b>{{ summary.open or 0 }}</b> · Kapalı <b>{{ summary.closed or 0 }}</b> ·
+      Tümü <b>{{ summary.all_ or 0 }}</b></span>
   </div>
 
   <table class="gtable">
@@ -20,10 +20,10 @@
     {% for r in rows %}
       <tr>
         <td>
-          <span class="chip {% if r.kind == 'hata' %}c-bug{% else %}c-task{% endif %}">
-            {{ 'Hata' if r.kind == 'hata' else 'Görev' }}</span>
-          <a class="tlink" href="/gorevler/{{ r.id }}">{{ r.title }}</a>
-          {% if r.acik_eylem %}<span class="chip c-eyl" title="açık eylem">⚡{{ r.acik_eylem }}</span>{% endif %}
+          <span class="chip {% if r.kind == 'issue' %}c-bug{% else %}c-task{% endif %}">
+            {{ 'Hata' if r.kind == 'issue' else 'Görev' }}</span>
+          <a class="tlink" href="/tasks/{{ r.id }}">{{ r.title }}</a>
+          {% if r.open_action_count %}<span class="chip c-eyl" title="açık eylem">⚡{{ r.open_action_count }}</span>{% endif %}
         </td>
         <td class="dim">{{ r.path }}</td>
         <td>{% if r.team %}<span class="tdot" style="background:{{ r.team.color }}"></span>

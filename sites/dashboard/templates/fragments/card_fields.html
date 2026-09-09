@@ -52,7 +52,7 @@
   {% if item.pillar %}<span class="fld"><span class="k">Pillar</span><span class="v">{{ item.pillar }}</span></span>{% endif %}
 
   <div style="flex:1"></div>
-  {% if creator %}<span class="small muted">Açan: {{ creator.name }} · {{ olusturma }}</span>{% endif %}
+  {% if creator %}<span class="small muted">Açan: {{ creator.name }} · {{ created }}</span>{% endif %}
   <div class="stack">
     {% for p in participants %}<span class="av" style="background:{{ p.color }}">{{ p.name[0] }}</span>{% endfor %}
   </div>

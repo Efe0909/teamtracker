@@ -23,9 +23,9 @@ def search_items(q: str, limit: int = 25) -> list[dict]:
     match = fts_query(q)
     if match is None:
         return []
-    return db.q("select i.*, ts_rank(i.arama, sorgu) rank from items i,"
-                " to_tsquery('tr', %s) sorgu"
-                " where i.arama @@ sorgu order by rank desc, i.updated_at desc limit %s",
+    return db.q("select i.*, ts_rank(i.search_vector, query) rank from items i,"
+                " to_tsquery('tr', %s) query"
+                " where i.search_vector @@ query order by rank desc, i.updated_at desc limit %s",
                 (match, limit))
 
 
@@ -42,4 +42,3 @@ def search_nodes(q: str, limit: int = 10) -> list[dict]:
         if len(out) == limit:
             break
     return out
-

@@ -1,7 +1,7 @@
 """Mobil site — yapilacaklar, arama, eylemler, bildirimler, kayit.
 
 Ayni veritabani, ayni yetki, ayri yerlesim. Mobil yuz KENDI ALAN ADINDA,
-KOKTE durur — yol oneki YOKTUR. Ayrim Host'a gore, app.py'deki sadece_mobil
+KOKTE durur — yol oneki YOKTUR. Ayrim Host'a gore, app.py'deki mobile_only
 bagimliligiyla yapilir.
 Iki site birbirine baglanti VERMEZ (tasarim karari, spec/50-yapi.md).
 """
@@ -16,12 +16,12 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 from shared import auth, db, search, service
 from shared.config import mp
 from shared.render import is_htmx, site_templates
-from shared.service import (AYLAR, MINE_SQL, MINE_SQL_I, PRIO_SQL, PRIORITIES, STATUSES,
+from shared.service import (MINE_SQL, MINE_SQL_I, MONTHS, PRIO_SQL, PRIORITIES, STATUSES,
                             add_message, change_field, get_item, new_item, short_time,
                             users_by_id)
 
 router = APIRouter()
-STATIK = Path(__file__).parent / "static"
+STATIC = Path(__file__).parent / "static"
 _TPL = site_templates(Path(__file__).parent / "templates")
 
 
@@ -30,10 +30,10 @@ def render(request, name: str, ctx: dict) -> HTMLResponse:
 
 
 MOBILE_TABS = [
-    {"slug": "yapilacaklar", "path": "", "icon": "📋", "label": "Yapılacak"},
-    {"slug": "ara", "path": "/ara", "icon": "🔎", "label": "Ara"},
-    {"slug": "eylemler", "path": "/eylemler", "icon": "⚡", "label": "Eylemler"},
-    {"slug": "bildirimler", "path": "/bildirimler", "icon": "🔔", "label": "Bildirim"},
+    {"slug": "todo", "path": "", "icon": "📋", "label": "Yapılacak"},
+    {"slug": "search", "path": "/search", "icon": "🔎", "label": "Ara"},
+    {"slug": "actions", "path": "/actions", "icon": "⚡", "label": "Eylemler"},
+    {"slug": "notifications", "path": "/notifications", "icon": "🔔", "label": "Bildirim"},
 ]
 
 
@@ -48,7 +48,7 @@ def rel_time(when: datetime) -> str:
         return f"{int(sec // 3600)} saat önce"
     if sec < 7 * 86400:
         return f"{int(sec // 86400)} gün önce"
-    return f"{when.day} {AYLAR[when.month - 1]}"
+    return f"{when.day} {MONTHS[when.month - 1]}"
 
 
 def due_info(d) -> dict | None:
@@ -59,7 +59,7 @@ def due_info(d) -> dict | None:
     if not d:
         return None
     left = (d - datetime.now(timezone.utc).date()).days
-    return {"label": f"{d.day} {AYLAR[d.month - 1]} {d.year}", "days": left, "late": left < 0}
+    return {"label": f"{d.day} {MONTHS[d.month - 1]} {d.year}", "days": left, "late": left < 0}
 
 
 def mobile_row(r, users: dict) -> dict:
@@ -74,14 +74,14 @@ def mobile_row(r, users: dict) -> dict:
         "path": " › ".join(service.TREE.name(n) for n in service.TREE.ancestors(r["node_id"])[-2:]),
         "due": due_info(r["due_date"]), "time": rel_time(r["updated_at"]),
         "msgs": db.q1("select count(*) c from events where subject_type='item'"
-                      " and subject_id=%s and event_type='mesaj'", (r["id"],))["c"],
+                      " and subject_id=%s and event_type='message'", (r["id"],))["c"],
     }
 
 
 def mobile_todo(user, done: bool = False) -> list[dict]:
     """Bana ait kayitlar. Siralama SQL'de: once oncelik, sonra son tarih."""
     op = "=" if done else "<>"
-    rows = db.q(f"select * from items where status {op} 'kapandi' and {MINE_SQL}"
+    rows = db.q(f"select * from items where status {op} 'closed' and {MINE_SQL}"
                 f" order by {PRIO_SQL}, (due_date is null), due_date, updated_at desc limit 60",
                 (user["id"], user["id"]))
     users = users_by_id()
@@ -90,7 +90,7 @@ def mobile_todo(user, done: bool = False) -> list[dict]:
 
 def mobile_actions(user) -> list[tuple[str, list[dict]]]:
     """Son tarihi olan acik kayitlar — gecikmis olan basta."""
-    rows = db.q(f"select * from items where status <> 'kapandi' and due_date is not null"
+    rows = db.q(f"select * from items where status <> 'closed' and due_date is not null"
                 f" and {MINE_SQL} order by due_date, {PRIO_SQL} limit 60",
                 (user["id"], user["id"]))
     users = users_by_id()
@@ -131,7 +131,7 @@ def notif_badge(user) -> int:
 
 
 
-def m_ctx(request, user, tab: str | None, title: str, **extra) -> dict:
+def mobile_ctx(request, user, tab: str | None, title: str, **extra) -> dict:
     prefix = mp(request)
     ctx = {"request": request, "user": user, "tab": tab, "title": title,
            "badge": notif_badge(user), "mp": prefix, "mroot": prefix or "/",
@@ -200,26 +200,26 @@ def service_worker():
     /static altindan verilseydi service worker'in kapsami oraya daralir ve
     sayfalari kontrol edemezdi (Service-Worker-Allowed basligi bunun icin).
     """
-    return FileResponse(STATIK / "sw.js", media_type="text/javascript",
+    return FileResponse(STATIC / "sw.js", media_type="text/javascript",
                         headers={"Service-Worker-Allowed": "/", "Cache-Control": "no-cache"})
 
 
 
 # Kok rota BURADA KAYITLI DEGIL: '/' iki yuzde de var, ayrim Host'a gore
-# app.py'deki dagiticida yapiliyor (kok()). Islev disaridan cagriliyor.
-def m_todo(request: Request, sekme: str = "acik"):
+# app.py'deki dagiticida yapiliyor (root()). Islev disaridan cagriliyor.
+def todo_page(request: Request, tab: str = "open"):
     user = auth.current_user(request)
-    done = sekme == "kapali"
+    done = tab == "closed"
     return render(request, "todo.html",
-                  m_ctx(request, user, "yapilacaklar", "Yapılacaklar",
+                  mobile_ctx(request, user, "todo", "Yapılacaklar",
                         rows=mobile_todo(user, done), done=done))
 
 
-@router.get("/ara", response_class=HTMLResponse)
-def m_search(request: Request, q: str = ""):
+@router.get("/search", response_class=HTMLResponse)
+def search_page(request: Request, q: str = ""):
     user = auth.current_user(request)
     q = q.strip()
-    ctx = m_ctx(request, user, "ara", "Ara", q=q,
+    ctx = mobile_ctx(request, user, "search", "Ara", q=q,
                 items=[mobile_row(r, users_by_id()) for r in search.search_items(q)] if q else [],
                 nodes=search.search_nodes(q) if q else [])
     if is_htmx(request):
@@ -227,48 +227,48 @@ def m_search(request: Request, q: str = ""):
     return render(request, "ara.html", ctx)
 
 
-@router.get("/eylemler", response_class=HTMLResponse)
-def m_actions(request: Request):
+@router.get("/actions", response_class=HTMLResponse)
+def actions_page(request: Request):
     user = auth.current_user(request)
     return render(request, "eylemler.html",
-                  m_ctx(request, user, "eylemler", "Eylemler", groups=mobile_actions(user)))
+                  mobile_ctx(request, user, "actions", "Eylemler", groups=mobile_actions(user)))
 
 
-@router.get("/bildirimler", response_class=HTMLResponse)
-def m_notifs(request: Request):
+@router.get("/notifications", response_class=HTMLResponse)
+def notifications_page(request: Request):
     user = auth.current_user(request)
     return render(request, "bildirimler.html",
-                  m_ctx(request, user, "bildirimler", "Bildirimler", rows=mobile_notifs(user)))
+                  mobile_ctx(request, user, "notifications", "Bildirimler", rows=mobile_notifs(user)))
 
 
-@router.get("/yeni", response_class=HTMLResponse)
-def m_new_form(request: Request):
+@router.get("/new", response_class=HTMLResponse)
+def new_item_form(request: Request):
     user = auth.current_user(request)
-    scope = user["scope_node_id"]
+    scope_id = user["scope_node_id"]
     nodes = [{"id": nid, "name": ("— " * service.TREE.depth[nid]) + service.TREE.name(nid)}
              for nid in sorted(service.TREE.nodes, key=lambda n: service.TREE.tin[n])
-             if db.as_bool(user["is_admin"]) or (scope and service.TREE.is_descendant(nid, scope))]
+             if db.as_bool(user["is_admin"]) or (scope_id and service.TREE.is_descendant(nid, scope_id))]
     return render(request, "yeni.html",
-                  m_ctx(request, user, None, "Yeni kayıt", nodes=nodes))
+                  mobile_ctx(request, user, None, "Yeni kayıt", nodes=nodes))
 
 
-@router.post("/yeni")
-def m_new(request: Request, node_id: str = Form(...), title: str = Form(...),
-          kind: str = Form("hata"), description: str = Form("")):
+@router.post("/new")
+def create_item(request: Request, node_id: str = Form(...), title: str = Form(...),
+                kind: str = Form("issue"), description: str = Form("")):
     user = auth.current_user(request)
     item_id = new_item(user, node_id, kind, title, description)
-    return RedirectResponse(f"{mp(request)}/kayit/{item_id}", status_code=303)
+    return RedirectResponse(f"{mp(request)}/record/{item_id}", status_code=303)
 
 
-@router.get("/kayit/{item_id}", response_class=HTMLResponse)
-def m_item(request: Request, item_id: str):
+@router.get("/record/{item_id}", response_class=HTMLResponse)
+def record_page(request: Request, item_id: str):
     user = auth.current_user(request)
     return render(request, "kayit.html",
                   mobile_card_ctx(request, get_item(item_id), user))
 
 
-@router.post("/kayit/{item_id}/mesaj", response_class=HTMLResponse)
-def m_message(request: Request, item_id: str, body: str = Form("")):
+@router.post("/record/{item_id}/message", response_class=HTMLResponse)
+def post_message(request: Request, item_id: str, body: str = Form("")):
     user = auth.current_user(request)
     item = get_item(item_id)
     if not auth.can_edit_item(user, item, service.TREE):
@@ -279,8 +279,8 @@ def m_message(request: Request, item_id: str, body: str = Form("")):
     return render(request, "ortak/mesaj.html", {"m": m})
 
 
-@router.patch("/kayit/{item_id}/alan", response_class=HTMLResponse)
-async def m_field(request: Request, item_id: str):
+@router.patch("/record/{item_id}/field", response_class=HTMLResponse)
+async def patch_field(request: Request, item_id: str):
     user = auth.current_user(request)
     item = get_item(item_id)
     if not auth.can_edit_item(user, item, service.TREE):
@@ -290,4 +290,3 @@ async def m_field(request: Request, item_id: str):
         ctx = mobile_card_ctx(request, get_item(item_id), user)
         ctx["oob_feed"] = True          # serit + akis birlikte tazelenir (hx-swap-oob)
     return render(request, "strip.html", ctx)
-

@@ -1,6 +1,6 @@
 """PWA ikonlarini uretir (saf Python, bagimlilik yok).
 
-Calistir: .venv/bin/python tools/ikon_uret.py
+Calistir: .venv/bin/python tools/icon_gen.py
 Uretir: shared/static/icon-180.png (apple-touch-icon), icon-192.png, icon-512.png
 
 Tasarim: paletin mor gradyani (--acc #7c5bff -> #c48fff) uzerine beyaz elmas (rlogo ile ayni).
