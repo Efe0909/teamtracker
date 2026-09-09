@@ -7,15 +7,15 @@ maddesi ("kaynaktaki kötü yanları da yaz") burada boş kalıyor, çünkü kay
 ## 1. İş
 
 Bugün kullanıcı eklemenin tek yolu sunucuda kabuk açıp
-`tools/kullanici.py ekle` çalıştırmak (`tools/kullanici.py:1`). Bu ekran o
+`tools/user.py add` çalıştırmak (`tools/user.py:1`). Bu ekran o
 eşiği kaldırıyor: kulübe birini almak, birini kapatmak, yetki vermek artık
 sunucuya girmeden yapılabilir. Kullanan: admin yetkisi olan 1-3 kişi, haftada
 birkaç kez (yeni üye dönemlerinde daha sık).
 
 Dar kapsam (TODO.md madde 3, "önce sadece üye/admin ekleme"): **kullanıcılar +
-scope/role yönetimi**. Takım üyeliği `ekipler` ekranına ait (`MODULES` kaydı
+scope/role yönetimi**. Takım üyeliği `teams` ekranına ait (`MODULES` kaydı
 zaten öyle diyor — `sites/dashboard/routes.py:40`). `change_requests` kuyruğu
-(onayla/reddet) ve kapsam düğüm ataması `kazanim-agaci` ekranına ait — TODO.md
+(onayla/reddet) ve kapsam düğüm ataması `outcome-tree` ekranına ait — TODO.md
 "Sonraya bırakılanlar" bölümünde bu ikisinin çakıştığı, sınır kararı verilmeden
 ikisinin birden yazılmayacağı not düşülmüş.
 
@@ -35,8 +35,8 @@ ikisinin birden yazılmayacağı not düşülmüş.
 
 | `data-fragment` | Ne gösterir | Nereden besleniyor | Boşken |
 |---|---|---|---|
-| `user_table` | e-posta, ad, yetki (admin/scope özeti), durum, son görülme | `users` + `effective_scopes()` özetlenmiş | "Liste boş. Aşağıdan ilk kullanıcıyı ekle." (`tools/kullanici.py`'nin bugünkü mesajıyla aynı ton) |
-| `user_add_form` | e-posta + ad + (opsiyonel) rol seçimi | POST, aynı iş mantığı `shared/users.py`'de | — (form hep açık) |
+| `user_table` | e-posta, ad, yetki (admin/scope özeti), durum, son görülme | `users` + `active_scopes()` özetlenmiş | "Liste boş. Aşağıdan ilk kullanıcıyı ekle." (`tools/user.py`'nin bugünkü mesajıyla aynı ton) |
+| `user_add_form` | e-posta + ad + (opsiyonel) rol seçimi | POST, aynı iş mantığı `shared/users.py`'de (bkz. §5) | — (form hep açık) |
 | `user_row_actions` | aç/kapat, admin çevir, rol/scope düzenle | satır içi, htmx PATCH | — |
 | `role_table` | rol adı, içerdiği scope'lar, üye sayısı | `roles` + `role_scopes` + `user_roles` sayımı | "Henüz rol yok. Kullanıcılara scope'ları tek tek ver, ya da bir rol tanımla." |
 | `role_editor` | rol adı + `SCOPES` sözlüğünden çoklu seçim | POST/PATCH/DELETE `/role/{id}` | — |
@@ -49,12 +49,12 @@ Skin kuralı geçerli: her fragment nerede gösterildiğini bilmez
 
 | Eylem | Kim yapabilir | Sunucuda ne değişir | Ekranda ne tazelenir |
 |---|---|---|---|
-| Kullanıcı ekle | `manage_users` scope'u ya da admin | `users` satırı; `tools/kullanici.py ekle` ile **aynı** fonksiyon (`shared/users.py`, aşağı bkz.) | `user_table` |
-| Aç/kapat | `manage_users` scope'u ya da admin | `is_active` çevirir + `guvenlik_olaylari` satırı (`tur='pasiflestirme'`) — bugünkünün aynısı, sadece uçtan tetiklenir | `user_table` satırı |
+| Kullanıcı ekle | `manage_users` scope'u ya da admin | `users` satırı; `tools/user.py add` ile **aynı** fonksiyon (`shared/users.py`, aşağı bkz.) | `user_table` |
+| Aç/kapat | `manage_users` scope'u ya da admin | `is_active` çevirir + `security_events` satırı (`event_type='deactivation'`) — bugünkünün aynısı, sadece uçtan tetiklenir | `user_table` satırı |
 | `is_admin` ver/al | **yalnız admin** — kendine ait bayrağı kapatamaz, son aktif admin kapatılamaz (kilitlenme koruması, §"Kilitlenme") | `users.is_admin` | `user_table` satırı |
 | Scope ver/al (tek tek) | `manage_users` scope'u ya da admin | `user_scopes` insert/delete | `user_scope_panel` |
 | Rol oluştur/sil | **yalnız admin** — rol oluşturma yetkiyi çoğaltabildiği için (bkz. §"Yetki modeli" ayrıcalık yükseltme) | `roles` (+ cascade `role_scopes`, `user_roles`) | `role_table` |
-| Rolü kullanıcıya ver/al | `manage_users` scope'u ya da admin | `user_roles` insert/delete — **flatten yok**, `effective_scopes()` okuma anında birleştirir (§5) | `user_scope_panel` |
+| Rolü kullanıcıya ver/al | `manage_users` scope'u ya da admin | `user_roles` insert/delete — **flatten yok**, `active_scopes()` okuma anında birleştirir (§5) | `user_scope_panel` |
 | Role scope ekle/çıkar | yalnız admin | `role_scopes` — mevcut sahiplerine **otomatik yansır**, çünkü union okuma anında hesaplanıyor; ayrı bir "yansıt" adımı yok | `role_table` + o rolü tutan herkesin `user_scope_panel`'i (aynı isteğin sonucu) |
 
 Tüm yazan uçlar `is_admin`/scope kontrolünü **sunucuda, ucun ilk satırında**
@@ -63,10 +63,10 @@ yapar (KNOW-99'daki kural burada da geçerli) — panel sadece görünen yüz.
 ## 5. Veri ihtiyacı
 
 Şema kısmen kurulu (`user_scopes`, `user_node_scopes`, göç 007
-— `shared/gocler/007_kapsamlar.sql`), roller yok. Yeni göç gerekiyor:
+— `shared/migrations/007_scopes.sql`), roller yok. Yeni göç gerekiyor:
 
 ```sql
--- scope kataloğu: kod-taraflı liste (shared/scopes.py SCOPES), DML ile
+-- scope kataloğu: kod-taraflı liste (shared/scope.py SCOPES), DML ile
 -- veritabanına yazılır. Çalışma anında değişmez — yeni scope = kod değişikliği.
 create table if not exists scopes (
   name       text primary key,
@@ -87,7 +87,7 @@ create table if not exists role_scopes (
 );
 
 -- SADECE UYELIK. Yetki kontrolu bu tabloyu hic okumaz tek basina — her zaman
--- role_scopes ile join edilir (effective_scopes()). "Rolun tum scope'larina
+-- role_scopes ile join edilir (active_scopes()). "Rolun tum scope'larina
 -- sahip olmak" ile "rolu tutmak" ayri gerceklerdir.
 create table if not exists user_roles (
   user_id    uuid not null references users(id) on delete cascade,
@@ -103,12 +103,12 @@ alter table user_scopes
 ```
 
 Ardından DML: `insert into scopes (name) values ('edit_nodes'),
-('manage_users'), ('manage_teams');` — `shared/scopes.py`'deki `SCOPES`
+('manage_users'), ('manage_teams');` — `shared/scope.py`'deki `SCOPES`
 sözlüğüyle birebir.
 
 **Yetki modeli — üç karar, oturumda netleşti:**
 
-1. **Rol = scope demeti, sığ.** Flatten yok: `effective_scopes(user)` iki
+1. **Rol = scope demeti, sığ.** Flatten yok: `active_scopes(user)` iki
    kaynağın birleşimi, tek sorguda:
 
    ```sql
@@ -128,45 +128,48 @@ sözlüğüyle birebir.
 2. **Düğüm izni (`user_node_scopes`) kod seviyesinde korunur, FK ile değil.**
    `edit_nodes` role üzerinden de gelebildiği için `user_scopes` tablosunda
    karşılığı olmayabilir — composite FK bu durumda geçerli bir izni reddeder.
-   Kontrol `shared/scopes.py`'de iki adımda kalıyor (göç 007'deki
-   `dugumde_yetkili` mantığının aynısı, sadece rol union'ı eklenmiş): önce
-   `edit_nodes` var mı (rolden ya da doğrudan), sonra hangi dalda.
+   Kontrol `shared/scope.py`'de iki adımda kalıyor (`authorized_on_node`
+   mantığının aynısı, sadece rol union'ı eklenmiş): önce `edit_nodes` var mı
+   (rolden ya da doğrudan), sonra hangi dalda.
 
 3. **Rol oluşturma/silme yalnız admin.** `manage_users` scope'u rol
    *atayabilir*, yeni rol *tanımlayamaz* — aksi halde `manage_users`'ı
    olan biri "her şeyi yapabilen" bir rol yaratıp kendine verebilir
    (ayrıcalık yükseltme). Hiyerarşi kurulmuyor; tek çıkış admin'in tek
-   tepe olması, `shared/kapsam.py`'nin (`shared/scopes.py` olacak) zaten
-   dayandığı kural.
+   tepe olması, `shared/scope.py`'nin zaten dayandığı kural
+   (`can_do_root_operation`).
 
 **Kilitlenme koruması** — panelin var oluş amacı sunucuya girmeyi gereksiz
 kılmak; kendi kendini kilitleyebilmemeli:
 
 - kullanıcı kendi `is_admin`'ini kapatamaz
 - son aktif admin kapatılamaz / demote edilemez
-- `tools/kullanici.py` **break-glass olarak kalır** — `users`'ta hiç satırı
-  olmayan ilk kurulumda tek yol o (`tests/test_kullanici.py:3` bunu zaten
+- `tools/user.py` **break-glass olarak kalır** — `users`'ta hiç satırı
+  olmayan ilk kurulumda tek yol o (`tests/test_user.py` bunu zaten
   test ediyor, dokunulmuyor)
 
-**Ortak iş mantığı** — TODO.md açıkça istiyor: form, `tools/kullanici.py
-ekle`'yle **aynı** fonksiyonu çağırsın, kopyalanmasın. Bugün mantık
-`tools/kullanici.py:52`'de (`ekle()`). Taşıma: `shared/users.py` yeni modül,
+**Ortak iş mantığı** — TODO.md açıkça istiyor: form, `tools/user.py
+add`'la **aynı** fonksiyonu çağırsın, kopyalanmasın. Bugün mantık
+`tools/user.py:48` (`add()`). Taşıma: `shared/users.py` yeni modül,
 `add_user(email, name, *, is_admin=False, scope=None)` — script bunu import
 edip çağıran ince bir CLI'a düşer, panel de aynı fonksiyonu POST'tan çağırır.
 
-**Audit** — rol/scope değişiklikleri `guvenlik_olaylari`'na düşer (bugünkü
-`tur='pasiflestirme'` deseninin devamı): `tur='scope_verildi'`,
-`'scope_alindi'`, `'rol_verildi'`, `'rol_alindi'`, `'rol_silindi'`. Rol
+**Audit** — rol/scope değişiklikleri `security_events`'e düşer (bugünkü
+`event_type='deactivation'` deseninin devamı): `event_type='scope_granted'`,
+`'scope_revoked'`, `'role_granted'`, `'role_revoked'`, `'role_deleted'`. Rol
 düzenlemesi N kullanıcıya birden dokunduğunda (union okuma-anında olduğu için
 DB'de N satır değişmez, ama etkilenen kişi sayısı gerçek) tek satır: rol adı +
 scope + etkilenen kullanıcı sayısı — kişi başına satır değil.
 
 **İsimlendirme:** yeni her şey İngilizce (`CLAUDE.md` "Kod dili: İngilizce").
-`shared/kapsam.py` → `shared/scopes.py`, `KAPSAMLAR` → `SCOPES`, anahtarlar
-`edit_nodes`/`manage_users`/`manage_teams`. Veritabanında bugün Türkçe scope
-adı YOK (kurulu veritabanı yok, göç 007 hiç prod'da çalışmadı) — bu yüzden
-eski adı yeni ada çeviren ayrı bir göç gerekmiyor, `007_kapsamlar.sql`
-doğrudan İngilizce yazılabilir.
+Kod tabanı zaten bu kurala göre çevrildi (PR #13, 2026-09-09): `shared/kapsam.py`
+→ `shared/scope.py`, `KAPSAMLAR` → `SCOPES`, `etkin_kapsamlar` → `active_scopes`,
+`dugumde_yetkili` → `authorized_on_node`, `guvenlik_olaylari` → `security_events`.
+Anahtarlar `edit_nodes`/`manage_users`/`manage_teams` zaten kod tabanında bu
+adlarla duruyor. Veritabanında bugün Türkçe scope adı YOK (kurulu veritabanı
+yok, göç 007 hiç prod'da çalışmadı) — bu yüzden eski adı yeni ada çeviren ayrı
+bir göç gerekmiyor, `007_scopes.sql` (eski adıyla `007_kapsamlar.sql`)
+doğrudan İngilizce yazıldı.
 
 ## 6. Alınmayacaklar
 
@@ -177,9 +180,9 @@ doğrudan İngilizce yazılabilir.
 - **Negatif izin** ("bu rolün her şeyi olsun, şunu hariç") — union modeliyle
   ifade edilemiyor; ihtiyaç çıkarsa çözüm rolü kaldırıp gerekeni tek tek
   vermek, ayrı bir `deny` tablosu şimdiden kurulmaz.
-- **`change_requests` kuyruğu (onayla/reddet)** — `kazanim-agaci`'na ait,
+- **`change_requests` kuyruğu (onayla/reddet)** — `outcome-tree`'ye ait,
   TODO.md'nin kendi sınır çizgisi.
-- **Takım üyeliği ekranı** — `ekipler`'e ait, oraya bağlantı verilir, burada
+- **Takım üyeliği ekranı** — `teams`'e ait, oraya bağlantı verilir, burada
   tekrar edilmez.
 - **Kapsam adı ekleme UI'dan** — `SCOPES` kod seviyesinde sabit; panel
   yalnızca var olan scope'ları listeler ve atar, yeni scope icat edemez
