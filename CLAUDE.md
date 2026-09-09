@@ -67,3 +67,35 @@ kullanılmayacaksa onlar açılır.
 
 alpha-0.1 = Faz 1 (hiyerarşi, kayıtlar, kart içi sohbet, alan değişiklikleri) + mobil yüz.
 Faz 2 (Google OAuth) gelene kadar kimlik sahte; `auth.current_user` tek değişecek yer.
+
+## Kod dili: İngilizce. İstisna yok.
+
+Kaynak koddaki **her tanımlayıcı İngilizce**: değişken, fonksiyon, sınıf, modül
+ve dosya adı, tablo ve sütun adı, kapsam/izin anahtarı, sözlük anahtarı, test adı.
+
+Türkçe kalan tek şey **kullanıcının gördüğü metin**: şablonlardaki yazılar, hata
+mesajları, etiketler, `SCOPES` sözlüğünün *değerleri*. Yorumlar, docstring'ler,
+`spec/` ve commit mesajları da Türkçe kalır — onlar kod değil, anlatı.
+
+```python
+SCOPES = {
+    "edit_nodes": "Yapıyı düzenle — düğüm ekle, adlandır, taşı, sil",
+#    ^ anahtar İngilizce      ^ ekranda görünen metin Türkçe
+}
+```
+
+**Neden:** iki ay sonra `kapsam` / `gocler` / `var_mi` açıldığında ne olduğu
+okunmuyor. Terimi çevirme — `scope` scope'tur, `kapsam` değil.
+
+### Bugünkü kod bu kurala uymuyor
+
+Depo Türkçe yazılmış (`shared/kapsam.py`, `shared/gocler/`, `db.havuz()`,
+`service.dugum_ekle`, Türkçe test adları). Kural **yeni kod için bağlayıcı**;
+mevcut adlar ayrı bir yeniden adlandırma kararıdır, kendiliğinden yapılmaz.
+
+**Göç dosyası adını değiştirirken dikkat.** `gocler()` uygulanan göçü *dosya
+adıyla* `schema_migrations`'a yazıyor (`shared/db.py`); kurulu bir veritabanında
+`001_sema.sql` yeniden adlandırılırsa uygulanmamış sayılır ve **yeniden koşar** —
+001 idempotent değil (`alter table ... add constraint`, `if not exists`i yok),
+bu da açılışta kalıcı hataya düşürür. Bugün kurulu veritabanı yok, o yüzden
+dosya adları şu an serbest; canlıya ilk kurulumdan sonra donarlar.
