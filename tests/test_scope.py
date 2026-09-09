@@ -76,11 +76,14 @@ def test_uydurma_kapsam_kabul_edilmez(client):
     assert "do_everything" not in scope.active_scopes(u)
 
 
-def test_veritabanindaki_tanimsiz_kapsam_elenir(client):
-    """Satir elle yazilmis olsa bile uygulama tanimayani yok sayar."""
+def test_tanimsiz_kapsam_yazilamaz(client):
+    """Uydurma kapsam artik veritabani seviyesinde reddedilir (goc 008,
+    user_scopes.scope -> scopes.name FK) — eskiden yalniz okuma anindaki
+    active_scopes() filtrelerdi, artik yazma anindan itibaren imkansiz."""
     u = person("Deniz")
-    db.x("insert into user_scopes (user_id, scope) values (%s,%s)", (u["id"], "uydurma"))
-    assert "uydurma" not in scope.active_scopes(u)
+    import psycopg
+    with pytest.raises(psycopg.errors.ForeignKeyViolation):
+        db.x("insert into user_scopes (user_id, scope) values (%s,%s)", (u["id"], "uydurma"))
 
 
 def test_admin_tum_kapsamlara_sahiptir(client):

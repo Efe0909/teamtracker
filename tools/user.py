@@ -1,7 +1,11 @@
 """Davetli listesi yonetimi (spec/70-guvenlik.md §2.3).
 
-Giris yalnizca `users` tablosunda kayitli e-postalara acik. Bu betik o listeyi
-yonetir — yonetim ekrani gelene kadar tek yol budur.
+Giris yalnizca `users` tablosunda kayitli e-postalara acik. /admin paneli
+gelene kadar (spec/71-yonetim-paneli.md) sunucuda kabuk acmak tek yoldu; artik
+break-glass — panel calismiyorsa ya da hic kullanici yoksa hala bu.
+
+Mantik burada degil: shared/users.py'de. Bu betik ince bir CLI kabugu, panel
+ile AYNI fonksiyonlari cagirir (TODO.md madde 3 'aynı iş mantığını çağırsın').
 
   .venv/bin/python tools/user.py list
   .venv/bin/python tools/user.py add ayse@ornek.com "Ayşe" --scope "Malzeme Temini"
@@ -20,20 +24,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from shared import db  # noqa: E402
-
-COLORS = ["#5b8cff", "#e5484d", "#d99a2b", "#22a06b", "#7c5bff", "#b4501a"]
-
-
-def _user(email: str):
-    # Tekillik lower(email) indeksinde (shared/migrations/001_schema.sql); arama da
-    # oyle olmali, yoksa "Ayse@..." ile "ayse@..." ayri kullanici sanilir.
-    return db.q1("select * from users where lower(email) = lower(%s)", (email,))
+from shared import db, users  # noqa: E402
 
 
 def list_users() -> None:
-    rows = db.q("select u.*, n.name node from users u"
-                " left join nodes n on n.id = u.scope_node_id order by u.name")
+    rows = users.list_all()
     if not rows:
         print("Liste boş. `add` ile ilk kullanıcıyı yaz.")
         return
@@ -46,33 +41,23 @@ def list_users() -> None:
 
 
 def add(email: str, name: str, scope: str | None, admin: bool, editor: bool) -> None:
-    email = email.strip().lower()
-    if _user(email):
-        sys.exit(f"zaten var: {email}  (yetki degistirmek icin dogrudan SQL)")
-    node_id = None
-    if scope:
-        n = db.q1("select id from nodes where name = %s", (scope,))
-        if n is None:
-            sys.exit(f"dugum yok: {scope!r}")
-        node_id = n["id"]
-    count = db.q1("select count(*) c from users")["c"]
-    db.x("insert into users (id,email,name,color,is_admin,is_editor,scope_node_id,"
-         "created_at,is_active) values (%s,%s,%s,%s,%s,%s,%s,%s,true)",
-         (db.new_id(), email, name, COLORS[count % len(COLORS)],
-          bool(admin), bool(editor or admin), node_id, db.now()))
-    print(f"eklendi: {email} ({name})"
+    try:
+        u = users.add_user(email, name, node_name=scope, is_admin=admin, is_editor=editor)
+    except users.UserError as e:
+        sys.exit(f"{e}  (yetki degistirmek icin dogrudan SQL)" if "zaten var" in str(e) else str(e))
+    print(f"eklendi: {u['email']} ({u['name']})"
           f"{' · admin' if admin else ''}{' · kapsam: ' + scope if scope else ''}")
     print("Not: kişi Google ile ilk girdiğinde hesabı bu satıra bağlanır.")
 
 
 def set_active(email: str, active: bool) -> None:
-    u = _user(email.strip().lower())
+    u = users.find_by_email(email.strip().lower())
     if u is None:
         sys.exit(f"kullanici yok: {email}")
-    db.x("update users set is_active = %s where id = %s", (bool(active), u["id"]))
-    db.x("insert into security_events (id,created_at,event_type,actor_id,email,detail)"
-         " values (%s,%s,'deactivation',null,%s,%s)",
-         (db.new_id(), db.now(), u["email"], "acildi" if active else "kapatildi"))
+    try:
+        users.set_active(u["id"], active)
+    except users.UserError as e:
+        sys.exit(str(e))
     print(f"{u['email']}: {'açıldı' if active else 'KAPATILDI (oturumu bir sonraki istekte düşer)'}")
 
 

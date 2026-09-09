@@ -13,7 +13,7 @@ from pathlib import Path
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from shared import auth, db, filters, scope, service
+from shared import auth, db, filters, scope, service, users
 from shared.config import site_address
 from shared.render import is_htmx, site_templates
 from shared.service import (ACTION_STATUS, PRIORITIES, STATUSES, add_action, add_message,
@@ -74,12 +74,10 @@ MODULES = [
      "plan": ["spec/20-sema.md açık nokta 1 🚧: docker + NAS yönü; saklama süresi kararı bekliyor.",
               "Faz 1'de dosya yükleme bilerek yok; yükleme kaynaklı saldırı yüzeyi de yok (README).",
               "Erişim yetkisi kartın yetkisiyle aynı yerden gelir, ikinci bir model kurulmaz."]},
-    {"slug": "admin", "icon": "🛡", "name": "Yönetim Paneli", "ready": False,
-     "desc": "Kullanıcılar, takımlar, kapsamlar, yetkiler ve bekleyen değişiklik talepleri.",
-     "plan": ["Kullanıcı kapsamı (scope_node_id), is_admin / is_editor bayrakları buradan yönetilir.",
-              "Takım üyelikleri ve roller (team_members) buradan düzenlenir.",
-              "Açık change_requests kuyruğu: onayla / reddet — ret prev_state'ten geri yazar.",
-              "Yetki her uçta sunucuda kontrol edilir; panel sadece görünen yüzü."]},
+    {"slug": "admin", "icon": "🛡", "name": "Yönetim Paneli", "ready": True,
+     "desc": "Kullanıcılar, kapsamlar ve roller — dar kapsam (TODO.md madde 3). "
+             "Takım üyeliği ekipler'de, yapı ve düğüm izni outcome-tree'de.",
+     "plan": []},
 ]
 MODULE_BY_SLUG = {m["slug"]: m for m in MODULES}
 
@@ -467,6 +465,196 @@ def delete_node(request: Request, node_id: str):
         raise HTTPException(403, "bu düğümde silme yetkisi yok")
     service.delete_node(node_id, deleted_by=user["id"])
     return render(request, "fragments/agac.html", {"user": user, **_tree_ctx(user)})
+
+
+# --- yonetim paneli (spec/71-yonetim-paneli.md) --------------------------
+#
+# Yetki iki basamak: `manage_users` scope'u (ya da admin) gunluk isi yapar
+# (kullanici ekle/kapat, scope/rol ver-al); rol OLUSTURMA/SILME ve is_admin
+# bayragi YALNIZ admin — aksi halde manage_users'i olan biri "her seyi
+# yapabilen" bir rol yaratip kendine verebilir (ayricalik yukseltme,
+# spec §5 madde 3). Panel sadece gorunen yuz: her uc burada da ayrica
+# kontrol eder (KNOW-99'daki kural).
+
+
+def _can_manage_users(u) -> bool:
+    return bool(u) and (db.as_bool(u["is_admin"]) or scope.has_scope(u, "manage_users"))
+
+
+def _require_manage_users(u) -> None:
+    if not _can_manage_users(u):
+        raise HTTPException(403, "kullanıcı yönetimi yetkisi yok")
+
+
+def _require_admin(u) -> None:
+    if not (u and db.as_bool(u["is_admin"])):
+        raise HTTPException(403, "yalnız admin")
+
+
+def _admin_ctx(user) -> dict:
+    all_roles = scope.list_roles()
+    people = []
+    for u in users.list_all():
+        direct = scope.direct_scopes(u["id"])
+        active = scope.active_scopes(u)
+        my_roles = scope.user_roles(u["id"])
+        my_role_ids = {r["id"] for r in my_roles}
+        sources = scope.scope_sources(u)
+        # scope_rows: her etkin kapsam icin ad + rolden mi geldigi (rolden
+        # geldiyse burada silinmez, rolun kendisinden yapilir — spec §5 madde 1).
+        scope_rows = [{"name": s, "direct": s in direct,
+                       "via_roles": [o for o in sources.get(s, []) if o != "direct"]}
+                      for s in sorted(active)]
+        people.append(dict(
+            u, scope_rows=scope_rows, roles=my_roles,
+            grantable=[k for k in scope.SCOPES if k not in direct],
+            assignable_roles=[r for r in all_roles if r["id"] not in my_role_ids],
+            last_seen=short_time(u["last_seen_at"]) if u["last_seen_at"] else None))
+    return {
+        "people": people, "roles": all_roles, "all_scopes": scope.SCOPES,
+        "can_manage": _can_manage_users(user), "is_admin": db.as_bool(user["is_admin"]),
+    }
+
+
+@router.get("/admin", response_class=HTMLResponse)
+def admin_panel(request: Request):
+    user = auth.current_user(request)
+    _require_manage_users(user)
+    ctx = {"user": user, "m": MODULE_BY_SLUG["admin"], **_admin_ctx(user)}
+    if is_htmx(request):
+        return render(request, "fragments/admin_main.html", ctx)
+    return render(request, "admin.html", ctx)
+
+
+@router.post("/users", response_class=HTMLResponse)
+def create_user(request: Request, email: str = Form(...), name: str = Form(...)):
+    user = auth.current_user(request)
+    _require_manage_users(user)
+    try:
+        users.add_user(email, name)
+    except users.UserError as e:
+        raise HTTPException(400, str(e))
+    return render(request, "fragments/admin_main.html", {"user": user, **_admin_ctx(user)})
+
+
+@router.patch("/users/{user_id}/active", response_class=HTMLResponse)
+def toggle_user_active(request: Request, user_id: str):
+    user = auth.current_user(request)
+    _require_manage_users(user)
+    target = db.q1("select is_active from users where id = %s", (db.uid(user_id),))
+    if target is None:
+        raise HTTPException(404, "kullanıcı yok")
+    try:
+        users.set_active(user_id, not db.as_bool(target["is_active"]), actor_id=user["id"])
+    except users.UserError as e:
+        raise HTTPException(400, str(e))
+    return render(request, "fragments/admin_main.html", {"user": user, **_admin_ctx(user)})
+
+
+@router.patch("/users/{user_id}/admin", response_class=HTMLResponse)
+def toggle_user_admin(request: Request, user_id: str):
+    user = auth.current_user(request)
+    _require_admin(user)
+    target = db.q1("select is_admin from users where id = %s", (db.uid(user_id),))
+    if target is None:
+        raise HTTPException(404, "kullanıcı yok")
+    try:
+        users.set_admin(user_id, not db.as_bool(target["is_admin"]), actor_id=user["id"])
+    except users.UserError as e:
+        raise HTTPException(400, str(e))
+    return render(request, "fragments/admin_main.html", {"user": user, **_admin_ctx(user)})
+
+
+@router.post("/users/{user_id}/scopes", response_class=HTMLResponse)
+def grant_user_scope(request: Request, user_id: str, scope_name: str = Form(..., alias="scope")):
+    user = auth.current_user(request)
+    _require_manage_users(user)
+    if not scope.valid(scope_name):
+        raise HTTPException(400, f"geçersiz kapsam: {scope_name}")
+    scope.grant_scope(user_id, scope_name, granted_by=user["id"])
+    db.x("insert into security_events (id,created_at,event_type,actor_id,email,detail)"
+         " values (%s,%s,'scope_granted',%s,(select email from users where id=%s),%s)",
+         (db.new_id(), db.now(), user["id"], db.uid(user_id), scope_name))
+    return render(request, "fragments/admin_main.html", {"user": user, **_admin_ctx(user)})
+
+
+@router.delete("/users/{user_id}/scopes/{scope_name}", response_class=HTMLResponse)
+def revoke_user_scope(request: Request, user_id: str, scope_name: str):
+    user = auth.current_user(request)
+    _require_manage_users(user)
+    scope.revoke_scope(user_id, scope_name)
+    db.x("insert into security_events (id,created_at,event_type,actor_id,email,detail)"
+         " values (%s,%s,'scope_revoked',%s,(select email from users where id=%s),%s)",
+         (db.new_id(), db.now(), user["id"], db.uid(user_id), scope_name))
+    return render(request, "fragments/admin_main.html", {"user": user, **_admin_ctx(user)})
+
+
+@router.post("/users/{user_id}/roles", response_class=HTMLResponse)
+def assign_user_role(request: Request, user_id: str, role_id: str = Form(...)):
+    user = auth.current_user(request)
+    _require_manage_users(user)
+    if not scope.assign_role(user_id, role_id, granted_by=user["id"]):
+        raise HTTPException(404, "rol yok")
+    role = scope.get_role(role_id)
+    db.x("insert into security_events (id,created_at,event_type,actor_id,email,detail)"
+         " values (%s,%s,'role_granted',%s,(select email from users where id=%s),%s)",
+         (db.new_id(), db.now(), user["id"], db.uid(user_id), role["name"] if role else role_id))
+    return render(request, "fragments/admin_main.html", {"user": user, **_admin_ctx(user)})
+
+
+@router.delete("/users/{user_id}/roles/{role_id}", response_class=HTMLResponse)
+def unassign_user_role(request: Request, user_id: str, role_id: str):
+    user = auth.current_user(request)
+    _require_manage_users(user)
+    role = scope.get_role(role_id)
+    scope.unassign_role(user_id, role_id)
+    db.x("insert into security_events (id,created_at,event_type,actor_id,email,detail)"
+         " values (%s,%s,'role_revoked',%s,(select email from users where id=%s),%s)",
+         (db.new_id(), db.now(), user["id"], db.uid(user_id), role["name"] if role else role_id))
+    return render(request, "fragments/admin_main.html", {"user": user, **_admin_ctx(user)})
+
+
+@router.post("/roles", response_class=HTMLResponse)
+async def create_role(request: Request):
+    user = auth.current_user(request)
+    _require_admin(user)
+    form = await request.form()
+    name = form.get("name", "")
+    scopes = set(form.getlist("scope"))
+    try:
+        scope.create_role(name, scopes, created_by=user["id"])
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    db.x("insert into security_events (id,created_at,event_type,actor_id,email,detail)"
+         " values (%s,%s,'role_created',%s,%s,%s)",
+         (db.new_id(), db.now(), user["id"], user["email"], name))
+    return render(request, "fragments/admin_main.html", {"user": user, **_admin_ctx(user)})
+
+
+@router.patch("/roles/{role_id}", response_class=HTMLResponse)
+async def update_role(request: Request, role_id: str):
+    user = auth.current_user(request)
+    _require_admin(user)
+    form = await request.form()
+    try:
+        if "name" in form and form.get("name"):
+            scope.rename_role(role_id, form.get("name"))
+        scope.set_role_scopes(role_id, set(form.getlist("scope")))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return render(request, "fragments/admin_main.html", {"user": user, **_admin_ctx(user)})
+
+
+@router.delete("/roles/{role_id}", response_class=HTMLResponse)
+def delete_role(request: Request, role_id: str):
+    user = auth.current_user(request)
+    _require_admin(user)
+    role = scope.get_role(role_id)
+    scope.delete_role(role_id)
+    db.x("insert into security_events (id,created_at,event_type,actor_id,email,detail)"
+         " values (%s,%s,'role_deleted',%s,%s,%s)",
+         (db.new_id(), db.now(), user["id"], user["email"], role["name"] if role else role_id))
+    return render(request, "fragments/admin_main.html", {"user": user, **_admin_ctx(user)})
 
 
 @router.get("/{slug}", response_class=HTMLResponse)

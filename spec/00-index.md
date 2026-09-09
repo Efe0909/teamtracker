@@ -36,7 +36,7 @@ Kaynak sistemden uyarlanacak ekranlar. Sıra, `app.py` içindeki `MODULES` kayd�
 | | Ekip Arşivi | `arsiv` | | | | bekliyor |
 | | Dosyalar / NAS | `dosyalar` | var (git'te değil) | `60-kaynak-uyarlama.md` 2.7 | | 🚧 ek kararına bağlı |
 | | WDS panosu | `wds` | var (git'te değil) | `60-kaynak-uyarlama.md` 2.9 | | 🚧 rutin kararına bağlı |
-| | Yönetim Paneli | `admin` | yok — kaynakta karşılığı yok | `71-yonetim-paneli.md` | `iskelet/admin.html` | çözümlendi, rota yazılmadı |
+| | Yönetim Paneli | `admin` | yok — kaynakta karşılığı yok | `71-yonetim-paneli.md` | `iskelet/admin.html` | **yazıldı** |
 
 ## Akış haritası
 

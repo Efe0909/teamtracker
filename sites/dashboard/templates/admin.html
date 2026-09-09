@@ -1,0 +1,33 @@
+{# Yonetim Paneli — kullanicilar, kapsamlar, roller (spec/71-yonetim-paneli.md).
+   Yerlesim SADECE burada; fragments/admin_main.html nerede gosterildigini bilmez. #}
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Yönetim Paneli — EkipTakip</title>
+<link rel="icon" href="/static/icon-192.png">
+<link rel="stylesheet" href="{{ static('/static/base.css') }}">
+<link rel="stylesheet" href="{{ static('/static/d/dashboard.css') }}">
+<link rel="stylesheet" href="{{ static('/static/d/admin.css') }}">
+<script src="{{ static('/static/htmx.min.js') }}"></script>
+</head>
+<body hx-headers='{"X-CSRF-Token": "{{ csrf_token }}"}'>
+{% include "fragments/uyari_mobil.html" %}
+{% with aktif = "admin" %}{% include "fragments/rail.html" %}{% endwith %}
+
+<div class="tmain" id="main">
+  <div class="thead row">
+    <h1>Yönetim Paneli</h1>
+  </div>
+  <p class="muted" style="margin:-4px 0 14px;font-size:13px">
+    Kullanıcılar, kapsamlar ve roller. Takım üyeliği
+    <a href="/teams">Ekipler</a>'de, yapı ve düğüm izni
+    <a href="/outcome-tree">Veri Yönetimi</a>'nde düzenlenir.
+  </p>
+
+  {% include "fragments/admin_main.html" %}
+</div>
+<script src="{{ static('/static/d/dashboard.js') }}"></script>
+</body>
+</html>
