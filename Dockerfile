@@ -2,9 +2,9 @@
 #
 #   docker build -t ekiptakip:latest .
 #
-# Sema gocleri acilista kosar (app.py lifespan -> db.gocler()), ayri bir goc
+# Sema gocleri acilista kosar (app.py lifespan -> db.migrate()), ayri bir goc
 # adimi yok. Tohum ve kullanici yonetimi icin compose'daki `seed` profili ve
-# `docker compose run --rm app python tools/kullanici.py ...` kullanilir.
+# `docker compose run --rm app python tools/user.py ...` kullanilir.
 
 FROM python:3.12-slim
 

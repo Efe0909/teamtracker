@@ -1,7 +1,8 @@
 # Yapılacaklar
 
-alpha-0.1 yayında (NixOS VM, Docker yığını, Google girişi çalışıyor). Sıradaki
-üç iş. Öncelik sırası yukarıdan aşağı: **3 → 2 → 1**, gerekçesi her maddede.
+alpha-0.1 yayında (NixOS VM, Docker yığını, Google girişi çalışıyor). Öncelik
+sırası buydu: **3 → 2 → 1**, gerekçesi her maddede. Madde 3 (Yönetim Paneli)
+yazıldı — sıradaki **2 → 1**.
 
 Modül planları `sites/dashboard/routes.py` içindeki `MODULES` kaydında duruyor
 (`ready` bayrağı + `plan` listesi). Bir ekran bitince orada `ready: True`
@@ -128,57 +129,50 @@ adı ve kapsamı değişiyor, `MODULES` kaydındaki `desc` ve `plan` güncellenm
 
 ## 3. Yönetim Paneli — önce sadece üye/admin ekleme
 
-**Durum:** `ready: False`. Kullanıcı eklemenin tek yolu bugün
-`tools/kullanici.py`, o da sunucuda kabuk açmayı gerektiriyor:
+**Durum: YAZILDI** (`ready: True`, `/admin`, spec/71-yonetim-paneli.md).
+Kullanıcı eklemenin tek yolu `tools/user.py` olmaktan çıktı — panel aynı
+mantığı çağırıyor (`shared/users.py`), script ince bir CLI'a düştü.
 
-```bash
-sudo docker exec ekiptakip-app python tools/kullanici.py ekle biri@ornek.com "Ad" --admin
-```
+### Yapılan (dar kapsam — sadece kullanıcılar)
 
-**Bu yüzden önce bu geliyor.** Diğer iki iş güzelleştirme; bu, kullanılabilirlik
-eşiği: kulübe birini almak için sunucuya girmek gerekmemeli.
+- [x] Kullanıcı listesi: e-posta, ad, yetki, durum, son görülme.
+- [x] Kullanıcı ekleme formu — `shared/users.add_user`, `tools/user.py add`
+      ile AYNI fonksiyon.
+- [x] Kapatma / açma — `is_active` çevirir, `security_events`'e
+      `event_type='deactivation'` satırı yazar. Kullanıcıyı silmez.
+- [x] `is_admin` bayrağı (panelden). `is_editor` hâlâ geçiş bayrağı,
+      dokunulmadı — ayrı bir göç ister (aşağı bkz.).
+- [x] Yetki sunucuda: her uç `_require_manage_users` / `_require_admin`
+      kendi başına kontrol ediyor, panel sadece görünen yüz.
+- [x] **Kilitlenme koruması**: kendi `is_admin`'ini kapatamaz, son aktif
+      admin kapatılamaz/demote edilemez (`shared/users.py`, `tests/test_roles.py`).
 
-### Yapılacak (dar kapsam — sadece kullanıcılar)
+### Sonraya bırakılanlar (değişmedi)
 
-- [ ] Kullanıcı listesi: e-posta, ad, yetki, durum, kapsam. Zaten
-      `tools/kullanici.py listele`'nin bastığı bilgi.
-- [ ] Kullanıcı ekleme formu — betiğin `ekle` komutuyla **aynı iş mantığını**
-      çağırsın, mantık kopyalanmasın. Bugün mantık betiğin içinde;
-      `shared/`'a taşımak gerekebilir (`shared/` veri modelinin tek sahibi).
-- [ ] Kapatma / açma — `is_active` çevirir ve `guvenlik_olaylari`'na
-      `tur='pasiflestirme'` satırı yazar. Kapatmak kullanıcıyı **silmez**;
-      kayıtlarındaki izleri kalır, oturumu bir sonraki istekte düşer.
-- [ ] `is_admin` / `is_editor` bayrakları.
-- [ ] **Yetki sunucuda kontrol edilir.** Panelin kendisini gizlemek yetmez; her
-      uç ayrıca `is_admin` bakmalı. Panel sadece görünen yüz.
+Takım üyelikleri, `change_requests` kuyruğu (onayla/reddet), kapsam düğüm
+ataması. Bunlar madde 2 ile çakışıyor — sınır kararı verilmeden ikisini
+birden yazma.
 
-### Sonraya bırakılanlar
+### Yetki kapsamları ve roller (Discord modeli) — YAZILDI
 
-Takım üyelikleri, `change_requests` kuyruğu (onayla/reddet), kapsam düzenleme.
-Bunlar madde 2 ile çakışıyor — sınır kararı verilmeden ikisini birden yazma.
+Model uygulandı (göç 008, `shared/scope.py`, spec/71-yonetim-paneli.md §5):
 
-### Yetki kapsamları ve roller (Discord modeli)
+- **Scope** = kod tarafında sabit liste (`shared/scope.py SCOPES`), veritabanı
+  `scopes` tablosuyla FK'lenmiş — uydurma scope yazılamaz. Yeni scope eklemek
+  kod değişikliği + DML göçü.
+- **Rol** = bir scope demeti, sığ. `roles`/`role_scopes`/`user_roles`.
+  **Flatten yok**: `active_scopes()` `user_scopes ∪ (user_roles ⋈ role_scopes)`
+  birleşimini OKUMA ANINDA hesaplıyor — rol düzenlemesi mevcut sahiplerine
+  otomatik yansır, rol silmek yalnız o rolden gelen scope'ları alır (tek tek
+  verilmiş olan kalır).
+- Rol oluşturma/silme **yalnız admin** — `manage_users` yalnız var olan rolü
+  atayabilir/alabilir (ayrıcalık yükseltmeyi kapatmak için).
+- Düğüm izni (`edit_nodes`) kod seviyesinde korunur (`shared/scope.py`), FK ile
+  değil — rolden gelen scope'un `user_scopes`'ta karşılığı olmayabilir.
 
-Bugün yetki üç kaba bayrakta: `is_admin`, `is_editor`, `scope_node_id`. İstenen
-model daha ince:
-
-- **Kapsam (scope)** = tek tek yetkiler. "Kayıt açabilir", "düğüm ekleyebilir",
-  "kullanıcı ekleyebilir", "takım yönetebilir" gibi adlandırılmış izinler.
-- **Rol** = bir kapsam demeti. Yönetim panelinden oluşturulur, adlandırılır,
-  içine istenen kapsamlar konur — Discord'un rol oluşturma ekranındaki gibi.
-- Kullanıcıya **rol** verilebilir; ayrıca **rolden bağımsız tek tek kapsam** da
-  verilebilir. İkisi birleşir.
-- Yeni rol tanımlamak yönetim panelinden yapılır, kod değişikliği gerektirmez.
-
-Şema tarafı (henüz yok): `roles`, `role_scopes`, `user_roles`, `user_scopes`.
-Kapsam adları koda gömülü bir liste olur (uydurma kapsam kabul edilmesin),
-roller ve atamalar veritabanında.
-
-**Karar bekleyen:** mevcut `is_admin` / `is_editor` bayrakları kalsın mı, yoksa
-birer kapsama mı dönüşsün? İkisini birden tutmak "yetki nereden geliyor"
-sorusunu iki kaynağa böler — `shared/auth.py`'deki `can_edit_item` zaten beş
-yolu tek fonksiyonda topluyor, oraya altıncı bir kaynak eklemek pahalı.
-Geçişte en güvenli yol: bayrakları kapsamlara çeviren tek yönlü bir göç.
+**Karar verildi:** `is_admin` kalıyor (tepe, tek kaynak). `is_editor` henüz
+kapsama çevrilmedi — geçiş şimi (`_can_edit_structure`, `routes.py`) duruyor,
+tek yönlü göç hâlâ TODO.
 
 ---
 

@@ -11,7 +11,7 @@ from pathlib import Path
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
-from . import auth, config, csrf
+from . import auth, config, csrf, db, scope
 
 SHARED_DIR = Path(__file__).parent / "templates"
 ROOT = Path(__file__).resolve().parents[1]
@@ -68,6 +68,10 @@ def site_templates(directory: Path) -> Jinja2Templates:
     t.env.globals["static"] = static_url
     # Varlik: balonlardaki avatar noktasi bunu okuyor (shared/auth.py).
     t.env.globals["online"] = auth.online
+    # Rail'deki Yönetim Paneli baglantisi bunu okuyor — admin VEYA manage_users
+    # scope'u (spec/71-yonetim-paneli.md §2).
+    t.env.globals["can_manage_users"] = lambda u: bool(u) and (
+        db.as_bool(u["is_admin"]) or scope.has_scope(u, "manage_users"))
     return t
 
 

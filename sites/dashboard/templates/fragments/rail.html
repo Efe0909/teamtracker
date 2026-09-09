@@ -7,6 +7,11 @@
   <a class="rbtn{% if aktif == 'teams' %} on{% endif %}" href="/teams"
      style="text-decoration:none;display:grid;place-items:center">
     👥<span class="lbl">Ekipler</span></a>
+  {% if can_manage_users(user) %}
+  <a class="rbtn{% if aktif == 'admin' %} on{% endif %}" href="/admin"
+     style="text-decoration:none;display:grid;place-items:center">
+    🛡<span class="lbl">Yönetim Paneli</span></a>
+  {% endif %}
   <div style="flex:1"></div>
   <details style="position:relative">
     <summary class="rbtn" style="list-style:none">

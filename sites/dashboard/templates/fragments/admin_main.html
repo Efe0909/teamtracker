@@ -1,0 +1,160 @@
+{# fragment: admin_main — kullanicilar + roller. Kendi kokunu dondurur,
+   nerede gosterildigini bilmez (spec kurali). Her mutasyon bu fragmenti
+   BUTUN olarak yeniden doner (agac.html'deki #agac deseniyle ayni). #}
+<div id="admin-main" data-fragment="admin_main">
+
+  {% if can_manage %}
+  <section class="apanel" data-fragment="user_add_form">
+    <h2>Kullanıcı ekle</h2>
+    <p class="hint">tools/user.py add ile aynı işi yapar — sunucuya girmeye gerek kalmaz.</p>
+    <form class="aform-row" hx-post="/users" hx-target="#admin-main" hx-swap="outerHTML">
+      <input name="email" type="email" placeholder="e-posta" required>
+      <input name="name" placeholder="ad" required>
+      <button class="primary">Ekle</button>
+    </form>
+  </section>
+  {% endif %}
+
+  <section class="apanel" data-fragment="user_table">
+    <h2>Kullanıcılar</h2>
+    {% if not people %}
+    <div class="aempty">Liste boş. Yukarıdan ilk kullanıcıyı ekle.</div>
+    {% else %}
+    <table class="atable">
+      <thead><tr>
+        <th>Kişi</th><th>Yetki</th><th>Kapsamlar</th><th>Durum</th><th>Son görülme</th><th></th>
+      </tr></thead>
+      <tbody>
+        {% for u in people %}
+        <tr>
+          <td><span class="av" style="background:{{ u.color }}">{{ u.name[0] }}</span>{{ u.name }}
+              <div class="hint">{{ u.email }}</div></td>
+          <td>{% if u.is_admin %}<span class="atag admin">admin</span>{% endif %}</td>
+          <td>
+            {% if u.is_admin %}<span class="hint">— (admin hepsine sahip)</span>
+            {% else %}
+              {% for row in u.scope_rows %}
+              <span class="atag scope{% if not row.direct %} role-sourced{% endif %}"
+                    {% if row.via_roles %}title="{{ row.via_roles | join(', ') }} rolünden"{% endif %}>
+                {{ row.name }}
+                {% if row.direct and can_manage %}
+                <button hx-delete="/users/{{ u.id }}/scopes/{{ row.name }}"
+                        hx-target="#admin-main" hx-swap="outerHTML" title="Al">✕</button>
+                {% endif %}
+              </span>
+              {% endfor %}
+              {% if not u.scope_rows %}<span class="hint">—</span>{% endif %}
+            {% endif %}
+          </td>
+          <td><span class="atag {% if u.is_active %}on{% else %}off{% endif %}">
+              {{ "aktif" if u.is_active else "KAPALI" }}</span></td>
+          <td class="hint">{{ u.last_seen or "—" }}</td>
+          <td class="arow-actions">
+            {% if can_manage %}
+            <button data-toggle="#u-edit-{{ u.id }}">Düzenle</button>
+            <button hx-patch="/users/{{ u.id }}/active" hx-target="#admin-main" hx-swap="outerHTML">
+              {{ "Kapat" if u.is_active else "Aç" }}</button>
+            {% endif %}
+            {% if is_admin %}
+            <button hx-patch="/users/{{ u.id }}/admin" hx-target="#admin-main" hx-swap="outerHTML">
+              {{ "Admin al" if u.is_admin else "Admin yap" }}</button>
+            {% endif %}
+          </td>
+        </tr>
+        {% if can_manage and not u.is_admin %}
+        <tr id="u-edit-{{ u.id }}" class="aform">
+          <td colspan="6">
+            <div class="hint" style="margin-bottom:6px">Roller</div>
+            {% for r in u.roles %}
+            <span class="arole-chip"><span class="n">{{ r.name[0] }}</span>{{ r.name }}
+              <button hx-delete="/users/{{ u.id }}/roles/{{ r.id }}"
+                      hx-target="#admin-main" hx-swap="outerHTML" title="Al">✕</button></span>
+            {% endfor %}
+            {% if u.assignable_roles %}
+            <form class="aform-row" style="margin-top:6px"
+                  hx-post="/users/{{ u.id }}/roles" hx-target="#admin-main" hx-swap="outerHTML">
+              <select name="role_id">
+                {% for r in u.assignable_roles %}<option value="{{ r.id }}">{{ r.name }}</option>{% endfor %}
+              </select>
+              <button>Rol ver</button>
+            </form>
+            {% endif %}
+
+            <div class="hint" style="margin:10px 0 6px">Kapsam ver (tek tek)</div>
+            {% if u.grantable %}
+            <form class="aform-row" hx-post="/users/{{ u.id }}/scopes" hx-target="#admin-main" hx-swap="outerHTML">
+              <select name="scope">
+                {% for key, label in all_scopes.items() if key in u.grantable %}
+                <option value="{{ key }}">{{ key }} — {{ label }}</option>
+                {% endfor %}
+              </select>
+              <button>Ver</button>
+            </form>
+            {% else %}<span class="hint">Zaten tüm kapsamlar doğrudan verilmiş.</span>{% endif %}
+          </td>
+        </tr>
+        {% endif %}
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </section>
+
+  {% if is_admin %}
+  <div class="agrid2">
+    <section class="apanel" data-fragment="role_table">
+      <h2>Roller</h2>
+      <p class="hint">Oluşturma ve silme yalnız admin — bir scope demeti, üyelik ayrı bir gerçek.</p>
+      {% if not roles %}
+      <div class="aempty">Henüz rol yok. Kullanıcılara kapsamları tek tek ver, ya da bir rol tanımla.</div>
+      {% else %}
+      <table class="atable">
+        <thead><tr><th>Rol</th><th>Kapsamlar</th><th>Üye</th><th></th></tr></thead>
+        <tbody>
+          {% for r in roles %}
+          <tr>
+            <td><b>{{ r.name }}</b></td>
+            <td>{% for s in r.scopes|sort %}<span class="atag scope">{{ s }}</span>{% endfor %}</td>
+            <td>{{ r.member_count }}</td>
+            <td class="arow-actions">
+              <button data-toggle="#role-edit-{{ r.id }}">Düzenle</button>
+              <button hx-delete="/roles/{{ r.id }}" hx-target="#admin-main" hx-swap="outerHTML"
+                      hx-confirm="{{ r.name }} silinecek. {{ r.member_count }} kişi bu rolden gelen kapsamları kaybedecek (tek tek verilmiş olanlar kalır). Emin misin?">Sil</button>
+            </td>
+          </tr>
+          <tr id="role-edit-{{ r.id }}" class="aform">
+            <td colspan="4">
+              <form hx-patch="/roles/{{ r.id }}" hx-target="#admin-main" hx-swap="outerHTML">
+                <input name="name" value="{{ r.name }}" style="margin-bottom:8px">
+                {% for key, label in all_scopes.items() %}
+                <label class="ascope-check">
+                  <input type="checkbox" name="scope" value="{{ key }}"
+                         {% if key in r.scopes %}checked{% endif %}> {{ key }} — {{ label }}
+                </label>
+                {% endfor %}
+                <button class="primary" style="margin-top:8px">Kaydet</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+    </section>
+
+    <section class="apanel" data-fragment="role_editor">
+      <h2>Yeni rol</h2>
+      <p class="hint">Scope eklemek/çıkarmak mevcut sahiplerine anında yansır.</p>
+      <form hx-post="/roles" hx-target="#admin-main" hx-swap="outerHTML">
+        <input name="name" placeholder="rol adı (ör. Koordinatör)" required style="margin-bottom:8px;width:100%">
+        {% for key, label in all_scopes.items() %}
+        <label class="ascope-check">
+          <input type="checkbox" name="scope" value="{{ key }}"> {{ key }} — {{ label }}
+        </label>
+        {% endfor %}
+        <button class="primary" style="margin-top:8px">Oluştur</button>
+      </form>
+    </section>
+  </div>
+  {% endif %}
+</div>
