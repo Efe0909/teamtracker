@@ -44,6 +44,38 @@ dosyaya değil tabloya girecek.
 - [ ] `tag` alanını kullan — aynı tag'li bildirimler üst üste yığılmaz,
       birbirini günceller.
 
+### Bildirim = push + uygulama içi, TEK olaydan
+
+Bugün ikisi ayrı boru ve birbirine bağlı değil:
+
+```
+gerçek olay  →  events satırı  →  /bildirimler sayfası
+                              ↘   push gönderimi        ← BU BAĞLANTI YOK
+/test/bildirim ──────────────────→ push gönderimi
+```
+
+`/bildirimler` sayfası `events`'ten türetiliyor (`mobile_notifs`), deneme ucu
+ise hiçbir şey yazmadan doğrudan push servisine gidiyor. O yüzden deneme
+bildirimi telefona düşüyor ama uygulama içinde görünmüyor — beklenen, ama
+gerçek bildirimlerde **olmaması gereken** davranış.
+
+**Kural:** gönderim bağlanırken bildirim TEK olaydan doğsun — aynı olay hem
+`events` satırını yazsın hem push'u tetiklesin. İki ayrı üretim yolu olursa
+telefona düşen ile uygulamada görünen kaçınılmaz olarak ayrışır.
+
+```
+biri sana eylem atar
+  → service.log(...)      events'e yazar     (zaten var)
+  → push.gonder(...)      telefona yollar    (eksik)
+```
+
+Bunun yan etkisi: `tag` alanı doğal olarak kart kimliği olur
+(`tag=kart-<id>`), telefonda aynı karta ait bildirimler üst üste yığılmaz.
+
+Not: `notif_badge()` bugün "son 24 saat" sayıyor, okundu bilgisi yok
+(`spec/20-sema.md` §6'daki gerçek bildirim tablosu Faz 3'e bırakılmış). Push
+bağlanınca "okundu" derdi de gündeme gelir.
+
 ### Tuzaklar
 
 - **iOS'ta izin tarayıcıdan istenemez.** Sıra: Safari → Paylaş → Ana Ekrana Ekle
