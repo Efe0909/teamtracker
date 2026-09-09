@@ -13,7 +13,7 @@ from pathlib import Path
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from shared import auth, db, filters, service
+from shared import auth, db, filters, kapsam, service
 from shared.config import site_adresi
 from shared.render import is_htmx, site_templates
 from shared.service import (EYLEM_DURUM, PRIORITIES, STATUSES, add_action, add_message,
@@ -39,12 +39,9 @@ MODULES = [
      "desc": "Takımlar, roller (lider/mentor/üye), takım duvarı ve \"bu takıma kayıt aç\". "
              "Takım/üyelik yönetimi Yönetim Paneli'ne ait.",
      "plan": []},
-    {"slug": "kazanim-agaci", "icon": "🌳", "name": "Kazanım Ağacı", "ready": False,
-     "desc": "Cell / makine kırılımını düzenlediğin ekran: düğüm ekle, adlandır, taşı, sil.",
-     "plan": ["Ağaç düzenleme nodes üzerinde çalışır; değişiklik anında uygulanır.",
-              "is_editor olmayanın değişikliği change_requests'e düşer, prev_state ile geri alınabilir (spec/20-sema.md §4).",
-              "Yapı her değiştiğinde TreeIndex komple yeniden kurulur ve nodes.tin/tout tek UPDATE ile yazılır.",
-              "Taşımada döngü koruması: hedef, taşınan düğümün alt ağacında olamaz."]},
+    {"slug": "kazanim-agaci", "icon": "🌳", "name": "Veri Yönetimi", "ready": True,
+     "desc": "Yapının düzenlendiği ekran: düğüm ekle, adlandır, açıklama yaz, taşı, sil.",
+     "plan": []},
     {"slug": "pivot", "icon": "📊", "name": "Pivot & Veri Analizi", "ready": False,
      "desc": "Kayıtları düğüm, takım, pillar, sorumlu ve zaman kırılımında çapraz say.",
      "plan": ["Gruplama ve sayım SQL'de; Python'a dönen satır ekranda görünen satırdır (spec/10-kararlar.md 'Sorgular').",
@@ -197,7 +194,7 @@ def card_ctx(request, item, user) -> dict:
 
 # --- uclar ---------------------------------------------------------------
 
-@router.get("/", response_class=HTMLResponse)
+# Kok rota BURADA KAYITLI DEGIL — bkz. app.py kok(): '/' iki yuzde de var.
 def home(request: Request):
     """Ana sayfa: modul secimi (panolar grid'i — spec/60-kaynak-uyarlama.md 2.1)."""
     user = auth.current_user(request)
@@ -367,6 +364,109 @@ def create_item(request: Request, node_id: str = Form(...), title: str = Form(..
 
 
 # --- iskele moduller: EN SONDA dursun, once tanimli rotalar eslessin --------
+
+
+# --- veri yonetimi: yapinin duzenlendigi ekran ------------------------------
+#
+# Agac SUREC BELLEGINDE (shared/tree.py). Her degisiklikten sonra
+# service.* islevleri rebuild_tree() cagiriyor — rota katmani bunu
+# tekrarlamaz, yoksa iki kaynak olur.
+#
+# YETKI iki parcali (goc 007, shared/kapsam.py):
+#   - "dugum_duzenle" KAPSAMI  -> ne yapabilir
+#   - user_node_scopes izni    -> hangi dalda; alt agaca miras kalir
+# Admin ikisini de atlar. Kok islemleri yalnizca admin: dugum izni bir DALI
+# kapsar, kok hicbir dala girmez.
+#
+# is_editor bayragi GECIS DONEMI icin kabul ediliyor — eski kullanicilar
+# kapsam satiri kazanana kadar kilitlenmesin. TODO.md'de bayraklarin kapsama
+# cevrilmesi duruyor.
+
+
+def _yapiyi_degistirebilir(u) -> bool:
+    """Ekranda form gosterilsin mi — kaba kontrol."""
+    return bool(u) and (db.as_bool(u["is_admin"]) or db.as_bool(u["is_editor"])
+                        or kapsam.var_mi(u, "dugum_duzenle"))
+
+
+def _dugumde_yetkili(u, node_id) -> bool:
+    """Belirli bir dugumde islem yetkisi — asil kontrol."""
+    if u and db.as_bool(u["is_editor"]) and not kapsam.izinli_dugumler(u):
+        return True                       # gecis: kapsam satiri olmayan eski editor
+    return kapsam.dugumde_yetkili(u, node_id)
+
+
+def _agac_ctx(user) -> dict:
+    """Duz liste: sablon girintiyi depth ile ciziyor, ic ice dongu yok."""
+    tree = service.TREE
+    sayilar = service.dugum_kayit_sayilari()
+    aciklamalar = {r["id"]: r["description"]
+                   for r in db.q("select id, description from nodes")}
+    sirali = sorted(tree.nodes, key=lambda n: tree.tin[n])
+    return {
+        "dugumler": [{"id": nid, "ad": tree.nodes[nid].name,
+                      "tur": tree.nodes[nid].node_type,
+                      "derinlik": tree.depth[nid],
+                      "cocuk_var": bool(tree.children.get(nid)),
+                      "kayit": sayilar.get(nid, 0),
+                      "aciklama": aciklamalar.get(nid)}
+                     for nid in sirali],
+        "yazabilir": _yapiyi_degistirebilir(user),
+    }
+
+
+@router.get("/kazanim-agaci", response_class=HTMLResponse)
+def veri_yonetimi(request: Request):
+    user = auth.current_user(request)
+    ctx = {"user": user, "m": MODULE_BY_SLUG["kazanim-agaci"], **_agac_ctx(user)}
+    if is_htmx(request):
+        return render(request, "fragments/agac.html", ctx)
+    return render(request, "veri_yonetimi.html", ctx)
+
+
+@router.post("/dugum", response_class=HTMLResponse)
+def dugum_ekle(request: Request, ad: str = Form(...), tur: str = Form(...),
+               ust: str = Form(""), aciklama: str = Form("")):
+    user = auth.current_user(request)
+    if ust:
+        if not _dugumde_yetkili(user, ust):
+            raise HTTPException(403, "bu dalda düzenleme yetkisi yok")
+    elif not (kapsam.kok_islemi_yapabilir(user) or _yapiyi_degistirebilir(user)):
+        raise HTTPException(403, "kök düğüm eklemek yönetici yetkisi ister")
+    service.dugum_ekle(ad, tur, ust or None, aciklama, created_by=user["id"])
+    return render(request, "fragments/agac.html", {"user": user, **_agac_ctx(user)})
+
+
+@router.patch("/dugum/{node_id}", response_class=HTMLResponse)
+async def dugum_guncelle(request: Request, node_id: str):
+    user = auth.current_user(request)
+    if not _dugumde_yetkili(user, node_id):
+        raise HTTPException(403, "bu düğümde düzenleme yetkisi yok")
+    form = await request.form()
+    # Alan gonderilmediyse None: "dokunma" ile "bosalt" farkli seyler.
+    service.dugum_guncelle(
+        node_id,
+        ad=form.get("ad"), node_type=form.get("tur"), aciklama=form.get("aciklama"),
+        degistiren=user["id"])
+    if "ust" in form:
+        # Hedef dalda da yetki gerekir, yoksa yetkili oldugu dugumu
+        # yetkisiz oldugu bir dala tasiyabilirdi.
+        hedef = form.get("ust") or None
+        if hedef is None:
+            if kapsam.kok_islemi_yapabilir(user):
+                service.dugum_tasi(node_id, None, tasiyan=user["id"])
+        elif _dugumde_yetkili(user, hedef):
+            service.dugum_tasi(node_id, hedef, tasiyan=user["id"])
+    return render(request, "fragments/agac.html", {"user": user, **_agac_ctx(user)})
+
+
+@router.delete("/dugum/{node_id}", response_class=HTMLResponse)
+def dugum_sil(request: Request, node_id: str):
+    user = auth.current_user(request)
+    if not _dugumde_yetkili(user, node_id):
+        raise HTTPException(403, "bu düğümde silme yetkisi yok")
+    service.dugum_sil(node_id, silen=user["id"])
+    return render(request, "fragments/agac.html", {"user": user, **_agac_ctx(user)})
 
 
 @router.get("/{slug}", response_class=HTMLResponse)

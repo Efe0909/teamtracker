@@ -11,7 +11,7 @@ from pathlib import Path
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
-from . import config, csrf
+from . import auth, config, csrf
 
 ORTAK = Path(__file__).parent / "templates"
 KOK = Path(__file__).resolve().parents[1]
@@ -66,6 +66,8 @@ def site_templates(dizin: Path) -> Jinja2Templates:
     # gelistirmede gorunur, yayinda yerine cikis dugmesi durur.
     t.env.globals["sahte_kimlik"] = config.sahte_kimlik
     t.env.globals["statik"] = statik
+    # Varlik: balonlardaki avatar noktasi bunu okuyor (shared/auth.py).
+    t.env.globals["cevrimici"] = auth.cevrimici
     return t
 
 

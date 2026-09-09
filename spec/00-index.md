@@ -55,7 +55,7 @@ app.<alan>/                  yapılacaklar   ← ana ekrana eklenen uygulama
 ├─ /kayit/{id}               sohbet + alan şeridi
 └─ /yeni                     yeni kayıt
 
-(tek alan adı modunda mobil site /m altındadır)
+(mobil site kendi alan adında, kökte — yol öneki yoktur)
 ```
 
 Kalan ekranlar geldikçe doldurulur.

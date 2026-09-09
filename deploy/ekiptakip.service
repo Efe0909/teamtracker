@@ -32,7 +32,8 @@ Environment=EKIPTAKIP_ENV=yayin
 Environment=DATABASE_URL=postgresql:///ekiptakip
 
 # Iki alan adi ayrimi: app.<alan> mobil siteyi KOKTE servis eder, masaustu
-# sayfalari o alan adindan erisilemez. Bos birakirsan tek alan adi modu (/m).
+# sayfalari o alan adindan erisilemez. Bos birakilirsa ayrim Host'un ilk
+# etiketine bakar (app.<hershey> mobil sayilir); yol onegi hicbir durumda yok.
 Environment=EKIPTAKIP_HOST_APP=app.polonyum.com
 Environment=EKIPTAKIP_HOST_DASHBOARD=dashboard.polonyum.com
 Environment=EKIPTAKIP_COOKIE_DOMAIN=.polonyum.com

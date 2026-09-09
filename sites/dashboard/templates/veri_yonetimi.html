@@ -1,0 +1,51 @@
+{# Veri Yonetimi — yapinin duzenlendigi ekran.
+   Yerlesim SADECE burada; parcalar nerede gosterildiklerini bilmez. #}
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Veri Yönetimi — EkipTakip</title>
+<link rel="icon" href="/static/icon-192.png">
+<link rel="stylesheet" href="{{ statik('/static/base.css') }}">
+<link rel="stylesheet" href="{{ statik('/static/d/dashboard.css') }}">
+<script src="{{ statik('/static/htmx.min.js') }}"></script>
+</head>
+<body hx-headers='{"X-CSRF-Token": "{{ csrf_token }}"}'>
+{% include "fragments/uyari_mobil.html" %}
+{% with aktif = "kazanim-agaci" %}{% include "fragments/rail.html" %}{% endwith %}
+
+<div class="tmain" id="main">
+  <div class="thead row">
+    <h1>Veri Yönetimi</h1>
+    {% if yazabilir %}
+    <button class="btn" data-toggle="#yeni-kok">＋ Kök düğüm</button>
+    {% endif %}
+  </div>
+
+  <p class="muted" style="margin:-4px 0 14px;font-size:13px">
+    Yapı burada düzenlenir: düğüm ekle, adlandır, açıklama yaz, taşı, sil.
+    Değişiklik anında uygulanır ve ağaç yeniden kurulur.
+  </p>
+
+  {% if yazabilir %}
+  {# Kok dugum ekleme — agac bosken tek giris noktasi. #}
+  <form id="yeni-kok" class="tform tkok" hx-post="/dugum"
+        hx-target="#agac" hx-swap="outerHTML">
+    <input name="ad" placeholder="düğüm adı (ör. Maliye)" required>
+    <input name="tur" placeholder="tür (ör. Bölüm)" required>
+    <textarea name="aciklama" rows="2"
+              placeholder="açıklama — bu düğüm ne kapsıyor?"></textarea>
+    <button class="tkaydet">Ekle</button>
+  </form>
+  {% else %}
+  <p class="muted" style="font-size:13px">
+    Yapıyı değiştirmek için editör yetkisi gerekiyor. Yöneticine söyle.
+  </p>
+  {% endif %}
+
+  {% include "fragments/agac.html" %}
+</div>
+<script src="{{ statik('/static/d/dashboard.js') }}"></script>
+</body>
+</html>

@@ -72,7 +72,7 @@ def test_oturumsuz_yazma_401(client):
     client.cookies.clear()
     it = db.q1("select id from items limit 1")
     for yol, metot in ((f"/item/{it['id']}/message", "post"),
-                       (f"/m/kayit/{it['id']}/alan", "patch"),
+                       (f"/kayit/{it['id']}/alan", "patch"),
                        ("/item", "post")):
         r = getattr(client, metot)(yol, data={"body": "x"})
         assert r.status_code == 401, yol

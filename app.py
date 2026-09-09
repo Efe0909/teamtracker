@@ -17,13 +17,14 @@ from urllib.parse import urlparse
 
 from urllib.parse import quote
 
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.exception_handlers import http_exception_handler
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from fastapi.responses import (FileResponse, HTMLResponse, JSONResponse,
+                               RedirectResponse)
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
-from shared import auth, config, csrf, db, kimlik, sertlestirme, service
+from shared import auth, config, csrf, db, kimlik, push, sertlestirme, service
 from sites.dashboard import routes as dashboard
 from sites.mobil import routes as mobil
 
@@ -42,31 +43,39 @@ def _host_of(scope) -> str:
     return ""
 
 
-class MobileHostPrefix:
-    """app.<alan> altinda /ara -> ic yolda /m/ara.
+def _mobil_host(request) -> bool:
+    """Bu istek mobil yuze mi ait?
 
-    Sablonlar da ayni oneki kullanir (config.mp), boylece adres cubugunda /m
-    gorunmez. Masaustu sayfalari bu alan adindan gorunmez (/gorevler -> 404).
-
-    DIKKAT: bu bir ARAYUZ ayrimidir, yetki siniri DEGIL. Ayrim istemcinin
-    gonderdigi Host basligina bakar; surece dogrudan erisen biri baska bir Host
-    yazarak diger yuzu alir. Gercek sinir kimlik + yetki kontrolleridir
-    (spec/70-guvenlik.md §9: uygulama onundeki katmana guvenerek atlamaz).
+    Alan adi ayrimi kuruluyken: Host == HOST_APP.
+    Alan adi tanimsizken (yerel gelistirme): ilk etiket "app" ise — yani
+    app.localhost:8000 mobil, localhost:8000 masaustu. Boylece yapilandirma
+    olmadan da iki yuz ayri adreste durur; yol onegine gerek kalmaz.
     """
+    host = (request.url.hostname or "").lower()
+    if config.HOST_APP:
+        return host == config.HOST_APP
+    return host.split(".")[0] == "app"
 
-    def __init__(self, app):
-        self.app = app
 
-    async def __call__(self, scope, receive, send):
-        if scope["type"] == "http" and config.HOST_APP and _host_of(scope) == config.HOST_APP:
-            path = scope["path"]
-            # Ortak yollar onege girmez — /giris burada olmazsa mobil alan adinda
-            # giris /m/giris'e cevrilir ve 404 doner (yani hic girilemez).
-            ortak = path.startswith(config.SHARED_PATHS)
-            mobil_yol = path == "/m" or path.startswith("/m/")
-            if not ortak and not mobil_yol:
-                scope["path"] = "/m" + ("" if path == "/" else path.rstrip("/"))
-        await self.app(scope, receive, send)
+def sadece_mobil(request: Request):
+    """Mobil rotalar yalnizca mobil host'ta gorunur.
+
+    ORTAK yollar muaf: /manifest.json ve /sw.js mobil router'da tanimli ama
+    iki yuzun de kullandigi seyler (config.SHARED_PATHS). Muaf olmasalardi
+    masaustu alan adinda 404 donerlerdi — ve /giris de mobil router'da
+    olsaydi mobil alan adindan hic girilemezdi (KNOW-25 ile ayni tuzak).
+    """
+    if request.url.path.startswith(config.SHARED_PATHS):
+        return
+    if not _mobil_host(request):
+        raise HTTPException(404, "sayfa yok")
+
+
+def sadece_masaustu(request: Request):
+    """Masaustu rotalari mobil host'ta gorunmez — iki alan adina ayri Access
+    politikasi yazilabilsin diye kasten 404 (spec/50-yapi.md)."""
+    if _mobil_host(request):
+        raise HTTPException(404, "sayfa yok")
 
 
 @asynccontextmanager
@@ -124,8 +133,11 @@ class GirisKapisi:
 app = FastAPI(title="EkipTakip", version="0.1.0-alpha", lifespan=lifespan)
 
 # Ara katman sirasi: EN SON eklenen EN DISTA calisir.
-#   MobileHostPrefix (yolu duzeltir) -> SessionMiddleware (oturumu acar)
-#     -> GirisKapisi (kimligi arar) -> GuvenlikBasliklari -> CsrfKapisi -> rotalar
+#   SessionMiddleware (oturumu acar) -> GirisKapisi (kimligi arar)
+#     -> GuvenlikBasliklari -> CsrfKapisi -> rotalar
+#
+# Yol yeniden yazan bir katman YOK: mobil rotalar kokte tanimli, ayrim
+# Host'a gore bagimlilikla yapiliyor (sadece_mobil / sadece_masaustu).
 app.add_middleware(csrf.CsrfKapisi)
 app.add_middleware(sertlestirme.GuvenlikBasliklari)
 app.add_middleware(GirisKapisi)
@@ -138,7 +150,6 @@ app.add_middleware(
     https_only=config.yayinda(),     # yayinda yalnizca HTTPS
     domain=config.COOKIE_DOMAIN,     # bir giris, iki site
 )
-app.add_middleware(MobileHostPrefix)
 
 # Statik: ortak kokte, site dosyalari kendi alt yolunda (nginx de boyle ayirir).
 app.mount("/static/d", StaticFiles(directory=BASE / "sites/dashboard/static"), name="statik-d")
@@ -180,6 +191,92 @@ def whoami(request: Request):
                          "scope": service.TREE.name(u["scope_node_id"]) if u["scope_node_id"] else None})
 
 
+# --- web push (spec/40-push.md) -------------------------------------------
+#
+# Iki uc de config.SHARED_PATHS icinde: mobil onekine girmezler, iki alan
+# adinda da ayni yoldan calisirlar.
+
+
+@app.get("/vapid")
+def vapid(request: Request):
+    """Tarayicinin abone olurken ihtiyac duydugu ACIK anahtar.
+
+    Gizli anahtar burada DEGIL — o yalnizca sunucuda imza atarken kullanilir.
+    Push kurulmamissa 503: istemci "kapali" diye anlar ve dugmeyi gostermez.
+    """
+    if not push.acik():
+        return JSONResponse({"hata": "push kurulmamis"}, status_code=503)
+    return JSONResponse({"publicKey": config.VAPID_PUBLIC})
+
+
+@app.post("/abone")
+async def abone(request: Request):
+    """Tarayicidan gelen PushSubscription'i kaydeder.
+
+    Kimlik zorunlu: abonelik bir kullaniciya baglanir, yoksa kime gonderilecegi
+    bilinmez. CSRF kapisindan gecer (guvensiz metot) — istemci token'i
+    <body hx-headers> icinden okuyup basliga koyar.
+    """
+    u = auth.current_user(request)
+    if u is None:
+        return JSONResponse({"hata": "oturum yok"}, status_code=401)
+    if not push.acik():
+        return JSONResponse({"hata": "push kurulmamis"}, status_code=503)
+    try:
+        govde = await request.json()
+    except Exception:
+        return JSONResponse({"hata": "gecersiz govde"}, status_code=400)
+
+    if not push.abone_ol(u["id"], govde, request.headers.get("user-agent")):
+        return JSONResponse({"hata": "eksik abonelik"}, status_code=400)
+    return JSONResponse({"ok": True})
+
+
+if config.PUSH_TEST:
+    # Bildirim deneme ucu. Rota YALNIZCA EKIPTAKIP_PUSH_TEST=1 iken kayit
+    # edilir — kapatildiginda 403 degil 404 doner, cunku hic yoktur.
+    #
+    #   curl -X POST https://app.polonyum.com/test/bildirim \
+    #     -H 'Content-Type: application/json' \
+    #     -d '{"user_id":"<uuid>","baslik":"Deneme","govde":"Merhaba"}'
+    #
+    # user_id verilmezse ABONELIGI OLAN HERKESE gider.
+
+    @app.post("/test/bildirim")
+    async def test_bildirim(request: Request):
+        if not push.acik():
+            return JSONResponse({"hata": "push kurulmamis (VAPID yok)"}, status_code=503)
+        try:
+            g = await request.json()
+        except Exception:
+            return JSONResponse({"hata": "govde JSON olmali"}, status_code=400)
+
+        kimlik = g.get("user_id")
+        if kimlik:
+            if db.uid(kimlik) is None:
+                return JSONResponse({"hata": "gecersiz user_id"}, status_code=400)
+            hedefler = [kimlik]
+        else:
+            hedefler = [r["user_id"] for r in
+                        db.q("select distinct user_id from push_subscriptions")]
+
+        # Deneme ucunun isi hata ayiklamak: "0 gonderildi" deyip birakmak
+        # "neden gelmedi" sorusunu cevapsiz birakir. Abonelik yoklugunu
+        # ACIKCA soyle — telefon henuz abone olmamis demektir.
+        if not push.abonelikler(hedefler):
+            return JSONResponse(
+                {"hata": "bu kullanicinin abonelik kaydi yok"
+                         " — telefondan 'Bildirimleri aç' yapilmis mi?"},
+                status_code=404)
+
+        sonuc = push.gonder(hedefler,
+                            g.get("baslik") or "EkipTakip",
+                            g.get("govde") or "Deneme bildirimi",
+                            g.get("url") or config.mobil_yol("/"),
+                            g.get("tag"))
+        return JSONResponse({"hedef": len(hedefler), **sonuc})
+
+
 if config.sahte_kimlik():
     # Kullanici degistirme YALNIZCA gelistirme modunda var; yayin kurulumunda
     # bu rota hic tanimlanmaz (sahte kimlik zaten acilisi reddettirir).
@@ -194,6 +291,23 @@ if config.sahte_kimlik():
 
 app.include_router(kimlik.router)
 
-# Sira onemli: dashboard'un /{slug} iskele rotasi EN SONDA eslesmeli.
-app.include_router(mobil.router)
-app.include_router(dashboard.router)
+# Iki yuz de KOKTE tanimli; '/m' gibi bir yol yok. Ayrim Host'a gore, rota
+# seviyesinde bagimlilikla. Cakisan tek yol '/' — o yuzden iki router'daki
+# kok rotalari asagida tek bir dagiticiya baglaniyor.
+#
+# Sira onemli: dashboard'un /{slug} iskele rotasi EN SONDA eslesmeli, yoksa
+# /ara, /eylemler gibi mobil yollari yutar.
+@app.get("/", response_class=HTMLResponse)
+def kok(request: Request, sekme: str = "acik"):
+    """Iki yuzun cakistigi TEK yol.
+
+    Mobil yuz de masaustu yuzu de kokte duruyor ('/m' yok), o yuzden '/'
+    iki router'da birden tanimlanamaz — burada Host'a gore dagitiliyor.
+    """
+    if _mobil_host(request):
+        return mobil.m_todo(request, sekme)
+    return dashboard.home(request)
+
+
+app.include_router(mobil.router, dependencies=[Depends(sadece_mobil)])
+app.include_router(dashboard.router, dependencies=[Depends(sadece_masaustu)])

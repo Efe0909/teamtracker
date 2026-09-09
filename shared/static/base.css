@@ -51,6 +51,15 @@
   .stack .av{margin-left:-6px;border:2px solid var(--panel2)}
   .stack .av:first-child{margin-left:0}
 
+  /* ---- çevrimiçi noktası (varlık) ---- */
+  /* Avatarı saran kutu: nokta avatarın köşesine oturur. Nokta YALNIZCA
+     .on sınıfı varken çizilir — çevrimdışı için gri bir nokta yok, yokluk
+     zaten bilgi. */
+  .avw{position:relative;display:inline-grid;flex-shrink:0}
+  .avw.on::after{content:"";position:absolute;right:-1px;bottom:-1px;
+      width:7px;height:7px;border-radius:50%;background:#22a06b;
+      border:1.5px solid var(--panel)}
+
   /* ---- sohbet balonları: mesaj, sistem olayı ---- */
   .msg{display:flex;gap:9px;max-width:74%}
   .msg.me{align-self:flex-end;flex-direction:row-reverse}

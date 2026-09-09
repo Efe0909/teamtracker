@@ -1,7 +1,8 @@
 """Mobil site — yapilacaklar, arama, eylemler, bildirimler, kayit.
 
-Ayni veritabani, ayni yetki, ayri yerlesim. app.<alan> altinda kokte durur
-(shared/config.mp); tek alan adi modunda /m onekiyle.
+Ayni veritabani, ayni yetki, ayri yerlesim. Mobil yuz KENDI ALAN ADINDA,
+KOKTE durur — yol oneki YOKTUR. Ayrim Host'a gore, app.py'deki sadece_mobil
+bagimliligiyla yapilir.
 Iki site birbirine baglanti VERMEZ (tasarim karari, spec/50-yapi.md).
 """
 from __future__ import annotations
@@ -164,12 +165,16 @@ def mobile_card_ctx(request, item, user) -> dict:
 
 @router.get("/manifest.json", include_in_schema=False)
 def manifest(request: Request):
-    """Statik degil: start_url/scope alan adina gore degisir.
+    """Statik degil ama start_url her zaman KOK.
 
-    app.<alan> altinda mobil site kokte durur -> start_url "/". Tek alan adi
-    modunda "/m". Yanlis start_url ana ekrandaki uygulamayi bos sayfaya acar.
+    Mobil yuz app.<alan> altinda kokte durur. Eskiden burada mp(request)
+    Eskiden mp(request) okunuyordu ve bir yol oneki donebiliyordu; o zaman
+    ana ekrana eklenen uygulama yanlis adrese aciliyordu.
+
+    "/" her durumda dogru: manifest hangi alan adindan istendiyse o alan
+    adinin kokune isaret eder.
     """
-    root = mp(request) or "/"          # app alan adinda "/", tek alan adinda "/m"
+    root = "/"
     return JSONResponse({
         "name": "EkipTakip", "short_name": "EkipTakip",
         "description": "Ekibin kayıtları, eylemleri ve bildirimleri — cepte.",
@@ -190,13 +195,18 @@ def manifest(request: Request):
 
 @router.get("/sw.js", include_in_schema=False)
 def service_worker():
-    """Kok kapsamdan servis edilir; /static altindan verilirse /m'yi kontrol edemez."""
+    """Kok kapsamdan servis edilir.
+
+    /static altindan verilseydi service worker'in kapsami oraya daralir ve
+    sayfalari kontrol edemezdi (Service-Worker-Allowed basligi bunun icin).
+    """
     return FileResponse(STATIK / "sw.js", media_type="text/javascript",
                         headers={"Service-Worker-Allowed": "/", "Cache-Control": "no-cache"})
 
 
 
-@router.get("/m", response_class=HTMLResponse)
+# Kok rota BURADA KAYITLI DEGIL: '/' iki yuzde de var, ayrim Host'a gore
+# app.py'deki dagiticida yapiliyor (kok()). Islev disaridan cagriliyor.
 def m_todo(request: Request, sekme: str = "acik"):
     user = auth.current_user(request)
     done = sekme == "kapali"
@@ -205,7 +215,7 @@ def m_todo(request: Request, sekme: str = "acik"):
                         rows=mobile_todo(user, done), done=done))
 
 
-@router.get("/m/ara", response_class=HTMLResponse)
+@router.get("/ara", response_class=HTMLResponse)
 def m_search(request: Request, q: str = ""):
     user = auth.current_user(request)
     q = q.strip()
@@ -217,21 +227,21 @@ def m_search(request: Request, q: str = ""):
     return render(request, "ara.html", ctx)
 
 
-@router.get("/m/eylemler", response_class=HTMLResponse)
+@router.get("/eylemler", response_class=HTMLResponse)
 def m_actions(request: Request):
     user = auth.current_user(request)
     return render(request, "eylemler.html",
                   m_ctx(request, user, "eylemler", "Eylemler", groups=mobile_actions(user)))
 
 
-@router.get("/m/bildirimler", response_class=HTMLResponse)
+@router.get("/bildirimler", response_class=HTMLResponse)
 def m_notifs(request: Request):
     user = auth.current_user(request)
     return render(request, "bildirimler.html",
                   m_ctx(request, user, "bildirimler", "Bildirimler", rows=mobile_notifs(user)))
 
 
-@router.get("/m/yeni", response_class=HTMLResponse)
+@router.get("/yeni", response_class=HTMLResponse)
 def m_new_form(request: Request):
     user = auth.current_user(request)
     scope = user["scope_node_id"]
@@ -242,7 +252,7 @@ def m_new_form(request: Request):
                   m_ctx(request, user, None, "Yeni kayıt", nodes=nodes))
 
 
-@router.post("/m/yeni")
+@router.post("/yeni")
 def m_new(request: Request, node_id: str = Form(...), title: str = Form(...),
           kind: str = Form("hata"), description: str = Form("")):
     user = auth.current_user(request)
@@ -250,14 +260,14 @@ def m_new(request: Request, node_id: str = Form(...), title: str = Form(...),
     return RedirectResponse(f"{mp(request)}/kayit/{item_id}", status_code=303)
 
 
-@router.get("/m/kayit/{item_id}", response_class=HTMLResponse)
+@router.get("/kayit/{item_id}", response_class=HTMLResponse)
 def m_item(request: Request, item_id: str):
     user = auth.current_user(request)
     return render(request, "kayit.html",
                   mobile_card_ctx(request, get_item(item_id), user))
 
 
-@router.post("/m/kayit/{item_id}/mesaj", response_class=HTMLResponse)
+@router.post("/kayit/{item_id}/mesaj", response_class=HTMLResponse)
 def m_message(request: Request, item_id: str, body: str = Form("")):
     user = auth.current_user(request)
     item = get_item(item_id)
@@ -269,7 +279,7 @@ def m_message(request: Request, item_id: str, body: str = Form("")):
     return render(request, "ortak/mesaj.html", {"m": m})
 
 
-@router.patch("/m/kayit/{item_id}/alan", response_class=HTMLResponse)
+@router.patch("/kayit/{item_id}/alan", response_class=HTMLResponse)
 async def m_field(request: Request, item_id: str):
     user = auth.current_user(request)
     item = get_item(item_id)

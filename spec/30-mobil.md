@@ -1,4 +1,4 @@
-# 01 — Mobil site (`/m`)
+# 01 — Mobil site (`app.<alan>`)
 
 Kaynak: sahada kullanılan mobil uygulamanın dört ekranı (yapılacaklar, arama, eylemler,
 bildirimler). Görseller `spec/gorseller/` içinde, git'e girmez; buraya **yapı** yazıldı,
@@ -19,18 +19,18 @@ iOS'ta web push **yalnızca ana ekrana eklenmiş** sitede çalışır, bu yüzde
 bildirimden önce gelmek zorundaydı.
 
 Yayında iki alan adı: `app.polonyum.com` mobil siteyi kökte servis eder,
-`dashboard.polonyum.com` masaüstünü. Mobil yolların hepsi `/m` öneki olmadan görünür;
+`dashboard.polonyum.com` masaüstünü. Mobil yolların hepsi kökten yazılır — yol öneki YOKTUR;
 masaüstü sayfaları `app` alan adından erişilemez (ayrı Access politikası yazılabilsin diye).
 
 ## 2. Akış
 
 ```
-/m  yapılacaklar ──tıkla──> /m/kayit/{id}  (sohbet + alanlar)
+/   yapılacaklar ──tıkla──> /kayit/{id}  (sohbet + alanlar)
  │                              ▲
- ├─ /m/ara        ──sonuç──────┤
- ├─ /m/eylemler   ──kart───────┤
- ├─ /m/bildirimler──hareket────┘
- └─ +  /m/yeni    ──kaydet────> /m/kayit/{id}
+ ├─ /ara          ──sonuç──────┤
+ ├─ /eylemler     ──kart───────┤
+ ├─ /bildirimler  ──hareket────┘
+ └─ +  /yeni      ──kaydet────> /kayit/{id}
 ```
 
 Alt sekme çubuğu her ekranda sabit; kayıt detayında yerini mesaj kutusu alır (tek eylem
@@ -45,7 +45,7 @@ Alt sekme çubuğu her ekranda sabit; kayıt detayında yerini mesaj kutusu alı
 | `mobile_search` | kayıt ve düğüm sonuçları | `items.arama` (tsvector) + bellekteki `TreeIndex` |
 | `mobile_actions` | son tarihli açık kayıtlar | `items.due_date`, gruplama Python'da |
 | `mobile_notifs` | kartlarımdaki başkasının hareketi | `events` + `items` join |
-| `mobile_strip` | durum/öncelik/sorumlu/son tarih | `items`, `PATCH /m/kayit/{id}/alan` |
+| `mobile_strip` | durum/öncelik/sorumlu/son tarih | `items`, `PATCH /kayit/{id}/alan` |
 
 Boş hâller yazılı: "Sana ait açık kayıt yok…", "Son tarihi olan açık kaydın yok…",
 "Bildirim yok…" — boş liste sessiz kalmıyor, ne yapılacağını söylüyor.
