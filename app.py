@@ -102,7 +102,13 @@ class GirisKapisi:
     # onek eslesmesi olsaydi, ileride eklenen bir modul slug'i (/giris-raporu
     # gibi) sessizce kimliksiz okunabilir olurdu — /{slug} yakalayicisi var.
     ACIK_TAM = frozenset({"/giris", "/giris/callback", "/sw.js", "/favicon.ico",
-                          "/manifest.json"})
+                          "/manifest.json"}
+                         # Bildirim deneme ucu: kimlik ARANMAZ, cunku curl'den
+                         # cagrilabilmesi tek varlik sebebi (uretimde oturum
+                         # Google girisinden geliyor, curl ile alinamaz).
+                         # Yalnizca EKIPTAKIP_PUSH_TEST=1 iken; bayrak kapaliyken
+                         # zaten rota da yok.
+                         | ({"/test/bildirim"} if config.PUSH_TEST else set()))
     ACIK_ONEK = ("/static/",)
 
     def __init__(self, app):

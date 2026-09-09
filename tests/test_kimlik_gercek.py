@@ -209,3 +209,66 @@ def test_cikis_oturumu_komple_temizler():
         session = {"uid": "x", "csrf": "t", "sid": "s"}
     kimlik.oturum_kapat(_Sahte)
     assert _Sahte.session == {}
+
+
+# --- bildirim deneme ucu: OTURUMSUZ calismali ----------------------------
+#
+# Bu uc curl'den cagrilmak icin var; uretimde oturum Google girisinden geliyor
+# ve curl ile alinamiyor. Yani "oturumsuz erisilebilir" bir kolaylik degil,
+# ucun tek varlik sebebi.
+#
+# Bir kez ısırdı: uc CSRF muafiyetine eklenmisti ama GirisKapisi.ACIK_TAM'e
+# EKLENMEMISTI. Diger butun testler sahte kimlik kipinde kostugu icin orada
+# oturum olmasa da kullanici cozuluyor ve 401 hic gorunmuyordu; uretimde
+# ilk curl 401 dondu.
+
+
+@pytest.fixture(scope="module")
+def push_deneme_istemcisi():
+    """Gercek kimlik + EKIPTAKIP_PUSH_TEST=1."""
+    import importlib
+    import os
+
+    from conftest import test_veritabani  # noqa: E402
+    test_veritabani("kimlikpush")
+    os.environ["EKIPTAKIP_PUSH_TEST"] = "1"
+    try:
+        importlib.reload(config)
+        import app as app_mod
+        importlib.reload(app_mod)
+        onceki = config.AUTH_MODE
+        config.AUTH_MODE = "google"
+        config.GOOGLE_CLIENT_ID = config.GOOGLE_CLIENT_ID or "test-istemci"
+        config.GOOGLE_CLIENT_SECRET = config.GOOGLE_CLIENT_SECRET or "test-sir"
+        with TestClient(app_mod.app) as c:
+            yield c
+        config.AUTH_MODE = onceki
+    finally:
+        os.environ.pop("EKIPTAKIP_PUSH_TEST", None)
+        importlib.reload(config)
+        import app as app_mod
+        importlib.reload(app_mod)
+
+
+def test_deneme_ucu_OTURUMSUZ_erisilebilir(push_deneme_istemcisi, monkeypatch):
+    """401 DONMEMELI — giris kapisi bu ucu gecirmeli."""
+    monkeypatch.setattr(config, "VAPID_PRIVATE", "x")
+    monkeypatch.setattr(config, "VAPID_PUBLIC", "y")
+    r = push_deneme_istemcisi.post("/test/bildirim", json={"user_id": "bozuk-uuid"})
+    assert r.status_code != 401, "giris kapisi ucu kesiyor — curl'den cagrilamaz"
+    assert r.status_code == 400          # uc calisti, govdeyi reddetti
+
+
+def test_deneme_ucu_vapid_yokken_de_401_DEGIL(push_deneme_istemcisi, monkeypatch):
+    """Kurulum eksikse 503 der — ama yine giris kapisina takilmaz."""
+    monkeypatch.setattr(config, "VAPID_PRIVATE", "")
+    monkeypatch.setattr(config, "VAPID_PUBLIC", "")
+    r = push_deneme_istemcisi.post("/test/bildirim", json={})
+    assert r.status_code == 503
+
+
+def test_deneme_ucu_disinda_kapi_hala_kapali(push_deneme_istemcisi):
+    """Muafiyet TAM ESLESME: yakin bir yol acilmis olmamali."""
+    for yol in ("/", "/gorevler", "/test/bildirimx", "/test/"):
+        r = push_deneme_istemcisi.get(yol, follow_redirects=False)
+        assert r.status_code in (401, 303, 404), yol
