@@ -134,7 +134,9 @@ Model değişmiyor, bugünkü doğru (spec/10-kararlar). Bu belge onu **sabitler
 | Katman | Ne verir | Nereden gelir |
 |---|---|---|
 | Kart yetkisi | durum/öncelik/atama değiştirme, mesaj yazma | sorumlu, açan, karta dahil edilen, ya da kapsam alt ağacı |
-| Yapısal yetki | düğüm ekle/adlandır/taşı/sil | `is_admin`, ya da `is_editor` + kapsam |
+| Yapısal yetki | düğüm ekle/adlandır/taşı/**pasifleştir** | `edit_nodes` kapsamı + o dalda `user_node_scopes` izni (`is_editor` geçiş şimi) |
+| Sert silme | bağımlısı **olmayan** düğümü kalıcı sil | yapısal yetkiyle aynı — ayrı kapsam yok (spec/72 §6.2) |
+| Sert silme | bağımlısı **olan** düğümü kalıcı sil (kayıt + alt ağaç gider) | ayrıca `hard_delete_nodes` kapsamı |
 | Yönetim | kullanıcı ekle/pasifleştir, kapsam ata | `is_admin` |
 
 Kurallar:
