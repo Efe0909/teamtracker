@@ -169,6 +169,51 @@ def test_state_uyusmayan_callback_reddedilir(client):
     assert db.q1("select count(*) c from security_events where event_type='login_denied'")["c"] == before + 1
 
 
+# --- bayat oturum: / <-> /login sonsuz dongusu (regresyon) ---------------
+#
+# LoginGate `auth.current_user()` ile DB'ye bakar; /login ise eskiden HAM
+# oturuma bakiyordu. Ikisi ayrisinca tarayici iki uc arasinda sonsuz donuyor
+# ve dongu kendi hiz sinirini tuketip 429'a dusuyordu ("Cok fazla deneme"),
+# oysa kimse giris denemesi yapmiyor. Iki tetikleyici de gercek: kullanici
+# kapatilinca (yonetim paneli) ve veritabani sifirlaninca.
+
+
+def _dongu_yok(client, uid: str) -> None:
+    """Bu oturumla /login KOKE geri yollamamali — yollarsa dongu baslar."""
+    client.cookies.clear()
+    client.cookies.set(config.cookie_name(), session_cookie({"uid": uid, "sid": "bayat"}))
+    r = client.get("/login?next=/", follow_redirects=False)
+    assert r.headers.get("location") != "/", "bayat oturum / <-> /login dongusune sokuyor"
+    assert r.status_code in (200, 302, 303)
+    if r.status_code in (302, 303):
+        assert r.headers["location"].startswith("https://accounts.google.com/")
+
+
+def test_silinmis_kullanicinin_oturumu_donguye_sokmaz(client):
+    """Veritabani sifirlanmis: cerezdeki uid artik hicbir satira denk gelmiyor."""
+    _dongu_yok(client, "00000000-0000-4000-8000-000000000000")
+
+
+def test_kapatilmis_kullanicinin_oturumu_donguye_sokmaz(client):
+    """Yonetim panelinden kapatilan kisi (is_active=false) cikisa dusmeli,
+    sonsuz yonlendirmeye degil."""
+    u = db.q1("select * from users where name = 'Deniz'")
+    db.x("update users set is_active = false where id = %s", (u["id"],))
+    try:
+        _dongu_yok(client, str(u["id"]))
+    finally:
+        db.x("update users set is_active = true where id = %s", (u["id"],))
+
+
+def test_gecerli_oturum_hala_koke_doner(client):
+    """Duzeltme dogru oturumu bozmasin: gercek kullanici /login'e ugrayinca
+    hala hedefe yonlenmeli."""
+    u = login(client, "Efe")
+    r = client.get("/login?next=/tasks", follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/tasks"
+    assert u is not None
+
+
 def test_giris_google_a_yonlendirir(client):
     client.cookies.clear()
     r = client.get("/login", follow_redirects=False)
