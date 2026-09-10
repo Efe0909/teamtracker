@@ -1,6 +1,7 @@
 # 72 — Node türleri: omurga + tür projeksiyonları
 
-**Durum: tasarım.** Kod yazılmadı. Bir açık karar var (§8).
+**Durum: tasarım.** Kod yazılmadı. Açık karar kalmadı; pillar ↔ kayıt bağı
+bilerek ertelendi (§8).
 
 Bu belge `spec/60-kaynak-uyarlama.md` §2.6'daki "node_type serbest metin kalır,
 tip kataloğu alınmaz" kararını **geçersiz kılar**. O karar yanlış değildi —
@@ -41,7 +42,7 @@ türüne göre bir dilim alır:
         ┌───────────────┼───────────────┐
    type=team        type=pillar      type=cell
         │               │               │
-  Ekipler sayfası   pivot sayfası   operasyonel kapsam
+  Ekipler sayfası   (sayfa: sonra)  operasyonel kapsam
 ```
 
 Somut sonuç: **"şu türdeki tüm node'lar" temel bir sorgu primitifi olur.**
@@ -58,7 +59,7 @@ türe özel olan (üyeler, renk, duvar) projeksiyon tablosunda (§5).
 ```python
 NODE_TYPES = {
     "cell":     "Cell",       # IWS hücresi / operasyonel birim
-    "pillar":   "Pillar",     # IWS pillar'ı — pivot sayfası üretir
+    "pillar":   "Pillar",     # IWS pillar'ı — sayfası sonra (§4)
     "team":     "Takım",      # Ekipler sayfasında kart üretir
     "task":     "Görev",
     "step":     "Adım",
@@ -87,7 +88,7 @@ Her tür, kodun ona ne yapacağının sözleşmesidir:
 | tür | sözleşme |
 |---|---|
 | `team` | Ekipler sayfasında bir kart. Üyeler, roller, takım duvarı buna asılır. |
-| `pillar` | Otomatik pivot sayfası (hatalar/deviation'lar). Kayıt formundaki pillar seçicisini besler. |
+| `pillar` | **Şimdilik davranışı yok.** Tür var, node'lar tanımlanabilir. Hedeflenen: takımlarınki gibi pillar başına sayfa (ortak dökümanlar, eğitim içerikleri — "Operation Plus" tarzı). Pivot fikri **düşürüldü**, örnekti. |
 | `cell` | Kendisi ve **alt ağacı** operasyonel kapsam sayılır. |
 | `task`, `step` | Yapısal; kayıt bağlanır, ayrı ekran üretmez. |
 | `group` | Hiçbir şey. Bilerek. |
@@ -104,38 +105,53 @@ alter table teams alter column node_id set not null;
 alter table teams add constraint teams_node_uniq unique (node_id);
 alter table teams drop constraint teams_node_id_fkey,
   add constraint teams_node_fk foreign key (node_id)
-      references nodes(id) on delete cascade;   -- node giderse kart da gider
+      references nodes(id) on delete cascade;
 ```
+
+`cascade` yalnız **sert silme** yolunda devreye girer (§6: admin'e ait, normal
+akışta yok). Gündelik kapatma `nodes.is_active` ile olur, satır silinmez.
 
 `teams.name` artık **türetilir** (node'un adı). İki yerde ad tutmak, ikisinin
 ayrışması demek — `teams.name` düşürülür ya da salt-okunur kabul edilir.
 
-Aynı kalıp ileride başka türler için de: `pillar` bugün ek veri istemiyor
-(pivot tamamen türetilebiliyor), isterse `pillars (node_id primary key, ...)`
-eklenir. Omurga değişmez.
+**`teams`'in kendi `is_active`'i YOKTUR.** Durum tek yerde, node'da (§6);
+iki tabloda ayrı bayrak, senkron tutulması gereken ikinci bir gerçek demekti.
 
-## 6. Yaşam döngüsü
+Aynı kalıp ileride başka türler için de: `pillar` bugün ek veri istemiyor,
+sayfası yazılırken isterse `pillars (node_id primary key, ...)` eklenir.
+Omurga değişmez.
 
-**Node tek sahiptir.** Çift yönlü silme (karttan silince node düşsün, node'dan
-silince kart disabled olsun + uzlaştırma kutusu) bilerek **alınmadı**: iki
-silme yolu iki yaşam döngüsü demek, orphan üretir ve bir durum makinesi ister.
+## 6. Yaşam döngüsü: iki yönde SENKRON pasifleştirme
 
-Aynı kullanıcı deneyimi tek mekanizmayla alınır: Ekipler sayfasındaki "Sil"
-düğmesi de **node'u** siler, onay kutusunda neyin gideceğini sayar ("bu takımın
-3 üyesi ve duvarı da gidecek"). Kullanıcı yine Ekipler sayfasından siliyor; tek
-yön, uzlaştırma yok.
+Normal akışta **hiçbir taraf sert silmez.** Her iki yön de `is_active`'i
+çevirir ve bu **senkrondur**:
 
-**Silmek yerine pasifleştirmek.** `nodes.is_active` eklenir:
+| kullanıcı ne yapar | ne olur |
+|---|---|
+| Ekipler'de kartı kapatır | `nodes.is_active = false` — node da pasifleşir |
+| Veri yönetiminde node'u kapatır | Ekipler kartı pasif görünür |
 
-- Pasif node dropdown'larda, yeni kayıt formlarında, Ekipler kartlarında çıkmaz.
-- **Geçmiş kayıtlar sağlam kalır** — anlamsızlaşan bir pillar'a bağlı eski
-  kayıtlar silinmez, sadece yeni seçimlerde görünmez.
+Tek durum (`nodes.is_active`), iki görünüm. Uzlaştırma kutusu yok, "node
+yeniden oluşturulsun mu" sorusu yok, orphan yok — çünkü hiçbir şey yok
+olmuyor, yalnız durum değişiyor.
 
-Bu, §1'deki "bugünün pillar'ı yarın anlamsızlaşabilir" derdinin asıl cevabı:
-silme değil, pasifleştirme.
+**Geçmiş kaybı asıl mesele.** Anlamsızlaşan bir pillar'a ya da kapanan bir
+takıma bağlı eski kayıtlar **silinmez**: `items.node_id`, `events`, takım
+duvarı, hepsi yerinde kalır. Pasif node yalnız *ileriye dönük* kaybolur —
+dropdown'larda, yeni kayıt formlarında, aktif kart listelerinde çıkmaz.
 
-**Tür değiştirme:** projeksiyonunda veri varken **yasak**. `team` node'unun
-üyeleri varken `pillar` yapılamaz — önce boşaltılır. Yoksa sessiz veri kaybı.
+Bu, §1'deki "bugünün pillar'ı yarın anlamsızlaşabilir" derdinin asıl cevabı.
+
+**Sert silme** (`service.delete_node`, bugün ağaçtaki ✕ düğmesi) normal
+akıştan çıkar: alt ağacı ve `items.node_id` üzerinden **kayıtları da** cascade
+ile götürüyor. Kalırsa yalnızca admin'e ve neyin gideceğini sayan açık bir
+onayla kalır; gündelik "bu artık kullanılmıyor" işi için doğru araç
+pasifleştirmedir.
+
+**Tür değiştirme: bağımlı satır varsa KİLİTLİ.** Kural genel — node'un
+`node_id`'sini kullanan herhangi bir tabloda satır varsa (bugün `teams`,
+yarın pillar sayfası tabloları) tür değiştirilemez. Önce o bağımlılıklar
+temizlenir. Yoksa projeksiyon değişir ve veri sessizce sahipsiz kalır.
 
 ## 7. Yerleşim kuralları
 
@@ -148,27 +164,31 @@ ROOT_ONLY = frozenset({"cell"})      # cell yalnizca kokte
 Kural kodda, kontrol `service.add_node` / `move_node` içinde (yapı değişikliği
 zaten tek yerden geçiyor). Yanlış yere pillar koymak baştan engellenir.
 
-## 8. ⚠️ Açık karar: pillar ↔ kayıt bağı
+## 8. Pillar ↔ kayıt bağı: ERTELENDİ
 
-Pillar'a otomatik pivot açılacaksa, pivot **hangi kayıtları** toplar?
+Bu soruyu ("pivot hangi kayıtları toplar?") pivot doğuruyordu; pivot düşürüldü
+(§4), dolayısıyla karar da **şimdi verilmiyor**. Erken vermek, ihtiyacı henüz
+belli olmayan bir sütun eklemek olurdu.
 
-**(a) Türetilmiş.** Kayıt hangi cell'in altındaysa, o cell'in pillar'ı.
-Kayıtta pillar alanı yok. Basit, tutarsızlık imkânsız — ama bir cell tek
-pillar'a bağlanır, **matris kaybolur**.
-
-**(b) Ayrı boyut (ÖNERİLEN, bu belge bunu varsayıyor).** Kayıt cell'in altında
-durur, ayrıca bir pillar node'una etiketlenir:
+Bugün yapılan: `items.pillar` **düşürülür**. Serbest metin, hiç set edilmedi
+(VM'de 0 farklı değer), `EDITABLE`'da yok yani arayüzden set edilemiyor.
+Ölü sütun.
 
 ```sql
-alter table items drop column pillar;                    -- serbest metin, hic kullanilmadi
-alter table items add column pillar_node_id uuid references nodes(id) on delete set null;
+alter table items drop column pillar;
 ```
 
-IWS'te pillar × cell matristir (bir cell birçok pillar'a iş üretir, bir pillar
-birçok cell'e yayılır); (b) bunu korur. VM'deki `Pillars` dalı da zaten bir
-**kayıt defteri** gibi duruyor — altında gerçek kayıt yok, pillar tanımları var.
+Buna bağlı olarak **pillar filtresi de kaldırılır** — `TASK-220`'nin kabul
+ettiği iki çözümden biri bu ("ya `EDITABLE`'a eklenip set edilebilir yapıldı ya
+da filtre kaldırıldı"). Kayıtla bağı olmayan bir boyutta filtre olamaz.
 
-Karar (a) olursa bu belgede yalnız bu bölüm ve §4'teki `pillar` satırı değişir.
+Pillar sayfası (§4) yazılırken soru geri gelir. O gün seçenekler:
+
+- **(a) Türetilmiş** — kayıt hangi cell'in altındaysa o cell'in pillar'ı. Basit,
+  tutarsızlık imkânsız, ama bir cell tek pillar'a bağlanır: **matris kaybolur**.
+- **(b) Ayrı boyut** — `items.pillar_node_id`. IWS'te pillar × cell matris
+  olduğu için doğal duran bu; VM'deki `Pillars` dalı da zaten kayıt defteri
+  şeklinde (altında gerçek kayıt yok, tanım var).
 
 ## 9. Üyelik ≠ yetki
 
@@ -180,9 +200,18 @@ Takım node olunca şu ikisi aynı şeye benzer ama **değildir**:
 | `user_node_scopes` | "bu dalda düzenleyebilirim" — yetki |
 
 Aynı node üzerinde ikisi de bulunabilir. Karıştırılırsa "takıma ekledim"
-sessizce "düzenleme yetkisi verdim"e döner. `can_edit_item`'daki takım yolu
-(`KNOW-64`) **bilinçli bir karar** olarak durur, node'laşma yüzünden otomatik
-genişlemez.
+sessizce "düzenleme yetkisi verdim"e döner — üretim veritabanını stajyere
+teslim etmek gibi.
+
+**Kural: takım üyeliği hiçbir koşulda dal yetkisi doğurmaz.** Node'laşma bunu
+değiştirmez; `user_node_scopes` tek yetki kaynağı olarak kalır.
+
+> Ayrı ve mevcut bir konu: `shared/auth.py:126` bugün **kart** düzeyinde takım
+> üyeliğini bir yetki yolu sayıyor (`item.team_id` kullanıcının takımlarındaysa
+> düzenleyebiliyor — `KNOW-64`'ün beş yolundan biri). Bu dal yetkisi değil, tek
+> kartlık yetki; ama "üyelik yetki doğurmaz" ilkesiyle gerginliği var. Bu
+> belgenin kapsamı dışında — değişecekse ayrı bir karar, çünkü bugün o yolla
+> düzenleyen insanlar yetkilerini kaybeder.
 
 ## 10. Etkilenen yerler
 
