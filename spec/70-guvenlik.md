@@ -47,8 +47,8 @@ kapsam Google doğrulama incelemesi getirir ve bize gereği yok.
 ### 2.2 Akış
 
 ```
-/giris          → state üret, Google'a yönlendir
-/giris/callback → state doğrula → kod ↔ token → id_token doğrula → e-posta
+/login          → state üret, Google'a yönlendir
+/login/callback → state doğrula → kod ↔ token → id_token doğrula → e-posta
                 → users tablosunda var mı? → oturum çerezi yaz → geldiği yere dön
 /cikis          → çerezi sil (POST, GET değil)
 ```
@@ -160,7 +160,7 @@ Kurallar:
   HTMX'in bütün istekleri başlığı otomatik taşır; ayrıca form alanı da desteklenir.
 - Ara katman `POST/PATCH/PUT/DELETE` isteklerinde token'ı oturumdakiyle karşılaştırır,
   eşleşmezse **403**.
-- Muaf: `/giris`, `/giris/callback` (oturum yokken çalışır, kendi `state`'i var).
+- Muaf: `/login`, `/login/callback` (oturum yokken çalışır, kendi `state`'i var).
 - **Girişte ve çıkışta oturum komple temizlenir** (`session.clear()`), token dahil.
   Aksi hâlde: saldırgan kimliksiz bir istekle oturuma kendi token'ını bastırır (giriş
   sayfası da token üretir), o çerezi alt alan adından kurbanın tarayıcısına yazdırır,
@@ -171,7 +171,7 @@ Kurallar:
   `commit()`; yazsaydık adresi bilen herkes sınırsız satır ürettirip diski şişirir ve
   olay döngüsünü yavaşlatırdı.
 - Muafiyet listeleri **tam eşleşme** (yalnız `/static/` önek). Önek eşleşmesi olsaydı,
-  ileride eklenen bir modül slug'ı (`/giris-raporu` gibi) `/{slug}` yakalayıcısı
+  ileride eklenen bir modül slug'ı (`/login-raporu` gibi) `/{slug}` yakalayıcısı
   üzerinden sessizce kimliksiz okunabilir olurdu.
 
 **`SameSite=Lax`'in bu mimarideki sınırı:** çerez `.<alan>`'a yazıldığı için
@@ -240,10 +240,10 @@ bütün oturumlar düşer.
 ## 8. Denetim izi
 
 Alan değişiklikleri zaten `events`'e `sistem` olayı olarak yazılıyor. Eksik olan **güvenlik
-olayları**: yeni tablo `guvenlik_olaylari` (zaman, tür, aktör, e-posta, IP, ayrıntı).
+olayları**: yeni tablo `security_events` (zaman, tür, aktör, e-posta, IP, ayrıntı).
 
-Yazılacak türler: `giris`, `giris_reddi` (listede olmayan e-posta), `cikis`,
-`yetki_reddi` (403 dönen yazma denemesi), `pasiflestirme`.
+Yazılacak türler: `login`, `login_denied` (listede olmayan e-posta), `logout`,
+`permission_denied` (403 dönen yazma denemesi), `deactivation`.
 
 Kişisel veri: IP ve e-posta tutulur, gövde tutulmaz. Kayıtlar 90 gün sonra silinebilir
 (temizlik işi ayrı, şimdilik elle).
@@ -270,7 +270,7 @@ Bu maddeler teste bağlanır:
 1. Oturumsuz istek korumalı sayfada giriş ekranına yönlenir; API ucunda **401/403**.
 2. Çerez içeriği elle değiştirilirse (imza bozulur) oturum **geçersiz** olur.
 3. `users` tablosunda olmayan e-posta ile giriş **reddedilir**, kullanıcı **oluşmaz**,
-   `giris_reddi` kaydı düşer.
+   `login_denied` kaydı düşer.
 4. `is_active = 0` yapılan kullanıcının varolan oturumu **bir sonraki istekte** ölür.
 5. CSRF token'ı olmayan/yanlış olan `POST/PATCH` **403** döner; doğru token geçer.
 6. Kapsam dışı kartta yazma denemesi **403** döner (mevcut testler korunur) ve
@@ -288,7 +288,7 @@ Bu maddeler teste bağlanır:
 
 Her adım ayrı commit, her commit sonrası temiz context'li denetim:
 
-1. **Şema + sırlar**: `google_sub`, `is_active`, `last_login_at`, `guvenlik_olaylari`;
+1. **Şema + sırlar**: `google_sub`, `is_active`, `last_login_at`, `security_events`;
    `.env.ornek`; `config` içinde sır okuma ve yayında zorunluluk kontrolü.
 2. **Kimlik**: Google OIDC uçları, imzalı oturum, davetli listesi, `/switch` kaldırma,
    sahte mod bayrağı.

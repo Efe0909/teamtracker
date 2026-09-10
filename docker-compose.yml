@@ -4,8 +4,8 @@
 #   docker compose down           durdur (veri kalir)
 #   docker compose down -v        veriyi de sil
 #
-# Yayinda bu dosya KULLANILMAZ: orada Postgres bir servis olarak kurulur
-# (deploy/README.md). Buradaki parola gelistirme icindir, sir degildir.
+# Yayinda bu dosya KULLANILMAZ: orada docker-compose.prod.yml kosuyor
+# (~/nix, modules/ekiptakip-app.nix). Buradaki parola gelistirme icindir.
 
 services:
   db:
