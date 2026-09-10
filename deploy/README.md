@@ -1,299 +1,143 @@
-# deploy/ — cloudflared + nginx ile yayına alma
+# deploy/ — üç ortam
 
-Zincir:
+Bu dizin artık **elle kurulum** anlatmıyor. Makine yapılandırması ayrı bir depoda
+(`~/nix`, github:Efe0909/nix) ve **reproducible**: nginx, systemd birimi, sırlar,
+tünel — hepsi orada Nix ifadesi olarak duruyor. Buradaki dosyalar yalnızca
+uygulamanın kendi sözleşmesini (konteyner yığını, medya dizini, tünel/Access
+ayarları) tarif eder.
 
-```
-telefon ──https──> Cloudflare ──tünel──> cloudflared ──> nginx 127.0.0.1:8080 ──> uvicorn 127.0.0.1:8000
-                    (TLS burada biter)   (catch-all)      (server_name ile ayrım)   (--workers 1)
-```
-
-Uygulama **hiçbir zaman** 0.0.0.0'a bağlanmaz; dışarıya çıkan tek şey tünel.
-
-## İki alan adı
-
-| Alan adı | Ne servis eder | Yollar |
+| Ortam | Nerede | Ne çalıştırır |
 |---|---|---|
-| `app.polonyum.com` | mobil site, **kökte** | `/`, `/search`, `/actions`, `/notifications`, `/record/{id}`, `/new` |
-| `dashboard.polonyum.com` | masaüstü | `/` (ana sayfa), `/tasks`, modül sayfaları |
+| **Yerel geliştirme** | bu depo | `make up` — Docker'da Postgres + uvicorn (sahte kimlik) |
+| **VM testi** | `~/nix` → `.#vmtest` | gerçek NixOS, gerçek nginx/cloudflared/Google girişi |
+| **Üretim** | `~/nix` → `.#evsunucu` | Raspberry Pi, aynı yapılandırma |
 
-Ayrımı nginx `server_name` ile yapar; uygulama `Host` başlığına bakıp mobil siteyi kökte
-servis eder. Bunun için systemd biriminde üç değişken var:
+VM testi ile üretim **aynı** `configuration.nix`'i paylaşır; fark yalnızca
+Pi'ye özgü donanım modülü (device tree, bootloader) ve hangi modüllerin import
+edildiği. Yani VM'de geçen bir şey Pi'de de büyük ölçüde geçer — kasıtlı.
 
-```ini
-Environment=EKIPTAKIP_HOST_APP=app.polonyum.com
-Environment=EKIPTAKIP_HOST_DASHBOARD=dashboard.polonyum.com
-Environment=EKIPTAKIP_COOKIE_DOMAIN=.polonyum.com
-```
+---
 
-Boş bırakırsan ayrım Host'un ilk etiketine bakar (`app.localhost` mobil) — yerelde `make dev`
-böyle çalışıyor, testler ikisini de kapsıyor.
+## 1. Yerel geliştirme (ajan oturumları dahil)
 
-Üç ayrıntı, üçü de kasıtlı:
-
-- **Masaüstü sayfaları `app` alan adından erişilemez** (`/tasks` → 404). İki alan adına
-  ayrı Cloudflare Access politikası yazabilesin diye; yoksa dashboard'a koyduğun sıkı
-  politikayı `app` üzerinden dolanmak mümkün olurdu.
-- **Çerez `.polonyum.com`'a yazılır**, yoksa kimlik iki alt alan adında ayrı ayrı seçilir.
-- **`manifest.json` uygulamadan üretilir**, statik dosya değil: `start_url` `app` alan
-  adında `/` — her zaman kök. Yanlış `start_url` ana ekrandaki uygulamayı boş
-  sayfaya açar.
-
-## Kimlik: Google ile giriş
-
-Uygulamanın kendi kimliği artık var (`spec/70-guvenlik.md`). Kurulum:
-
-**1. Google OAuth istemcisi.** Google Cloud Console → APIs & Services →
-Credentials → *Create credentials* → *OAuth client ID* → **Web application**.
-Yetkili redirect URI olarak iki siteyi de ekle:
-
-```
-https://dashboard.<alan>/login/callback
-https://app.<alan>/login/callback
-```
-
-Kapsam yalnızca `openid email profile` — hassas kapsam isteme, Google doğrulama
-incelemesi getirir. Kulübün Google Workspace hesabı varsa uygulamayı **Internal**
-yap: kullanıcı sınırı yok, doğrulama yok. Değilse "In production"a al; **Testing**
-modunda kalma, orada izinler 7 günde bir düşer ve 100 kullanıcı sınırı var.
-
-**2. Sırlar.** `/etc/ekiptakip.env` (systemd `EnvironmentFile`) ya da depo
-kökünde `.env`:
+Tek komut yeter; Postgres Docker'da kalkar, şema göçleri açılışta kendiliğinden
+koşar, tohum verisi yazılır ve sunucu `--reload` ile başlar:
 
 ```bash
-EKIPTAKIP_SECRET_KEY=$(python3 -c "import secrets;print(secrets.token_urlsafe(32))")
-GOOGLE_CLIENT_ID=...
-GOOGLE_CLIENT_SECRET=...
-EKIPTAKIP_ENV=yayin
+make up
 ```
 
-Eksikse uygulama **açılmaz** — çalışma anında değil açılışta öğrenirsin.
-`SECRET_KEY` değişirse herkesin oturumu düşer; acil durum düğmesi budur.
+Sonra: <http://localhost:8000> (masaüstü) ve <http://app.localhost:8000> (mobil).
+Ayrım **Host başlığının ilk etiketine** bakar — yol öneki yoktur, `/m` diye bir
+şey yoktur.
 
-**3. Davetli listesi.** Kayıtlı olmayan e-posta giremez ve kullanıcı
-oluşturulmaz. İlk admini elle ekle, yoksa kimse giremez:
+Kimlik **sahte**: `EKIPTAKIP_AUTH=sahte`, giriş ekranı yok, ilk kullanıcı olarak
+çalışırsın. Ray'deki avatardan kullanıcı değiştirebilirsin (yalnız geliştirmede).
+
+Parça parça çalıştırmak istersen:
 
 ```bash
-.venv/bin/python tools/kullanici.py ekle sen@ornek.com "Adın" --admin
-.venv/bin/python tools/kullanici.py listele
-.venv/bin/python tools/kullanici.py kapat ayrilan@ornek.com   # oturumu anında düşer
+make setup      # .venv + bağımlılıklar (idempotent)
+make db-ac      # yalnız Postgres (veri kalır)
+make seed       # tohum — VAROLAN VERİYİ SİLER
+make dev        # sunucu, --reload
+make test       # pytest (gerçek Postgres'e karşı, kendi test veritabanları)
+make db-kapat   # Postgres'i durdur (veri kalır)
 ```
 
-## Önce: kapı meselesi
+Veritabanını komple silmek: `docker compose down -v`.
 
-alpha-0.1'in kendi kimlik doğrulaması **yok** (README "Bilgi güvenliği"). `uid` çerezi
-imzasız, CSRF koruması yok. Tünelden verirken önüne bir kapı koymazsan adresi bilen herkes
-her kaydı düzenler. İki seçenek:
+**Ajan oturumları için notlar**
 
-**A) Cloudflare Access (önerilen).** Zero Trust → Access → Applications → Self-hosted,
-hostname `app.polonyum.com` (ve ayrıca `dashboard.polonyum.com`), policy: `Emails` =
-ekibin adresleri. İki alan adına ayrı politika yazabilirsin — örneğin dashboard yalnızca
-yöneticilere. Tünelin önünde
-durur, uygulamaya hiç dokunmazsın; kişi bazlı, log tutar, parola paylaşmazsın.
-Kurduysan `nginx-ekiptakip-ortak.conf` içindeki `auth_basic` iki satırını yorum yap.
+- `make test` gerçek Postgres ister — `make db-ac` çalışmıyorsa testler toplanma
+  aşamasında patlar. Docker açık mı, önce ona bak.
+- Testler `ekiptakip_test_<modul>` adında **kendi** veritabanlarını kurar; ana
+  `ekiptakip` veritabanına dokunmazlar. Yani `make seed` testleri etkilemez.
+- Gerçek Google girişini yerelde denemek genelde **gereksiz**: `EKIPTAKIP_AUTH=sahte`
+  ile bütün yetki yolları (admin, scope, rol) zaten sınanabiliyor. Gerçekten
+  gerekiyorsa `tests/test_real_identity.py` kalıbına bak — imzalı oturum çerezini
+  taklit ediyor, OAuth'a hiç çıkmıyor.
+- Yeni bağımlılık `requirements.txt`'e girer (tek kaynak; Makefile ve Dockerfile
+  ikisi de onu okur). Kurmak: `uv pip install --python .venv/bin/python -r requirements-dev.txt`.
+- Yeni göç `shared/migrations/` altına numaralı dosya olarak; açılışta kendiliğinden
+  koşar, elle `alter table` yok.
 
-**B) Basic auth (hızlı).** Tek parola, herkes aynı. `htpasswd` ile kurulur (aşağıda).
-Perimetre kapanır ama **kimlik değildir**: içeri giren kişi rayın altındaki listeden
-istediği kullanıcıya geçebilir. Faz 2'de Google OAuth gelince ikisi de kalkar.
+---
 
-## Adımlar
+## 2. VM testi (NixOS)
 
-`deploy/kur.sh` şablonlardaki yolları bu makineye göre değiştirip `deploy/olusan/`
-altına yazar — sistem dosyalarına dokunmaz, kopyalama komutlarını ekrana basar:
+Yapılandırma `~/nix`'te. Uygulamanın sürümü **flake input** olarak pinli, yani
+VM'de shell açıp `git pull` yapılmaz:
 
 ```bash
-bash deploy/kur.sh                       # varsayılan: repo yolu, $USER, 8000/8080
-ALAN=polonyum.com PORT_APP=8000 PORT_NGINX=8080 bash deploy/kur.sh
+cd ~/nix
+nix flake update teamtracker          # teamtracker'ı main'in ucuna al
+git commit -am "teamtracker: <sha>"   # kilit dosyası commit edilir
+nixos-rebuild switch --flake .#vmtest # VM'de (ya da --target-host ile uzaktan)
 ```
 
-Sonra sırayla:
+`~/nix`'te bu iş için duran modüller:
 
-**0. PostgreSQL**
+| modül | ne yapar |
+|---|---|
+| `modules/ekiptakip-app.nix` | agenix sırrı + `docker compose` yığınını koşan systemd birimi |
+| `modules/ekiptakip-media.nix` | medya dizini (uid 10001), `EKIPTAKIP_MEDIA_DIR`, `RequiresMountsFor` |
+| `modules/nginx/ekiptakip.nix` | iki vhost, `127.0.0.1:8000`'e proxy, `real_ip` |
+| `modules/cloudflared.nix` | tünel |
 
-Yayında Docker değil, servis olarak kurulur (`spec/80-veritabani.md` §6):
+`modules/ekiptakip-media.nix`'in **kaynağı bu depodadır**:
+[`nix-ekiptakip-media.nix`](nix-ekiptakip-media.nix). Depolar ayrı olduğu için
+kopyalanarak taşınıyor — burada değiştirirsen `~/nix`'e de taşımayı unutma
+(iki kopya sessizce ayrışırsa belirti üretimde çıkar).
+
+---
+
+## 3. Üretim (Raspberry Pi)
+
+Aynı akış, farklı hedef:
 
 ```bash
-sudo apt install postgresql postgresql-contrib     # ya da: brew install postgresql@16
-sudo -u postgres psql <<'SQL'
-create role ekiptakip login password 'GERCEK_PAROLA';
-create database ekiptakip owner ekiptakip;
-\c ekiptakip
-create extension if not exists pgcrypto;   -- uzantilar bir kez, superuser ile
-create extension if not exists unaccent;
-SQL
+nixos-rebuild switch --flake .#evsunucu --target-host efe@evsunucu --use-remote-sudo
 ```
 
-Uygulama **superuser değil** `ekiptakip` rolüyle bağlanır. Parola `.env`'de
-(`DATABASE_URL`), git'e girmez. Şema göçleri açılışta kendiliğinden koşar.
+Pi'de shell açmak gerekmiyor; gerekiyorsa bir yerde declarative olmayan bir şey
+var demektir.
 
-**1. Uygulama**
-
-```bash
-make setup && make seed                  # tohum: VAROLAN VERİYİ SİLER
-sudo cp deploy/olusan/ekiptakip.service /etc/systemd/system/
-sudo systemctl daemon-reload && sudo systemctl enable --now ekiptakip
-curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: app.polonyum.com' \
-  http://127.0.0.1:8000/        # 200 (mobil yüz)
-```
-
-`--workers 1` şart: ağaç indeksi süreç belleğinde (spec/10-kararlar.md 'Ağaç bellekte'). İkinci worker
-açarsan iki farklı ağaç indeksi oluşur ve yetki kontrolü tutarsızlaşır.
-
-**2. nginx + kapı**
-
-```bash
-sudo htpasswd -c /etc/nginx/.htpasswd-ekiptakip efe      # (B) seçtiysen
-sudo cp deploy/olusan/nginx-ekiptakip.conf /etc/nginx/sites-available/ekiptakip
-sudo ln -sf /etc/nginx/sites-available/ekiptakip /etc/nginx/sites-enabled/
-sudo nginx -t && sudo systemctl reload nginx
-curl -s   -o /dev/null -w '%{http_code}\n' -H 'Host: app.polonyum.com' \
-  http://127.0.0.1:8080/       # 401
-curl -su efe -o /dev/null -w '%{http_code}\n' -H 'Host: app.polonyum.com' \
-  http://127.0.0.1:8080/    # 200
-```
-
-**3. Tünel**
-
-> Tüneli **Cloudflare panelinden** yönetiyorsan (kurulum `--token` ile yapıldıysa) yerel
-> `config.yml` yok sayılır: **`deploy/cloudflare-dashboard.md`**'ye geç, aşağısı seni
-> ilgilendirmiyor. Hangi moddasın: `systemctl cat cloudflared | grep ExecStart`.
-
-Yerel `config.yml` ile yönetiyorsan iki yol var, ikisi de çalışır:
-
-- **Catch-all** (en son kural `- service: http://127.0.0.1:8080`, hostname'siz): tünele
-  düşen her isim nginx'e gider, ayrımı `server_name` yapar. **Mevcut kuralların
-  (push denemesi vb.) catch-all'ın ÜSTÜNDE kalsın**, altındaki her şeyi yutar.
-- **Açık isim**: `app` ve `dashboard` için ayrı `hostname:` kuralları, en altta
-  `- service: http_status:404`.
-
-**`originRequest.httpHostHeader` KOYMA.** Host başlığını sabitlersen nginx alan adlarını
-ayıramaz, ikisi de aynı bloğa düşer.
-
-DNS'i iki isim için de ekle (proxy'li wildcard kayıt plana göre değişiyor, bu garanti):
-
-```bash
-cloudflared tunnel route dns <tunel-adi> app.polonyum.com
-cloudflared tunnel route dns <tunel-adi> dashboard.polonyum.com
-sudo systemctl restart cloudflared
-curl -su efe -o /dev/null -w '%{http_code}\n' https://app.polonyum.com/         # 200
-curl -su efe -o /dev/null -w '%{http_code}\n' https://dashboard.polonyum.com/   # 200
-```
-
-nginx'te `default_server` bloğu bilinmeyen host'u `444` ile kapatıyor — catch-all
-kullanırken bu şart, yoksa tünele düşen rastgele bir isim uygulamayı açar.
-
-Telefonda `https://app.polonyum.com` → Safari → **Paylaş → Ana Ekrana Ekle**.
-
-## Güncelleme
-
-```bash
-git pull && make setup                   # bağımlılık değiştiyse
-sudo systemctl restart ekiptakip
-```
-
-`sw.js` değiştiyse telefondaki uygulama bir sonraki açılışta yeni sürümü alır
-(nginx onu `no-store` ile servis ediyor). Takılırsa: uygulamayı kapat-aç, olmadı
-ana ekrandan silip yeniden ekle.
-
-## Yedek
-
-`pg_dump` ile al; çalışırken güvenlidir (tutarlı anlık görüntü):
-
-```bash
-pg_dump -Fc "$DATABASE_URL" -f /yedek/ekiptakip-$(date +%F).dump
-```
-
-Günlük yedek için crontab (`crontab -e`):
+Zincir her iki hedefte de aynı:
 
 ```
-15 3 * * * pg_dump -Fc "postgresql://ekiptakip:PAROLA@127.0.0.1/ekiptakip" -f /yedek/ekiptakip-$(date +\%F).dump
+telefon ──https──> Cloudflare ──tünel──> cloudflared ──> nginx :80 ──> uvicorn 127.0.0.1:8000
+                    (TLS burada biter)                   (server_name)   (--workers 1)
 ```
 
-Geri yükleme (boş veritabanına): `pg_restore -d ekiptakip /yedek/....dump`
+`--workers 1` **şart**: ağaç indeksi (`TreeIndex`) süreç belleğinde tutuluyor.
+İkinci bir işçi kendi bayat ağacıyla kalır.
 
-**`make seed` / `make reseed` varolan veritabanını siler.** Yayındaki makinede
-çalıştırma; `make dev` yerine `systemctl restart ekiptakip` kullan.
+---
 
-## Medya (ekler)
+## Devamı
 
-Kart sohbetine ve takım duvarına yüklenen görseller (`spec/20-sema.md` §3b)
-`config.MEDIA_ROOT` altına yazılır. Bu kurulumda (Docker yok, uygulama
-doğrudan uvicorn ile) o kök tek bir ortam değişkeniyle belirlenir:
-
-```
-EKIPTAKIP_MEDIA_ROOT=/gercek/diskin/yolu
-```
-
-Boş bırakılırsa depo kökünde `var/media` kullanılır (`.gitignore`'da,
-commit'e girmez) — tek makinelik denemede yeter, gerçek kurulumda gerçek
-bir diske işaret etmeli.
-
-**Servis kullanıcısının (`efe`, `deploy/ekiptakip.service`) o dizine yazma
-izni olmalı.** Varsayılan yol zaten depo altında (`WorkingDirectory` de
-`/home/efe/...`) olduğu için ekstra bir şey gerekmez; `EKIPTAKIP_MEDIA_ROOT`'u
-`/home` dışına taşırsan `ekiptakip.service`'teki `ProtectSystem=full`
-sertleştirmesinin o yolu **salt okunur** bırakmadığını doğrula — gerekirse
-birime `ReadWritePaths=` ekle (bu dosya `ekiptakip.service`'e dokunmuyor,
-o satırı eklemek adminin işi).
-
-**Yedek:** yukarıdaki `pg_dump` yalnızca veritabanını alır, medyayı
-**kapsamaz**. Ekler `EKIPTAKIP_MEDIA_ROOT` altında düz dosyalar olarak
-durur — hangi araçla yedekliyorsan (rsync, restic, tar+cron) o dizini de
-kapsama al; aksi halde ekler hiçbir yerde ikinci bir kopya olmadan tek
-diskte kalır. (Efe'nin NixOS/Docker kurulumundaki karşılığı ve orada
-**hâlâ çözülmemiş** yedek boşluğu için `deploy/DOCKER.md` "Medya (ekler)".)
-
-## Push (Faz 3)
-
-Tünel HTTPS verdiği için web push'un ön şartı karşılandı: iOS'ta web push **yalnızca
-ana ekrana eklenmiş** sitede çalışır, o yüzden önce `app.<alan>` adresini ana
-ekrana ekletmek gerekiyor.
-`static/sw.js` içinde `push` ve `notificationclick` girişleri hazır. Eksik olan sunucu
-tarafı: `push_subscriptions` tablosu (spec/20-sema.md §7) + VAPID anahtarları. Anahtarlar
-`.env`'de kalır, koda gömülmez (spec/40-push.md).
+- [`DOCKER.md`](DOCKER.md) — konteyner yığını, agenix sırları, medya dizini,
+  günlük işler (`docker compose` komutları).
+- [`cloudflare-dashboard.md`](cloudflare-dashboard.md) — tünel panelden
+  yönetiliyorsa public hostname + Access politikası.
+- `spec/70-guvenlik.md` — tehdit modeli, kimlik, CSRF, denetim izi.
 
 ## Bu kurulumun kapatmadıkları
 
-| Konu | Durum |
-|---|---|
-| Kimlik | Kapıdan sonra hâlâ sahte: içeri giren istediği kullanıcıya geçebilir → Faz 2 OAuth |
-| CSRF | Yok. Kapı olduğu sürece saldırı yüzeyi dar, ama açık kapanmadı → Faz 2 |
-| Hız sınırlama | Yok. Gerekirse nginx `limit_req` |
-| Denetim izi | Alan değişiklikleri `events`'e yazılır; okuma erişimi loglanmaz |
+- **Medya yedeklenmiyor.** `services.restic.backups` `/home/efe/sata`'yı hariç
+  tutuyor, ekler de orada. Disk arızası her görseli götürür ve Postgres yedeği
+  var olmayan dosyalara işaret eden satırları sağlam tutar.
+- **Cloudflare Access AÇIK DEĞİL** (2026-09-10'da doğrulandı: public hostname'e
+  giden istek Access'e değil, doğrudan uygulamaya düşüyor — `curl` ile bakınca
+  401 gövdesi `giriş gerekli`, yani `LoginGate`; `cf-access-*` başlığı yok).
 
-CSP `unsafe-eval` içermiyor; şablonlar da `hx-on=` kullanmıyor (htmx onu `new Function`
-ile derler, CSP engeller). Şablonlara `hx-on=` eklersen bu kurulumda **sessizce çalışmaz** —
-davranışı `templates/base.html` ve `templates/mobile/base.html` içindeki delege
-dinleyicilere yaz.
+  Bu bir zamanlar **bloke edici** bir eksikti: uygulamanın kendi kimliği yokken
+  (`uid` çerezi imzasız, CSRF yok) Access dışarısıyla açık uygulama arasındaki
+  tek şeydi. Artık öyle değil — Google girişi, davetli listesi, imzalı oturum,
+  CSRF kapısı ve giriş hız sınırı var. Access bugün **ek katman**, tek kapı değil.
 
-## macOS notu (bu makine)
-
-`nginx-ekiptakip.conf` + `ekiptakip.service` Linux/systemd içindir. Bu makinede:
-
-- nginx **Homebrew** ile, `Efe` kullanıcısında koşuyor → config `/opt/homebrew/etc/nginx/servers/`
-  altına **symlink**, `sudo` yok. Kullanılan dosya: `deploy/nginx-ekiptakip.macos.conf`
-  (iki server bloğu + `default_server` 444, ortak gövde snippet'i yerine tek dosyada).
-- 8080 portu push demosuyla (`push.polonyum.com`) paylaşılıyor; ayrışma `server_name` ile.
-  Bu yüzden `listen 8080` wildcard kalmalı — `listen 127.0.0.1:8080` yazılırsa nginx açılmaz.
-- `systemd` yok → `ekiptakip.service` kullanılmıyor. Uvicorn elle veya launchd ile,
-  **alan adı ortam değişkenleriyle**:
-
-```bash
-EKIPTAKIP_HOST_APP=app.polonyum.com \
-EKIPTAKIP_HOST_DASHBOARD=dashboard.polonyum.com \
-EKIPTAKIP_COOKIE_DOMAIN=.polonyum.com \
-  .venv/bin/uvicorn app:app --host 127.0.0.1 --port 8000 --workers 1
-```
-
-- Tünel **dashboard yönetimli** (`temp`, token ile root olarak çalışıyor). Yerel
-  `config.yml` **yok**, dolayısıyla `cloudflared-ornek.yml` bu makinede geçerli değil:
-  ingress kuralları Zero Trust panelinden "Public hostname" olarak eklenir — iki isim için
-  de, ikisi de `http://localhost:8080`.
-
-```bash
-ln -sf ~/projects/teamtracker/deploy/nginx-ekiptakip.macos.conf \
-       /opt/homebrew/etc/nginx/servers/ekiptakip.conf
-nginx -t && nginx -s reload
-curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: app.polonyum.com'       http://127.0.0.1:8080/
-curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: dashboard.polonyum.com' http://127.0.0.1:8080/
-curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: bilinmeyen.example'     http://127.0.0.1:8080/   # 000
-```
+  Yine de kapalı olmasının bedeli var: kimliksiz trafik origin'e ulaşıyor, yani
+  herkes `/login`'i yoklayabiliyor, hız sınırı bütçesini yiyebiliyor, ve
+  uygulamada ileride çıkacak bir kimlik hatası doğrudan internete açık oluyor.
+  Açmaya karar verirsen: [`cloudflare-dashboard.md`](cloudflare-dashboard.md) §3.

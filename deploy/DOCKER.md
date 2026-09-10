@@ -1,13 +1,15 @@
 # Konteynerle dağıtım
 
-`deploy/README.md` makineye doğrudan kurulumu anlatır (systemd + sistem Postgres'i).
-Bu dosya alternatifi: **uygulama ve veritabanı konteynerde**, önlerinde makinede
-kurulu nginx.
+Uygulama ve veritabanı **konteynerde**, önlerinde nginx. Yayında bu yığını
+elle kurmuyorsun: `~/nix`'teki `modules/ekiptakip-app.nix` systemd birimi
+`docker compose up -d --build` koşuyor, nginx de `modules/nginx/ekiptakip.nix`
+ile geliyor (bkz. [`README.md`](README.md)). Bu dosya o yığının **içini**
+anlatır — imaj, sırlar, medya dizini, günlük komutlar.
 
 ```
-istemci ──> nginx :8000 ──> 127.0.0.1:8001 ──> ekiptakip-app:8000
-                                                      │
-                                                      └──> ekiptakip-db:5432
+cloudflared ──> nginx :80 ──> 127.0.0.1:8000 ──> ekiptakip-app:8000
+                                                        │
+                                                        └──> ekiptakip-db:5432
 ```
 
 Dosyalar:
@@ -16,7 +18,7 @@ Dosyalar:
 |---|---|
 | `Dockerfile` | uygulama imajı (python:3.12-slim, root değil, `--workers 1`) |
 | `docker-compose.prod.yml` | uygulama + Postgres + isteğe bağlı `tohum` profili |
-| `deploy/nginx-ekiptakip-docker.conf` | 8000'i dinleyen ön yüz |
+| `~/nix` `modules/nginx/ekiptakip.nix` | ön yüz (ayrı depo, Nix ifadesi) |
 | `requirements.txt` | bağımlılıkların tek kaynağı (Makefile de bunu okur) |
 
 ## Kurulum
@@ -84,27 +86,21 @@ Giriş yalnızca `users` tablosunda kayıtlı e-postalara açık
 
 ```bash
 docker compose -f docker-compose.prod.yml run --rm app \
-  python tools/kullanici.py ekle sen@ornek.com "Adın" --admin
+  python tools/user.py add sen@ornek.com "Adın" --admin
 ```
 
 Listelemek / kapatmak:
 
 ```bash
-docker compose -f docker-compose.prod.yml run --rm app python tools/kullanici.py listele
-docker compose -f docker-compose.prod.yml run --rm app python tools/kullanici.py kapat biri@ornek.com
+docker compose -f docker-compose.prod.yml run --rm app python tools/user.py list
+docker compose -f docker-compose.prod.yml run --rm app python tools/user.py deactivate biri@ornek.com
 ```
 
-**4. nginx'i bağla**
+**4. nginx**
 
-```bash
-sudo cp deploy/nginx-ekiptakip-docker.conf /etc/nginx/sites-available/ekiptakip
-sudo ln -sf /etc/nginx/sites-available/ekiptakip /etc/nginx/sites-enabled/
-sudo nginx -t && sudo systemctl reload nginx
-```
-
-Sunucuda 8000'i başka bir `default_server` tutuyorsa nginx açılmaz —
-`sudo nginx -t` bunu söyler; çakışan bloğu kaldır ya da bu dosyadaki
-`default_server` sözcüğünü sil.
+Elle bağlanmıyor: `~/nix/modules/nginx/ekiptakip.nix` iki vhost'u
+(`app.` / `dashboard.`) tanımlıyor ve `127.0.0.1:8000`'e proxy'liyor.
+`nixos-rebuild switch` yeterli.
 
 ## Medya (ekler)
 
@@ -214,7 +210,7 @@ Elle uğraşmamak için kabuk tarafında sabitle:
 export EKIPTAKIP_ENV_FILE=/run/agenix/ekiptakip-env
 alias ekt='docker compose --env-file /run/agenix/ekiptakip-env -f /srv/ekiptakip/docker-compose.prod.yml'
 ekt ps
-ekt run --rm app python tools/kullanici.py listele
+ekt run --rm app python tools/user.py list
 ```
 
 `~/nix/modules/ekiptakip-app.nix` bunu `compose` değişkeninde zaten tek yerde
@@ -232,23 +228,18 @@ sürümler açılabilir. Sır döndürürken eski değeri de iptal et
 (`EKIPTAKIP_SECRET_KEY` değişirse herkesin oturumu düşer — bu kasıtlı bir
 acil durum düğmesi).
 
-## Kapı — atlanmamalı
+## Kapı
 
-Uygulamanın **kendi kimlik doğrulaması yok**: `uid` çerezi imzasız, CSRF yok
-(README "Bilgi güvenliği"). Kapısız açılırsa adresi bulan herkes ilk aktif
-kullanıcı olarak kayıt açar, siler, ağacı değiştirir.
+Uygulamanın **kendi kimliği artık var**: Google girişi, davetli listesi
+(`users` tablosunda olmayan e-posta giremez), imzalı oturum çerezi, CSRF
+kapısı, giriş hız sınırı (`spec/70-guvenlik.md`). Bu paragraf eskiden
+"kimlik yok, kapı şart" diyordu — o dönem kapandı.
 
-İki seçenekten biri kurulmadan dışarı açma:
+Cloudflare Access bugün **kapalı** ve artık **ek katman**, tek kapı değil
+(ayrıntı ve gerekçe: [`README.md`](README.md) "Bu kurulumun kapatmadıkları").
 
-- **Cloudflare Access** tünelin/alan adının önünde (`deploy/README.md`), ya da
-- **auth_basic** — `nginx-ekiptakip-docker.conf` içinde yorumda hazır:
-
-```bash
-sudo htpasswd -c /etc/nginx/.htpasswd-ekiptakip efe
-```
-
-Yığın kendi başına yalnızca `127.0.0.1:8001`'e bağlanır; dışarıya açan tek
-şey nginx'tir.
+Yığın kendi başına yalnızca `127.0.0.1:8000`'e bağlanır; dışarıya açan tek
+şey nginx + tüneldir.
 
 ## Günlük işler
 

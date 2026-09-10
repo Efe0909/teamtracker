@@ -1,21 +1,17 @@
 # Tünel dashboard'dan yönetiliyorsa
 
 Cloudflare tünelini panelden yönetiyorsan (kurulum `cloudflared ... --token ...` ile
-yapıldıysa) **yerel `~/.cloudflared/config.yml` yok sayılır** — ingress kurallarını
-Cloudflare tutar. Bu durumda `deploy/cloudflared-ornek.yml`'ye dokunma, aşağıdaki
-adımları izle.
+yapıldıysa) **yerel `config.yml` yok sayılır** — ingress kurallarını Cloudflare
+tutar; aşağıdaki adımları izle.
 
-Hangi moddasın:
+NixOS kurulumunda tünel `~/nix/modules/cloudflared.nix` ile tanımlı
+(`services.cloudflared`, kimlik bilgisi agenix sırrında). Hangi moddasın:
 
 ```bash
-systemctl cat cloudflared | grep ExecStart      # Linux
-ps aux | grep [c]loudflared                     # macOS (systemd yok)
+systemctl cat cloudflared | grep ExecStart
 #   ... --token ey...        -> UZAKTAN yönetiliyor (bu dosya)
-#   ... run <tunel-adi>      -> YEREL config.yml (deploy/cloudflared-ornek.yml)
+#   ... run <tunel-adi>      -> YEREL ingress (modules/cloudflared.nix içinde)
 ```
-
-Bu makine (darwin) **uzaktan yönetiliyor**: tünel `temp`, root olarak `--token` ile
-koşuyor, `~/.cloudflared/` içinde yalnızca `cert.pem` var, `config.yml` yok.
 
 ## 1. İki public hostname ekle
 
@@ -50,11 +46,16 @@ Zero Trust → **Access → Applications → Add an application → Self-hosted*
   uygulaması sürekli giriş ekranı gösterir.
 
 İki alan adına **ayrı politika** yazabilirsin — dashboard'u yalnızca kendine açmak gibi.
-Uygulamanın kendi kimliği yok, kapı gerçekten kapı.
 
-Access'i kurduğunda nginx'teki basic auth'a gerek kalmaz:
-`/etc/nginx/snippets/ekiptakip-ortak.conf` içindeki `auth_basic` iki satırını yorum yap,
-`sudo nginx -t && sudo systemctl reload nginx`.
+**Durum (2026-09-10): Access AÇIK DEĞİL.** Public hostname'e giden istek Access'e
+takılmıyor, doğrudan uygulamaya düşüyor (`curl -I https://dashboard.polonyum.com/`
+→ 401 `giriş gerekli`, yani uygulamanın `LoginGate`'i; `cf-access-*` başlığı yok).
+
+Bu bölüm bir zamanlar **zorunluydu**: uygulamanın kendi kimliği yokken kapı
+gerçekten tek kapıydı. Artık Google girişi + davetli listesi + CSRF + imzalı
+oturum var, yani Access **ek katman**. Açmanın getirisi: kimliksiz trafik
+origin'e hiç ulaşmaz (hız sınırı yoklanamaz, ileride çıkacak bir kimlik hatası
+internete açık olmaz).
 
 ## 4. Doğrulama
 
