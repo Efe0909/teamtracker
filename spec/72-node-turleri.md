@@ -59,6 +59,7 @@ türe özel olan (üyeler, renk, duvar) projeksiyon tablosunda (§5).
 ```python
 NODE_TYPES = {
     "cell":        "Cell",          # IWS hücresi / operasyonel birim (yalniz kokte)
+    "machine":     "Makine",        # atomik fonksiyonel birim: girdisi + ciktisi var
     "pillar":      "Pillar",        # IWS pillar'i — sayfasi sonra (§4)
     "team":        "Takım",         # Ekipler sayfasinda kart uretir
     "task":        "Görev",
@@ -85,9 +86,9 @@ beklenmesinden iyidir; ad ise ileride davranış bağlanmak istenirse hazır dur
 
 Bugünkü VM ağacındaki karşılıklar: `Departman`→`cell`, `Görev`→`task`,
 `Operational`→`operational` (ad korundu), `Pillar`→`pillar`, `Takım`→`team`. Tohum verisindeki
-üretim terimleri (`Hat`, `Ünite`, `Makine/Kol`, `Kazanım`, `Etkinlik`) kaynak
-sistemden kalma — kulüp aracında karşılığı yok, göçte eşlenmeli ya da
-tohum güncellenmeli.
+üretim terimleri (`Hat`, `Ünite`, `Kazanım`, `Etkinlik`) kaynak sistemden
+kalma — kulüp aracında karşılığı yok, göçte eşlenmeli ya da tohum
+güncellenmeli. (`Makine/Kol` artık `machine`'e karşılık geliyor.)
 
 ## 4. Tür sözleşmeleri
 
@@ -98,9 +99,34 @@ Her tür, kodun ona ne yapacağının sözleşmesidir:
 | `team` | Ekipler sayfasında bir kart. Üyeler, roller, takım duvarı buna asılır. |
 | `pillar` | **Şimdilik davranışı yok.** Tür var, node'lar tanımlanabilir. Hedeflenen: takımlarınki gibi pillar başına sayfa (ortak dökümanlar, eğitim içerikleri — "Operation Plus" tarzı). Pivot fikri **düşürüldü**, örnekti. |
 | `cell` | Kendisi ve **alt ağacı** operasyonel kapsam sayılır. |
+| `machine` | Yapısal. **KPI'nın doğal yeri** — bkz. aşağıdaki not. |
 | `task`, `step` | Yapısal; kayıt bağlanır, ayrı ekran üretmez. |
 | `operational` | Hiçbir şey. Bilerek — IWS kabı (senin `Pillars` node'un). |
 | `generic` | Hiçbir şey. Bilerek — nötr yer tutucu. |
+
+### 4.1 `machine` — atomik fonksiyonel birim
+
+IWS'te makine, **girdisi ve çıktısı olan atomik fonksiyonel birim**. Fabrika
+makinesi olmak zorunda değil: tasarım ekibi de makinedir — girdisi etkinlik
+detayı, çıktısı afiş. `spec/60-kaynak-uyarlama.md` §2.6 bunu zaten yazmıştı ve
+şu sonucu çıkarmıştı: **ölçülebilir KPI'sı, kaybı ve plandan sapması olan her
+şey makinedir**, dolayısıyla KPI'lar bir gün eklenirse doğal yerleri burasıdır
+(`spec/20-sema.md` açık nokta 6). Tür şimdi adlandırıldığı için o çıpa hazır.
+
+Yerleşim: `cell` ile `task` arasında. Bir cell birden çok makine taşır; bir
+makine hem görevleri hem bir ya da birden çok **takımı** barındırabilir.
+
+**Zorunlu değil.** Bazı dallarda fazladan bir hop olur ve atlanır — görev
+doğrudan cell'in altına da girebilir. Bu yüzden §7'deki yerleşim kuralları
+`machine`'i **dayatmıyor**: ne "cell'in altında machine olmalı" ne de "task
+mutlaka machine'in altında" diye bir kural var. Esneklik bilerek korunuyor
+(§11: tür-ilişki matrisi alınmadı).
+
+**Aynı adlı takım.** Bazı makineler kendisiyle aynı adda tek bir takım taşır
+(`Dolum Makinesi` > `Dolum Makinesi`). Bu tekrar kozmetiktir ve **kabul
+ediliyor**: alternatifi bir node'un iki tür birden taşıması olurdu, o da tüm
+modeli bozar. Ağaçta ikisi ayrı durur çünkü ayrı şeylerdir — makine
+fonksiyonel birim, takım o birimdeki insanlar.
 
 ## 5. Projeksiyon tabloları
 
