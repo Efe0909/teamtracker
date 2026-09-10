@@ -142,16 +142,65 @@ dropdown'larda, yeni kayıt formlarında, aktif kart listelerinde çıkmaz.
 
 Bu, §1'deki "bugünün pillar'ı yarın anlamsızlaşabilir" derdinin asıl cevabı.
 
-**Sert silme** (`service.delete_node`, bugün ağaçtaki ✕ düğmesi) normal
-akıştan çıkar: alt ağacı ve `items.node_id` üzerinden **kayıtları da** cascade
-ile götürüyor. Kalırsa yalnızca admin'e ve neyin gideceğini sayan açık bir
-onayla kalır; gündelik "bu artık kullanılmıyor" işi için doğru araç
-pasifleştirmedir.
+**Sert silme** normal akıştan çıkar (`service.delete_node`, bugün ağaçtaki ✕
+düğmesi): alt ağacı ve `items.node_id` üzerinden **kayıtları da** cascade ile
+götürüyor. Gündelik "bu artık kullanılmıyor" işinin doğru aracı
+pasifleştirmedir. Silmenin kaldığı tek yer §6.2.
 
-**Tür değiştirme: bağımlı satır varsa KİLİTLİ.** Kural genel — node'un
-`node_id`'sini kullanan herhangi bir tabloda satır varsa (bugün `teams`,
-yarın pillar sayfası tabloları) tür değiştirilemez. Önce o bağımlılıklar
-temizlenir. Yoksa projeksiyon değişir ve veri sessizce sahipsiz kalır.
+### 6.1 Tek yüklem: "virgin" node
+
+Hem tür değiştirme kilidi hem sert silme izni **aynı soruyu** sorar: bu node'a
+bağlı bir şey var mı? Tek fonksiyon, iki kullanım — `is_virgin(node_id)`:
+node'a bağlı hiçbir şey yoksa `True`, yani silmek hiçbir geçmişi götürmez.
+
+Bakılan yerler (şemadan çıkarıldı, tahmin değil):
+
+| bağımlılık | tablo.sütun |
+|---|---|
+| alt düğüm | `nodes.parent_id` |
+| kayıt | `items.node_id` |
+| projeksiyon (takım kartı) | `teams.node_id` |
+| dal yetkisi | `user_node_scopes.node_id` |
+| eski kapsam sütunu | `users.scope_node_id` |
+
+**`events` BİLEREK dışarıda.** `events.subject_id` FK **değil** (göç 001,
+satır 98) — göç 007'nin yorumu bunu açıkça karara bağlamış: *"düğüm silinse
+bile geçmiş satırı kalır"*. Node geçmişi node'dan uzun yaşıyor. Ayrıca
+`add_node` her node için bir oluşturma olayı yazıyor; events sayılsaydı
+**hiçbir node virgin olamazdı** ve özellik hiç çalışmazdı.
+
+### 6.2 Sert silme: yalnız virgin node, yalnız yetkiyle
+
+| node | ne yapılabilir |
+|---|---|
+| **virgin** (hiçbir bağımlılık yok) | `delete_nodes` kapsamıyla **sert silinebilir** — kaybolan geçmiş yok |
+| **virgin değil** | **yalnız pasifleştirilir.** Sert silme yok, hiçbir yetkiyle. |
+
+Gerekçe: geçmiş kaybı kabul edilmiyor (§6). Virgin node'un kaybedecek geçmişi
+zaten yoktur — yanlışlıkla açılmış, adı yanlış yazılmış, boş bir node ağacı
+kirletiyorsa gitsin. Bağımlısı olan node ise ancak pasifleşir; `items` ve
+`user_node_scopes` FK'leri `on delete cascade` olduğu için sert silme orada
+sessizce kayıt götürürdü.
+
+> Alternatif (alınmadı): kapsam, virgin olmayan node'u da silebilsin. Bu
+> "her şeyi götürebilen düğme" demek olurdu; kaçış kapısı gerçekten gerekirse
+> ayrı ve açıkça adlandırılmış bir işlem olarak eklenir.
+
+Yeni kapsam (`shared/scope.py`, göç ile `scopes` tablosuna):
+
+```python
+"delete_nodes": "Boş düğümü kalıcı sil (yalnız hiçbir şeye bağlı olmayanlar)",
+```
+
+`edit_nodes` gibi **düğüm bağımlıdır** (`NODE_DEPENDENT`): kapsam tek başına
+yetmez, silinecek dalda `user_node_scopes` izni de gerekir.
+
+### 6.3 Tür değiştirme
+
+**Virgin değilse KİLİTLİ.** Aynı `is_virgin` yüklemi: node'un `node_id`'sini
+kullanan herhangi bir tabloda satır varsa (bugün `teams`, yarın pillar sayfası
+tabloları) tür değiştirilemez — önce o bağımlılıklar temizlenir. Yoksa
+projeksiyon değişir ve veri sessizce sahipsiz kalır.
 
 ## 7. Yerleşim kuralları
 
@@ -217,12 +266,13 @@ değiştirmez; `user_node_scopes` tek yetki kaynağı olarak kalır.
 
 | yer | ne olur |
 |---|---|
-| `shared/nodes.py` (yeni) | `NODE_TYPES`, `ROOT_ONLY`, tür sorguları |
+| `shared/nodes.py` (yeni) | `NODE_TYPES`, `ROOT_ONLY`, `is_virgin`, tür sorguları |
+| `shared/scope.py` | yeni kapsam `delete_nodes` (+ `NODE_DEPENDENT`) |
 | `shared/service.py` | `add_node`/`update_node`/`move_node` tür + yerleşim kontrolü |
 | `shared/tree.py` | `TreeIndex` tür-farkında dilim (`nodes_of_type`) |
 | `shared/filters.py` | `_pillar_options()` artık pillar node'larından — `TASK-220` kapanır |
 | `sites/dashboard/routes.py` | veri yönetimi formunda tür `<select>`; Ekipler node projeksiyonundan |
-| göç (yeni) | `nodes.is_active`, `node_type` enum'a eşleme, `teams.node_id` sıkılaştırma, `items.pillar` → `pillar_node_id` |
+| göç (yeni) | `nodes.is_active`, `node_type` enum'a eşleme, `teams.node_id` sıkılaştırma, `items.pillar` düşürme, `scopes`'a `delete_nodes` satırı |
 
 `TASK-220` (pillar filtresi ölü metin kutusu) bu işin doğal sonucu olarak
 kapanır: seçenekler artık `select distinct pillar from items` yerine pillar
