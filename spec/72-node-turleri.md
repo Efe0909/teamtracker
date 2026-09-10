@@ -52,31 +52,39 @@ eklenmesi her çağrı yerine dokunur.
 **Node ince kalır.** Ortak olan (kimlik, konum, ad, tür, aktiflik) `nodes`'ta;
 türe özel olan (üyeler, renk, duvar) projeksiyon tablosunda (§5).
 
-## 3. Türler (ilk liste — tartışmaya açık)
+## 3. Türler
 
 `shared/nodes.py`:
 
 ```python
 NODE_TYPES = {
-    "cell":     "Cell",       # IWS hücresi / operasyonel birim
-    "pillar":   "Pillar",     # IWS pillar'ı — sayfası sonra (§4)
-    "team":     "Takım",      # Ekipler sayfasında kart üretir
-    "task":     "Görev",
-    "step":     "Adım",
-    "group":    "Grup",       # davranışı YOK: ağaçta yer tutar
+    "cell":        "Cell",          # IWS hücresi / operasyonel birim (yalniz kokte)
+    "pillar":      "Pillar",        # IWS pillar'i — sayfasi sonra (§4)
+    "team":        "Takım",         # Ekipler sayfasinda kart uretir
+    "task":        "Görev",
+    "step":        "Adım",
+    "operational": "Operational",   # davranis YOK — IWS kabi (ornek: Pillars)
+    "generic":     "Genel",         # davranis YOK — notr yer tutucu
 }
 ```
 
 Anahtar İngilizce, etiket Türkçe (`CLAUDE.md` "Kod dili"). Yeni tür eklemek =
 kod değişikliği + DML göçü, tıpkı scope gibi.
 
-`group`, bugünkü `Operational` etiketinin karşılığı: hiçbir şeye bağlı değil,
-bilerek. Ağaçta yer tutan, ileride anlam kazanabilecek node'lar için. Anlamı
-olmayan bir türün **açıkça** "anlamı yok" demesi, yanlışlıkla davranış
-beklenmesinden iyidir.
+İki tür de **davranışsız**, ikisi de ağaçta yer tutar; fark okuyana verdikleri
+anlamda. `operational`: "pillar nedir" sorusunun kaba cevabı "operasyonel bir
+şey" — `Pillars` kabı o adı taşısın. `generic`: gerçekten hiçbir şey ifade
+etmeyen yer tutucu (`group` adı yerine).
+
+> İkisi de davranışsız olduğu için **gereksiz ikizlik riski** var. Tek tür
+> yetiyorsa `generic` düşürülüp her yerde `operational` kullanılabilir; bu
+> not, kararın bilinçli olduğunu göstermek için duruyor.
+
+Anlamı olmayan bir türün **açıkça** "anlamı yok" demesi, yanlışlıkla davranış
+beklenmesinden iyidir; ad ise ileride davranış bağlanmak istenirse hazır durur.
 
 Bugünkü VM ağacındaki karşılıklar: `Departman`→`cell`, `Görev`→`task`,
-`Operational`→`group`, `Pillar`→`pillar`, `Takım`→`team`. Tohum verisindeki
+`Operational`→`operational` (ad korundu), `Pillar`→`pillar`, `Takım`→`team`. Tohum verisindeki
 üretim terimleri (`Hat`, `Ünite`, `Makine/Kol`, `Kazanım`, `Etkinlik`) kaynak
 sistemden kalma — kulüp aracında karşılığı yok, göçte eşlenmeli ya da
 tohum güncellenmeli.
@@ -91,7 +99,8 @@ Her tür, kodun ona ne yapacağının sözleşmesidir:
 | `pillar` | **Şimdilik davranışı yok.** Tür var, node'lar tanımlanabilir. Hedeflenen: takımlarınki gibi pillar başına sayfa (ortak dökümanlar, eğitim içerikleri — "Operation Plus" tarzı). Pivot fikri **düşürüldü**, örnekti. |
 | `cell` | Kendisi ve **alt ağacı** operasyonel kapsam sayılır. |
 | `task`, `step` | Yapısal; kayıt bağlanır, ayrı ekran üretmez. |
-| `group` | Hiçbir şey. Bilerek. |
+| `operational` | Hiçbir şey. Bilerek — IWS kabı (senin `Pillars` node'un). |
+| `generic` | Hiçbir şey. Bilerek — nötr yer tutucu. |
 
 ## 5. Projeksiyon tabloları
 
