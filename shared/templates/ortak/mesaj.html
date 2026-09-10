@@ -1,4 +1,6 @@
-{# fragment: card_message — TEK olay. Akisa beforeend olarak eklenir. #}
+{# fragment: card_message — TEK olay. Akisa beforeend olarak eklenir.
+   Kart sohbeti, mobil kayit ve takim duvari ayni parcayi kullanir — bu dosya
+   nerede gosterildigini bilmez (skin kurali), o yuzden site'ye ozel sinif yok. #}
 {% if m.type == 'system' %}
   <div class="sys">{{ m.body }} · {{ m.time }}</div>
 {% else %}
@@ -11,6 +13,26 @@
     <div class="bub">
       {% if not m.mine and m.author %}<div class="nm">{{ m.author.name }}</div>{% endif %}
       {{ m.body }}
+      {% for media in m.media %}
+        {% if media.deleted %}
+        <div class="bmedia mtomb">🖼 Görsel silindi</div>
+        {% else %}
+        <div class="bmedia">
+          <a href="/media/{{ media.id }}" target="_blank" rel="noopener noreferrer">
+            <img class="bimg" src="/media/{{ media.id }}/thumb"
+                 {% if media.width %}width="{{ media.width }}"{% endif %}
+                 {% if media.height %}height="{{ media.height }}"{% endif %}
+                 loading="lazy" alt="{{ media.original_name or 'Ek görsel' }}">
+          </a>
+          {% if media.can_delete %}
+          <button type="button" class="mdel" title="Görseli sil"
+                  hx-delete="/media/{{ media.id }}"
+                  hx-target="closest .msg" hx-swap="outerHTML"
+                  hx-confirm="Bu görseli silmek istediğine emin misin?">🗑</button>
+          {% endif %}
+        </div>
+        {% endif %}
+      {% endfor %}
       <div class="ts">{{ m.time }}</div>
     </div>
   </div>

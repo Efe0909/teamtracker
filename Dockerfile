@@ -27,10 +27,19 @@ COPY shared/ ./shared/
 COPY sites/ ./sites/
 COPY tools/ ./tools/
 
-# Root olarak kosma. Uygulama diske yazmiyor (ekler henuz yok, KNOW-230),
-# bu yuzden yazilabilir dizin gerekmez.
+# Root olarak kosma. Uygulama artik diske yaziyor (medya ekleri, KNOW-230
+# kapandi): re-encode edilmis gorseller + kucuk resimler config.MEDIA_ROOT
+# altina duser, konteynerde bu /data/media (EKIPTAKIP_MEDIA_ROOT,
+# docker-compose.prod.yml). uid 10001 SABIT deger — host tarafinda bind
+# mount edilen dizinin sahibi de ayni uid olmali, yoksa yazma EACCES ile
+# patlar (bkz. deploy/nix-ekiptakip-media.nix, systemd.tmpfiles owner).
+#
+# /data/media'yi burada da olusturuyoruz ki imaj compose disinda (bare
+# `docker run`, testler) calistirilinca da yazilabilir bir dizin bulsun;
+# yayinda compose'un bind mount'u zaten bunun uzerine biner.
 RUN useradd --create-home --uid 10001 ekiptakip \
- && chown -R ekiptakip:ekiptakip /app
+ && mkdir -p /data/media \
+ && chown -R ekiptakip:ekiptakip /app /data/media
 USER ekiptakip
 
 EXPOSE 8000

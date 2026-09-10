@@ -13,7 +13,18 @@ document.body.addEventListener("htmx:afterSwap", e => {
 document.body.addEventListener("htmx:afterRequest", e => {
   if ((e.detail.requestConfig?.verb || '').toLowerCase() === 'get') return;
   const f = e.target.closest("form");
-  if (f && e.detail.successful) f.reset();
+  if (f && e.detail.successful) {
+    f.reset();
+    f.querySelectorAll(".fname").forEach(s => { s.textContent = ""; });
+  }
+});
+/* Ek dosya secilince ad, atasi kilibin (.attach) icindeki .fname'de gorunur —
+   "takildi mi?" hicbir zaman soru olmasin. hx-on= degil, burada: yukarida. */
+document.body.addEventListener("change", e => {
+  const inp = e.target.closest(".attach input[type=file]");
+  if (!inp) return;
+  const span = inp.closest(".attach")?.querySelector(".fname");
+  if (span) span.textContent = inp.files[0]?.name || "";
 });
 
 /* --- web push abonelıgı (spec/40-push.md) ------------------------------
