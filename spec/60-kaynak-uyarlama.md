@@ -130,15 +130,28 @@ eylem listesi. Genel tabloyu hiç açmayan biri bu iki yerden sistemde kalır.
 ### 2.6 Veri Yönetimi → bizde: kazanım ağacı (planı değişmez)
 
 Kaynakta tipli birim kataloğu (Department / Cell / Machine / Equipment…) ve
-tipler arası üst-alt ilişki tanımı. Bizde `nodes.node_type` serbest metin — bu
-esneklik **korunur**; tip kataloğu ve tip-ilişki matrisi alınmaz (iki ekran ve
-bir yönetim yükü eder, 25 kişide getirisi yok).
+tipler arası üst-alt ilişki tanımı.
+
+> ⚠️ **Bu paragrafın ilk yarısı GEÇERSİZ** — `spec/72-node-turleri.md` yerine
+> geçti. Burada "`node_type` serbest metin kalır, tip kataloğu alınmaz"
+> deniyordu; artık **kodda enum**. Karar yanlış değildi, *betimleyici* bir
+> katalog için doğruydu; değişen şey türün davranış taşımaya başlaması
+> (team → Ekipler kartı, pillar → kendi sayfası) — kod, adını bilmediği bir
+> şeye davranış bağlayamaz.
+>
+> **Hâlâ geçerli olan:** tip-ilişki **matrisi** alınmadı. Tek yerleşim kuralı
+> `ROOT_ONLY = {cell}`; "cell'in altında machine olmalı" gibi kural yok, ağacın
+> esnekliği korunuyor (spec/72 §7, §11).
 
 Kaynaktaki "machine" kavramının önemlisi yapı değil anlamı: ölçülebilir KPI'sı,
 kaybı ve plandan sapması olan her şey makine (tasarım ekibi bir makinedir:
 girdisi etkinlik detayı, çıktısı afiş). Bu, ilerde düğüme KPI bağlamak
 istediğimizde ağacın zaten doğru soyutlama olduğu anlamına gelir. KPI alanları
 🚧 — ihtiyaç netleşince (`spec/20-sema.md` açık nokta 6).
+
+Bu gözlem **karşılığını buldu**: `machine` artık adlandırılmış bir tür
+(spec/72 §4.1), yani KPI'ların bağlanacağı çıpa hazır. Yerleşimi cell ile task
+arasında, ama **zorunlu değil** — bazı dallarda fazladan hop olur ve atlanır.
 
 ### 2.7 Kılavuzlar → 🚧 `dosyalar` modülünün altına
 

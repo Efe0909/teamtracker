@@ -17,8 +17,12 @@ Yürürlükteki şema PostgreSQL; kaynağı numaralı göçlerdir
 | `push_subscriptions` | yok — `spec/40-push.md` |
 | `attachments` (§3b) | **kurulu** — `009_attachments.sql`; karar aşağıda §"Açık noktalar" madde 1 |
 
-Kurulu tablolardaki farklar: `items`'a `dms` ve `pillar` (TEXT) eklendi; okunabilir kısa
-kod sütunu (`BUT-1042`) **henüz yok** — arama bugün başlık/açıklama üzerinden çalışıyor.
+Kurulu tablolardaki farklar: `items`'a `dms` eklendi; okunabilir kısa kod sütunu
+(`BUT-1042`) **henüz yok** — arama bugün başlık/açıklama üzerinden çalışıyor.
+
+`items.pillar` (TEXT) **düşürüldü** (spec/72 §8): serbest metindi, `EDITABLE`'da
+olmadığı için arayüzden hiç set edilemiyordu ve üretimde 0 farklı değer taşıyordu
+— ölü sütun. Pillar ↔ kayıt bağı, pillar sayfası yazılırken karara bağlanacak.
 
 ---
 
@@ -56,7 +60,9 @@ create table nodes (
   id           uuid primary key default gen_random_uuid(),
   parent_id    uuid references nodes(id) on delete cascade,
   name         text not null,
-  node_type    text not null,                 -- serbest metin: "Kazanım", "Makine/Kol", ...
+  node_type    text not null,                 -- ENUM (spec/72): cell, machine, pillar,
+                                               -- team, task, step, operational, generic
+  is_active    boolean not null default true,  -- pasiflestirme (spec/72 §6); silme DEGIL
   sort_order   int  not null default 0,
   pending_cr_id uuid,                         -- onay bekleyen değişiklik (§4)
   pending_delete boolean not null default false,
@@ -66,7 +72,18 @@ create table nodes (
 create index on nodes(parent_id);
 ```
 
-Derinlik sınırsız, tür alanı serbest metin — bir kulüpte "Kazanım / Makine / Adım", başka yerde başka bir şey olabilir.
+Derinlik sınırsız. **Tür artık serbest metin değil, kodda tanımlı enum** —
+`spec/72-node-turleri.md`. Sebep: tür davranış taşıyor (team → Ekipler kartı,
+pillar → kendi sayfası), ve kod adını bilmediği bir şeye davranış bağlayamaz.
+Örnekler (node'lar) veritabanında ve kullanıcı tarafından yönetilir; **tür**
+kodda, yeni tür = kod değişikliği + göç.
+
+`is_active`: yapı **silinerek değil pasifleştirilerek** yönetilir. Anlamsızlaşan
+bir pillar ya da kapanan bir takım silinmez — geçmiş kayıtlar (`items`,
+`events`, takım duvarı) yerinde kalır, node yalnız ileriye dönük kaybolur.
+Sert silme yalnız iki kademede: bağımlısı olmayan ("virgin") node'u o dalda
+düzenleyebilen siler; bağımlısı olanı silmek `hard_delete_nodes` kapsamı
+ister (spec/72 §6).
 
 **Alt ağaç sorgusu** (yetki kontrolü ve hata sayımı bunun üstünde döner):
 
@@ -98,7 +115,8 @@ create table teams (
   id          uuid primary key default gen_random_uuid(),
   name        text not null unique,
   description text,                              -- takımın görev alanı, ekipler ekranında görünür
-  node_id     uuid references nodes(id) on delete set null,
+  node_id     uuid not null unique                    -- PROJEKSIYON: kimlik node'da
+              references nodes(id) on delete cascade,   -- (spec/72 §5)
   color       text,
   created_at  timestamptz not null default now()
 );
