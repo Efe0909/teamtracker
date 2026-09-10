@@ -4,6 +4,11 @@ __pycache__/
 .venv/
 .pytest_cache/
 
+# Medya ekleri: gelistirmede MEDIA_ROOT varsayilani burasi. Kullanicilarin
+# yukledigi gorseller birikir — veritabani gibi, ASLA commit etme. Yayinda bu
+# dizin kullanilmaz; orada bind-mount /data/media var (deploy/DOCKER.md).
+var/
+
 # Veritabani: gercek kart icerigi ve kullanici e-postalari birikir, ASLA commit etme
 *.db
 *.db-journal

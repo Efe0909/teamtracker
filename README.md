@@ -124,7 +124,22 @@ ikinci bir kapı (Cloudflare Access) koymak tavsiye edilir — `deploy/README.md
   taşır. Karşılaştırma `hmac.compare_digest`.
 - **Denetim izi:** giriş, giriş reddi, çıkış, 403 ve pasifleştirme
   `guvenlik_olaylari` tablosuna yazılır (gövde tutulmaz).
-- **Dosya yükleme yok**, dolayısıyla yükleme kaynaklı saldırı yüzeyi de yok.
+- **Dosya yükleme var** (kart sohbeti ve takım duvarına mesaj başına tek
+  görsel, `spec/20-sema.md` §3b) — bu satır artık doğru değil, savunması
+  katmanlı: dosya tipi **beyaz liste** (yalnızca JPEG/PNG/WebP/GIF), içerik
+  uzantıya ya da istemcinin gönderdiği `Content-Type`'a değil **magic
+  byte'a** bakılarak doğrulanır, boyut **10 MB** sert tavanla sınırlı ve
+  büyük bir görsele açılan sıkıştırma bombalarına karşı
+  `Image.MAX_IMAGE_PIXELS` ile ayrıca korunur. JPEG/PNG/WebP EXIF'i
+  temizlenip yeniden kodlanır — asıl içerik doğrulaması burada olur, gerçek
+  bir görsel olmayan hiçbir payload bu adımdan sağ çıkmaz. Servis ucu
+  (`/media/{id}`) diğer her uç gibi `LoginGate`'in arkasında, kimliksiz
+  erişilemez; `Content-Type` dosyadan değil **veritabanı sütunundan** sabit
+  gider ve `X-Content-Type-Options: nosniff` eşlik eder, yani tarayıcı
+  içeriği kendi başına koklayıp farklı yorumlamaz. Bu savunmalar oturumu
+  olan birinin kötü niyetli bir dosya yüklemesine karşıdır — oturumsuz
+  erişime karşı değil, o yüzden kapı (Cloudflare Access, `deploy/README.md`
+  "Kapı") burada da aynı şekilde şart.
 
 ### Açık bildirimi
 

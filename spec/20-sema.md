@@ -15,6 +15,7 @@ Yürürlükteki şema PostgreSQL; kaynağı numaralı göçlerdir
 | `change_requests` | yok — kazanım ağacı ekranıyla gelecek |
 | `notifications`, `notification_prefs`, `mutes` | yok — mobil bildirimler bugün `events`'ten türetiliyor |
 | `push_subscriptions` | yok — `spec/40-push.md` |
+| `attachments` (§3b) | **kurulu** — `009_attachments.sql`; karar aşağıda §"Açık noktalar" madde 1 |
 
 Kurulu tablolardaki farklar: `items`'a `dms` ve `pillar` (TEXT) eklendi; okunabilir kısa
 kod sütunu (`BUT-1042`) **henüz yok** — arama bugün başlık/açıklama üzerinden çalışıyor.
@@ -207,6 +208,66 @@ Kurallar:
 
 ---
 
+## 3b. Medya ekleri
+
+Kaynak uyarlamasındaki açık nokta 1 karara bağlandı (bkz. sonundaki not).
+Sözleşme dosyası (bu özelliğin donduğu arayüz) commit geçmişinde durur;
+şema aşağıdaki gibi kuruldu (`009_attachments.sql`):
+
+```sql
+create table attachments (
+  id            uuid primary key default gen_random_uuid(),
+  event_id      uuid not null references events(id) on delete cascade,
+  uploader_id   uuid references users(id) on delete set null,
+  mime          text not null
+                check (mime in ('image/jpeg','image/png','image/webp','image/gif')),
+  byte_size     bigint not null check (byte_size > 0),
+  width         integer,
+  height        integer,
+  original_name text,
+  storage_key   text not null unique,
+  thumb_key     text,
+  created_at    timestamptz not null default now(),
+  deleted_at    timestamptz,
+  deleted_by    uuid references users(id) on delete set null
+);
+create index on attachments(event_id);
+```
+
+Kurallar:
+
+- Ek, kartın değil **olayın** (`events`) altına asılır — bir mesaj bir eke
+  sahip olur. Şema birden çok eki destekler (FK tekil değil), ama arayüz ve
+  rotalar **tek dosya** ile sınırlı; genişletmek gerekirse şema değişmez.
+- `storage_key`/`thumb_key` **göreli** yol (`"2026/09/<uuid>.jpg"`). Mutlak
+  yol ne veritabanında ne şablonda görünür — kök `config.MEDIA_ROOT`'tan gelir.
+- Silme **yumuşak**: `deleted_at`/`deleted_by` yazılır, `events` satırı ve
+  metni kalır, balon "(görsel silindi)" gösterir. Blob'lar gerçekten silinir
+  (`shared/media.remove`); veritabanı satırı iz olarak durur.
+- `events.body not null` kısıtı **değişmedi** — yalnız görselli bir mesajda
+  `body = ''` yazılır, boş metin yasak değil.
+
+**Karar (2026-09-10, daha önce açık nokta):**
+
+| Soru | Karar |
+|---|---|
+| Saklama süresi | **Kalıcı.** Otomatik silme/arşivleme yok; yazar veya admin elle siler. |
+| Depolama | Düz POSIX dizin (`config.MEDIA_ROOT`), Pi'de SATA disk üzerinde bind mount — uygulama SMB **konuşmaz**. Samba açılırsa aynı dizini yalnızca **salt okunur** yeniden dışarı verir (`deploy/nix-ekiptakip-media.nix`, kapalı). |
+| Dosya sayısı | Kart/duvar mesajı başına **tam bir** görsel. |
+| Boyut ve tip | **10 MB**, yalnızca JPEG/PNG/WebP/GIF. |
+| İşleme | Pillow: EXIF-uyumlu döndürme sonrası yeniden kodlama + EXIF temizleme + küçük resim (WebP). |
+
+Kılavuzlar görünümü ve kart ek kutusu artık bu karara bağlı **değil**
+(`spec/60-kaynak-uyarlama.md` §2.4, §2.7 güncellendi); ek kutusu yazıldı,
+`dosyalar` modülü ise ayrı bir iş olarak bekliyor (bkz. `TODO.md`).
+
+Not: dosya yükleme açıldığı için README'deki "yükleme yok = o saldırı yüzeyi
+yok" satırı düştü — yerine gelen savunmalar (tip beyaz listesi, magic-byte
+koklama, yeniden kodlama, 10 MB tavan, kimlik doğrulamalı servis, `nosniff`)
+`README.md` "Bilgi güvenliği" bölümünde yazılı.
+
+---
+
 ## 4. Değişiklik talepleri
 
 Değişiklik **anında uygulanır**, talep sadece "kesinleşti mi" sorusunu tutar.
@@ -352,13 +413,17 @@ Oturumları veritabanında tutmak yerine imzalı çerez kullan; bu ölçekte tab
 
 ## Açık noktalar (karar bekliyor)
 
-1. **Karta dosya eklenmesi:** 🚧 yön belli, karar değil. Kalıcı evde dockerize +
-   NAS bağlama düşünülüyor; `attachments` tablosu dosya meta'sını tutar, dosya
-   diske/NAS'a yazılır. Açık soru — saklama süresi: ekler kalıcı mı, yoksa kayıt
-   kapandıktan sonra arşivlenmemişse 30 günde silinsin mi? Kılavuzlar görünümü ve
-   kart ek kutusu (`spec/60-kaynak-uyarlama.md` 2.4, 2.7) bu karara bağlı.
-   Not: dosya yükleme açıldığı an README'deki "yükleme yok = o saldırı yüzeyi yok"
-   satırı düşer; kapı (Access) şartı burada da geçerli.
+1. **Karta dosya eklenmesi:** ✅ karara bağlandı, kuruldu (§3b). Kalıcı ev
+   (Pi) SATA diskini bind mount olarak kullanır, `attachments` tablosu dosya
+   meta'sını tutar (`009_attachments.sql`). Saklama **kalıcı** — otomatik
+   silme/arşivleme yok, yazar veya admin elle siler. Mesaj başına tam bir
+   görsel, 10 MB, yalnızca JPEG/PNG/WebP/GIF. Kılavuzlar görünümü ve kart ek
+   kutusu (`spec/60-kaynak-uyarlama.md` 2.4, 2.7) artık bu kararın üstünde
+   duruyor; 2.7 (`dosyalar` modülü) hâlâ yazılmadı ama artık **belirsiz bir
+   soruya değil**, ayrı bir yapım işine bağlı bekliyor.
+   Not: dosya yükleme açıldığı için README'deki "yükleme yok = o saldırı
+   yüzeyi yok" satırı düştü; yerine gelen savunmalar ve kapı (Access) şartı
+   `README.md` "Bilgi güvenliği" bölümünde güncel.
 2. **Hata ilişkileri:** "Sevkiyat gecikmesi, bütçe onayından kaynaklanıyor" bağını tutan
    `item_links` tablosu — kök neden analizini zincir halinde göstermeyi sağlar.
    (`items.origin_team_id` bunun ucuz ön hali — §3.)

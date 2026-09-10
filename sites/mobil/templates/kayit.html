@@ -26,8 +26,14 @@
 {% endblock %}
 
 {% block bottom %}
-<form class="dcomp" hx-post="{{ mp }}/record/{{ item.id }}/message" hx-target="#feed" hx-swap="beforeend">
+<form class="dcomp" hx-post="{{ mp }}/record/{{ item.id }}/message" hx-target="#feed" hx-swap="beforeend"
+      hx-encoding="multipart/form-data">
   <div class="in">
+    <label class="attach{% if not can_edit %} disabled{% endif %}" title="Görsel ekle">
+      📎<span class="fname" data-role="attach-name"></span>
+      <input type="file" name="image" accept="image/jpeg,image/png,image/webp,image/gif"
+             {% if not can_edit %}disabled{% endif %} hidden>
+    </label>
     <input name="body" placeholder="{{ 'Mesaj yaz…' if can_edit else 'Bu kartta yazma yetkin yok' }}"
            autocomplete="off" {% if not can_edit %}disabled{% endif %}>
     <button class="primary" {% if not can_edit %}disabled{% endif %}>Gönder</button>

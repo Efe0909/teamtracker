@@ -65,6 +65,18 @@ VAPID_SUB = os.getenv("VAPID_SUB", "mailto:yonetici@polonyum.com")
 # birakma.
 PUSH_TEST = os.getenv("EKIPTAKIP_PUSH_TEST") == "1"
 
+# --- medya ekleri (spec/ ekler) --------------------------------------------
+# Duz POSIX yol: uygulama SMB konusmuyor. Samba, acilirsa, ayni dizini salt
+# okunur yeniden disari verir (bkz. sozlesme §1).
+MEDIA_ROOT = os.getenv("EKIPTAKIP_MEDIA_ROOT") or str(Path(__file__).resolve().parents[1] / "var/media")
+
+# X-Accel-Redirect oneki (CONTRACT-V2.md §10) — bos: --workers 1'in TEK isci
+# surecinin butun medya baytlarini kendi FileResponse'uyla sunmasi, gelistirme
+# ve test suitinin bugune kadarki yolu. Doluysa (orn. "/_media") rota bos govde
+# + bu baslikla doner, byte'i nginx'teki `internal;` location sunar — proxy_cache
+# DEGIL: yetki HER istekte uygulamada kalir, sadece bayt itme nginx'e gecer.
+MEDIA_ACCEL = os.getenv("EKIPTAKIP_MEDIA_ACCEL", "")
+
 SESSION_COOKIE = "ekiptakip"          # yayinda __Secure- onekiyle (bkz. cookie_name)
 SESSION_MAX_AGE = 30 * 24 * 3600            # 30 gun: telefondaki uygulama surekli sormasin
 
@@ -169,6 +181,10 @@ def validate() -> list[str]:
     if in_production() and not COOKIE_DOMAIN:
         warnings.append("EKIPTAKIP_COOKIE_DOMAIN yok: iki alan adinda ayri ayri "
                         "giris yapmak gerekir.")
+
+    if in_production() and not (os.path.isdir(MEDIA_ROOT) and os.access(MEDIA_ROOT, os.W_OK)):
+        warnings.append(f"MEDIA_ROOT yazilabilir bir dizin degil: {MEDIA_ROOT!r}. "
+                        "Disk baglanana kadar metin sohbeti calisir, ek yuklemesi patlar.")
 
     if fatal and not _test_run():
         raise SystemExit("GUVENLIK yapilandirmasi eksik:\n  - " + "\n  - ".join(fatal))

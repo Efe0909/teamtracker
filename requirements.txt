@@ -14,3 +14,4 @@ itsdangerous
 python-dotenv
 psycopg[binary,pool]         # PostgreSQL (spec/80-veritabani.md)
 pywebpush                    # web push (spec/40-push.md)
+Pillow                       # medya isleme: yeniden kodlama, EXIF, kucuk resim (spec/ ekler)

@@ -142,13 +142,9 @@ def mobile_ctx(request, user, tab: str | None, title: str, **extra) -> dict:
 
 def mobile_card_ctx(request, item, user) -> dict:
     users = users_by_id()
-    feed = []
-    for e in db.q("select * from events where subject_type='item' and subject_id=%s"
-                  " order by created_at", (item["id"],)):
-        a = users.get(e["author_id"])
-        feed.append({"type": e["event_type"], "body": e["body"], "author": a,
-                     "mine": a is not None and a["id"] == user["id"],
-                     "time": short_time(e["created_at"])})
+    # feed_of ile ayni sorgu-ve-gruplama: burada tekrar yazmak ekleri IKI yerde
+    # ayrica baglamak demekti (sozlesme §8). service.feed_of TEK dogruluk kaynagi.
+    feed = service.feed_of("item", item["id"], user)
     return {
         "request": request, "user": user, "item": item, "row": mobile_row(item, users),
         "assignee": users.get(item["assignee_id"]), "users": list(users.values()),
@@ -268,12 +264,18 @@ def record_page(request: Request, item_id: str):
 
 
 @router.post("/record/{item_id}/message", response_class=HTMLResponse)
-def post_message(request: Request, item_id: str, body: str = Form("")):
+async def post_message(request: Request, item_id: str):
+    service.reject_oversized_upload(request)
+    form = await request.form()
+    body = str(form.get("body") or "")
+    image = form.get("image")
+    image = image if getattr(image, "filename", None) else None
     user = auth.current_user(request)
     item = get_item(item_id)
     if not auth.can_edit_item(user, item, service.TREE):
         raise HTTPException(403, "bu kartta yetkin yok")
-    m = add_message(user, item, body)
+    attachment = service.save_upload(image)
+    m = add_message(user, item, body, attachment)
     if m is None:
         return HTMLResponse("")
     return render(request, "ortak/mesaj.html", {"m": m})

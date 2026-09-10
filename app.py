@@ -17,14 +17,15 @@ from urllib.parse import urlparse
 
 from urllib.parse import quote
 
-from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from fastapi import Depends, FastAPI, Form, HTTPException, Request, Response
 from fastapi.exception_handlers import http_exception_handler
 from fastapi.responses import (FileResponse, HTMLResponse, JSONResponse,
                                RedirectResponse)
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
-from shared import auth, config, csrf, db, hardening, identity, push, service
+from shared import attachments, auth, config, csrf, db, hardening, identity, media, push, service
+from shared.render import SHARED_DIR, site_templates
 from sites.dashboard import routes as dashboard
 from sites.mobil import routes as mobil
 
@@ -87,6 +88,9 @@ async def lifespan(_app: FastAPI):
     for name in db.migrate():           # uygulanmamis goc dosyalari sirayla kosar
         print(f"[ekiptakip] goc uygulandi: {name}", file=sys.stderr)
     service.rebuild_tree()
+    # ASLA raise etmez (CONTRACT-V2.md §8): bagli disk yoksa metin sohbeti
+    # calisir, ek yuklemesi patlar — config.validate()'in zaten aldigi durus.
+    attachments.sync_volume()
     yield
 
 
@@ -195,6 +199,157 @@ def whoami(request: Request):
     return JSONResponse({"id": str(u["id"]), "name": u["name"], "email": u["email"],
                          "is_admin": db.as_bool(u["is_admin"]),
                          "scope": service.TREE.name(u["scope_node_id"]) if u["scope_node_id"] else None})
+
+
+# --- medya ekleri (sozlesme §6) --------------------------------------------
+#
+# Iki router'da degil DOGRUDAN app'te, /whoami gibi: /media/* iki alan
+# adinda da calismali. LoginGate zaten kapsiyor, ayrica bir istisna eklenmez.
+
+_MEDIA_TPL = site_templates(SHARED_DIR)     # ortak/mesaj.html'i tek basina cizmek icin
+
+
+def _attachment_or_404(attachment_id: str) -> dict:
+    """uuid gecersizse ya da satir yok/silinmisse 404 — 500 degil.
+
+    db.uid() gecersiz girdide None doner; bu ayni zamanda
+    /media/../../etc/passwd gibi bir yolu da yol asimi degil "bulunamadi"
+    yapan mekanizmadir (sozlesme §6). Satirin kendisi shared/attachments.py'den
+    gelir — burasi sadece 404/silinmis kontrolu yapar.
+    """
+    row = attachments.get(attachment_id)
+    if row is None or row["deleted_at"] is not None:
+        raise HTTPException(404, "ek yok")
+    return row
+
+
+def _content_disposition(name: str | None, fallback: str) -> str:
+    """Content-Disposition degeri: CR/LF yok, tirnak kacagi yok, ASCII yedek.
+
+    RFC 5987 `filename*` gercek (UTF-8) adi tasir; duz `filename=` ASCII'ye
+    indirgenmis bir yedek — CR/LF ve tirnak elenir ki baslik kacagi olmasin.
+    """
+    raw = (name or fallback).replace("\r", " ").replace("\n", " ").strip() or fallback
+    ascii_name = raw.encode("ascii", "ignore").decode("ascii").replace('"', "").strip() or fallback
+    return f'inline; filename="{ascii_name}"; filename*=UTF-8\'\'{quote(raw, safe="")}'
+
+
+def _serve_blob(row: dict, thumb: bool, mime: str, filename: str | None,
+                 fallback: str) -> Response:
+    """Byte'i yolla. MEDIA_ACCEL bosken bugunku FileResponse; doluyken bos govde
+    + X-Accel-Redirect (CONTRACT-V2.md §10) — iki yol da AYNI kilitleme
+    kontrolunden (attachments.abs_path / accel_relpath) gecer.
+    """
+    headers = {
+        "Content-Disposition": _content_disposition(filename, fallback),
+        # id'ler DEGISMEZ (silinen ek zaten 404): sonsuza kadar onbellekle.
+        "Cache-Control": "private, max-age=31536000, immutable",
+    }
+    if config.MEDIA_ACCEL:
+        try:
+            rel = attachments.accel_relpath(row, thumb=thumb)
+        except media.MediaError:
+            raise HTTPException(404, "ek yok")          # bozuk kayit, 500 degil
+        headers["X-Accel-Redirect"] = f"{config.MEDIA_ACCEL}/{quote(rel)}"
+        headers["Content-Type"] = mime
+        return Response(status_code=200, headers=headers)
+
+    try:
+        path = attachments.abs_path(row, thumb=thumb)
+    except media.MediaError:
+        raise HTTPException(404, "ek yok")              # bozuk kayit, 500 degil
+    if not path.is_file():
+        raise HTTPException(404, "ek yok")
+    return FileResponse(path, media_type=mime, headers=headers)
+
+
+@app.get("/media/{attachment_id}")
+def get_attachment(request: Request, attachment_id: str):
+    user = auth.current_user(request)
+    row = _attachment_or_404(attachment_id)
+    if not attachments.can_view(user, row):
+        raise HTTPException(403, "bu eki görme yetkin yok")
+    return _serve_blob(row, False, row["mime"], row["original_name"], attachment_id)
+
+
+@app.get("/media/{attachment_id}/thumb")
+def get_attachment_thumb(request: Request, attachment_id: str):
+    """Kucuk resim; thumb_key yoksa TAM goruntuye duser (sozlesme §6)."""
+    user = auth.current_user(request)
+    row = _attachment_or_404(attachment_id)
+    if not attachments.can_view(user, row):
+        raise HTTPException(403, "bu eki görme yetkin yok")
+    has_thumb = bool(row["thumb_key"])
+    mime = media.THUMB_MIME if has_thumb else row["mime"]     # dususte GERCEK mime
+    return _serve_blob(row, has_thumb, mime, row["original_name"], f"{attachment_id}-thumb")
+
+
+@app.delete("/media/{attachment_id}", response_class=HTMLResponse)
+def delete_attachment(request: Request, attachment_id: str):
+    """Yumusak silme: deleted_at/deleted_by yazilir, sonra blob'lar silinir.
+
+    events satiri ve metni KALIR — balon "(görsel silindi)" mezar tasiyla
+    yeniden cizilir (sozlesme §6). Yetki: yukleyen ya da admin.
+    """
+    user = auth.current_user(request)
+    row = _attachment_or_404(attachment_id)
+    if not attachments.can_delete(user, row):
+        raise HTTPException(403, "bu eki silme yetkin yok")
+    attachments.soft_delete(row, user)
+    # Bugun SADECE 'event' baglaniyor (CONTRACT-V2 §1b); baska bir owner_type
+    # icin (item/node/team) henuz cizilecek bir balon yok — bos govde donulur,
+    # varsayim degil GERCEK bir dal ayrimi (sozlesme §9).
+    if row["owner_type"] != "event":
+        return HTMLResponse("")
+    m = service.event_message(row["owner_id"], user)
+    return _MEDIA_TPL.TemplateResponse(request, "ortak/mesaj.html", {"m": m})
+
+
+# --- etiketler (CONTRACT-V2.md §6) ------------------------------------------
+#
+# Serit AYRI bir sablonda (ortak/tag_strip.html) ve akistaki balon da ayni
+# parcayi include ediyor: yanit ile akis tek kaynaktan cizilsin. HTML'i
+# Python'da dizgi olarak kurmak kacisi elle tasimak demekti — Jinja'nin
+# select_autoescape'i o isi zaten yapiyor (README "XSS'e karsi kacis acik").
+
+
+def _tag_strip(request: Request, row: dict) -> HTMLResponse:
+    """Bir ekin etiket seridini yeniden cizer (POST/DELETE ortak donusu)."""
+    tags = attachments.tags_for([row["id"]]).get(row["id"], [])
+    return _MEDIA_TPL.TemplateResponse(
+        request, "ortak/tag_strip.html",
+        {"media": {"id": row["id"], "tags": tags, "can_tag": True}})
+
+
+@app.post("/media/{attachment_id}/tags", response_class=HTMLResponse)
+def add_media_tag(request: Request, attachment_id: str, name: str = Form(...)):
+    user = auth.current_user(request)
+    row = _attachment_or_404(attachment_id)
+    if not attachments.can_tag(user, row):
+        raise HTTPException(403, "bu eki etiketleme yetkin yok")
+    attachments.add_tag(user, row, name)
+    return _tag_strip(request, row)
+
+
+@app.delete("/media/{attachment_id}/tags/{tag_id}", response_class=HTMLResponse)
+def remove_media_tag(request: Request, attachment_id: str, tag_id: str):
+    user = auth.current_user(request)
+    row = _attachment_or_404(attachment_id)
+    if not attachments.can_tag(user, row):
+        raise HTTPException(403, "bu eki etiketleme yetkin yok")
+    attachments.remove_tag(user, row, tag_id)
+    return _tag_strip(request, row)
+
+
+@app.get("/tags")
+def list_tags(request: Request):
+    """Sozluk — datalist icin (CONTRACT-V2.md §6)."""
+    user = auth.current_user(request)
+    if user is None:
+        return JSONResponse({"hata": "oturum yok"}, status_code=401)
+    return JSONResponse({"tags": [
+        {"id": str(t["id"]), "name": t["name"], "slug": t["slug"], "color": t["color"]}
+        for t in attachments.all_tags()]})
 
 
 # --- web push (spec/40-push.md) -------------------------------------------

@@ -73,9 +73,63 @@
   .sys{align-self:center;font-size:11.5px;color:var(--dim);background:var(--panel);
        border:1px solid var(--line);border-radius:999px;padding:4px 14px;box-shadow:var(--sh)}
 
+  /* ---- balon içi ek görsel: küçük resim, silinmişse taşbaşı ---- */
+  /* width/height <img> özniteliklerinden geliyor (shared/media.py) — CSS onları
+     zorlamaz, yalnızca üst sınır koyar; tarayıcı en-boy oranını öznitelikten
+     çıkarıp yüklenirken sıçramayı önlüyor (height:auto bu yüzden şart). */
+  .bmedia{margin-top:6px;position:relative;display:inline-block;max-width:100%;line-height:0}
+  .bimg{display:block;max-width:min(240px,100%);max-height:280px;width:auto;height:auto;
+        border-radius:10px;background:var(--panel2)}
+  .mdel{position:absolute;top:5px;right:5px;width:22px;height:22px;padding:0;border:none;
+        border-radius:50%;background:rgba(30,20,55,.55);color:#fff;font-size:11px;line-height:1;
+        display:grid;place-items:center;box-shadow:none}
+  .mdel:hover{background:rgba(30,20,55,.82);color:#fff;border-color:transparent}
+  .mtomb{margin-top:6px;display:flex;align-items:center;gap:5px;color:var(--dim);
+         font-size:12px;font-style:italic;line-height:1.4}
+  .msg.me .bub .mtomb{color:rgba(255,255,255,.75)}
+
+  /* ---- kompozer ataç iliştirme: gerçek input gizli, .attach etiket sürüyor ---- */
+  .attach{display:inline-flex;align-items:center;gap:3px;flex-shrink:0;cursor:pointer;
+          border:1px solid var(--line);background:var(--panel);color:var(--dim);
+          border-radius:9px;padding:6px 9px;font-size:13px}
+  .attach:hover{border-color:var(--acc-s);color:var(--acc)}
+  .attach.disabled{opacity:.55;cursor:not-allowed;pointer-events:none}
+  .attach .fname{max-width:120px;font-size:11px;color:var(--dim);overflow:hidden;
+                 text-overflow:ellipsis;white-space:nowrap}
+
   /* ---- durum/öncelik renkleri + küçük durumlar ---- */
   .v-open,.v-critical{color:var(--err)} .v-in_progress{color:var(--acc)}
   .v-pending,.v-high{color:var(--warn)} .v-closed{color:var(--ok)}
   .lock{font-size:11px;color:var(--dim);border:1px dashed var(--line);border-radius:8px;
         padding:3px 8px}
   .empty{color:var(--dim);font-size:13px;padding:18px;text-align:center}
+
+/* --- ek etiketleri (ortak/tag_strip.html) --------------------------------
+   Gorselin ALTINDA, ona gore ikincil: kucuk, dusuk kontrast, sarilan satir.
+   Balonun kendi genisligini zorlamasin diye chip'ler wrap eder. */
+.tag-strip { display:flex; flex-wrap:wrap; gap:4px; align-items:center; margin-top:5px }
+.tag-chip {
+  display:inline-flex; align-items:center; gap:3px;
+  font-size:11px; line-height:1.6; padding:0 6px;
+  border:1px solid var(--line); border-radius:9px;
+  background:rgba(0,0,0,.03); color:inherit; opacity:.85;
+}
+.tag-del {
+  border:0; background:none; padding:0; margin:0; cursor:pointer;
+  font-size:12px; line-height:1; color:inherit; opacity:.5;
+}
+.tag-del:hover { opacity:1 }
+.tag-add { display:inline-flex; gap:3px; align-items:center }
+.tag-add input {
+  font-size:11px; width:82px; padding:1px 5px;
+  border:1px dashed var(--line); border-radius:9px; background:transparent; color:inherit;
+}
+.tag-add button {
+  border:1px solid var(--line); background:none; border-radius:9px;
+  font-size:11px; line-height:1.5; padding:0 6px; cursor:pointer; color:inherit; opacity:.7;
+}
+.tag-add button:hover { opacity:1 }
+/* Kendi mesajimin balonu koyu/gradient: kenarlik ve zemin oraya gore. */
+.msg.me .bub .tag-chip { border-color:rgba(255,255,255,.35); background:rgba(255,255,255,.12) }
+.msg.me .bub .tag-add input,
+.msg.me .bub .tag-add button { border-color:rgba(255,255,255,.35) }

@@ -1,0 +1,25 @@
+{# fragment: tag_strip — BIR ekin etiketleri.
+   Iki yerde ayni parca: akista (ortak/mesaj.html icinden include) ve etiket
+   uclarinin yanitinda (POST/DELETE /media/{id}/tags). Uc seridi tek basina
+   dondurur, htmx id'sinden bulup yerine koyar — balonun tamami yeniden
+   cizilmez.
+   Yetki sunucuda: can_tag False ise kontroller HIC BASILMAZ (disabled degil). #}
+<div class="tag-strip" id="tag-strip-{{ media.id }}">
+  {% for t in media.tags %}
+  <span class="tag-chip"{% if t.color %} style="border-color:{{ t.color }}"{% endif %}>{{ t.name }}
+    {% if media.can_tag %}
+    <button type="button" class="tag-del" title="Etiketi kaldır"
+            hx-delete="/media/{{ media.id }}/tags/{{ t.id }}"
+            hx-target="#tag-strip-{{ media.id }}" hx-swap="outerHTML">×</button>
+    {% endif %}
+  </span>
+  {% endfor %}
+  {% if media.can_tag %}
+  <form class="tag-add" hx-post="/media/{{ media.id }}/tags"
+        hx-target="#tag-strip-{{ media.id }}" hx-swap="outerHTML">
+    <input type="text" name="name" list="tag-list" placeholder="etiket…"
+           maxlength="60" autocomplete="off" required>
+    <button type="submit" title="Etiket ekle">+</button>
+  </form>
+  {% endif %}
+</div>

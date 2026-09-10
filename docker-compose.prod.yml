@@ -58,6 +58,23 @@ services:
       # .env'deki DATABASE_URL'i kasten EZER — oradaki degeri elle 'db' yapmak
       # unutuluyor ve hata "connection refused" olarak geliyor.
       DATABASE_URL: postgresql://${POSTGRES_USER:-ekiptakip}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-ekiptakip}
+      # Konteyner icindeki yol SABIT (Dockerfile bunu 10001:10001 olarak
+      # onceden olusturuyor). Ana makinedeki karsiligi asagidaki bind mount.
+      EKIPTAKIP_MEDIA_ROOT: /data/media
+    # DIKKAT — isimli volume DEGIL, bind mount. Bilerek: medyanin GERCEK
+    # diskte (SATA, Pi'deki kalici ev) durmasi gerekiyor; isimli bir volume
+    # bunu Docker'in kendi veri dizini altina (`/var/lib/docker/volumes/...`,
+    # genelde SD kart) gomer ve "medya SATA'da" varsayimini SESSIZCE bozar —
+    # disk dolana kadar kimse fark etmez. EKIPTAKIP_MEDIA_DIR'i o yuzden HER
+    # ZAMAN gercek bir host yoluna isaret ettir (Pi'de: NixOS modulundeki
+    # /home/efe/sata/ekiptakip/media, bkz. deploy/nix-ekiptakip-media.nix).
+    #
+    # Varsayilan `./var/media` (compose'un calistigi dizine gore, yani depo
+    # kokune gore) yalnizca bare `docker compose up` calissin diye var —
+    # gelistirmede/denemede sessizce bir dizin belirir, yayinda EKIPTAKIP_MEDIA_DIR
+    # HER ZAMAN acikca verilmeli.
+    volumes:
+      - ${EKIPTAKIP_MEDIA_DIR:-./var/media}:/data/media
     depends_on:
       db:
         condition: service_healthy

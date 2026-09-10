@@ -106,6 +106,55 @@ Sunucuda 8000'i başka bir `default_server` tutuyorsa nginx açılmaz —
 `sudo nginx -t` bunu söyler; çakışan bloğu kaldır ya da bu dosyadaki
 `default_server` sözcüğünü sil.
 
+## Medya (ekler)
+
+Kart sohbetine ve takım duvarına yüklenen görseller (`spec/20-sema.md` §3b)
+`docker-compose.prod.yml` içinde `app` servisine bağlanan bir dizine yazılır:
+
+```yaml
+volumes:
+  - ${EKIPTAKIP_MEDIA_DIR:-./var/media}:/data/media
+```
+
+**Bilerek bind mount, isimli Docker volume DEĞİL.** Medyanın gerçek diskte
+durması gerekiyor (Pi'de: SATA); isimli bir volume Docker'ın kendi veri
+dizinine (genelde sistem diski/SD kart) gömülür ve bu varsayımı **sessizce**
+bozar — disk dolana kadar kimse fark etmez. `EKIPTAKIP_MEDIA_DIR` bu yüzden
+her zaman gerçek bir host yoluna işaret etmeli; varsayılan `./var/media`
+yalnızca bare `docker compose up` denemesi bozulmasın diyedir.
+
+Konteyner içindeki yol sabit: `/data/media`, sahibi **uid 10001**
+(Dockerfile'daki `ekiptakip` kullanıcısı). Host tarafındaki dizin de aynı
+sayısal uid'e yazılabilir olmalı — isimle değil, çünkü konteynerin
+`/etc/passwd`'inde host'un kullanıcı adları yok.
+
+**Taşımak/yerleştirmek** (ör. ikinci bir diske):
+
+```bash
+EKIPTAKIP_MEDIA_DIR=/yeni/yol docker compose -f docker-compose.prod.yml up -d
+```
+
+Dizin önceden var olmalı ve uid 10001 tarafından yazılabilir olmalı. Değilse
+`shared/config.py::validate()` yalnızca **uyarı** verir (metin sohbeti
+çalışmaya devam eder, `in_production()` doğruysa uyarı loglanır) — ilk
+görsel yükleme denemesi diskte yazma hatasıyla patlar.
+
+Efe'nin NixOS kurulumunda bu adım elle yapılmaz:
+`deploy/nix-ekiptakip-media.nix` dizini `systemd.tmpfiles.rules` ile
+10001:10001 sahipli olarak SATA diskinde oluşturur ve değeri
+`systemd.services.ekiptakip`'e geçirir — ayrıntı ve "disk yoksa ne olur"
+sorusunun cevabı (`RequiresMountsFor`) modülün kendi yorumunda.
+
+**Yedek — bilinen bir boşluk.** Yukarıdaki "Yedek" bölümündeki `pg_dump`
+yalnızca veritabanını alır, medya dosyalarını **almaz**. Pi kurulumunda
+medya SATA diskinde durur ve `~/nix`'teki `services.restic.backups.yerel`
+o diski (`/home/efe/sata`) kendini sonsuz döngüyle yedeklememek için
+**bilerek** `exclude` listesine koyuyor (`modules/configuration.nix`).
+Sonuç: **bugün hiçbir mekanizma medya dosyalarını yedeklemiyor** — disk
+arızası tüm ekleri götürür. Bu örtük olarak çözülmüş sayılmamalı; üçüncü
+bir yedek hedefi (ayrı disk/uzak sunucu) `~/nix`'in kendi kararı, bu
+depodan çözülmez.
+
 ## agenix ile sırlar (NixOS)
 
 Sunucu NixOS'sa `.env`'i makinede elle tutmak yerine age ile şifreleyip depoda
@@ -223,7 +272,9 @@ Makefile kısayolları: `make yayin-ac`, `make yayin-kapat`, `make yayin-log`,
   için ya `down -v` (VERİ GİDER) ya da elle `alter user ... with password`.
 - **Yayın volume'ü geliştirmeninkinden ayrı** (`ekiptakip-pgdata-yayin`).
   Aynı isim verilseydi `docker-compose.yml` ile aynı veriyi paylaşırlardı.
-- **Yedek:** veri yalnızca volume'de.
+- **Yedek:** veri yalnızca volume'de. **Bu, medya eklerini kapsamaz** —
+  görseller ayrı bir bind mount'ta yaşar, ayrıntı ve bilinen boşluk yukarıda
+  "Medya (ekler)" bölümünde.
 
   ```bash
   docker compose -f docker-compose.prod.yml exec -T db \

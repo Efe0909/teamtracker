@@ -34,7 +34,7 @@ Kaynak sistemden uyarlanacak ekranlar. Sıra, `app.py` içindeki `MODULES` kayd�
 | | Takvim | `takvim` | | | | bekliyor |
 | | Görev Tanımları & Şemalar | `tanimlar` | | `60-kaynak-uyarlama.md` 2.8 | | bekliyor |
 | | Ekip Arşivi | `arsiv` | | | | bekliyor |
-| | Dosyalar / NAS | `dosyalar` | var (git'te değil) | `60-kaynak-uyarlama.md` 2.7 | | 🚧 ek kararına bağlı |
+| | Dosyalar / NAS | `dosyalar` | var (git'te değil) | `60-kaynak-uyarlama.md` 2.7 | | bekliyor — karar verildi (`20-sema.md` §3b), modül henüz yazılmadı |
 | | WDS panosu | `wds` | var (git'te değil) | `60-kaynak-uyarlama.md` 2.9 | | 🚧 rutin kararına bağlı |
 | | Yönetim Paneli | `admin` | yok — kaynakta karşılığı yok | `71-yonetim-paneli.md` | `iskelet/admin.html` | **yazıldı** |
 
