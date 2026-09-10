@@ -169,31 +169,39 @@ bile geçmiş satırı kalır"*. Node geçmişi node'dan uzun yaşıyor. Ayrıca
 `add_node` her node için bir oluşturma olayı yazıyor; events sayılsaydı
 **hiçbir node virgin olamazdı** ve özellik hiç çalışmazdı.
 
-### 6.2 Sert silme: yalnız virgin node, yalnız yetkiyle
+### 6.2 Sert silme: iki kademe
 
-| node | ne yapılabilir |
+| node | kim silebilir |
 |---|---|
-| **virgin** (hiçbir bağımlılık yok) | `delete_nodes` kapsamıyla **sert silinebilir** — kaybolan geçmiş yok |
-| **virgin değil** | **yalnız pasifleştirilir.** Sert silme yok, hiçbir yetkiyle. |
+| **virgin** (hiçbir bağımlılık yok) | o dalda **düzenleyebilen herkes** — ayrı kapsam yok |
+| **virgin değil** | `hard_delete_nodes` kapsamı **ayrıca** gerekir |
 
-Gerekçe: geçmiş kaybı kabul edilmiyor (§6). Virgin node'un kaybedecek geçmişi
-zaten yoktur — yanlışlıkla açılmış, adı yanlış yazılmış, boş bir node ağacı
-kirletiyorsa gitsin. Bağımlısı olan node ise ancak pasifleşir; `items` ve
-`user_node_scopes` FK'leri `on delete cascade` olduğu için sert silme orada
-sessizce kayıt götürürdü.
+Virgin node silmek ayrıcalık istemez: kaybolan geçmiş yok, yanlışlıkla açılmış
+ya da adı yanlış yazılmış boş bir node ağacı kirletiyorsa onu ekleyebilen kişi
+kaldırabilmeli de. Kontrol, her yapı değişikliğindeki kontrolün aynısı —
+`authorized_on_node(user, node_id)`: `edit_nodes` kapsamı + o dalda (ya da bir
+üstünde) `user_node_scopes` izni. İzin alt ağaca miras kaldığı için "node'u ve
+üstünü düzenleyebilen" zaten bu yüklemin karşılığı.
 
-> Alternatif (alınmadı): kapsam, virgin olmayan node'u da silebilsin. Bu
-> "her şeyi götürebilen düğme" demek olurdu; kaçış kapısı gerçekten gerekirse
-> ayrı ve açıkça adlandırılmış bir işlem olarak eklenir.
-
-Yeni kapsam (`shared/scope.py`, göç ile `scopes` tablosuna):
+Virgin olmayanı silmek ayrı bir şey: `items` ve `user_node_scopes` FK'leri
+`on delete cascade`, `nodes.parent_id` de öyle — yani silme **kayıtları, alt
+ağacı ve dal izinlerini** birlikte götürür. Bu yüzden ikinci bir kapsam:
 
 ```python
-"delete_nodes": "Boş düğümü kalıcı sil (yalnız hiçbir şeye bağlı olmayanlar)",
+"hard_delete_nodes": "Bağımlısı olan düğümü kalıcı sil (kayıtlar ve alt ağaç dahil)",
 ```
 
 `edit_nodes` gibi **düğüm bağımlıdır** (`NODE_DEPENDENT`): kapsam tek başına
-yetmez, silinecek dalda `user_node_scopes` izni de gerekir.
+yetmez, silinecek dalda izin de gerekir.
+
+**Onay kutusu neyi götüreceğini sayar** — "3 alt düğüm, 12 kayıt, 2 dal izni
+silinecek" gibi. Kapsam yetkiyi verir, sayı kararı kullanıcıya verdirir;
+`delete_node` bugün de alt ağaç sayısını geçmişe yazıyor
+(`tests/test_scope.py::test_silme_gecmisi_alt_agac_sayisini_yazar`), aynı
+bilgi onaya taşınır.
+
+Gündelik "bu artık kullanılmıyor" işinin doğru aracı hâlâ **pasifleştirmedir**
+(§6): geçmişi korur, geri alınabilir.
 
 ### 6.3 Tür değiştirme
 
@@ -267,12 +275,12 @@ değiştirmez; `user_node_scopes` tek yetki kaynağı olarak kalır.
 | yer | ne olur |
 |---|---|
 | `shared/nodes.py` (yeni) | `NODE_TYPES`, `ROOT_ONLY`, `is_virgin`, tür sorguları |
-| `shared/scope.py` | yeni kapsam `delete_nodes` (+ `NODE_DEPENDENT`) |
+| `shared/scope.py` | yeni kapsam `hard_delete_nodes` (+ `NODE_DEPENDENT`) |
 | `shared/service.py` | `add_node`/`update_node`/`move_node` tür + yerleşim kontrolü |
 | `shared/tree.py` | `TreeIndex` tür-farkında dilim (`nodes_of_type`) |
 | `shared/filters.py` | `_pillar_options()` artık pillar node'larından — `TASK-220` kapanır |
 | `sites/dashboard/routes.py` | veri yönetimi formunda tür `<select>`; Ekipler node projeksiyonundan |
-| göç (yeni) | `nodes.is_active`, `node_type` enum'a eşleme, `teams.node_id` sıkılaştırma, `items.pillar` düşürme, `scopes`'a `delete_nodes` satırı |
+| göç (yeni) | `nodes.is_active`, `node_type` enum'a eşleme, `teams.node_id` sıkılaştırma, `items.pillar` düşürme, `scopes`'a `hard_delete_nodes` satırı |
 
 `TASK-220` (pillar filtresi ölü metin kutusu) bu işin doğal sonucu olarak
 kapanır: seçenekler artık `select distinct pillar from items` yerine pillar
