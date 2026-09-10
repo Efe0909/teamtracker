@@ -14,7 +14,7 @@ from authlib.integrations.starlette_client import OAuth
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from . import config, db, hardening
+from . import auth, config, db, hardening
 from .render import SHARED_DIR
 from .render import site_templates
 
@@ -153,8 +153,20 @@ async def login(request: Request, next: str = "/"):
     if hardening.limit_exceeded(request):
         log_event(request, "login_denied", detail="hiz siniri")
         return hardening.too_many_attempts()
+    # "Zaten girmissin" demeden ONCE kullanicinin gercekten COZULDUGUNU
+    # dogrula. Oturumda uid olmasi yetmez: satir silinmis, `is_active=false`
+    # yapilmis (yonetim paneli!) ya da veritabani sifirlanmis olabilir.
+    #
+    # Dogrulamazsak LoginGate ile bu uc birbirini suclar ve tarayici SONSUZ
+    # DONGUYE girer: LoginGate `auth.current_user()` (DB'ye bakar) None
+    # gorup buraya yollar, burasi ham oturuma bakip "girmissin" deyip geri
+    # yollar. Ustelik dongunun kendisi GET /login'i dovup hiz sinirini
+    # tuketir ve 429'a duser — belirti "cok fazla deneme" olur, oysa kimse
+    # giris denemesi yapmamistir.
     if session_user_id(request):
-        return RedirectResponse(safe_return(next), status_code=303)
+        if auth.current_user(request) is not None:
+            return RedirectResponse(safe_return(next), status_code=303)
+        close_session(request)        # bayat oturum: temizle, akis bastan bassin
     if config.fake_identity():
         return _page(request)
     request.session["login_return"] = safe_return(next)
