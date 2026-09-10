@@ -22,6 +22,8 @@ SCOPES: dict[str, str] = {
     "edit_nodes": "Yapıyı düzenle — düğüm ekle, adlandır, taşı, sil",
     "manage_users": "Kullanıcı ekle, kapat, yetki ver",
     "manage_teams": "Takım kur, üye ekle ve çıkar",
+    "create_tags": "Etiket sözlüğünü genişlet — yeni etiket adı tanımla",
+    "tag_media": "Ekleri etiketle — katıldığın sohbetlerdeki görsellere etiket ekle/çıkar",
 }
 
 # Dugum bazli izin ISTEYEN kapsamlar. Bunlar icin kapsam tek basina yetmez;

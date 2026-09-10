@@ -103,3 +103,33 @@
   .lock{font-size:11px;color:var(--dim);border:1px dashed var(--line);border-radius:8px;
         padding:3px 8px}
   .empty{color:var(--dim);font-size:13px;padding:18px;text-align:center}
+
+/* --- ek etiketleri (ortak/tag_strip.html) --------------------------------
+   Gorselin ALTINDA, ona gore ikincil: kucuk, dusuk kontrast, sarilan satir.
+   Balonun kendi genisligini zorlamasin diye chip'ler wrap eder. */
+.tag-strip { display:flex; flex-wrap:wrap; gap:4px; align-items:center; margin-top:5px }
+.tag-chip {
+  display:inline-flex; align-items:center; gap:3px;
+  font-size:11px; line-height:1.6; padding:0 6px;
+  border:1px solid var(--line); border-radius:9px;
+  background:rgba(0,0,0,.03); color:inherit; opacity:.85;
+}
+.tag-del {
+  border:0; background:none; padding:0; margin:0; cursor:pointer;
+  font-size:12px; line-height:1; color:inherit; opacity:.5;
+}
+.tag-del:hover { opacity:1 }
+.tag-add { display:inline-flex; gap:3px; align-items:center }
+.tag-add input {
+  font-size:11px; width:82px; padding:1px 5px;
+  border:1px dashed var(--line); border-radius:9px; background:transparent; color:inherit;
+}
+.tag-add button {
+  border:1px solid var(--line); background:none; border-radius:9px;
+  font-size:11px; line-height:1.5; padding:0 6px; cursor:pointer; color:inherit; opacity:.7;
+}
+.tag-add button:hover { opacity:1 }
+/* Kendi mesajimin balonu koyu/gradient: kenarlik ve zemin oraya gore. */
+.msg.me .bub .tag-chip { border-color:rgba(255,255,255,.35); background:rgba(255,255,255,.12) }
+.msg.me .bub .tag-add input,
+.msg.me .bub .tag-add button { border-color:rgba(255,255,255,.35) }

@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException
 
-from . import auth, db, media
+from . import attachments, auth, db, media
 from .tree import TreeIndex
 
 STATUSES = {"open": "Açık", "in_progress": "Devam", "pending": "Beklemede", "closed": "Kapandı"}
@@ -269,16 +269,19 @@ def actions_of(item_id: str) -> list:
 
 def last_line(item_id: str) -> str:
     r = db.q1(
-        "select e.body, u.name,"
-        " exists(select 1 from attachments a where a.event_id = e.id"
-        "  and a.deleted_at is null) has_media"
+        "select e.id, e.body, u.name"
         " from events e left join users u on u.id = e.author_id"
         " where e.subject_type='item' and e.subject_id=%s"
         " order by e.created_at desc limit 1", (item_id,))
     if not r:
         return ""
+    # Ekin ownership'i attachments.py'nin isi (CONTRACT-V2 §9): buradan sadece
+    # "bu olayin SILINMEMIS eki var mi" soruluyor, owner_type='event' varsayimi
+    # burada degil for_owners'in sorgusunda kalir.
+    row_media = attachments.for_owners("event", [r["id"]]).get(r["id"], [])
+    has_media = any(m["deleted_at"] is None for m in row_media)
     # Govdesiz gorsel mesaj bos govde birakmaz — satir "Ad: " gibi yarim kalmasin.
-    body = r["body"] if (r["body"] or not r["has_media"]) else "📷 görsel"
+    body = r["body"] if (r["body"] or not has_media) else "📷 görsel"
     return f"{r['name']}: {body}" if r["name"] else body
 
 
@@ -313,8 +316,9 @@ def log(subject_id: str, etype: str, author_id: str | None, body: str,
         subject_type: str = "item"):
     """Olay yaz, ID'sini dondurur.
 
-    Donus degeri gerekli: bir eke sahip mesajda attachments.event_id FK'i bu
-    satiri gosterir, o yuzden ek yazilmadan once olayin id'si elde olmali.
+    Donus degeri gerekli: bir eke sahip mesajda attachments.attach() owner_id
+    olarak (owner_type='event') bu id'yi alir, o yuzden ek yazilmadan once
+    olayin id'si elde olmali.
     """
     event_id = db.new_id()
     db.x("insert into events (id,subject_type,subject_id,event_type,author_id,body,created_at)"
@@ -323,11 +327,12 @@ def log(subject_id: str, etype: str, author_id: str | None, body: str,
     return event_id
 
 
-# --- medya ekleri (sozlesme §7-8) -------------------------------------------
+# --- medya ekleri (sozlesme §7-8, genis sahiplik CONTRACT-V2.md §4) --------
 #
 # Depolama + goruntu isleme shared/media.py'de (HTTP'den, kullanicidan bihaber).
-# Burasi tek bilen taraf: bir ekin HANGI olaya bagli oldugunu ve akista nasil
-# gorunecegini bilir.
+# Sahiplik/izin/etiket shared/attachments.py'de (CONTRACT-V2 §9: owner_type='event'
+# varsayimi SADECE orada). Burasi ikisini bir araya getirir: bir mesajin ekini
+# olaya (owner_type='event') baglar ve akis/balon sozlugune cevirir.
 
 
 def reject_oversized_upload(request) -> None:
@@ -355,45 +360,36 @@ def save_upload(image) -> dict | None:
         raise HTTPException(413 if e.code == "too_large" else 400, e.message) from e
 
 
-def _insert_attachment(event_id, user, saved: dict) -> dict:
-    """media.save() ciktisini attachments satirina yazar (olayla ayni mantiksal islem).
+def _media_view(rows: list[dict], user, tags_by_id: dict, can_tag: bool) -> list[dict]:
+    """Ek satirlarini sablonun bekledigi ekran sozlugune cevirir.
 
-    Donen sozluk feed_of ile AYNI bicimde: storage_key sablona hic ulasmaz.
+    can_delete BURADA hesaplanir: attachments.for_owners() kullaniciyi bilmez
+    (CONTRACT-V2 §4 imzasi geregi — ayni satirlar farkli kullanicilar icin
+    farkli can_delete gorebilsin, ekstra sorgu gerekmez, attachments.can_delete
+    saf bir hesap). storage_key sablona hic ulasmaz.
+
+    tags_by_id ve can_tag DISARIDAN gelir, burada hesaplanmaz: ikisi de sorgu
+    ister ve bu islev akistaki her olay icin bir kez cagriliyor — iceride
+    hesaplansalardi 20 gorselli bir kart 40 sorgu ederdi (spec/10-kararlar.md
+    N+1 yasagi).
     """
-    attachment_id = db.new_id()
-    db.x(
-        "insert into attachments (id,event_id,uploader_id,mime,byte_size,width,height,"
-        "original_name,storage_key,thumb_key,created_at)"
-        " values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
-        (attachment_id, event_id, user["id"], saved["mime"], saved["byte_size"],
-         saved.get("width"), saved.get("height"), saved.get("original_name"),
-         saved["storage_key"], saved.get("thumb_key"), db.now()))
-    return {"id": attachment_id, "mime": saved["mime"], "width": saved.get("width"),
-            "height": saved.get("height"), "original_name": saved.get("original_name"),
-            "deleted": False, "can_delete": True}
+    return [{"id": r["id"], "mime": r["mime"], "width": r["width"], "height": r["height"],
+             "original_name": r["original_name"], "deleted": r["deleted_at"] is not None,
+             "can_delete": attachments.can_delete(user, r),
+             "can_tag": can_tag, "tags": tags_by_id.get(r["id"], [])} for r in rows]
 
 
-def _attachments_by_event(event_ids, user) -> dict:
-    """Tum olaylarin ekleri TEK sorguda; event_id'ye gore Python'da gruplanir.
+def _tag_context(rows: list[dict], user) -> tuple[dict, bool]:
+    """Bir akisin TAMAMI icin etiketler + etiketleme yetkisi, sabit maliyetle.
 
-    Kayit basina ayri bir sorgu N+1 olurdu (spec/10-kararlar.md 'Sorgular').
-    Silinen satirlar da doner (deleted=True) — balon "silindi" mezar tasiyla
-    cizilsin diye; yalnizca /media/* ucu silineni 404'ler.
+    Yetki tek bir ek icin hesaplanip hepsine uygulaniyor: bir akistaki butun
+    ekler AYNI konuya (ayni kart ya da ayni takim duvari) asili, dolayisiyla
+    katilim sorusunun cevabi hepsinde ayni. Ek basina sormak ayni cevabi
+    N kez satin almak olurdu.
     """
-    ids = [i for i in event_ids if i is not None]
-    if not ids:
-        return {}
-    rows = db.q(
-        "select id, event_id, uploader_id, mime, width, height, original_name, deleted_at"
-        " from attachments where event_id = any(%s) order by created_at", (ids,))
-    out: dict = {}
-    for r in rows:
-        out.setdefault(r["event_id"], []).append({
-            "id": r["id"], "mime": r["mime"], "width": r["width"], "height": r["height"],
-            "original_name": r["original_name"], "deleted": r["deleted_at"] is not None,
-            "can_delete": user is not None and (
-                db.as_bool(user["is_admin"]) or r["uploader_id"] == user["id"])})
-    return out
+    if not rows:
+        return {}, False
+    return attachments.tags_for([r["id"] for r in rows]), attachments.can_tag(user, rows[0])
 
 
 def feed_of(subject_type: str, subject_id, user) -> list[dict]:
@@ -405,14 +401,20 @@ def feed_of(subject_type: str, subject_id, user) -> list[dict]:
     users = users_by_id()
     rows = db.q("select * from events where subject_type = %s and subject_id = %s"
                 " order by created_at", (subject_type, db.uid(subject_id)))
-    media_by_event = _attachments_by_event([e["id"] for e in rows], user)
+    # TEK sorgu, tum akis icin (spec/10-kararlar.md N+1 yasagi) — owner_type='event'
+    # varsayimi burada DEGIL, attachments.for_owners'in kendi sorgusunda kalir.
+    media_by_event = attachments.for_owners("event", [e["id"] for e in rows])
+    # Etiketler ve etiketleme yetkisi de TEK sefer, akisin tamami icin.
+    flat = [r for rs in media_by_event.values() for r in rs]
+    tags_by_id, can_tag = _tag_context(flat, user)
     out = []
     for e in rows:
         a = users.get(e["author_id"])
         out.append({"type": e["event_type"], "body": e["body"], "author": a,
                     "mine": a is not None and a["id"] == user["id"],
                     "time": short_time(e["created_at"]),
-                    "media": media_by_event.get(e["id"], [])})
+                    "media": _media_view(media_by_event.get(e["id"], []), user,
+                                         tags_by_id, can_tag)})
     return out
 
 
@@ -428,27 +430,31 @@ def event_message(event_id, user) -> dict | None:
         return None
     users = users_by_id()
     a = users.get(e["author_id"])
-    media_by_event = _attachments_by_event([e["id"]], user)
+    media_by_event = attachments.for_owners("event", [e["id"]])
+    rows = media_by_event.get(e["id"], [])
+    tags_by_id, can_tag = _tag_context(rows, user)
     return {"type": e["event_type"], "body": e["body"], "author": a,
             "mine": a is not None and a["id"] == user["id"],
             "time": short_time(e["created_at"]),
-            "media": media_by_event.get(e["id"], [])}
+            "media": _media_view(rows, user, tags_by_id, can_tag)}
 
 
 def add_message(user, item, body: str, attachment: dict | None = None) -> dict | None:
     """Mesaj yaz, istege bagli TEK ekle. Yetki cagiran ucta kontrol edilir.
 
     attachment, media.save()'in ciktisidir — olay ve ek satiri ayni mantiksal
-    islemde yazilir: once olay (id gerekli), sonra ona bagli ek.
+    islemde yazilir: once olay (id gerekli), sonra attachments.attach() ile
+    ona bagli ek (owner_type='event').
     """
     body = body.strip()
     if not body and not attachment:
         return None
     event_id = log(item["id"], "message", user["id"], body)
-    saved = _insert_attachment(event_id, user, attachment) if attachment else None
+    saved = attachments.attach("event", event_id, user["id"], attachment) if attachment else None
     db.x("update items set updated_at = %s where id = %s", (db.now(), item["id"]))
     return {"type": "message", "body": body, "author": user, "mine": True,
-            "time": short_time(db.now()), "media": [saved] if saved else []}
+            "time": short_time(db.now()), "media": _media_view([saved], user, *_tag_context([saved], user))
+            if saved else []}
 
 
 def add_team_message(user, team, body: str, attachment: dict | None = None) -> dict | None:
@@ -461,9 +467,10 @@ def add_team_message(user, team, body: str, attachment: dict | None = None) -> d
     if not body and not attachment:
         return None
     event_id = log(team["id"], "message", user["id"], body, subject_type="team")
-    saved = _insert_attachment(event_id, user, attachment) if attachment else None
+    saved = attachments.attach("event", event_id, user["id"], attachment) if attachment else None
     return {"type": "message", "body": body, "author": user, "mine": True,
-            "time": short_time(db.now()), "media": [saved] if saved else []}
+            "time": short_time(db.now()), "media": _media_view([saved], user, *_tag_context([saved], user))
+            if saved else []}
 
 
 def change_field(user, item, form) -> bool:

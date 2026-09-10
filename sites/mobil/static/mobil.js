@@ -89,3 +89,27 @@ document.body.addEventListener("change", e => {
     return Uint8Array.from(atob(padded), c => c.charCodeAt(0));
   }
 })();
+
+// --- etiket sozlugu: datalist'i TEK SEFER doldur --------------------------
+// Her balon icin degil, ilk odaklanmada bir kez: sozluk sayfa omru boyunca
+// degismiyor. hx-on= yok (CSP unsafe-eval istemiyor) — delege dinleyici.
+(function () {
+  var loaded = false;
+  document.body.addEventListener("focusin", function (e) {
+    if (loaded || !e.target.closest(".tag-add input")) return;
+    loaded = true;
+    fetch("/tags", { headers: { "Accept": "application/json" } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        var dl = document.getElementById("tag-list");
+        if (!d || !dl) return;
+        dl.innerHTML = "";
+        d.tags.forEach(function (t) {
+          var o = document.createElement("option");
+          o.value = t.name;
+          dl.appendChild(o);
+        });
+      })
+      .catch(function () { loaded = false; });   // yeniden denenebilsin
+  });
+})();

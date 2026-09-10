@@ -1,4 +1,4 @@
-{ lib, ... }:
+{ ... }:
 
 # EkipTakip — medya ekleri icin ek modul (bagimsiz, hazir yapistir).
 #

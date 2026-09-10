@@ -30,6 +30,7 @@
                   hx-target="closest .msg" hx-swap="outerHTML"
                   hx-confirm="Bu görseli silmek istediğine emin misin?">🗑</button>
           {% endif %}
+          {% include "ortak/tag_strip.html" %}
         </div>
         {% endif %}
       {% endfor %}
