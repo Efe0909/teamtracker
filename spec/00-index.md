@@ -12,6 +12,7 @@
 | `61-arastirma-sentezi.md` | araştırma sentezi |
 | `70-guvenlik.md` | tehdit modeli, kimlik, yetki, CSRF, sırlar, denetim izi |
 | `71-yonetim-paneli.md` | admin ekranı: kullanıcı/scope/rol yönetimi, kilitlenme koruması |
+| `72-node-turleri.md` | node_type enum + tür projeksiyonları (teams/pillar), yaşam döngüsü — **tasarım** |
 | `60-kaynak-uyarlama.md` | kaynak panoların çözümlemesi: veri hattı, ekran ekran uyarlama, alınmayacaklar |
 | `61-arastirma-sentezi.md` | IWS ve ekip araçları kaynak taraması — bizim ölçeğe uyan/uymayan pratikler |
 | `referans/` | kaynak arayüz dosyaları (`spec/referans/layout-a.html`) |
