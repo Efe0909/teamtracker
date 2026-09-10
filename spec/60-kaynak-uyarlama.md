@@ -108,8 +108,11 @@ Eklenecekler:
    `items`'a az sayıda sabit alan: tekrar eden mi, kaynak takım. Öneri
    `spec/20-sema.md §3a`.
 
-Ekler kutusu (WhatsApp medya sekmesi gibi): 🚧 — `attachments` kararına bağlı
-(`spec/20-sema.md` açık nokta 1).
+Ekler kutusu (WhatsApp medya sekmesi gibi): ✅ yazıldı. `attachments` kararı
+verildi (`spec/20-sema.md` §3b): kalıcı saklama, mesaj başına tek görsel,
+10 MB, JPEG/PNG/WebP/GIF. Küçük resme tıklayınca tam görsel yeni sekmede
+açılır (lightbox yok — o JS ayrı bir iş, `TODO.md`). Silinen ek "(görsel
+silindi)" damgasıyla yerinde kalır, olay akışından düşmez.
 
 ### 2.5 Ekipler → yeni modül `ekipler`
 
@@ -140,9 +143,13 @@ istediğimizde ağacın zaten doğru soyutlama olduğu anlamına gelir. KPI alan
 ### 2.7 Kılavuzlar → 🚧 `dosyalar` modülünün altına
 
 Etiket+filtre ile taranan eğitim/doküman kütüphanesi ("üyelere atılan mail nasıl
-olmalı" vb.). Tamamen `attachments` kararına bağımlı; bağımsız bir modül olarak
-**şimdi açılmaz**. Karar sonrası `dosyalar` modülünün bir görünümü olur
-(düğüme/takıma bağlı dosya + etiket).
+olmalı" vb.). **Artık belirsiz bir karara değil, yapılmamış bir işe bağlı**:
+`attachments` kararı verildi ve kart içi/duvar eki olarak kuruldu
+(`spec/20-sema.md` §3b), ama o altyapı yalnızca JPEG/PNG/WebP/GIF, mesaj
+başına tek dosya kabul ediyor — kılavuz kütüphanesinin istediği etiketli,
+çok formatlı (PDF dahil) genel dosya deposu ayrı bir modül. Bağımsız bir
+ekran olarak **hâlâ açılmadı**; sıraya girdiğinde `dosyalar` modülünün bir
+görünümü olur (düğüme/takıma bağlı dosya + etiket).
 
 ### 2.8 Prosedürler → uyarlanmaz; `tanimlar` modülü karşılar
 
@@ -177,7 +184,7 @@ sürümde rutinsiz, sadece kayıt/eylem nabzıyla açılabilir.
 | `items.team_id` | kayıt takıma tanımlanır | **karar** — §3a |
 | `items.recurring`, `items.origin_team_id` | sabit sınıflandırma alanları | öneri — §3a |
 | okunabilir kod | açık nokta 4, öne çekildi | Faz 2 başı |
-| `attachments` | açık nokta 1; docker+NAS yönü, saklama süresi sorusu | 🚧 |
+| `attachments` | kalıcı saklama, SATA disk, tek dosya/mesaj, 10 MB, JPEG/PNG/WebP/GIF | **karar** — §3b |
 | rutinler / WDS | açık nokta 5 (yeni) | 🚧 |
 | düğüm KPI'ları | açık nokta 6 (yeni) | 🚧 |
 

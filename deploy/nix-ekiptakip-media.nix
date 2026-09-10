@@ -19,7 +19,7 @@
 # kapali) henuz verilmedi — o kararin gelecekteki karsiligi da kendi
 # alaninda dursun, ana uygulama modulunu sismesin.
 #
-# ÖNEMLİ — ayrica bak: teamtracker'daki deploy/DOCKER.md ve
+# ONEMLI — ayrica bak: teamtracker'daki deploy/DOCKER.md ve
 # deploy/nginx-ekiptakip*.conf 10 MB'lik yuklemeyi kabul edecek sekilde
 # guncellendi (client_max_body_size 12m). Bu depodaki
 # modules/nginx/ekiptakip.nix HALA 2m — bu modul ona DOKUNMUYOR (baska
@@ -66,7 +66,7 @@ in
   # EKIPTAKIP_ENV_FILE icin yasamis: o degisken de --env-file'daki dosyanin
   # ICINDE degil, systemd `environment.` alaninda duruyor, cunku compose
   # dosyasindaki `env_file: ${EKIPTAKIP_ENV_FILE:-.env}` satiri da AYNI
-  # sureç-ortami interpolasyonuyla cozuluyor. Ayni mekanizma, ikinci
+  # surec-ortami interpolasyonuyla cozuluyor. Ayni mekanizma, ikinci
   # degisken: `environment.` uzerinden gecen deger, `docker compose` alt
   # sureci baslatildiginda onun ortaminda hazir bulunuyor ve YAML'daki
   # ${...} referanslarini dolduruyor — --env-file'a hic ihtiyac yok, ayri
@@ -129,7 +129,7 @@ in
   # };
   #
   # configuration.nix bu ikisini SAMBA ACILINCA diye kendi yorumlarinda
-  # zaten anti­cipate ediyor (avahi: "samba ile birlikte acilir"; firewall:
+  # zaten ongoruyor (avahi: "samba ile birlikte acilir"; firewall:
   # "Samba acilirsa: ... 139 445"). 80 zaten configuration.nix'te tanimli
   # oldugu icin burada YALNIZCA 139/445 var — liste tipli secenekler NixOS'ta
   # modul basina EKLENIR (uzerine yazilmaz), yani acildiginda sonuc

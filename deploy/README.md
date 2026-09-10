@@ -213,6 +213,35 @@ Geri yükleme (boş veritabanına): `pg_restore -d ekiptakip /yedek/....dump`
 **`make seed` / `make reseed` varolan veritabanını siler.** Yayındaki makinede
 çalıştırma; `make dev` yerine `systemctl restart ekiptakip` kullan.
 
+## Medya (ekler)
+
+Kart sohbetine ve takım duvarına yüklenen görseller (`spec/20-sema.md` §3b)
+`config.MEDIA_ROOT` altına yazılır. Bu kurulumda (Docker yok, uygulama
+doğrudan uvicorn ile) o kök tek bir ortam değişkeniyle belirlenir:
+
+```
+EKIPTAKIP_MEDIA_ROOT=/gercek/diskin/yolu
+```
+
+Boş bırakılırsa depo kökünde `var/media` kullanılır (`.gitignore`'da,
+commit'e girmez) — tek makinelik denemede yeter, gerçek kurulumda gerçek
+bir diske işaret etmeli.
+
+**Servis kullanıcısının (`efe`, `deploy/ekiptakip.service`) o dizine yazma
+izni olmalı.** Varsayılan yol zaten depo altında (`WorkingDirectory` de
+`/home/efe/...`) olduğu için ekstra bir şey gerekmez; `EKIPTAKIP_MEDIA_ROOT`'u
+`/home` dışına taşırsan `ekiptakip.service`'teki `ProtectSystem=full`
+sertleştirmesinin o yolu **salt okunur** bırakmadığını doğrula — gerekirse
+birime `ReadWritePaths=` ekle (bu dosya `ekiptakip.service`'e dokunmuyor,
+o satırı eklemek adminin işi).
+
+**Yedek:** yukarıdaki `pg_dump` yalnızca veritabanını alır, medyayı
+**kapsamaz**. Ekler `EKIPTAKIP_MEDIA_ROOT` altında düz dosyalar olarak
+durur — hangi araçla yedekliyorsan (rsync, restic, tar+cron) o dizini de
+kapsama al; aksi halde ekler hiçbir yerde ikinci bir kopya olmadan tek
+diskte kalır. (Efe'nin NixOS/Docker kurulumundaki karşılığı ve orada
+**hâlâ çözülmemiş** yedek boşluğu için `deploy/DOCKER.md` "Medya (ekler)".)
+
 ## Push (Faz 3)
 
 Tünel HTTPS verdiği için web push'un ön şartı karşılandı: iOS'ta web push **yalnızca

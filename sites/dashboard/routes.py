@@ -242,12 +242,18 @@ def item_view(item_id: str):
 
 
 @router.post("/item/{item_id}/message", response_class=HTMLResponse)
-def post_message(request: Request, item_id: str, body: str = Form("")):
+async def post_message(request: Request, item_id: str):
+    service.reject_oversized_upload(request)
+    form = await request.form()
+    body = str(form.get("body") or "")
+    image = form.get("image")
+    image = image if getattr(image, "filename", None) else None
     user = auth.current_user(request)
     item = get_item(item_id)
     if not auth.can_edit_item(user, item, service.TREE):
         raise HTTPException(403, "bu kartta yetkin yok")
-    m = add_message(user, item, body)
+    attachment = service.save_upload(image)
+    m = add_message(user, item, body, attachment)
     if m is None:
         return HTMLResponse("")
     return render(request, "ortak/mesaj.html", {"m": m})
@@ -341,12 +347,18 @@ def team_page(request: Request, team_id: str):
 
 
 @router.post("/team/{team_id}/message", response_class=HTMLResponse)
-def post_team_message(request: Request, team_id: str, body: str = Form("")):
+async def post_team_message(request: Request, team_id: str):
+    service.reject_oversized_upload(request)
+    form = await request.form()
+    body = str(form.get("body") or "")
+    image = form.get("image")
+    image = image if getattr(image, "filename", None) else None
     user = auth.current_user(request)
     team = service.get_team(team_id)
     if not auth.can_post_team(user, team["id"]):
         raise HTTPException(403, "bu takımın üyesi değilsin")
-    m = service.add_team_message(user, team, body)
+    attachment = service.save_upload(image)
+    m = service.add_team_message(user, team, body, attachment)
     if m is None:
         return HTMLResponse("")
     return render(request, "ortak/mesaj.html", {"m": m})

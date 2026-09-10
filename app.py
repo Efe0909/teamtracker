@@ -24,7 +24,8 @@ from fastapi.responses import (FileResponse, HTMLResponse, JSONResponse,
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
-from shared import auth, config, csrf, db, hardening, identity, push, service
+from shared import auth, config, csrf, db, hardening, identity, media, push, service
+from shared.render import SHARED_DIR, site_templates
 from sites.dashboard import routes as dashboard
 from sites.mobil import routes as mobil
 
@@ -195,6 +196,108 @@ def whoami(request: Request):
     return JSONResponse({"id": str(u["id"]), "name": u["name"], "email": u["email"],
                          "is_admin": db.as_bool(u["is_admin"]),
                          "scope": service.TREE.name(u["scope_node_id"]) if u["scope_node_id"] else None})
+
+
+# --- medya ekleri (sozlesme §6) --------------------------------------------
+#
+# Iki router'da degil DOGRUDAN app'te, /whoami gibi: /media/* iki alan
+# adinda da calismali. LoginGate zaten kapsiyor, ayrica bir istisna eklenmez.
+
+_MEDIA_TPL = site_templates(SHARED_DIR)     # ortak/mesaj.html'i tek basina cizmek icin
+
+
+def can_view(user, attachment) -> bool:
+    """Ek, asıldığı kartın kuralına uyar.
+
+    BUGÜN: oturumu olan herkes kartları okuyabiliyor (routes.task_page kapsam
+    kontrolü yapmıyor), o yüzden ek de öyle. Kart okuması daraltılırsa
+    değişecek İKİNCİ yer burasıdır.
+    """
+    return user is not None
+
+
+def _attachment_or_404(attachment_id: str) -> dict:
+    """uuid gecersizse ya da satir yok/silinmisse 404 — 500 degil.
+
+    db.uid() gecersiz girdide None doner; bu ayni zamanda
+    /media/../../etc/passwd gibi bir yolu da yol asimi degil "bulunamadi"
+    yapan mekanizmadir (sozlesme §6).
+    """
+    id_ = db.uid(attachment_id)
+    row = (db.q1("select * from attachments where id = %s and deleted_at is null", (id_,))
+           if id_ is not None else None)
+    if row is None:
+        raise HTTPException(404, "ek yok")
+    return row
+
+
+def _content_disposition(name: str | None, fallback: str) -> str:
+    """Content-Disposition degeri: CR/LF yok, tirnak kacagi yok, ASCII yedek.
+
+    RFC 5987 `filename*` gercek (UTF-8) adi tasir; duz `filename=` ASCII'ye
+    indirgenmis bir yedek — CR/LF ve tirnak elenir ki baslik kacagi olmasin.
+    """
+    raw = (name or fallback).replace("\r", " ").replace("\n", " ").strip() or fallback
+    ascii_name = raw.encode("ascii", "ignore").decode("ascii").replace('"', "").strip() or fallback
+    return f'inline; filename="{ascii_name}"; filename*=UTF-8\'\'{quote(raw, safe="")}'
+
+
+def _blob_response(path, mime: str, filename: str | None, fallback: str) -> FileResponse:
+    if not path.is_file():
+        raise HTTPException(404, "ek yok")
+    return FileResponse(path, media_type=mime, headers={
+        "Content-Disposition": _content_disposition(filename, fallback),
+        # id'ler DEGISMEZ (silinen ek zaten 404): sonsuza kadar onbellekle.
+        "Cache-Control": "private, max-age=31536000, immutable",
+    })
+
+
+@app.get("/media/{attachment_id}")
+def get_attachment(request: Request, attachment_id: str):
+    user = auth.current_user(request)
+    row = _attachment_or_404(attachment_id)
+    if not can_view(user, row):
+        raise HTTPException(403, "bu eki görme yetkin yok")
+    try:
+        path = media.path_of(row["storage_key"])
+    except media.MediaError:
+        raise HTTPException(404, "ek yok")            # bozuk kayit, 500 degil
+    return _blob_response(path, row["mime"], row["original_name"], attachment_id)
+
+
+@app.get("/media/{attachment_id}/thumb")
+def get_attachment_thumb(request: Request, attachment_id: str):
+    """Kucuk resim; thumb_key yoksa TAM goruntuye duser (sozlesme §6)."""
+    user = auth.current_user(request)
+    row = _attachment_or_404(attachment_id)
+    if not can_view(user, row):
+        raise HTTPException(403, "bu eki görme yetkin yok")
+    has_thumb = bool(row["thumb_key"])
+    key = row["thumb_key"] if has_thumb else row["storage_key"]
+    mime = media.THUMB_MIME if has_thumb else row["mime"]     # dususte GERCEK mime
+    try:
+        path = media.path_of(key)
+    except media.MediaError:
+        raise HTTPException(404, "ek yok")
+    return _blob_response(path, mime, row["original_name"], f"{attachment_id}-thumb")
+
+
+@app.delete("/media/{attachment_id}", response_class=HTMLResponse)
+def delete_attachment(request: Request, attachment_id: str):
+    """Yumusak silme: deleted_at/deleted_by yazilir, sonra blob'lar silinir.
+
+    events satiri ve metni KALIR — balon "(görsel silindi)" mezar tasiyla
+    yeniden cizilir (sozlesme §6). Yetki: yukleyen ya da admin.
+    """
+    user = auth.current_user(request)
+    row = _attachment_or_404(attachment_id)
+    if not (row["uploader_id"] == user["id"] or db.as_bool(user["is_admin"])):
+        raise HTTPException(403, "bu eki silme yetkin yok")
+    db.x("update attachments set deleted_at = %s, deleted_by = %s where id = %s",
+         (db.now(), user["id"], row["id"]))
+    media.remove(row["storage_key"], row["thumb_key"])
+    m = service.event_message(row["event_id"], user)
+    return _MEDIA_TPL.TemplateResponse(request, "ortak/mesaj.html", {"m": m})
 
 
 # --- web push (spec/40-push.md) -------------------------------------------

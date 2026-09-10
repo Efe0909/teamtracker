@@ -176,6 +176,54 @@ tek yönlü göç hâlâ TODO.
 
 ---
 
+## 4. Medya ekleri (kart sohbeti + takım duvarı) — YAZILDI
+
+**Durum: YAZILDI** (`spec/20-sema.md` §3b, göç `009_attachments.sql`).
+Kaynak uyarlamasındaki açık nokta 1 (`spec/60-kaynak-uyarlama.md` 2.4, 2.7)
+karara bağlandı ve o karar uygulandı: kalıcı saklama, mesaj başına tek
+görsel, 10 MB, yalnızca JPEG/PNG/WebP/GIF, dosyalar Pi'nin SATA diskinde
+(bind mount, `deploy/nix-ekiptakip-media.nix`).
+
+### Yapılan
+
+- [x] `attachments` tablosu, `shared/media.py` (doğrula, EXIF-uyumlu
+      döndür, yeniden kodla, küçük resim üret).
+- [x] Kart sohbeti ve takım duvarı — `image: UploadFile` mevcut mesaj
+      uçlarına eklendi, yeni uç açılmadı.
+- [x] Servis uçları `/media/{id}` ve `/media/{id}/thumb` — kimlik
+      doğrulamalı, `Content-Type` veritabanından sabit, `nosniff`.
+- [x] Yumuşak silme: yazar veya admin siler, olay akışında
+      "(görsel silindi)" damgası kalır, blob gerçekten silinir.
+- [x] Dockerfile + `docker-compose.prod.yml`: `/data/media` (uid 10001),
+      host'tan bind mount (`EKIPTAKIP_MEDIA_DIR`), nginx şablonları 10 MB'a
+      açıldı (`client_max_body_size 12m`).
+
+### Bilerek dışarıda bırakılanlar (kapsam bu turda genişlemedi)
+
+- **Lightbox yok.** Küçük resme tıklayınca tam görsel yeni sekmede açılır;
+  sayfa içi büyütme/gezinme ayrı bir JS işi (`spec/` sözleşmesi, "no
+  lightbox — that needs JS we are not writing yet").
+- **Mesaj başına tam bir dosya.** Şema birden çoğu destekler
+  (`event_id` FK tekil değil) ama arayüz ve rotalar tek dosyayla sınırlı;
+  çoklu ek ayrı bir iş.
+- **Çöp toplama / saklama aracı yok.** Saklama kararı **kalıcı** —
+  otomatik silme yok, elle silinen dosyaların blob'u anında gider ama
+  "şu tarihten eski, hiç açılmamış ekleri temizle" gibi bir araç yazılmadı;
+  gerekirse ayrı bir iş.
+- **`dosyalar` modülü hâlâ yazılmadı** (`spec/00-index.md`,
+  `spec/60-kaynak-uyarlama.md` 2.7). Kılavuz/etiket kütüphanesi ayrı bir
+  ekran — artık belirsiz bir karara değil, yapılmamış bir işe bağlı
+  bekliyor.
+- **SATA diskindeki medya HİÇBİR ŞEY TARAFINDAN YEDEKLENMİYOR.**
+  `services.restic.backups.yerel` (`~/nix` `modules/configuration.nix`)
+  `/home/efe/sata`'yı kendini yedeklememek için **bilerek** hariç tutuyor —
+  ama bu, o diskteki `ekiptakip/media` alt dizininin de yedek dışı kaldığı
+  anlamına geliyor. Disk arızası = tüm ekler gider. Üçüncü bir yedek hedefi
+  (ayrı disk/uzak sunucu) `~/nix`'in kendi TODO'su, bu depodan çözülmez —
+  bkz. `deploy/DOCKER.md` "Yedek".
+
+---
+
 ## Kural: mobil arayüz kendi alan adında, kökte
 
 `/m` diye bir yol **yoktur** — ne dışarıda ne kodda. Mobil rotalar kökte
