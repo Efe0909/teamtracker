@@ -55,7 +55,7 @@ def is_virgin(node_id: str, counts: dict | None = None) -> bool:
     if counts is None:
         counts = counts_by_node()
     
-    c = counts.get(node_id)
+    c = counts.get(db.uid(node_id))
     if not c:
         return True
         
@@ -68,5 +68,5 @@ def has_projection(node_id: str, counts: dict | None = None) -> bool:
     if counts is None:
         counts = counts_by_node()
         
-    c = counts.get(node_id)
+    c = counts.get(db.uid(node_id))
     return bool(c and c["teams"] > 0)

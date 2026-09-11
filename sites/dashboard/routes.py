@@ -472,11 +472,26 @@ async def update_node(request: Request, node_id: str):
     return render(request, "fragments/agac.html", {"user": user, **_tree_ctx(user)})
 
 
-@router.delete("/node/{node_id}", response_class=HTMLResponse)
-def delete_node(request: Request, node_id: str):
+@router.patch("/node/{node_id}/active", response_class=HTMLResponse)
+def set_node_active(request: Request, node_id: str, active: bool = Form(...)):
     user = auth.current_user(request)
     if not _authorized_on_node(user, node_id):
-        raise HTTPException(403, "bu düğümde silme yetkisi yok")
+        raise HTTPException(403, "bu düğümde düzenleme yetkisi yok")
+    service.set_node_active(node_id, active, changed_by=user["id"])
+    return render(request, "fragments/agac.html", {"user": user, **_tree_ctx(user)})
+
+
+@router.delete("/node/{node_id}", response_class=HTMLResponse)
+def delete_node(request: Request, node_id: str):
+    from shared import nodes
+    user = auth.current_user(request)
+    if not _authorized_on_node(user, node_id):
+        raise HTTPException(403, "bu düğümde düzenleme yetkisi yok")
+        
+    if not nodes.is_virgin(node_id):
+        if not scope.authorized_on_node(user, node_id, "hard_delete_nodes"):
+            raise HTTPException(403, "bu düğüm boş değil, kalıcı silme yetkisi gerekiyor")
+            
     service.delete_node(node_id, deleted_by=user["id"])
     return render(request, "fragments/agac.html", {"user": user, **_tree_ctx(user)})
 

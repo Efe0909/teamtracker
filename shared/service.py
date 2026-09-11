@@ -66,15 +66,21 @@ def _node_event(node_id, author_id, text: str) -> None:
 def add_node(name: str, node_type: str, parent_id=None, description: str | None = None,
              created_by=None) -> dict | None:
     """Yeni dugum. parent_id None ise kok."""
+    from shared import nodes
     name = (name or "").strip()
     node_type = (node_type or "").strip()
-    if not name or not node_type:
+    if not name or not node_type or not nodes.valid(node_type):
         return None
 
     parent = db.uid(parent_id) if parent_id else None
-    if parent is not None and parent not in TREE.nodes:
-        return None                       # olmayan ustun altina yazma
-
+    if parent is not None:
+        if parent not in TREE.nodes:
+            return None                       # olmayan ustun altina yazma
+        if not TREE.nodes[parent].is_active:
+            return None                       # pasif dugum altina eklenmez
+        if node_type in nodes.ROOT_ONLY:
+            return None                       # kok-ozel turler alt dugum olamaz
+    
     # Kardeslerin sonuna: sira numarasi elle verilmiyor, ekleme sirasi korunuyor.
     siblings = TREE.children.get(parent, []) if parent else TREE.roots
     order = max((TREE.nodes[k].sort_order for k in siblings), default=-1) + 1
@@ -92,6 +98,7 @@ def add_node(name: str, node_type: str, parent_id=None, description: str | None 
 def update_node(node_id, name: str | None = None, node_type: str | None = None,
                 description: str | None = None, changed_by=None) -> bool:
     """Ad / tur / aciklama. Verilmeyen alan DEGISMEZ (None = dokunma)."""
+    from shared import nodes
     id_ = db.uid(node_id)
     if id_ is None or id_ not in TREE.nodes:
         return False
@@ -102,8 +109,16 @@ def update_node(node_id, name: str | None = None, node_type: str | None = None,
             return False                  # adsiz dugum agacta okunmaz olur
         fields.append("name = %s"); values.append(name.strip())
     if node_type is not None:
-        if not node_type.strip():
+        if not node_type.strip() or not nodes.valid(node_type):
             return False
+            
+        current_type = TREE.nodes[id_].node_type
+        if node_type != current_type:
+            if nodes.has_projection(id_):
+                return False              # takim/projeksiyon varsa tur degisemez
+            if node_type in nodes.ROOT_ONLY and TREE.parent[id_] is not None:
+                return False              # kok-ozel tur, alt dugum olamaz
+                
         fields.append("node_type = %s"); values.append(node_type.strip())
     if description is not None:
         # Bos metin "aciklamayi sil" demek; None ile karistirma.
@@ -117,19 +132,25 @@ def update_node(node_id, name: str | None = None, node_type: str | None = None,
     new_name = TREE.name(id_)
     _node_event(id_, changed_by,
                 f"{previous_name} -> {new_name} olarak adlandirildi" if previous_name != new_name
-                else f"{new_name} guncellendi")
+                else f"{new_name} güncellendi")
     return True
 
 
 def move_node(node_id, new_parent_id, moved_by=None) -> bool:
     """Dugumu baska bir ustun altina alir. new_parent_id None ise koke cikarir."""
+    from shared import nodes
     id_ = db.uid(node_id)
     if id_ is None or id_ not in TREE.nodes:
         return False
 
     parent = db.uid(new_parent_id) if new_parent_id else None
+    
     if parent is not None:
         if parent not in TREE.nodes:
+            return False
+        if not TREE.nodes[parent].is_active:
+            return False
+        if TREE.nodes[id_].node_type in nodes.ROOT_ONLY:
             return False
         # DONGU KORUMASI: hedef, tasinan dugumun alt agacinda olamaz. Olsaydi
         # agac bir halkaya donerdi ve Euler turu sonsuz donerdi.
@@ -141,6 +162,17 @@ def move_node(node_id, new_parent_id, moved_by=None) -> bool:
     db.x("update nodes set parent_id = %s where id = %s", (parent, id_))
     rebuild_tree()
     _node_event(id_, moved_by, f"{name} {destination} taşındı")
+    return True
+
+
+def set_node_active(node_id, active: bool, changed_by=None) -> bool:
+    id_ = db.uid(node_id)
+    if id_ is None or id_ not in TREE.nodes:
+        return False
+        
+    db.x("update nodes set is_active = %s where id = %s", (active, id_))
+    rebuild_tree()
+    _node_event(id_, changed_by, "düğüm açıldı" if active else "düğüm kapatıldı")
     return True
 
 

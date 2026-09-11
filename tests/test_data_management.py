@@ -234,3 +234,63 @@ def test_yetkisiz_kullanici_sayfayi_gorur_ama_form_yok(client):
         assert "editör yetkisi gerekiyor" in text
     finally:
         _switch(client, db.q1("select id from users where name = 'Efe'")["id"])
+def test_taninmayan_tur_reddedilir(client):
+    assert service.add_node("T-Gecersiz", "olmayan-tur") is None
+
+
+def test_root_only_kurali_gecerlidir(client):
+    # Koke cell eklenebilir
+    c = service.add_node("T-Kok-Cell", "cell")
+    assert c is not None
+    
+    # Alta cell eklenemez
+    assert service.add_node("T-Alt-Cell", "cell", parent_id=c["id"]) is None
+    
+    # Guncelleme sirasinda koke cikarilmamisken cell yapilamaz
+    g = service.add_node("T-Alt-Gen", "generic", parent_id=c["id"])
+    assert service.update_node(g["id"], node_type="cell") is False
+    
+    # Cell olan dugum alta tasinamaz
+    assert service.move_node(c["id"], g["id"]) is False
+
+
+def test_pasif_node_altina_eklenemez_veya_tasinamaz(client):
+    p = service.add_node("T-Pasif-Ust", "generic")
+    service.set_node_active(p["id"], False)
+    
+    # Altina eklenemez
+    assert service.add_node("T-Alt", "generic", parent_id=p["id"]) is None
+    
+    # Altina tasinamaz
+    a = service.add_node("T-Baska", "generic")
+    assert service.move_node(a["id"], p["id"]) is False
+
+
+def test_tur_kilidi_has_projection(client):
+    n = service.add_node("T-Takim-Icin", "generic")
+    # Projection yarat
+    db.x("insert into teams (id, name, node_id, color) values (%s, %s, %s, '#000000')", 
+         (db.new_id(), "T-Takim-X", n["id"]))
+    
+    assert service.update_node(n["id"], node_type="step") is False
+    
+    # Ad degisebilir ama tur degisemez
+    assert service.update_node(n["id"], name="T-Takim-Icin-Yeni") is True
+    assert service.TREE.nodes[n["id"]].node_type == "generic"
+
+
+def test_pasiflestirme_ve_geri_acma(client):
+    n = service.add_node("T-AcKapa", "generic")
+    
+    assert service.set_node_active(n["id"], False)
+    assert not service.TREE.nodes[n["id"]].is_active
+    
+    assert service.set_node_active(n["id"], True)
+    assert service.TREE.nodes[n["id"]].is_active
+
+
+def test_pasif_node_agacta_kalir(client):
+    # Agactan silinmez, sadece is_active=False olur
+    n = service.add_node("T-Pasif", "generic")
+    service.set_node_active(n["id"], False)
+    assert n["id"] in service.TREE.nodes

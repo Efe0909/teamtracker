@@ -252,3 +252,64 @@ def test_tasima_gecmise_yazilir(client):
     event = db.q1("select body from events where subject_type = 'node' and subject_id = %s"
                  " order by created_at desc limit 1", (child["id"],))
     assert "taşındı" in event["body"] and "K-B" in event["body"]
+def test_virgin_node_ek_kapsam_istemez(client):
+    from shared import service, scope
+    u = person("Efe")
+    _switch(client, None)
+    scope.grant_scope(u["id"], "edit_nodes")
+    scope.grant_node_permission(u["id"], node("Malzeme Temini")["id"])
+    
+    p = service.add_node("K-Virgin-Sil", "generic", parent_id=node("Malzeme Temini")["id"])
+    
+    _switch(client, u["id"])
+    assert client.delete(f"/node/{p['id']}").status_code == 200
+
+
+def test_dolu_node_hard_delete_kapsami_ister(client):
+    from shared import service, db, scope
+    u = person("Deniz")
+    
+    _switch(client, None)
+    scope.grant_scope(u["id"], "edit_nodes")
+    scope.grant_node_permission(u["id"], node("Üretim Hattı A")["id"])
+    
+    p = service.add_node("K-Dolu-Sil", "generic", parent_id=node("Üretim Hattı A")["id"])
+    service.add_node("K-Dolu-Cocuk", "step", parent_id=p["id"])
+    
+    _switch(client, u["id"])
+    assert client.delete(f"/node/{p['id']}").status_code == 403
+    
+    _switch(client, None)
+    scope.grant_scope(u["id"], "hard_delete_nodes")
+    
+    _switch(client, u["id"])
+    assert client.delete(f"/node/{p['id']}").status_code == 200
+
+
+def test_hard_delete_kapsami_dal_disinda_islemez(client):
+    from shared import service, scope
+    u = person("Efe")
+    
+    _switch(client, None)
+    scope.grant_scope(u["id"], "edit_nodes")
+    scope.grant_scope(u["id"], "hard_delete_nodes")
+    scope.grant_node_permission(u["id"], node("Malzeme Temini")["id"])
+    
+    _switch(client, u["id"])
+    assert client.delete(f"/node/{node('Bütçe Onayı')['id']}").status_code == 200
+    assert client.delete(f"/node/{node('Dolum Makinesi')['id']}").status_code == 403
+
+
+def test_eski_editor_hard_delete_yapamaz(client):
+    from shared import service, db
+    
+    u_id = db.new_id()
+    db.x("insert into users (id, email, name, is_editor) values (%s, %s, %s, true)", 
+         (u_id, "eski@example.com", "Eski Editor"))
+    u = person("Eski Editor")
+    
+    p = service.add_node("K-Eski-Editor", "generic")
+    service.add_node("K-Eski-Editor-Cocuk", "step", parent_id=p["id"])
+    
+    _switch(client, u["id"])
+    assert client.delete(f"/node/{p['id']}").status_code == 403
