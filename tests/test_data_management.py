@@ -294,3 +294,16 @@ def test_pasif_node_agacta_kalir(client):
     n = service.add_node("T-Pasif", "generic")
     service.set_node_active(n["id"], False)
     assert n["id"] in service.TREE.nodes
+
+
+def test_agac_gorunumu_select_kullanir(client):
+    from shared import db
+    u = db.q1("select id from users where name = 'Selin'") # Admin
+    _switch(client, u["id"])
+    
+    r = client.get("/outcome-tree")
+    html = r.text
+    # Agac formu select icermeli
+    assert '<select name="type"' in html
+    # Kok formu select icermeli
+    assert '<select name="type" required title="tür">' in html
