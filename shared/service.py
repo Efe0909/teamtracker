@@ -41,7 +41,7 @@ TREE: TreeIndex = TreeIndex()
 
 def rebuild_tree() -> TreeIndex:
     global TREE
-    TREE = TreeIndex.build(db.q("select id,parent_id,name,node_type,sort_order from nodes"))
+    TREE = TreeIndex.build(db.q("select id,parent_id,name,node_type,sort_order,is_active from nodes"))
     return TREE
 
 

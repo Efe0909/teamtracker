@@ -125,11 +125,6 @@ class SearchFilter(Filter):
         return "i.search_vector @@ to_tsquery('tr', %s)", [match]
 
 
-def _pillar_options() -> dict[str, str]:
-    return {r["pillar"]: r["pillar"] for r in
-            db.q("select distinct pillar from items where pillar is not null order by pillar")}
-
-
 def active_filters() -> list[Filter]:
     """Her istekte kurulur: pillar secenekleri veriden, dugumler agactan gelir."""
     return [
@@ -139,7 +134,6 @@ def active_filters() -> list[Filter]:
         TeamFilter("team", "Takım"),
         PersonFilter("person", "Sorumlu", "assignee_id"),
         NodeFilter("node", "Düğüm"),
-        SelectFilter("pillar", "Pillar", "pillar", _pillar_options()),
         SearchFilter("search", "Ara"),
     ]
 

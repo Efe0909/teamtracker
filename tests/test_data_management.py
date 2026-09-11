@@ -55,7 +55,7 @@ def root_count():
 
 def test_kok_dugum_eklenir(client):
     before = root_count()
-    row = service.add_node("T-Maliye", "Bölüm")
+    row = service.add_node("T-Maliye", "generic")
     assert row is not None
     assert row["parent_id"] is None
     # Veritabani DEGIL, bellekteki agac da bilmeli:
@@ -65,32 +65,32 @@ def test_kok_dugum_eklenir(client):
 
 
 def test_alt_dugum_eklenir(client):
-    parent = service.add_node("T-Ust", "Bölüm")
-    child = service.add_node("T-Alt", "Adım", parent_id=parent["id"])
+    parent = service.add_node("T-Ust", "generic")
+    child = service.add_node("T-Alt", "step", parent_id=parent["id"])
     assert service.TREE.parent[child["id"]] == parent["id"]
     assert child["id"] in service.TREE.children[parent["id"]]
     assert service.TREE.depth[child["id"]] == service.TREE.depth[parent["id"]] + 1
 
 
 def test_aciklama_kaydedilir(client):
-    d = service.add_node("T-Aciklamali", "Bölüm", description="  Bütçe ve ödemeler  ")
+    d = service.add_node("T-Aciklamali", "generic", description="  Bütçe ve ödemeler  ")
     assert d["description"] == "Bütçe ve ödemeler"      # kirpilir
 
 
 def test_adsiz_dugum_reddedilir(client):
-    assert service.add_node("   ", "Bölüm") is None
+    assert service.add_node("   ", "generic") is None
     assert service.add_node("T-X", "  ") is None
 
 
 def test_olmayan_ustun_altina_eklenmez(client):
-    assert service.add_node("T-Yetim", "Adım",
+    assert service.add_node("T-Yetim", "step",
                             parent_id="00000000-0000-0000-0000-000000000000") is None
 
 
 def test_kardesler_sona_eklenir(client):
-    parent = service.add_node("T-Sira", "Bölüm")
-    a = service.add_node("T-Bir", "Adım", parent_id=parent["id"])
-    b = service.add_node("T-Iki", "Adım", parent_id=parent["id"])
+    parent = service.add_node("T-Sira", "generic")
+    a = service.add_node("T-Bir", "step", parent_id=parent["id"])
+    b = service.add_node("T-Iki", "step", parent_id=parent["id"])
     assert b["sort_order"] > a["sort_order"]
     assert service.TREE.children[parent["id"]] == [a["id"], b["id"]]
 
@@ -99,27 +99,27 @@ def test_kardesler_sona_eklenir(client):
 
 
 def test_ad_degisir_ve_agac_taze_kalir(client):
-    d = service.add_node("T-Eski", "Bölüm")
+    d = service.add_node("T-Eski", "generic")
     assert service.update_node(d["id"], name="T-Yeni")
     assert service.TREE.name(d["id"]) == "T-Yeni"
 
 
 def test_verilmeyen_alan_degismez(client):
-    d = service.add_node("T-Kismi", "Bölüm", description="kalsin")
+    d = service.add_node("T-Kismi", "generic", description="kalsin")
     service.update_node(d["id"], name="T-Kismi2")
     row = db.q1("select * from nodes where id = %s", (d["id"],))
     assert row["description"] == "kalsin"
-    assert row["node_type"] == "Bölüm"
+    assert row["node_type"] == "generic"
 
 
 def test_bos_aciklama_temizler(client):
-    d = service.add_node("T-Temiz", "Bölüm", description="silinecek")
+    d = service.add_node("T-Temiz", "generic", description="silinecek")
     service.update_node(d["id"], description="")
     assert db.q1("select description from nodes where id = %s", (d["id"],))["description"] is None
 
 
 def test_bos_ad_reddedilir(client):
-    d = service.add_node("T-Kalici", "Bölüm")
+    d = service.add_node("T-Kalici", "generic")
     assert service.update_node(d["id"], name="  ") is False
     assert service.TREE.name(d["id"]) == "T-Kalici"
 
@@ -128,9 +128,9 @@ def test_bos_ad_reddedilir(client):
 
 
 def test_dugum_tasinir(client):
-    a = service.add_node("T-A", "Bölüm")
-    b = service.add_node("T-B", "Bölüm")
-    child = service.add_node("T-Cocuk", "Adım", parent_id=a["id"])
+    a = service.add_node("T-A", "generic")
+    b = service.add_node("T-B", "generic")
+    child = service.add_node("T-Cocuk", "step", parent_id=a["id"])
 
     assert service.move_node(child["id"], b["id"])
     assert service.TREE.parent[child["id"]] == b["id"]
@@ -138,17 +138,17 @@ def test_dugum_tasinir(client):
 
 
 def test_koke_cikarilir(client):
-    parent = service.add_node("T-Ust2", "Bölüm")
-    child = service.add_node("T-Cocuk2", "Adım", parent_id=parent["id"])
+    parent = service.add_node("T-Ust2", "generic")
+    child = service.add_node("T-Cocuk2", "step", parent_id=parent["id"])
     assert service.move_node(child["id"], None)
     assert child["id"] in service.TREE.roots
 
 
 def test_kendi_altina_tasinamaz(client):
     """DONGU KORUMASI. Olmasaydi agac halkaya doner, Euler turu sonsuz donerdi."""
-    parent = service.add_node("T-Dongu", "Bölüm")
-    child = service.add_node("T-DonguCocuk", "Adım", parent_id=parent["id"])
-    grandchild = service.add_node("T-DonguTorun", "Adım", parent_id=child["id"])
+    parent = service.add_node("T-Dongu", "generic")
+    child = service.add_node("T-DonguCocuk", "step", parent_id=parent["id"])
+    grandchild = service.add_node("T-DonguTorun", "step", parent_id=child["id"])
 
     assert service.move_node(parent["id"], child["id"]) is False
     assert service.move_node(parent["id"], grandchild["id"]) is False, "torun da alt agacta"
@@ -156,7 +156,7 @@ def test_kendi_altina_tasinamaz(client):
 
 
 def test_kendisine_tasinamaz(client):
-    d = service.add_node("T-Kendi", "Bölüm")
+    d = service.add_node("T-Kendi", "generic")
     assert service.move_node(d["id"], d["id"]) is False
 
 
@@ -164,8 +164,8 @@ def test_kendisine_tasinamaz(client):
 
 
 def test_alt_agac_da_silinir(client):
-    parent = service.add_node("T-Sil", "Bölüm")
-    child = service.add_node("T-SilCocuk", "Adım", parent_id=parent["id"])
+    parent = service.add_node("T-Sil", "generic")
+    child = service.add_node("T-SilCocuk", "step", parent_id=parent["id"])
 
     assert service.delete_node(parent["id"])
     assert parent["id"] not in service.TREE.nodes
@@ -196,14 +196,14 @@ def test_htmx_yalnizca_agac_parcasini_doner(client):
 
 
 def test_uctan_dugum_eklenir(client):
-    r = client.post("/node", data={"name": "T-Uctan", "type": "Bölüm", "description": "not"})
+    r = client.post("/node", data={"name": "T-Uctan", "type": "generic", "description": "not"})
     assert r.status_code == 200
     assert "T-Uctan" in r.text
     assert db.q1("select 1 from nodes where name = %s", ("T-Uctan",)) is not None
 
 
 def test_uctan_silinir(client):
-    d = service.add_node("T-Silinecek", "Bölüm")
+    d = service.add_node("T-Silinecek", "generic")
     r = client.request("DELETE", f"/node/{d['id']}")
     assert r.status_code == 200
     assert d["id"] not in service.TREE.nodes

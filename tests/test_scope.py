@@ -123,7 +123,7 @@ def test_miras_yeni_eklenen_torunu_da_kapsar(client):
     scope.grant_scope(u["id"], "edit_nodes")
     scope.grant_node_permission(u["id"], node("Malzeme Temini")["id"])
 
-    new = service.add_node("K-Torun", "Adım", parent_id=node("Bütçe Onayı")["id"])
+    new = service.add_node("K-Torun", "step", parent_id=node("Bütçe Onayı")["id"])
     assert scope.authorized_on_node(u, new["id"]), "sonradan eklenen de kapsanmali"
 
 
@@ -164,7 +164,7 @@ def test_olmayan_dugume_izin_verilmez(client):
 def test_dugum_silinince_izin_de_gider(client):
     """Cascade: olmayan dugume izin tasima."""
     u = person("Deniz")
-    d = service.add_node("K-Gecici", "Bölüm")
+    d = service.add_node("K-Gecici", "generic")
     scope.grant_node_permission(u["id"], d["id"])
     service.delete_node(d["id"])
     assert scope.permitted_nodes(u) == []
@@ -191,11 +191,11 @@ def test_uc_dal_sinirini_uygular(client):
     _switch(client, u["id"])
     try:
         inside = client.post("/node", data={
-            "name": "K-Icinde", "type": "Adım", "parent": str(node("Bütçe Onayı")["id"])})
+            "name": "K-Icinde", "type": "step", "parent": str(node("Bütçe Onayı")["id"])})
         assert inside.status_code == 200, inside.text[:200]
 
         outside = client.post("/node", data={
-            "name": "K-Disinda", "type": "Adım", "parent": str(node("Salon Sözleşmesi")["id"])})
+            "name": "K-Disinda", "type": "step", "parent": str(node("Salon Sözleşmesi")["id"])})
         assert outside.status_code == 403
         assert db.q1("select 1 from nodes where name = %s", ("K-Disinda",)) is None
     finally:
@@ -206,7 +206,7 @@ def test_uc_dal_sinirini_uygular(client):
 
 
 def test_ekleme_gecmise_yazilir(client):
-    d = service.add_node("K-Gecmis", "Bölüm", created_by=person("Efe")["id"])
+    d = service.add_node("K-Gecmis", "generic", created_by=person("Efe")["id"])
     event = db.q1("select * from events where subject_type = 'node' and subject_id = %s"
                  " order by created_at desc limit 1", (d["id"],))
     assert event is not None
@@ -217,7 +217,7 @@ def test_ekleme_gecmise_yazilir(client):
 def test_silme_gecmisi_ADI_TASIR(client):
     """events.subject_id FK degil — satir kalir ama dugum gider. Ad body'de
     yazili olmazsa gecmis 'bir sey silindi' demekten oteye gitmez."""
-    d = service.add_node("K-Silinen", "Bölüm")
+    d = service.add_node("K-Silinen", "generic")
     service.delete_node(d["id"], deleted_by=person("Efe")["id"])
 
     event = db.q1("select * from events where subject_type = 'node' and subject_id = %s"
@@ -228,8 +228,8 @@ def test_silme_gecmisi_ADI_TASIR(client):
 
 
 def test_silme_gecmisi_alt_agac_sayisini_yazar(client):
-    parent = service.add_node("K-Ust", "Bölüm")
-    service.add_node("K-Alt", "Adım", parent_id=parent["id"])
+    parent = service.add_node("K-Ust", "generic")
+    service.add_node("K-Alt", "step", parent_id=parent["id"])
     service.delete_node(parent["id"])
     event = db.q1("select body from events where subject_type = 'node' and subject_id = %s"
                  " order by created_at desc limit 1", (parent["id"],))
@@ -237,7 +237,7 @@ def test_silme_gecmisi_alt_agac_sayisini_yazar(client):
 
 
 def test_adlandirma_gecmisi_eski_ADI_TASIR(client):
-    d = service.add_node("K-Once", "Bölüm")
+    d = service.add_node("K-Once", "generic")
     service.update_node(d["id"], name="K-Sonra", changed_by=person("Efe")["id"])
     event = db.q1("select body from events where subject_type = 'node' and subject_id = %s"
                  " order by created_at desc limit 1", (d["id"],))
@@ -245,9 +245,9 @@ def test_adlandirma_gecmisi_eski_ADI_TASIR(client):
 
 
 def test_tasima_gecmise_yazilir(client):
-    a = service.add_node("K-A", "Bölüm")
-    b = service.add_node("K-B", "Bölüm")
-    child = service.add_node("K-Cocuk", "Adım", parent_id=a["id"])
+    a = service.add_node("K-A", "generic")
+    b = service.add_node("K-B", "generic")
+    child = service.add_node("K-Cocuk", "step", parent_id=a["id"])
     service.move_node(child["id"], b["id"], moved_by=person("Efe")["id"])
     event = db.q1("select body from events where subject_type = 'node' and subject_id = %s"
                  " order by created_at desc limit 1", (child["id"],))

@@ -41,19 +41,19 @@ TEAM_MEMBERS = [
 
 NODES = [
     # (anahtar, ust anahtar, ad, tur)
-    ("bayi",     None,     "Yıllık Bayi Toplantısı 2026", "Etkinlik"),
-    ("malzeme",  "bayi",   "Malzeme Temini",              "Kazanım"),
-    ("butce",    "malzeme", "Bütçe Onayı",                "Adım"),
-    ("tedarik",  "malzeme", "Tedarikçi Seçimi",           "Adım"),
-    ("sevkiyat", "malzeme", "Sevkiyat & Teslim",          "Adım"),
-    ("mekan",    "bayi",   "Mekan & Lojistik",            "Kazanım"),
-    ("salon",    "mekan",  "Salon Sözleşmesi",            "Adım"),
-    ("ulasim",   "mekan",  "Ulaşım & Konaklama",          "Adım"),
-    ("iletisim", "bayi",   "İletişim & Tanıtım",          "Kazanım"),
-    ("hatta",    None,     "Üretim Hattı A",              "Hat"),
-    ("dolum",    "hatta",  "Dolum Makinesi",              "Makine/Kol"),
-    ("kapak",    "dolum",  "Kapak Ünitesi",               "Ünite"),
-    ("etiket",   "dolum",  "Etiketleme Ünitesi",          "Ünite"),
+    ("bayi",     None,     "Yıllık Bayi Toplantısı 2026", "operational"),
+    ("malzeme",  "bayi",   "Malzeme Temini",              "generic"),
+    ("butce",    "malzeme", "Bütçe Onayı",                "step"),
+    ("tedarik",  "malzeme", "Tedarikçi Seçimi",           "step"),
+    ("sevkiyat", "malzeme", "Sevkiyat & Teslim",          "step"),
+    ("mekan",    "bayi",   "Mekan & Lojistik",            "generic"),
+    ("salon",    "mekan",  "Salon Sözleşmesi",            "step"),
+    ("ulasim",   "mekan",  "Ulaşım & Konaklama",          "step"),
+    ("iletisim", "bayi",   "İletişim & Tanıtım",          "generic"),
+    ("hatta",    None,     "Üretim Hattı A",              "cell"),
+    ("dolum",    "hatta",  "Dolum Makinesi",              "machine"),
+    ("kapak",    "dolum",  "Kapak Ünitesi",               "machine"),
+    ("etiket",   "dolum",  "Etiketleme Ünitesi",          "machine"),
 ]
 
 ITEMS = [
@@ -62,32 +62,32 @@ ITEMS = [
          description="Finans departmanı onay vermeden tedarikçi ile sözleşme "
                      "imzalanamıyor. Zincirin tamamı bekliyor.",
          status="open", priority="critical", assignee="deniz", created_by="selin",
-         due="2026-09-04", dms="DH", pillar="SN", parts=["deniz", "selin", "efe"],
+         due="2026-09-04", dms="DH", parts=["deniz", "selin", "efe"],
          created=ago(days=12), updated=ago(minutes=20)),
     dict(key="sevkiyat_tarih", node="sevkiyat", kind="issue", team="satinalim",
          title="Sevkiyat tarihi etkinlikten sonraya düşüyor",
          description="Tedarikçi teslim tarihi 3 Eylül; etkinlik 28 Ağustos.",
          status="in_progress", priority="critical", assignee="efe", created_by="efe",
-         due="2026-09-10", dms=None, pillar="SN", parts=["efe", "selin"],
+         due="2026-09-10", dms=None, parts=["efe", "selin"],
          created=ago(days=11), updated=ago(hours=3)),
     dict(key="kapak_kayip", node="kapak", kind="task", team=None,
          title="Kapak Ünitesi — tekrar eden kayıp",
          description="3 DMS kaydından açıldı. Tekrar eden duruş, LE'ye taşınması "
                      "değerlendiriliyor.",
          status="pending", priority="high", assignee="deniz", created_by="selin",
-         due=None, dms="LE", pillar=None, parts=["deniz"],
+         due=None, dms="LE", parts=["deniz"],
          created=ago(days=8), updated=ago(hours=5)),
     dict(key="vekalet", node="butce", kind="task", team="maliye",
          title="Onay akışına vekalet mekanizması ekle",
          description="CFO izindeyken onay zinciri duruyor; vekalet tanımı gerekiyor.",
          status="in_progress", priority="medium", assignee="efe", created_by="selin",
-         due=None, dms="UPS", pillar=None, parts=["efe", "selin"],
+         due=None, dms="UPS", parts=["efe", "selin"],
          created=ago(days=6), updated=ago(days=1, hours=2)),
     dict(key="teklif", node="tedarik", kind="issue", team="satinalim",
          title="Tedarikçi teklifleri karşılaştırılamıyor",
          description="Üç teklif farklı formatta geldi; kıyas tablosu çıkarılamıyor.",
          status="open", priority="medium", assignee="efe", created_by="efe",
-         due=None, dms="IPS", pillar=None, parts=["efe"],
+         due=None, dms="IPS", parts=["efe"],
          created=ago(days=7), updated=ago(days=2)),
 ]
 
@@ -194,12 +194,12 @@ def run() -> None:
     for it in ITEMS:
         db.x(
             "insert into items (id,node_id,kind,title,description,status,priority,team_id,"
-            "assignee_id,created_by,due_date,dms,pillar,escalated,created_at,updated_at)"
-             " values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,false,%s,%s)",
+            "assignee_id,created_by,due_date,dms,escalated,created_at,updated_at)"
+             " values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,false,%s,%s)",
             (iid[it["key"]], nid[it["node"]], it["kind"], it["title"], it["description"],
              it["status"], it["priority"], tid[it["team"]] if it["team"] else None,
              uid[it["assignee"]], uid[it["created_by"]],
-             it["due"], it["dms"], it["pillar"], it["created"], it["updated"]))
+             it["due"], it["dms"], it["created"], it["updated"]))
         for p in it["parts"]:
             db.x("insert into item_participants (item_id,user_id,added_by,added_at)"
                  " values (%s,%s,%s,%s)",

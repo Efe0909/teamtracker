@@ -7,11 +7,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from shared.tree import TreeIndex  # noqa: E402
 
 ROWS = [
-    {"id": "a", "parent_id": None, "name": "A", "node_type": "t", "sort_order": 0},
-    {"id": "b", "parent_id": "a", "name": "B", "node_type": "t", "sort_order": 0},
-    {"id": "c", "parent_id": "a", "name": "C", "node_type": "t", "sort_order": 1},
-    {"id": "d", "parent_id": "b", "name": "D", "node_type": "t", "sort_order": 0},
-    {"id": "e", "parent_id": None, "name": "E", "node_type": "t", "sort_order": 1},
+    {"id": "a", "parent_id": None, "name": "A", "node_type": "t", "sort_order": 0, "is_active": True},
+    {"id": "b", "parent_id": "a", "name": "B", "node_type": "t", "sort_order": 0, "is_active": True},
+    {"id": "c", "parent_id": "a", "name": "C", "node_type": "t", "sort_order": 1, "is_active": True},
+    {"id": "d", "parent_id": "b", "name": "D", "node_type": "t", "sort_order": 0, "is_active": True},
+    {"id": "e", "parent_id": None, "name": "E", "node_type": "t", "sort_order": 1, "is_active": True},
 ]
 
 
@@ -53,7 +53,7 @@ def test_ancestors():
 def test_rebuild_is_cheap():
     import time
     rows = [{"id": str(i), "parent_id": str((i - 1) // 3) if i else None,
-             "name": f"n{i}", "node_type": "t", "sort_order": i} for i in range(3000)]
+             "name": f"n{i}", "node_type": "t", "sort_order": i, "is_active": True} for i in range(3000)]
     t0 = time.perf_counter()
     t = TreeIndex.build(rows)
     ms = (time.perf_counter() - t0) * 1000

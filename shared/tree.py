@@ -16,6 +16,7 @@ class Node:
     name: str
     node_type: str
     sort_order: int
+    is_active: bool
 
 
 @dataclass
@@ -32,7 +33,7 @@ class TreeIndex:
     def build(cls, rows) -> "TreeIndex":
         ix = cls()
         for r in rows:
-            n = Node(r["id"], r["parent_id"], r["name"], r["node_type"], r["sort_order"])
+            n = Node(r["id"], r["parent_id"], r["name"], r["node_type"], r["sort_order"], r["is_active"])
             ix.nodes[n.id] = n
             ix.parent[n.id] = n.parent_id
             ix.children.setdefault(n.id, [])
@@ -95,3 +96,8 @@ class TreeIndex:
     def name(self, node: str) -> str:
         n = self.nodes.get(node)
         return n.name if n else "?"
+
+    def nodes_of_type(self, node_type: str, *, active_only: bool = True) -> list[str]:
+        """Bu turdeki tum dugumler, bellekten (SQL'e gitmeden)."""
+        return [nid for nid, n in self.nodes.items()
+                if n.node_type == node_type and (not active_only or n.is_active)]
