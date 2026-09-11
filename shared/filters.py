@@ -43,7 +43,7 @@ class Filter:
 
 
 class SelectFilter(Filter):
-    """Sabit sozluklu sutun esitligi: tur, durum, oncelik, pillar."""
+    """Sabit sozluklu sutun esitligi: tur, durum, oncelik."""
 
     def __init__(self, param: str, label: str, column: str, choices: dict[str, str]):
         super().__init__(param, label)
@@ -126,7 +126,7 @@ class SearchFilter(Filter):
 
 
 def active_filters() -> list[Filter]:
-    """Her istekte kurulur: pillar secenekleri veriden, dugumler agactan gelir."""
+    """Her istekte kurulur: dugumler agactan gelir."""
     return [
         SelectFilter("kind", "Tür", "kind", {"issue": "Hata", "task": "Görev"}),
         SelectFilter("status", "Durum", "status", dict(service.STATUSES)),

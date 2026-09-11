@@ -43,7 +43,7 @@ MODULES = [
      "desc": "Yapının düzenlendiği ekran: düğüm ekle, adlandır, açıklama yaz, taşı, sil.",
      "plan": []},
     {"slug": "pivot", "icon": "📊", "name": "Pivot & Veri Analizi", "ready": False,
-     "desc": "Kayıtları düğüm, takım, pillar, sorumlu ve zaman kırılımında çapraz say.",
+     "desc": "Kayıtları düğüm, takım, sorumlu ve zaman kırılımında çapraz say.",
      "plan": ["Gruplama ve sayım SQL'de; Python'a dönen satır ekranda görünen satırdır (spec/10-kararlar.md 'Sorgular').",
               "Alt ağaç kırılımı tin/tout aralık taramasıyla — recursive CTE yok.",
               "İkinci yüz: açık kayıtların hazır kırılımları (spec/60-kaynak-uyarlama.md 2.3).",
