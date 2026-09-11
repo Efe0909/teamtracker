@@ -173,7 +173,8 @@ def test_alt_agac_da_silinir(client):
 
 
 def test_kayit_sayilari_silmeden_once_gorunur(client):
-    counts = service.node_record_counts()
+    from shared import nodes
+    counts = {nid: c["records"] for nid, c in nodes.counts_by_node().items()}
     item = db.q1("select node_id from items limit 1")
     assert counts.get(item["node_id"], 0) > 0
 

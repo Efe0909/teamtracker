@@ -164,12 +164,6 @@ def delete_node(node_id, deleted_by=None) -> bool:
     return True
 
 
-def node_record_counts() -> dict:
-    """Dugum basina kayit sayisi — silmeden once ne kaybedilecegi gorunsun."""
-    return {r["node_id"]: r["c"]
-            for r in db.q("select node_id, count(*) c from items group by node_id")}
-
-
 def users_by_id() -> dict:
     return {u["id"]: u for u in auth.all_users()}
 

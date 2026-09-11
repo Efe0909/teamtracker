@@ -409,7 +409,9 @@ def _authorized_on_node(u, node_id) -> bool:
 def _tree_ctx(user) -> dict:
     """Duz liste: sablon girintiyi depth ile ciziyor, ic ice dongu yok."""
     tree = service.TREE
-    counts = service.node_record_counts()
+    from shared import nodes
+    all_counts = nodes.counts_by_node()
+    counts = {nid: c["records"] for nid, c in all_counts.items()}
     descriptions = {r["id"]: r["description"]
                    for r in db.q("select id, description from nodes")}
     ordered = sorted(tree.nodes, key=lambda n: tree.tin[n])
