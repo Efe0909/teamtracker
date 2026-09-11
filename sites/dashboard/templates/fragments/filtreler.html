@@ -15,8 +15,8 @@
 
   <div class="fset">
     {% for f in filters %}
+      {% if f.input_type == "select" %}
       {% set options = f.options() %}
-      {% if options %}
       <label class="ff"><span>{{ f.label }}</span>
         <select name="{{ f.param }}">
           <option value="">Hepsi</option>

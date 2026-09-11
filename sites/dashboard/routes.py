@@ -152,9 +152,10 @@ def table_ctx(request, user) -> dict:
 
 
 def node_options() -> list[dict]:
-    """Yeni kayit formu icin dugum listesi (girintili)."""
+    """Yeni kayit formu icin dugum listesi (girintili). Pasifleri eler."""
     tree = service.TREE
-    ordered = sorted(tree.nodes, key=lambda n: tree.tin[n])
+    ordered = sorted([n for n, node_obj in tree.nodes.items() if node_obj.is_active], 
+                     key=lambda n: tree.tin[n])
     return [{"id": n, "name": tree.name(n), "depth": tree.depth[n]} for n in ordered]
 
 
@@ -415,15 +416,23 @@ def _tree_ctx(user) -> dict:
     descriptions = {r["id"]: r["description"]
                    for r in db.q("select id, description from nodes")}
     ordered = sorted(tree.nodes, key=lambda n: tree.tin[n])
+    can_hard_delete = scope.has_scope(user, "hard_delete_nodes")
     return {
         "nodes": [{"id": nid, "name": tree.nodes[nid].name,
                    "type": tree.nodes[nid].node_type,
+                   "type_label": nodes.label(tree.nodes[nid].node_type),
+                   "is_active": tree.nodes[nid].is_active,
                    "depth": tree.depth[nid],
                    "has_children": bool(tree.children.get(nid)),
-                   "record_count": counts.get(nid, 0),
+                   "record_count": all_counts.get(nid, {}).get("records", 0),
+                   "can_retype": not nodes.has_projection(nid, all_counts),
+                   "is_virgin": nodes.is_virgin(nid, all_counts),
                    "description": descriptions.get(nid)}
                   for nid in ordered],
         "can_write": _can_edit_structure(user),
+        "can_root": scope.can_do_root_operation(user),
+        "node_types": nodes.NODE_TYPES,
+        "can_hard_delete": scope.has_scope(user, "hard_delete_nodes")
     }
 
 
@@ -437,15 +446,19 @@ def data_management(request: Request):
 
 
 @router.post("/node", response_class=HTMLResponse)
-def add_node(request: Request, name: str = Form(...), type: str = Form(...),
-            parent: str = Form(""), description: str = Form("")):
+def add_node(request: Request, name: str = Form(...), type: str = Form(""),
+             parent: str = Form(None), description: str = Form("")):
     user = auth.current_user(request)
     if parent:
         if not _authorized_on_node(user, parent):
             raise HTTPException(403, "bu dalda düzenleme yetkisi yok")
     elif not (scope.can_do_root_operation(user) or _can_edit_structure(user)):
         raise HTTPException(403, "kök düğüm eklemek yönetici yetkisi ister")
-    service.add_node(name, type, parent or None, description, created_by=user["id"])
+        
+    res = service.add_node(name, type, parent or None, description, created_by=user["id"])
+    if res is None:
+        raise HTTPException(400, "geçersiz düğüm adı, türü veya konumu")
+        
     return render(request, "fragments/agac.html", {"user": user, **_tree_ctx(user)})
 
 
@@ -456,19 +469,23 @@ async def update_node(request: Request, node_id: str):
         raise HTTPException(403, "bu düğümde düzenleme yetkisi yok")
     form = await request.form()
     # Alan gonderilmediyse None: "dokunma" ile "bosalt" farkli seyler.
-    service.update_node(
+    res = service.update_node(
         node_id,
-        name=form.get("name"), node_type=form.get("type"), description=form.get("description"),
-        changed_by=user["id"])
+        name=form.get("name"),
+        node_type=form.get("type"),
+        description=form.get("description"),
+        changed_by=user["id"]
+    )
+    if not res:
+        raise HTTPException(400, "geçersiz düğüm adı veya türü")
+
     if "parent" in form:
-        # Hedef dalda da yetki gerekir, yoksa yetkili oldugu dugumu
-        # yetkisiz oldugu bir dala tasiyabilirdi.
-        target = form.get("parent") or None
-        if target is None:
-            if scope.can_do_root_operation(user):
-                service.move_node(node_id, None, moved_by=user["id"])
+        target = form["parent"] or None
+        if target is None and not scope.can_do_root_operation(user):
+            raise HTTPException(403, "kök düğüm seviyesine taşıma yönetici yetkisi ister")
         elif _authorized_on_node(user, target):
-            service.move_node(node_id, target, moved_by=user["id"])
+            if not service.move_node(node_id, target, moved_by=user["id"]):
+                raise HTTPException(400, "geçersiz taşıma (döngü, pasif düğüm veya tür uyumsuzluğu)")
     return render(request, "fragments/agac.html", {"user": user, **_tree_ctx(user)})
 
 

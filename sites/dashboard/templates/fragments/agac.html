@@ -14,20 +14,22 @@
 
   <ul class="tree">
     {% for d in nodes %}
-    <li class="tnode" style="--derinlik:{{ d.depth }}">
+    <li class="tnode {% if not d.is_active %}tpasif{% endif %}" style="--derinlik:{{ d.depth }}">
       <div class="trow">
         <span class="tkol">{% if d.has_children %}▾{% else %}·{% endif %}</span>
         <span class="tad">{{ d.name }}</span>
-        <span class="ttur">{{ d.type }}</span>
+        <span class="ttur">{{ d.type_label }}</span>
         {% if d.record_count %}<span class="tkayit" title="bu düğümdeki kayıt sayısı">{{ d.record_count }}</span>{% endif %}
         {% if can_write %}
         <span class="teylem">
           <button class="tmini" data-toggle="#duzenle-{{ d.id }}" title="Düzenle">✎</button>
           <button class="tmini" data-toggle="#ekle-{{ d.id }}" title="Alt düğüm ekle">＋</button>
-          <button class="tmini tsil"
-                  hx-delete="/node/{{ d.id }}" hx-target="#agac" hx-swap="outerHTML"
-                  hx-confirm="{{ d.name }} ve TÜM alt düğümleri silinecek{% if d.record_count %}, {{ d.record_count }} kayıt da gidecek{% endif %}. Emin misin?"
-                  title="Sil">✕</button>
+          
+          <button class="tmini" title="{% if d.is_active %}Kapat (Pasifleştir){% else %}Aç (Aktifleştir){% endif %}"
+                  hx-patch="/node/{{ d.id }}/active" hx-target="#agac" hx-swap="outerHTML"
+                  hx-vals='{"active": "{% if d.is_active %}false{% else %}true{% endif %}"}'>
+            {% if d.is_active %}✕{% else %}⟲{% endif %}
+          </button>
         </span>
         {% endif %}
       </div>
@@ -39,7 +41,14 @@
       <form id="duzenle-{{ d.id }}" class="tform"
             hx-patch="/node/{{ d.id }}" hx-target="#agac" hx-swap="outerHTML">
         <input name="name" value="{{ d.name }}" placeholder="ad" required>
-        <input name="type" value="{{ d.type }}" placeholder="tür" required>
+        <select name="type" required title="tür" {% if not d.can_retype %}disabled{% endif %}>
+          {% for k, v in node_types.items() %}
+            <option value="{{ k }}" {% if d.type == k %}selected{% endif %}>{{ v }}</option>
+          {% endfor %}
+        </select>
+        {% if not d.can_retype %}
+          <input type="hidden" name="type" value="{{ d.type }}">
+        {% endif %}
         <select name="parent" title="üst düğüm">
           <option value="">— kök —</option>
           {% for u in nodes if u.id != d.id %}
@@ -48,7 +57,17 @@
         </select>
         <textarea name="description" rows="2"
                   placeholder="açıklama — bu düğüm ne kapsıyor?">{{ d.description or "" }}</textarea>
-        <button class="tkaydet">Kaydet</button>
+        
+        <div class="tform-alt">
+          <button class="tkaydet">Kaydet</button>
+          <span style="flex:1"></span>
+          {% if d.is_virgin %}
+            <button class="tsil" hx-delete="/node/{{ d.id }}" hx-target="#agac" hx-swap="outerHTML" type="button">Sil</button>
+          {% elif can_hard_delete %}
+            <button class="tsil" hx-delete="/node/{{ d.id }}" hx-target="#agac" hx-swap="outerHTML" 
+                    hx-confirm="{{ d.name }} ve TÜM alt düğümleri silinecek{% if d.record_count %}, {{ d.record_count }} kayıt da gidecek{% endif %}. Emin misin?" type="button">Kalıcı Sil</button>
+          {% endif %}
+        </div>
       </form>
 
       {# --- alt dugum ekleme --- #}
@@ -56,7 +75,14 @@
             hx-post="/node" hx-target="#agac" hx-swap="outerHTML">
         <input type="hidden" name="parent" value="{{ d.id }}">
         <input name="name" placeholder="alt düğüm adı" required>
-        <input name="type" placeholder="tür (Adım, Ünite…)" required>
+        <select name="type" required title="tür">
+          <option value="" disabled selected>tür seçin…</option>
+          {% for k, v in node_types.items() %}
+            {% if not (k in ('cell', 'machine') and d.type != 'cell') %} {# Simplification of ROOT_ONLY #}
+            <option value="{{ k }}">{{ v }}</option>
+            {% endif %}
+          {% endfor %}
+        </select>
         <textarea name="description" rows="2" placeholder="açıklama (isteğe bağlı)"></textarea>
         <button class="tkaydet">Ekle</button>
       </form>

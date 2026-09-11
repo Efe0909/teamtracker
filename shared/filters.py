@@ -31,8 +31,9 @@ OPEN_ACTION = "select item_id from actions where status in ('open','in_progress'
 class Filter:
     """Taban sinif. options() sablondaki select'i besler, clause() SQL uretir."""
 
-    def __init__(self, param: str, label: str):
+    def __init__(self, param: str, label: str, input_type: str = "select"):
         self.param, self.label = param, label
+        self.input_type = input_type
 
     def options(self) -> list[tuple[str, str, str | None]]:
         """[(deger, etiket, grup)] — grup None ise optgroup acilmaz."""
@@ -115,8 +116,11 @@ class NodeFilter(Filter):
 class SearchFilter(Filter):
     """tsvector/GIN — sorgu ifadesi kullanici metniyle birlestirilmez (shared/search.py)."""
 
+    def __init__(self, param: str, label: str):
+        super().__init__(param, label, input_type="search")
+
     def options(self):
-        return []          # select degil metin girisi; sablon bunu options() bos diye anlar
+        return []
 
     def clause(self, value, user):
         match = search.fts_query(value)
