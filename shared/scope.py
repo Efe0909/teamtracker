@@ -24,11 +24,12 @@ SCOPES: dict[str, str] = {
     "manage_teams": "Takım kur, üye ekle ve çıkar",
     "create_tags": "Etiket sözlüğünü genişlet — yeni etiket adı tanımla",
     "tag_media": "Ekleri etiketle — katıldığın sohbetlerdeki görsellere etiket ekle/çıkar",
+    "hard_delete_nodes": "Kayıtlı düğümleri kalıcı silme",
 }
 
 # Dugum bazli izin ISTEYEN kapsamlar. Bunlar icin kapsam tek basina yetmez;
 # ayrica hangi dalda gecerli oldugu user_node_scopes'ta yazili olmali.
-NODE_DEPENDENT = frozenset({"edit_nodes"})
+NODE_DEPENDENT = frozenset({"edit_nodes", "hard_delete_nodes"})
 
 
 def valid(name: str) -> bool:
