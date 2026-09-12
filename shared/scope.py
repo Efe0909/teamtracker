@@ -19,7 +19,8 @@ from . import db, service
 # Kapsam anahtari -> ekranda gorunecek aciklama. Yonetim paneli bu sozlugu
 # listeleyecek; yeni kapsam eklemek = buraya bir satir.
 SCOPES: dict[str, str] = {
-    "edit_nodes": "Yapıyı düzenle — düğüm ekle, adlandır, taşı, sil",
+    "edit_nodes": "Yapıyı düzenle — düğüm ekle, adlandır, taşı, pasifleştir",
+    "hard_delete_nodes": "Bağımlısı olan düğümü kalıcı sil (kayıtlar ve alt ağaç dahil)",
     "manage_users": "Kullanıcı ekle, kapat, yetki ver",
     "manage_teams": "Takım kur, üye ekle ve çıkar",
     "create_tags": "Etiket sözlüğünü genişlet — yeni etiket adı tanımla",
@@ -28,7 +29,7 @@ SCOPES: dict[str, str] = {
 
 # Dugum bazli izin ISTEYEN kapsamlar. Bunlar icin kapsam tek basina yetmez;
 # ayrica hangi dalda gecerli oldugu user_node_scopes'ta yazili olmali.
-NODE_DEPENDENT = frozenset({"edit_nodes"})
+NODE_DEPENDENT = frozenset({"edit_nodes", "hard_delete_nodes"})
 
 
 def valid(name: str) -> bool:

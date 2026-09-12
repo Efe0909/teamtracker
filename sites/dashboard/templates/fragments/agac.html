@@ -2,7 +2,11 @@
    gosterildigini bilmez (spec: parca yerlesimi bilmez).
 
    Duz liste + girinti: ic ice dongu yerine derinlik degeri. Agac zaten Euler
-   turu sirasinda geliyor (tin), yani liste sirasi dogru gorunumu veriyor. #}
+   turu sirasinda geliyor (tin), yani liste sirasi dogru gorunumu veriyor.
+
+   YERLESIM KURALI BURADA YAZILMAZ: her dugum alabilecegi tur listesini
+   (d.types) sunucudan hazir alir, alt dugum formlari child_types'i kullanir.
+   Sablonun kendi kuralini uydurmasi sunucuyla celiski demek (spec/72 §7). #}
 <div id="agac" data-fragment="agac">
 
   {% if not nodes %}
@@ -14,20 +18,25 @@
 
   <ul class="tree">
     {% for d in nodes %}
-    <li class="tnode" style="--derinlik:{{ d.depth }}">
+    <li class="tnode{% if not d.is_active %} tpasif{% endif %}" style="--derinlik:{{ d.depth }}">
       <div class="trow">
         <span class="tkol">{% if d.has_children %}▾{% else %}·{% endif %}</span>
         <span class="tad">{{ d.name }}</span>
-        <span class="ttur">{{ d.type }}</span>
+        <span class="ttur">{{ d.type_label }}</span>
+        {% if not d.is_active %}<span class="tpasif-etiket" title="pasif — yeni kayıt ve dropdown'larda çıkmaz">pasif</span>{% endif %}
         {% if d.record_count %}<span class="tkayit" title="bu düğümdeki kayıt sayısı">{{ d.record_count }}</span>{% endif %}
         {% if can_write %}
         <span class="teylem">
           <button class="tmini" data-toggle="#duzenle-{{ d.id }}" title="Düzenle">✎</button>
           <button class="tmini" data-toggle="#ekle-{{ d.id }}" title="Alt düğüm ekle">＋</button>
-          <button class="tmini tsil"
-                  hx-delete="/node/{{ d.id }}" hx-target="#agac" hx-swap="outerHTML"
-                  hx-confirm="{{ d.name }} ve TÜM alt düğümleri silinecek{% if d.record_count %}, {{ d.record_count }} kayıt da gidecek{% endif %}. Emin misin?"
-                  title="Sil">✕</button>
+          {# ✕ artik SILMEZ, pasiflestirir: gundelik "bu artik kullanilmiyor"
+             isinin dogru araci bu — gecmis korunur, geri alinabilir. Kalici
+             silme duzenleme panelinin icinde (spec/72 §6). #}
+          <button class="tmini"
+                  hx-post="/node/{{ d.id }}/active" hx-vals='{"active": "{{ 0 if d.is_active else 1 }}"}'
+                  hx-target="#agac" hx-swap="outerHTML"
+                  title="{{ "Yeniden aç" if not d.is_active else "Pasifleştir" }}"
+                  >{{ "↻" if not d.is_active else "⊘" }}</button>
         </span>
         {% endif %}
       </div>
@@ -39,7 +48,14 @@
       <form id="duzenle-{{ d.id }}" class="tform"
             hx-patch="/node/{{ d.id }}" hx-target="#agac" hx-swap="outerHTML">
         <input name="name" value="{{ d.name }}" placeholder="ad" required>
-        <input name="type" value="{{ d.type }}" placeholder="tür" required>
+        {# can_retype yanlissa DISABLED: gonderilmez, update_node None alir ve
+           ture dokunmaz. Gizli bir input ile yine gondermek kilidi delerdi. #}
+        <select name="type" {% if d.can_retype %}title="tür"{% else %}disabled
+                title="türe bağlı veri var (takım kartı) — önce o bağ çözülmeli"{% endif %}>
+          {% for k, et in d.types.items() %}
+          <option value="{{ k }}" {% if d.type == k %}selected{% endif %}>{{ et }}</option>
+          {% endfor %}
+        </select>
         <select name="parent" title="üst düğüm">
           <option value="">— kök —</option>
           {% for u in nodes if u.id != d.id %}
@@ -49,6 +65,15 @@
         <textarea name="description" rows="2"
                   placeholder="açıklama — bu düğüm ne kapsıyor?">{{ d.description or "" }}</textarea>
         <button class="tkaydet">Kaydet</button>
+        {% if d.can_hard_delete %}
+        {# Kalici silme: onay kutusu NE GOTURECEGINI SAYAR. Yetkisi olmayana
+           hic cizilmez; uc ayrica kontrol eder (spec/72 §6.2). #}
+        <button class="tsil-kalici" type="button"
+                hx-delete="/node/{{ d.id }}" hx-target="#agac" hx-swap="outerHTML"
+                hx-confirm="{{ d.name }} KALICI olarak silinecek. Birlikte gidecekler: {{ d.delete_counts.children }} alt düğüm, {{ d.delete_counts.records }} kayıt, {{ d.delete_counts.permissions }} dal izni. Bu geri alınamaz — kapatmak için pasifleştirmeyi kullan. Emin misin?">
+          Kalıcı sil
+        </button>
+        {% endif %}
       </form>
 
       {# --- alt dugum ekleme --- #}
@@ -56,7 +81,11 @@
             hx-post="/node" hx-target="#agac" hx-swap="outerHTML">
         <input type="hidden" name="parent" value="{{ d.id }}">
         <input name="name" placeholder="alt düğüm adı" required>
-        <input name="type" placeholder="tür (Adım, Ünite…)" required>
+        <select name="type" title="tür">
+          {% for k, et in child_types.items() %}
+          <option value="{{ k }}">{{ et }}</option>
+          {% endfor %}
+        </select>
         <textarea name="description" rows="2" placeholder="açıklama (isteğe bağlı)"></textarea>
         <button class="tkaydet">Ekle</button>
       </form>
