@@ -1,0 +1,84 @@
+{# fragment: card_actions — eylem seridi (spec/20-sema.md §3a, spec/60 2.4).
+   Kayit "ne oldu", eylem "kim ne yapacak": her eylemin kendi atanani, tarihi,
+   durumu.
+
+   Iki yuz de AYNI parcayi kullanir; uclar da ortak (app.py: POST
+   /item/{id}/action, PATCH /action/{id}) — mobil ve masaustu ayni davranir.
+   Yetki: sablon soluklastirir, asil kontrol ucta. #}
+{% import "ortak/alan.html" as alan %}
+<div class="acts" id="acts" data-fragment="card_actions" {% if oob_acts %}hx-swap-oob="true"{% endif %}>
+  <div class="ahead">⚡ Eylemler
+    {% if open_action_count %}<span class="tb h2">{{ open_action_count }} açık</span>
+    {% else %}<span class="tb h1">hepsi kapalı</span>{% endif %}
+    <span class="small muted" style="font-weight:400">— kayıt, açık eylem varken kapanmaz</span>
+  </div>
+
+  {% set ns = namespace(bolum=false) %}
+  {% for e in actions %}
+  {% if e.done and not ns.bolum %}{% set ns.bolum = true %}
+  <div class="abolum">Tamamlanan / iptal</div>
+  {% endif %}
+  <div class="arow{% if e.done %} done{% endif %}">
+    {% if can_edit %}
+      {{ alan.trigger("dlg-as-" ~ e.id, "adur v-" ~ e.status, action_status[e.status]) }}
+    {% else %}<span class="adur v-{{ e.status }}">{{ action_status[e.status] }}</span>{% endif %}
+    <span class="at">{{ e.title }}</span>
+    {% if can_edit %}
+      {{ alan.trigger("dlg-aw-" ~ e.id, "akisi",
+                      e.assignee.name if e.assignee else "— havuzda —") }}
+      {{ alan.trigger("dlg-ad-" ~ e.id, "atarih" ~ (" gec" if e.overdue else ""),
+                      e.due or "— tarih —") }}
+    {% else %}
+    <span class="akisi">{{ e.assignee.name if e.assignee else '— havuzda —' }}</span>
+    <span class="atarih{% if e.overdue %} gec{% endif %}">{{ e.due or '—' }}</span>
+    {% endif %}
+  </div>
+  {% if can_edit %}
+    {{ alan.choice("dlg-as-" ~ e.id, "Eylem durumu", "status", "/action/" ~ e.id, "#acts",
+                   action_status.items()|list, e.status) }}
+    {{ alan.choice("dlg-aw-" ~ e.id, "Eylemi kime?", "assignee_id", "/action/" ~ e.id, "#acts",
+                   [("", "— havuzda —")] + user_options,
+                   e.assignee.id if e.assignee else "",
+                   "Atama akışa zaman damgasıyla düşer.") }}
+    {{ alan.date("dlg-ad-" ~ e.id, "Eylemin son tarihi", "due_date", "/action/" ~ e.id, "#acts",
+                 e.due, not can_edit_deadline) }}
+  {% endif %}
+  {% else %}
+  <div class="empty small" style="padding:8px">Eylem yok — "kim ne yapacak" henüz belirlenmedi.</div>
+  {% endfor %}
+
+  {% if can_edit %}
+  <form class="aform" id="yeni-eylem" hx-post="/item/{{ item.id }}/action"
+        hx-target="#acts" hx-swap="outerHTML">
+    <input name="title" placeholder="Yeni eylem…" required>
+    <select name="assignee_id" style="width:auto">
+      <option value="">— havuzda —</option>
+      {% for u in users %}<option value="{{ u.id }}">{{ u.name }}</option>{% endfor %}
+    </select>
+    {% if can_edit_deadline %}<input type="date" name="due_date" style="width:auto">{% endif %}
+    <button class="primary">Ekle</button>
+  </form>
+
+  {# Sohbetteki ⚡ bunu acar (figure3'teki hizli eylem). Ayni uc, ayni form —
+     ikinci bir "eylem ekle" yolu kurulmadi. #}
+  <dialog id="dlg-hizli-eylem" class="fdlg">
+    <h3>⚡ Hızlı eylem</h3>
+    <p class="dhint">Sohbetten çıkmadan "kim ne yapacak" yaz.</p>
+    <form hx-post="/item/{{ item.id }}/action" hx-target="#acts" hx-swap="outerHTML">
+      <input name="title" placeholder="Ne yapılacak?" required autocomplete="off">
+      <select name="assignee_id">
+        <option value="">— havuzda —</option>
+        {% for u in users %}<option value="{{ u.id }}">{{ u.name }}</option>{% endfor %}
+      </select>
+      {% if can_edit_deadline %}<input type="date" name="due_date">{% endif %}
+      <div class="dact">
+        <button type="submit" class="primary">Ekle</button>
+        <button type="button" class="ghost" data-dialog-close>Vazgeç</button>
+      </div>
+    </form>
+  </dialog>
+  {% endif %}
+</div>
+{% if oob_feed %}
+  {% with oob = True %}{% include "ortak/akis.html" %}{% endwith %}
+{% endif %}

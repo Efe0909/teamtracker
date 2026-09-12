@@ -1,5 +1,12 @@
 {% extends "base.html" %}
 
+{# Mobil kayit ekrani — ARTIK masaustundeki (figure2) bolumlerin mobil hali:
+   baslik → alanlar → eylemler → kart bloklari. Sohbet varsayilan olarak
+   KAPALI; sag alttaki balon aciyor ve kapatiyor (kullanici istegi).
+
+   Eylem ve kart parcalari ORTAK (shared/templates/ortak/): iki yuz ayni
+   HTML'i ciziyor, uclar da ayni (app.py). Burada yalnizca yerlesim var. #}
+
 {% block top_left %}
 <a class="slot" href="javascript:history.back()" aria-label="Geri">‹</a>
 {% endblock %}
@@ -18,25 +25,47 @@
   </div>
 
   {% include "strip.html" %}
-
-  <div class="dfeed" id="feed">
-    {% for m in feed %}{% include "ortak/mesaj.html" %}{% endfor %}
-  </div>
+  {% include "ortak/eylemler.html" %}
+  {% include "ortak/kartlar.html" %}
 </div>
+
+{# --- sohbet sayfasi: balondan acilir, ustte durur --- #}
+<div class="sheet" id="sohbet">
+  <div class="sheethead">
+    <b>💬 Sohbet</b>
+    <span class="small muted">@kişi · @all · @here · @team</span>
+    <button type="button" class="slot" data-sheet="#sohbet" aria-label="Kapat">✕</button>
+  </div>
+
+  {% include "ortak/akis.html" %}
+
+  <form class="dcomp" hx-post="{{ mp }}/record/{{ item.id }}/message" hx-target="#feed"
+        hx-swap="beforeend" hx-encoding="multipart/form-data">
+    <div class="in">
+      {% if can_edit %}
+      {# figure3'teki simsek: sohbetten cikmadan eylem ac. Dialog #acts icinde
+         yasiyor (ortak/eylemler.html) — ikinci bir form kurulmadi. #}
+      <button type="button" class="simsek" data-dialog="dlg-hizli-eylem"
+              title="Hızlı eylem">⚡</button>
+      {% endif %}
+      <label class="attach{% if not can_edit %} disabled{% endif %}" title="Görsel ekle">
+        📎<span class="fname" data-role="attach-name"></span>
+        <input type="file" name="image" accept="image/jpeg,image/png,image/webp,image/gif"
+               {% if not can_edit %}disabled{% endif %} hidden>
+      </label>
+      <button type="button" class="fclear" data-role="attach-clear" hidden
+              title="Eki kaldır" aria-label="Eki kaldır">✕</button>
+      <input name="body" placeholder="{{ 'Mesaj yaz…' if can_edit else 'Yazma yetkin yok' }}"
+             autocomplete="off" {% if not can_edit %}disabled{% endif %}>
+      <button class="primary" {% if not can_edit %}disabled{% endif %}>Gönder</button>
+    </div>
+  </form>
+</div>
+
+<button type="button" class="chatfab" data-sheet="#sohbet" aria-label="Sohbeti aç">
+  💬{% if msg_count %}<span class="cnt">{{ msg_count }}</span>{% endif %}
+</button>
 {% endblock %}
 
-{% block bottom %}
-<form class="dcomp" hx-post="{{ mp }}/record/{{ item.id }}/message" hx-target="#feed" hx-swap="beforeend"
-      hx-encoding="multipart/form-data">
-  <div class="in">
-    <label class="attach{% if not can_edit %} disabled{% endif %}" title="Görsel ekle">
-      📎<span class="fname" data-role="attach-name"></span>
-      <input type="file" name="image" accept="image/jpeg,image/png,image/webp,image/gif"
-             {% if not can_edit %}disabled{% endif %} hidden>
-    </label>
-    <input name="body" placeholder="{{ 'Mesaj yaz…' if can_edit else 'Bu kartta yazma yetkin yok' }}"
-           autocomplete="off" {% if not can_edit %}disabled{% endif %}>
-    <button class="primary" {% if not can_edit %}disabled{% endif %}>Gönder</button>
-  </div>
-</form>
-{% endblock %}
+{# Alt sekme cubugu bu ekranda yok: sayfanin kendi alt kosesinde sohbet balonu var. #}
+{% block bottom %}{% endblock %}

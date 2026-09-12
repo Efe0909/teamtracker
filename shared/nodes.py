@@ -19,7 +19,7 @@ NODE_TYPES: dict[str, str] = {
     "cell":        "Cell",          # IWS hucresi / operasyonel birim
     "machine":     "Makine",        # atomik fonksiyonel birim: girdisi + ciktisi var
     "pillar":      "Pillar",        # IWS pillar'i — sayfasi sonra
-    "team":        "Takım",         # Ekipler sayfasinda kart uretir
+    "team":        "Takım",         # Takimlar sayfasinda kart uretir (projeksiyon)
     "task":        "Görev",
     "step":        "Adım",
     "operational": "Operational",   # davranis YOK — IWS kabi

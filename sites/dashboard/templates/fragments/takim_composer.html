@@ -8,7 +8,11 @@
     <input type="file" name="image" accept="image/jpeg,image/png,image/webp,image/gif"
            {% if not can_post %}disabled{% endif %} hidden>
   </label>
-  <input name="body" placeholder="{{ 'Takıma yaz…' if can_post else 'Bu takımın üyesi değilsin — duvar salt okunur' }}"
+  <button type="button" class="fclear" data-role="attach-clear" hidden
+          title="Eki kaldır" aria-label="Eki kaldır">✕</button>
+  {# Duvarda katilimci kumesi = team_members: @all/@here takim uyeleridir,
+     @team de ayni kumeyi verir (shared/mentions.py). #}
+  <input name="body" placeholder="{{ 'Takıma yaz…  (@kişi, @all, @here)' if can_post else 'Bu takımın üyesi değilsin — duvar salt okunur' }}"
          autocomplete="off" {% if not can_post %}disabled{% endif %}>
   <button class="primary" {% if not can_post %}disabled{% endif %}>Gönder</button>
 </form>

@@ -13,18 +13,20 @@ from pathlib import Path
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from shared import auth, db, filters, nodes, scope, service, users
+from shared import auth, db, filters, nodes, pins, scope, service, users
 from shared.config import site_address
 from shared.render import is_htmx, site_templates
-from shared.service import (ACTION_STATUS, PRIORITIES, STATUSES, add_action, add_message,
-                            change_action, change_field, get_action, get_item, new_item,
-                            short_time, users_by_id)
+from shared.service import (PRIORITIES, STATUSES, add_message, change_field, get_item,
+                            new_item, short_time, users_by_id)
 
 router = APIRouter()
 _TPL = site_templates(Path(__file__).parent / "templates")
 
 
 def render(request, name: str, ctx: dict) -> HTMLResponse:
+    # Ray pinleri HER masaustu sayfasinda lazim ve hepsi bu huniden geciyor:
+    # alti rota islevine tek tek eklemek, birini unutmanin yolu olurdu.
+    ctx.setdefault("rail_pins", rail_modules(ctx.get("user") or auth.current_user(request)))
     return _TPL.TemplateResponse(request, name, ctx)
 
 
@@ -35,9 +37,9 @@ MODULES = [
      "desc": "Tüm kayıtlar tek tabloda: özet çipleri, hızlı filtreler, boyut filtreleri. "
              "Satır kayıt sayfasına gider; eylemler orada.",
      "plan": []},
-    {"slug": "teams", "icon": "👥", "name": "Ekipler", "ready": True,
+    {"slug": "teams", "icon": "👥", "name": "Takımlar", "ready": True,
      "desc": "Takımlar, roller (lider/mentor/üye), takım duvarı ve \"bu takıma kayıt aç\". "
-             "Takım/üyelik yönetimi Yönetim Paneli'ne ait.",
+             "Takım düğümü (node_type='team') açıldığında kart kendiliğinden doğar.",
      "plan": []},
     {"slug": "outcome-tree", "icon": "🌳", "name": "Veri Yönetimi", "ready": True,
      "desc": "Yapının düzenlendiği ekran: düğüm ekle, adlandır, açıklama yaz, taşı, sil.",
@@ -80,6 +82,24 @@ MODULES = [
      "plan": []},
 ]
 MODULE_BY_SLUG = {m["slug"]: m for m in MODULES}
+PINNABLE = {m["slug"] for m in MODULES}
+
+
+def rail_modules(user) -> list[dict]:
+    """Rayda gorunecek moduller — kisinin pinleri (shared/pins.py).
+
+    Yonetim Paneli pinlenmis olsa bile yetkisi olmayana cizilmez: ray
+    gorunen yuz, kapi degil (KNOW-99) — ama olmayan bir kapiyi da gostermez.
+    """
+    can_admin = bool(user) and (db.as_bool(user["is_admin"])
+                                or scope.has_scope(user, "manage_users"))
+    out = []
+    for slug in pins.slugs(user["id"] if user else None):
+        m = MODULE_BY_SLUG.get(slug)
+        if m is None or (slug == "admin" and not can_admin):
+            continue
+        out.append(dict(m, href="/" + slug))
+    return out
 
 
 def home_stats(user) -> dict:
@@ -163,56 +183,67 @@ def node_options() -> list[dict]:
             for n in ordered if tree.nodes[n].is_active]
 
 
+def pillar_options() -> list[tuple]:
+    """Pillar secenekleri — tanim AGACTA (node_type='pillar'), tek kaynak.
+
+    Pillar ORTOGONAL: kaydin atasi olmak zorunda degil, bu yuzden dugum
+    listesinden AYRI bir secim (goc 012, spec/72 §8).
+    """
+    tree = service.TREE
+    return [("", "—")] + [(nid, tree.name(nid)) for nid in tree.nodes_of_type("pillar")]
+
+
 def card_ctx(request, item, user) -> dict:
     users = users_by_id()
     teams = service.teams_by_id()
     feed = service.feed_of("item", item["id"], user)
-    today = datetime.now(timezone.utc).date()      # due_date artik date, metin degil
-    actions = []
-    for a in service.actions_of(item["id"]):
-        actions.append({
-            "id": a["id"], "title": a["title"], "status": a["status"],
-            "assignee": users.get(a["assignee_id"]), "due": a["due_date"],
-            "overdue": bool(a["due_date"]) and a["due_date"] < today
-                        and a["status"] in ("open", "in_progress"),
-            "done": a["status"] in ("closed", "cancelled"),
-        })
     return {
-        "request": request, "user": user, "item": item,
+        "request": request, "user": user,
         "assignee": users.get(item["assignee_id"]),
         "creator": users.get(item["created_by"]),
         "team": teams.get(item["team_id"]),
         "teams": list(teams.values()),
+        "team_options": [("", "—")] + [(t["id"], t["name"]) for t in teams.values()],
+        "pillar": service.TREE.name(item["pillar_node_id"]) if item["pillar_node_id"] else None,
+        "pillar_options": pillar_options(),
         "participants": [users[p] for p in auth.participant_ids(item["id"]) if p in users],
-        "users": list(users.values()), "feed": feed, "actions": actions,
-        "open_action_count": sum(1 for e in actions if not e["done"]),
+        "feed": feed,
         "crumbs": [{"id": n, "name": service.TREE.name(n)}
                    for n in service.TREE.ancestors(item["node_id"])],
-        "can_edit": auth.can_edit_item(user, item, service.TREE),
-        "statuses": STATUSES, "priorities": PRIORITIES, "action_status": ACTION_STATUS,
+        "statuses": STATUSES, "priorities": PRIORITIES,
         "status_label": STATUSES[item["status"]], "priority_label": PRIORITIES[item["priority"]],
         "created": short_time(item["created_at"]),
+        # Eylem seridi ve kart bloklari ORTAK sablon: sozlukleri de ortak
+        # (service.item_blocks_ctx) — mobil ayni cagriyi yapiyor.
+        **service.item_blocks_ctx(item, user),
     }
 
 
 # --- uclar ---------------------------------------------------------------
 
 # Kok rota BURADA KAYITLI DEGIL — bkz. app.py root(): '/' iki yuzde de var.
-def home(request: Request):
-    """Ana sayfa: modul secimi (panolar grid'i — spec/60-kaynak-uyarlama.md 2.1)."""
-    user = auth.current_user(request)
+def home_ctx(request, user) -> dict:
+    """Panolar ekraninin sozlugu. Pin ucu da bunu okur (grid'i tek basina
+    yeniden cizebilmek icin) — iki yerde iki farkli liste kurulmasin."""
     stats = home_stats(user)
     # Kart altindaki sayi: hazir modul kendi biriminde ne kadar veri tuttugunu
     # soyler. Yeni modul geldiginde buraya bir satir eklenir, sablon degismez.
     counts = {"tasks": (stats["all"], "kayıt"), "teams": (stats["teams"], "takım")}
-    mods = [dict(m, href=("/" + m["slug"]),
+    pinned = set(pins.slugs(user["id"]))
+    mods = [dict(m, href=("/" + m["slug"]), pinned=m["slug"] in pinned,
                  count=counts.get(m["slug"], (None, ""))[0],
                  unit=counts.get(m["slug"], (None, ""))[1]) for m in MODULES]
-    return render(request, "home.html", {
+    return {
         "user": user, "all_users": auth.all_users(), "modules": mods, "stats": stats,
         "app_address": site_address(request, app_site=True),
         "scope_name": service.TREE.name(user["scope_node_id"]) if user["scope_node_id"] else "tüm ağaç",
-    })
+    }
+
+
+def home(request: Request):
+    """Ana sayfa: modul secimi (panolar grid'i — spec/60-kaynak-uyarlama.md 2.1)."""
+    user = auth.current_user(request)
+    return render(request, "home.html", home_ctx(request, user))
 
 
 @router.get("/tasks", response_class=HTMLResponse)
@@ -270,7 +301,9 @@ async def patch_field(request: Request, item_id: str):
     item = get_item(item_id)
     if not auth.can_edit_item(user, item, service.TREE):
         raise HTTPException(403, "bu kartta yetkin yok")
-    if not change_field(user, item, await request.form()):
+    form = await request.form()
+    service.require_deadline_scope(user, form)   # son tarih ayri kapsam ister
+    if not change_field(user, item, form):
         return render(request, "fragments/card_fields.html", card_ctx(request, item, user))
 
     ctx = card_ctx(request, get_item(item_id), user)
@@ -278,30 +311,8 @@ async def patch_field(request: Request, item_id: str):
     return render(request, "fragments/card_fields.html", ctx)
 
 
-@router.post("/item/{item_id}/action", response_class=HTMLResponse)
-def post_action(request: Request, item_id: str, title: str = Form(...),
-                assignee_id: str = Form(""), due_date: str = Form("")):
-    user = auth.current_user(request)
-    item = get_item(item_id)
-    if not auth.can_edit_item(user, item, service.TREE):
-        raise HTTPException(403, "bu kartta yetkin yok")
-    add_action(user, item, title, assignee_id or None, due_date or None)
-    ctx = card_ctx(request, get_item(item_id), user)
-    ctx["oob_feed"] = True
-    return render(request, "fragments/card_actions.html", ctx)
-
-
-@router.patch("/action/{action_id}", response_class=HTMLResponse)
-async def patch_action(request: Request, action_id: str):
-    user = auth.current_user(request)
-    action = get_action(action_id)
-    item = get_item(action["item_id"])
-    if not auth.can_edit_item(user, item, service.TREE):
-        raise HTTPException(403, "bu kartta yetkin yok")
-    changed = change_action(user, item, action, await request.form())
-    ctx = card_ctx(request, get_item(item["id"]), user)
-    ctx["oob_feed"] = changed
-    return render(request, "fragments/card_actions.html", ctx)
+# Eylem uclari (POST /item/{id}/action, PATCH /action/{id}) APP.PY'DE:
+# eylem seridi artik ortak sablon, iki yuz de ayni uctan gecer.
 
 
 # --- ekipler (spec/60-kaynak-uyarlama.md 2.5, sema spec/20-sema.md §2a) -----
@@ -323,6 +334,7 @@ def team_ctx(request, team, user) -> dict:
         "roles": service.TEAM_ROLE,
         "statuses": STATUSES, "priorities": PRIORITIES,
         "node": service.TREE.name(team["node_id"]) if team["node_id"] else None,
+        "can_manage": _can_manage_teams(user),
     }
 
 
@@ -369,12 +381,37 @@ async def post_team_message(request: Request, team_id: str):
     return render(request, "ortak/mesaj.html", {"m": m})
 
 
+@router.post("/team/{team_id}")
+async def rename_team(request: Request, team_id: str):
+    """Takim adi/aciklamasi. Node'u olan takimda yazma AGACA gider, kart oradan
+    tazelenir (spec/72 §5) — iki arayuz tek gercegi degistirir."""
+    user = auth.current_user(request)
+    team = service.get_team(team_id)
+    if not _can_manage_teams(user):
+        raise HTTPException(403, "takım yönetimi yetkisi yok")
+    form = await request.form()
+    service.rename_team(team["id"], str(form.get("name") or ""),
+                        str(form.get("description") or ""), changed_by=user["id"])
+    return RedirectResponse(f"/teams/{team_id}", status_code=303)
+
+
+@router.post("/pins/{slug}", response_class=HTMLResponse)
+def toggle_pin(request: Request, slug: str):
+    """Panolardaki pin isareti (figure4): modulu raya sabitler ya da birakir."""
+    user = auth.current_user(request)
+    if slug not in PINNABLE:
+        raise HTTPException(404, "modül yok")
+    pins.toggle(user["id"], slug, PINNABLE)
+    return render(request, "fragments/panolar.html", home_ctx(request, user))
+
+
 @router.post("/item")
 def create_item(request: Request, node_id: str = Form(...), title: str = Form(...),
                 kind: str = Form("issue"), description: str = Form(""),
-                team_id: str = Form("")):
+                team_id: str = Form(""), pillar_node_id: str = Form("")):
     user = auth.current_user(request)
-    item_id = new_item(user, node_id, kind, title, description, team_id or None)
+    item_id = new_item(user, node_id, kind, title, description, team_id or None,
+                       pillar_node_id or None)
     return RedirectResponse(f"/tasks/{item_id}", status_code=303)
 
 
@@ -545,6 +582,10 @@ def set_node_active(request: Request, node_id: str, active: str = Form("")):
 # yapabilen" bir rol yaratip kendine verebilir (ayricalik yukseltme,
 # spec §5 madde 3). Panel sadece gorunen yuz: her uc burada da ayrica
 # kontrol eder (KNOW-99'daki kural).
+
+
+def _can_manage_teams(u) -> bool:
+    return bool(u) and (db.as_bool(u["is_admin"]) or scope.has_scope(u, "manage_teams"))
 
 
 def _can_manage_users(u) -> bool:

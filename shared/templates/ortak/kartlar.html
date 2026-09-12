@@ -1,0 +1,41 @@
+{# fragment: card_blocks — kaydin govdesine yapistirilan KART BLOKLARI.
+
+   Yer tutucu "🚧 Ekler" kutusunun yerini aldi. Blok yeniden kullanilabilir:
+   ileride "google forms gibi" ozel kayit acma formu da AYNI kart sinifini
+   cizecek — o yuzden bu parca kaydin ekraninda nerede durdugunu bilmiyor
+   (skin kurali) ve tur basina gorunum ortak/kart.html'de.
+
+   Uclar ortak (app.py): POST /item/{id}/card, PATCH|DELETE /card/{id},
+   POST /card/{id}/media — mobil ve masaustu ayni yoldan gecer. #}
+<div class="kartlar" id="kartlar" data-fragment="card_blocks"
+     {% if oob_cards %}hx-swap-oob="true"{% endif %}>
+  <div class="ahead">🗂 Kartlar
+    {% if cards %}<span class="tb h0">{{ cards|length }}</span>{% endif %}
+    <span class="small muted" style="font-weight:400">— kayıtla birlikte duran bloklar</span>
+    {% if can_edit %}
+    <button type="button" class="kekle" data-dialog="dlg-kart-ekle">+ Kart ekle</button>
+    {% endif %}
+  </div>
+
+  {% for c in cards %}{% include "ortak/kart.html" %}{% else %}
+  <div class="empty small" style="padding:8px">
+    Kart yok — görsel, toplantı planı gibi blokları buraya ekle.
+  </div>
+  {% endfor %}
+
+  {% if can_edit %}
+  <dialog id="dlg-kart-ekle" class="fdlg">
+    <h3>Kart ekle</h3>
+    <div class="opts kartsec">
+      {% for key, info in card_types.items() %}
+      <button type="button" class="opt"
+              hx-post="/item/{{ item.id }}/card" hx-vals='{"card_type": "{{ key }}"}'
+              hx-target="#kartlar" hx-swap="outerHTML">
+        <b>{{ info.icon }} {{ info.label }}</b><span class="small muted">{{ info.hint }}</span>
+      </button>
+      {% endfor %}
+    </div>
+    <div class="dact"><button type="button" class="ghost" data-dialog-close>Vazgeç</button></div>
+  </dialog>
+  {% endif %}
+</div>

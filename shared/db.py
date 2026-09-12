@@ -12,6 +12,7 @@ from pathlib import Path
 from uuid import UUID, uuid4
 
 from psycopg.rows import dict_row
+from psycopg.types.json import Json as Json     # dict -> jsonb (item_cards.data)
 from psycopg_pool import ConnectionPool
 
 # Baglanti bilgisi tek yerden. Parola .env'de durur, koda gomulmez.

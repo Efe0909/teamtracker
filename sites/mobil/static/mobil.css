@@ -104,14 +104,44 @@ body.m{display:block;height:auto;min-height:100dvh;overflow:auto;background:var(
 .dhead{background:var(--panel);padding:12px 14px 11px;border-bottom:1px solid var(--line)}
 .dhead .t{font-size:17px;font-weight:750;letter-spacing:-.2px;line-height:1.3;margin:6px 0 5px}
 .dhead .path{font-size:11.5px;color:var(--dim)}
-.dstrip{display:flex;gap:6px;overflow-x:auto;padding:9px 12px;background:var(--panel2);
-  border-bottom:1px solid var(--line);scrollbar-width:none}
-.dstrip::-webkit-scrollbar{display:none}
-.dstrip .fld{flex-shrink:0}
+/* Serit SARAR, yatay kaymaz (kullanici istegi, figure1): telefonda sagdaki
+   alanlar gorunmez oluyordu. */
+.dstrip{display:flex;flex-wrap:wrap;gap:6px;padding:9px 12px;background:var(--panel2);
+  border-bottom:1px solid var(--line)}
+.dstrip .fld{flex:0 1 auto;min-width:0;max-width:100%}
+.dstrip .fld .v{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:120px}
+
+/* Eylem seridi + kart bloklari mobilde de var (ortak sablon): masaustunun
+   genis yerlesimi dar ekranda sarsin. */
+.dwrap .acts,.dwrap .kartlar{padding:10px 12px;border-top:1px solid var(--line);
+  background:var(--panel)}
+.dwrap .arow{flex-wrap:wrap;gap:6px}
+.dwrap .arow .at{flex:1 0 100%;order:-1}
+.dwrap .aform{flex-wrap:wrap}
+.dwrap .aform input[name=title]{flex:1 0 100%}
+
 .dfeed{flex:1;padding:14px 12px;display:flex;flex-direction:column;gap:10px;
   padding-bottom:calc(74px + env(safe-area-inset-bottom))}
 .dfeed .msg{max-width:86%}
-.dcomp{position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--panel);
+
+/* --- sohbet sayfasi: varsayilan KAPALI, sag alttaki balondan acilir --- */
+.sheet{position:fixed;inset:0;z-index:45;background:var(--bg);display:none;
+  flex-direction:column}
+.sheet.on{display:flex}
+.sheet .sheethead{display:flex;align-items:center;gap:8px;background:var(--panel);
+  border-bottom:1px solid var(--line);
+  padding:calc(9px + env(safe-area-inset-top)) 12px 9px}
+.sheet .sheethead .slot{margin-left:auto;border:none;background:transparent;
+  color:var(--dim);font-size:16px}
+.sheet #feed{flex:1;overflow:auto}
+.chatfab{position:fixed;right:14px;bottom:calc(16px + env(safe-area-inset-bottom));z-index:40;
+  width:54px;height:54px;border-radius:50%;border:none;background:var(--acc);color:#fff;
+  font-size:22px;box-shadow:0 6px 18px rgba(124,91,255,.45)}
+.chatfab .cnt{position:absolute;top:-2px;right:-2px;background:var(--err);color:#fff;
+  font-size:10px;font-weight:700;border-radius:999px;padding:1px 5px;min-width:17px}
+body.sheet-on .chatfab{display:none}
+
+.dcomp{position:relative;background:var(--panel);
   border-top:1px solid var(--line);padding:9px 12px calc(9px + env(safe-area-inset-bottom));
   display:flex;gap:8px;margin:0}
 .dcomp .in{max-width:560px;margin:0 auto;width:100%;display:flex;gap:8px}

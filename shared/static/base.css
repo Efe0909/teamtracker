@@ -133,3 +133,107 @@
 .msg.me .bub .tag-chip { border-color:rgba(255,255,255,.35); background:rgba(255,255,255,.12) }
 .msg.me .bub .tag-add input,
 .msg.me .bub .tag-add button { border-color:rgba(255,255,255,.35) }
+
+/* ---- alan dialoglari (ortak/alan.html) ---------------------------------
+   Dropdown yerine dialog: degisim iki adim, yanlislikla atama bitiyor.
+   Dialog tazelenen parcanin ICINDE durur; htmx parcayi degistirince kendi
+   kendine kapanir (DOM'dan cikan modal kapanir). */
+.fdlg{border:1px solid var(--line);border-radius:16px;padding:16px 18px;
+      max-width:min(92vw,380px);width:100%;background:var(--panel);color:var(--txt);
+      box-shadow:var(--sh-lg)}
+.fdlg::backdrop{background:rgba(38,26,80,.42)}
+.fdlg h3{margin:0 0 4px;font-size:15px;letter-spacing:-.2px}
+.fdlg .dhint{margin:0 0 10px;font-size:12px;color:var(--dim);line-height:1.5}
+.fdlg form{margin:0;display:flex;flex-direction:column;gap:9px}
+.fdlg input,.fdlg select,.fdlg textarea{font:inherit;font-size:16px;width:100%;
+      background:var(--panel);color:var(--txt);border:1px solid var(--line);
+      border-radius:10px;padding:9px 11px}
+.fdlg textarea{resize:vertical}
+.opts{display:flex;flex-direction:column;gap:5px;margin:8px 0 12px;
+      max-height:46vh;overflow:auto}
+.opts .opt{display:flex;align-items:center;gap:7px;width:100%;text-align:left;
+      border:1px solid var(--line);border-radius:10px;padding:9px 12px;font-size:14px;
+      background:var(--panel)}
+.opts .opt:hover{border-color:var(--acc-s);background:var(--tint);color:var(--acc)}
+.opts .opt.on{border-color:var(--acc);background:var(--tint);color:var(--acc);font-weight:650}
+.opts.kartsec .opt{flex-direction:column;align-items:flex-start;gap:2px}
+.dact{display:flex;gap:8px;align-items:center;justify-content:flex-end;margin-top:4px}
+.dact .ghost{background:transparent;border-color:transparent;color:var(--dim)}
+.dfld{display:flex;flex-direction:column;gap:3px;font-size:11.5px;color:var(--dim)}
+/* Dialog tetikleyicileri dugme ama alan hapinin icinde metin gibi dursun. */
+.fld button.v,.arow button{border:none;background:transparent;padding:0;font:inherit;
+      font-size:12px;font-weight:600;cursor:pointer;text-align:left}
+.fld button.v:hover,.arow button:hover{color:var(--acc);border-color:transparent}
+
+/* ---- kompozer: ek iptali + hizli eylem ---- */
+.fclear{flex-shrink:0;border:1px solid var(--line);background:var(--panel);color:var(--dim);
+        border-radius:9px;padding:6px 9px;font-size:12px;line-height:1}
+.fclear:hover{border-color:var(--err);color:var(--err)}
+.simsek{flex-shrink:0;border:1px solid var(--line);background:var(--panel);
+        border-radius:9px;padding:6px 10px;font-size:14px;line-height:1}
+.simsek:hover{border-color:var(--acc-s);background:var(--tint)}
+
+/* ---- kart bloklari (ortak/kartlar.html) ----
+   Yeniden kullanilabilir blok: ileride ozel kayit formlari da ayni sinifi cizecek. */
+.kartlar{padding:9px 18px;background:var(--panel)}
+.kartlar .kekle{margin-left:auto;font-size:12px;padding:4px 11px;border-radius:999px}
+.kart{border:1px solid var(--line);border-radius:13px;background:var(--panel2);
+      padding:10px 12px;margin-bottom:7px}
+.kart .khead{display:flex;align-items:center;gap:7px}
+.kart .kic{font-size:15px}
+.kart .knm{font-size:13.5px;font-weight:700}
+.kart .ktur{font-size:10.5px;color:var(--dim);border:1px solid var(--line);
+      border-radius:999px;padding:1px 8px;background:var(--panel)}
+.kart .khead .tmini{margin-left:0}
+.kart .khead .tmini:first-of-type{margin-left:auto}
+.kgovde{margin-top:7px;display:flex;flex-direction:column;gap:4px}
+.krow{display:flex;gap:8px;font-size:12.5px}
+.krow .k{color:var(--dim);min-width:74px}
+.krow .v{font-weight:600}
+.kmetin{margin-top:4px;font-size:12.5px;color:var(--dim);line-height:1.55;white-space:pre-wrap}
+.kgorseller{margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:flex-start}
+.kgorsel img{display:block;width:92px;height:92px;object-fit:cover;border-radius:10px;
+      background:var(--panel)}
+.kyukle{margin-top:8px}
+
+/* ---- rozetler: sayac ve durum hapi (iki yuzde de, ortak sablonlarda) ---- */
+.tb{font-size:10.5px;font-weight:700;border-radius:999px;padding:1px 7px}
+.h0{background:#f0edf8;color:#a49dc0} .h1{background:#e2f5ec;color:#1c8a5b}
+.h2{background:#fdf0d9;color:#b47a09} .h3{background:#fde4e8;color:#d13350}
+
+/* ---- mini satir dugmeleri (agactaki ✎/✕, kart bloklarindaki ✎/✕) ---- */
+.tmini{border:0;background:none;cursor:pointer;color:var(--dim);
+       padding:3px 6px;border-radius:6px;font-size:13px;line-height:1}
+.tmini:hover{background:var(--panel);color:var(--acc)}
+.tsil:hover{color:#e5484d}
+
+/* ---- eylem şeridi (spec/20-sema.md §3a): kayıt ne oldu, eylem kim ne yapacak ---- */
+.acts{padding:9px 18px;border-top:1px solid var(--line);background:var(--panel)}
+.ahead{font-size:12px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;
+       color:var(--dim);display:flex;align-items:center;gap:7px;margin-bottom:7px}
+.arow{display:flex;align-items:center;gap:9px;padding:6px 8px;border:1px solid var(--line);
+      border-radius:9px;margin-bottom:5px;background:var(--panel2)}
+.arow.done{opacity:.55}
+.arow.done .at{text-decoration:line-through}
+.arow .at{flex:1;font-size:13px;font-weight:600;min-width:120px}
+.arow select,.arow input{width:auto;padding:3px 6px;font-size:12px;border:none;
+      background:transparent;font-weight:600}
+.arow select:focus,.arow input:focus{outline:none;box-shadow:none}
+.adur{font-size:12px}
+.akisi{font-size:12px;color:var(--txt)}
+.atarih{font-size:12px}
+.atarih.gec,.arow input.gec{color:var(--err)}
+.aform{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}
+.aform input[name=title]{flex:1;min-width:150px}
+.abolum{font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;
+        color:var(--dim);margin:9px 2px 5px}
+
+/* ---- sohbette anma (@kisi / @all / @here / @team) ----
+   Vurgu OKUMA aninda uretiliyor (shared/render.mention_html): govde ham metin
+   olarak saklaniyor, HTML veritabanina yazilmiyor. Grup anmalari ayri renkte:
+   "@all" bir odaya seslenmek, "@efe" bir kisiye dokunmak. */
+.mention{font-weight:700;color:var(--acc);background:var(--tint);
+         border-radius:6px;padding:0 3px}
+.mention.grp{color:#b4501a;background:#ffe9d9}
+.msg.me .bub .mention{color:#fff;background:rgba(255,255,255,.22)}
+.msg.me .bub .mention.grp{color:#fff;background:rgba(255,255,255,.3)}

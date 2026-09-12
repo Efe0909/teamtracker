@@ -12,7 +12,7 @@
     {% endif %}
     <div class="bub">
       {% if not m.mine and m.author %}<div class="nm">{{ m.author.name }}</div>{% endif %}
-      {{ m.body }}
+      {{ m.body | mention }}
       {% for media in m.media %}
         {% if media.deleted %}
         <div class="bmedia mtomb">🖼 Görsel silindi</div>

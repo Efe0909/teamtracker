@@ -292,15 +292,15 @@ def test_tur_degisiminde_yerlesim_yeniden_bakilir(client):
 
 
 def test_projeksiyonu_olan_dugumun_turu_degismez(client):
+    # Takim node'u projeksiyonunu KENDILIGINDEN dogurur (goc 012, spec/72 §5) —
+    # eskiden bu test teams.node_id'yi elle bagliyordu, artik gerekmiyor.
     d = service.add_node("T-Kilit", "team")
-    db.x("update teams set node_id = %s where name = 'Maliye'", (d["id"],))
-    try:
-        assert service.update_node(d["id"], node_type="generic") is False
-        assert service.TREE.nodes[d["id"]].node_type == "team"
-        # Ad DEGISEBILIR: kilit yalniz ture ait.
-        assert service.update_node(d["id"], name="T-KilitYeni")
-    finally:
-        db.x("update teams set node_id = null where name = 'Maliye'")
+    assert db.q1("select 1 from teams where node_id = %s", (d["id"],)) is not None
+    assert service.update_node(d["id"], node_type="generic") is False
+    assert service.TREE.nodes[d["id"]].node_type == "team"
+    # Ad DEGISEBILIR: kilit yalniz ture ait — ve takim karti da yeni adi alir.
+    assert service.update_node(d["id"], name="T-KilitYeni")
+    assert db.q1("select name from teams where node_id = %s", (d["id"],))["name"] == "T-KilitYeni"
 
 
 def test_cocugu_olan_dugumun_turu_degisir(client):
@@ -398,17 +398,13 @@ def test_tur_girdisi_SELECT_olarak_cizilir(client):
 
 
 def test_kilitli_dugumun_tur_secimi_disabled(client):
-    d = service.add_node("T-UcKilit", "team")
-    db.x("update teams set node_id = %s where name = 'Maliye'", (d["id"],))
-    try:
-        service.rebuild_tree()
-        text = client.get("/outcome-tree").text
-        form = text.split(f'hx-patch="/node/{d["id"]}"', 1)[1].split("</form>", 1)[0]
-        assert "disabled" in form
-        # Gizli bir type girdisiyle kilidi delmeye calisma:
-        assert '<input type="hidden" name="type"' not in form
-    finally:
-        db.x("update teams set node_id = null where name = 'Maliye'")
+    d = service.add_node("T-UcKilit", "team")       # projeksiyon kendiliginden dogar
+    service.rebuild_tree()
+    text = client.get("/outcome-tree").text
+    form = text.split(f'hx-patch="/node/{d["id"]}"', 1)[1].split("</form>", 1)[0]
+    assert "disabled" in form
+    # Gizli bir type girdisiyle kilidi delmeye calisma:
+    assert '<input type="hidden" name="type"' not in form
 
 
 def test_pasif_dugum_agacta_soluk_cizilir(client):

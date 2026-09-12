@@ -1,0 +1,26 @@
+{# fragment: panolar — modul grid'i (spec/60-kaynak-uyarlama.md 2.1).
+
+   Her kartin sag ustunde PIN (figure4): modulu sol raya sabitler ya da birakir.
+   Pin kisiye ait (goc 012, user_pins) — kuruluma degil. Toggle bu parcayi
+   yeniden cizer; ray zaten diger sayfalarda taze yuklenir. #}
+<div class="hgrid" id="panolar" data-fragment="panolar">
+  {% for m in modules %}
+  <div class="modwrap">
+    <a class="mod {{ 'ready' if m.ready else 'soon' }}" href="{{ m.href }}">
+      <div class="ic">{{ m.icon }}</div>
+      <div class="nm">{{ m.name }}</div>
+      <div class="ds">{{ m.desc }}</div>
+      <div class="ft">
+        <span class="tag {{ 't-ready' if m.ready else 't-soon' }}">
+          {{ 'Hazır' if m.ready else 'Yakında' }}</span>
+        {% if m.ready and m.count is not none %}<span>{{ m.count }} {{ m.unit }}</span>{% endif %}
+        <span class="go">→</span>
+      </div>
+    </a>
+    <button type="button" class="pin{% if m.pinned %} on{% endif %}"
+            hx-post="/pins/{{ m.slug }}" hx-target="#panolar" hx-swap="outerHTML"
+            aria-pressed="{{ 'true' if m.pinned else 'false' }}"
+            title="{{ 'Raydan bırak' if m.pinned else 'Sol raya sabitle' }}">📌</button>
+  </div>
+  {% endfor %}
+</div>

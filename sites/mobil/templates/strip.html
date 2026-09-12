@@ -1,56 +1,67 @@
-{# fragment: mobile_strip — alan seridi. PATCH sonrasi akisla birlikte tazelenir. #}
+{# fragment: mobile_strip — alan seridi. PATCH sonrasi akisla birlikte tazelenir.
+
+   IKI DEGISIKLIK (kullanici istegi, figure1/figure2):
+   1. Serit artik YATAY KAYMIYOR — sarar (.dstrip, mobil.css). Telefonda
+      sagdaki alanlar gorunmez oluyordu.
+   2. Dropdown yerine dialog (ortak/alan.html): tek dokunusla sorumlu
+      degistirmek cok kolaydi. Masaustuyle ayni davranis.
+
+   Her degisim akisa zaman damgali sistem olayi yazar (service.change_field). #}
+{% import "ortak/alan.html" as alan %}
+{% set url = mp ~ "/record/" ~ item.id ~ "/field" %}
 <div class="dstrip" id="serit" data-fragment="mobile_strip">
-  <span class="fld">
-    <span class="k">Durum</span>
-    {% if can_edit %}
-    <select name="status" hx-patch="{{ mp }}/record/{{ item.id }}/field" hx-target="#serit"
-            hx-swap="outerHTML" class="v v-{{ item.status }}">
-      {% for k, v in statuses.items() %}
-      <option value="{{ k }}"{% if k == item.status %} selected{% endif %}>{{ v }}</option>
-      {% endfor %}
-    </select>
+  <span class="fld"><span class="k">Durum</span>
+    {% if can_edit %}{{ alan.trigger("dlg-f-status", "v v-" ~ item.status, status_label) }}
     {% else %}<span class="v v-{{ item.status }}">{{ status_label }}</span>{% endif %}
   </span>
 
-  <span class="fld">
-    <span class="k">Öncelik</span>
-    {% if can_edit %}
-    <select name="priority" hx-patch="{{ mp }}/record/{{ item.id }}/field" hx-target="#serit"
-            hx-swap="outerHTML" class="v v-{{ item.priority }}">
-      {% for k, v in priorities.items() %}
-      <option value="{{ k }}"{% if k == item.priority %} selected{% endif %}>{{ v }}</option>
-      {% endfor %}
-    </select>
+  <span class="fld"><span class="k">Öncelik</span>
+    {% if can_edit %}{{ alan.trigger("dlg-f-priority", "v v-" ~ item.priority, priority_label) }}
     {% else %}<span class="v v-{{ item.priority }}">{{ priority_label }}</span>{% endif %}
   </span>
 
-  <span class="fld">
-    <span class="k">Sorumlu</span>
-    {% if can_edit %}
-    <select name="assignee_id" hx-patch="{{ mp }}/record/{{ item.id }}/field" hx-target="#serit"
-            hx-swap="outerHTML" class="v">
-      <option value="">—</option>
-      {% for u in users %}
-      <option value="{{ u.id }}"{% if u.id == item.assignee_id %} selected{% endif %}>{{ u.name }}</option>
-      {% endfor %}
-    </select>
+  <span class="fld"><span class="k">Takım</span>
+    {% if can_edit %}{{ alan.trigger("dlg-f-team", "v", team.name if team else "—") }}
+    {% else %}<span class="v">{{ team.name if team else '—' }}</span>{% endif %}
+  </span>
+
+  <span class="fld"><span class="k">Pillar</span>
+    {% if can_edit %}{{ alan.trigger("dlg-f-pillar", "v", pillar or "—") }}
+    {% else %}<span class="v">{{ pillar or '—' }}</span>{% endif %}
+  </span>
+
+  <span class="fld"><span class="k">Sorumlu</span>
+    {% if can_edit %}{{ alan.trigger("dlg-f-who", "v", assignee.name if assignee else "—") }}
     {% else %}<span class="v">{{ assignee.name if assignee else '—' }}</span>{% endif %}
   </span>
 
-  <span class="fld">
-    <span class="k">Son tarih</span>
-    {% if can_edit %}
-    <input type="date" name="due_date" value="{{ item.due_date or '' }}" class="v"
-           hx-patch="{{ mp }}/record/{{ item.id }}/field" hx-target="#serit" hx-swap="outerHTML">
+  <span class="fld"><span class="k">Son tarih</span>
+    {% if can_edit %}{{ alan.trigger("dlg-f-due", "v", item.due_date or "—") }}
     {% else %}<span class="v">{{ item.due_date or '—' }}</span>{% endif %}
   </span>
 
   {% if item.dms %}<span class="fld"><span class="k">DMS</span><span class="v">{{ item.dms }}</span></span>{% endif %}
+
+  {% if can_edit %}
+    {{ alan.choice("dlg-f-status", "Kayıt durumu", "status", url, "#serit",
+                   statuses.items()|list, item.status,
+                   "Açık eylem varken kayıt kapanmaz.") }}
+    {{ alan.choice("dlg-f-priority", "Öncelik", "priority", url, "#serit",
+                   priorities.items()|list, item.priority) }}
+    {{ alan.choice("dlg-f-team", "Takım", "team_id", url, "#serit",
+                   team_options, item.team_id or "") }}
+    {{ alan.choice("dlg-f-pillar", "Pillar", "pillar_node_id", url, "#serit",
+                   pillar_options, item.pillar_node_id or "",
+                   "Pillar hiyerarşiden bağımsız.") }}
+    {{ alan.choice("dlg-f-who", "Sorumlu", "assignee_id", url, "#serit",
+                   [("", "—")] + user_options, item.assignee_id or "",
+                   "Değişiklik akışa zaman damgasıyla düşer.") }}
+    {{ alan.date("dlg-f-due", "Kaydın son tarihi", "due_date", url, "#serit",
+                 item.due_date, not can_edit_deadline) }}
+  {% endif %}
 </div>
 
 {% if oob_feed %}
 {# alan degisince sistem olayi akisa dusmeli — ikinci parca ayni yanitta tazelenir #}
-<div class="dfeed" id="feed" hx-swap-oob="true">
-  {% for m in feed %}{% include "ortak/mesaj.html" %}{% endfor %}
-</div>
+{% with oob = True %}{% include "ortak/akis.html" %}{% endwith %}
 {% endif %}

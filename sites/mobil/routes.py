@@ -141,18 +141,33 @@ def mobile_ctx(request, user, tab: str | None, title: str, **extra) -> dict:
 
 
 def mobile_card_ctx(request, item, user) -> dict:
+    """Mobil kayit ekrani — ARTIK masaustuyle ayni bolumler (kullanici istegi,
+    figure2): alanlar + eylemler + kart bloklari. Sohbet varsayilan olarak
+    kapali, sag alttaki balondan aciliyor.
+
+    Eylem ve kart sozlukleri service.item_blocks_ctx'ten: iki yuz ayni ortak
+    sablonu ciziyor, sozluk de ayni yerden gelmeli.
+    """
     users = users_by_id()
+    teams = service.teams_by_id()
+    tree = service.TREE
     # feed_of ile ayni sorgu-ve-gruplama: burada tekrar yazmak ekleri IKI yerde
     # ayrica baglamak demekti (sozlesme §8). service.feed_of TEK dogruluk kaynagi.
     feed = service.feed_of("item", item["id"], user)
     return {
-        "request": request, "user": user, "item": item, "row": mobile_row(item, users),
-        "assignee": users.get(item["assignee_id"]), "users": list(users.values()),
-        "feed": feed, "can_edit": auth.can_edit_item(user, item, service.TREE),
+        "request": request, "user": user, "row": mobile_row(item, users),
+        "assignee": users.get(item["assignee_id"]),
+        "team": teams.get(item["team_id"]),
+        "team_options": [("", "—")] + [(t["id"], t["name"]) for t in teams.values()],
+        "pillar": tree.name(item["pillar_node_id"]) if item["pillar_node_id"] else None,
+        "pillar_options": [("", "—")] + [(n, tree.name(n)) for n in tree.nodes_of_type("pillar")],
+        "feed": feed,
+        "msg_count": sum(1 for m in feed if m["type"] == "message"),
         "statuses": STATUSES, "priorities": PRIORITIES,
         "status_label": STATUSES[item["status"]], "priority_label": PRIORITIES[item["priority"]],
         "tab": None, "title": "Kayıt", "badge": notif_badge(user),
         "mp": mp(request), "mroot": mp(request) or "/",
+        **service.item_blocks_ctx(item, user),
     }
 
 
@@ -244,15 +259,19 @@ def new_item_form(request: Request):
     nodes = [{"id": nid, "name": ("— " * service.TREE.depth[nid]) + service.TREE.name(nid)}
              for nid in sorted(service.TREE.nodes, key=lambda n: service.TREE.tin[n])
              if db.as_bool(user["is_admin"]) or (scope_id and service.TREE.is_descendant(nid, scope_id))]
+    pillars = [{"id": nid, "name": service.TREE.name(nid)}
+               for nid in service.TREE.nodes_of_type("pillar")]
     return render(request, "yeni.html",
-                  mobile_ctx(request, user, None, "Yeni kayıt", nodes=nodes))
+                  mobile_ctx(request, user, None, "Yeni kayıt", nodes=nodes, pillars=pillars))
 
 
 @router.post("/new")
 def create_item(request: Request, node_id: str = Form(...), title: str = Form(...),
-                kind: str = Form("issue"), description: str = Form("")):
+                kind: str = Form("issue"), description: str = Form(""),
+                pillar_node_id: str = Form("")):
     user = auth.current_user(request)
-    item_id = new_item(user, node_id, kind, title, description)
+    item_id = new_item(user, node_id, kind, title, description,
+                       pillar_node_id=pillar_node_id or None)
     return RedirectResponse(f"{mp(request)}/record/{item_id}", status_code=303)
 
 
@@ -287,8 +306,10 @@ async def patch_field(request: Request, item_id: str):
     item = get_item(item_id)
     if not auth.can_edit_item(user, item, service.TREE):
         raise HTTPException(403, "bu kartta yetkin yok")
+    form = await request.form()
+    service.require_deadline_scope(user, form)   # son tarih ayri kapsam ister
     ctx = mobile_card_ctx(request, item, user)
-    if change_field(user, item, await request.form()):
+    if change_field(user, item, form):
         ctx = mobile_card_ctx(request, get_item(item_id), user)
         ctx["oob_feed"] = True          # serit + akis birlikte tazelenir (hx-swap-oob)
     return render(request, "strip.html", ctx)

@@ -123,6 +123,25 @@ class NodeFilter(Filter):
         return "i.node_id = any(%s)", [list(ids)]
 
 
+class PillarFilter(Filter):
+    """Pillar ORTOGONAL bir boyut: kayit agacta bir yerde durur, ayrica bir
+    pillar'a sayilir (goc 012). Secenekler node agacindan — pillar'in TANIMI
+    orada, tek kaynak (spec/72 §8)."""
+
+    def options(self):
+        tree = service.TREE
+        return ([("none", "Pillar'sız", None)]
+                + [(nid, tree.name(nid), None) for nid in tree.nodes_of_type("pillar")])
+
+    def clause(self, value, user):
+        if value == "none":
+            return "i.pillar_node_id is null", []
+        id_ = db.uid(value)
+        if id_ is None or id_ not in service.TREE.nodes:
+            return None
+        return "i.pillar_node_id = %s", [id_]
+
+
 class SearchFilter(Filter):
     """tsvector/GIN — sorgu ifadesi kullanici metniyle birlestirilmez (shared/search.py)."""
 
@@ -138,9 +157,10 @@ class SearchFilter(Filter):
 def active_filters() -> list[Filter]:
     """Her istekte kurulur: dugum secenekleri bellekteki agactan gelir.
 
-    PILLAR FILTRESI YOK (spec/72 §8): items.pillar olu sutundu ve dusuruldu.
-    Pillar artik bir dugum turu; kayitla bagi ertelendigi icin o boyutta
-    suzme kurulamaz. Pillar sayfasi yazilirken soru geri gelir.
+    PILLAR FILTRESI GERI GELDI (goc 012): eski `items.pillar` serbest metindi
+    ve hic set edilemiyordu, o yuzden dusurulmustu. Yerine gelen sey ayni sey
+    degil — `items.pillar_node_id`, tanimi agactaki pillar node'undan alan
+    ORTOGONAL bir bag. Yazim varyasyonu yok, bos kirilim yok.
     """
     return [
         SelectFilter("kind", "Tür", "kind", {"issue": "Hata", "task": "Görev"}),
@@ -149,6 +169,7 @@ def active_filters() -> list[Filter]:
         TeamFilter("team", "Takım"),
         PersonFilter("person", "Sorumlu", "assignee_id"),
         NodeFilter("node", "Düğüm"),
+        PillarFilter("pillar", "Pillar"),
         SearchFilter("search", "Ara"),
     ]
 

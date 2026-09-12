@@ -24,7 +24,8 @@ from fastapi.responses import (FileResponse, HTMLResponse, JSONResponse,
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
-from shared import attachments, auth, config, csrf, db, hardening, identity, media, push, service
+from shared import (attachments, auth, cards, config, csrf, db, hardening, identity, media,
+                    push, service)
 from shared.render import SHARED_DIR, site_templates
 from sites.dashboard import routes as dashboard
 from sites.mobil import routes as mobil
@@ -303,6 +304,98 @@ def delete_attachment(request: Request, attachment_id: str):
         return HTMLResponse("")
     m = service.event_message(row["owner_id"], user)
     return _MEDIA_TPL.TemplateResponse(request, "ortak/mesaj.html", {"m": m})
+
+
+# --- eylemler + kart bloklari: IKI YUZDE de ayni uc -------------------------
+#
+# /media/* gibi DOGRUDAN app'te, router'larda degil: eylem seridi ve kart
+# bloklari artik ortak sablon (shared/templates/ortak/), yani mobil ve
+# masaustu ayni parcayi ciziyor. Uclari da kopyalasaydik iki yuz zamanla
+# ayrisirdi — hangi davranisin nerede oldugu ikinci bir soru olurdu.
+
+
+def _blocks(request: Request, item, user, name: str, **extra) -> HTMLResponse:
+    ctx = {**service.item_blocks_ctx(item, user), **extra}
+    return _MEDIA_TPL.TemplateResponse(request, name, ctx)
+
+
+def _editable_item(request: Request, item_id: str):
+    """Kayit + yazma yetkisi — dort ucun ortak kapisi."""
+    user = auth.current_user(request)
+    item = service.get_item(item_id)
+    if not auth.can_edit_item(user, item, service.TREE):
+        raise HTTPException(403, "bu kartta yetkin yok")
+    return user, item
+
+
+@app.post("/item/{item_id}/action", response_class=HTMLResponse)
+async def create_action(request: Request, item_id: str):
+    user, item = _editable_item(request, item_id)
+    form = await request.form()
+    service.require_deadline_scope(user, form)
+    service.add_action(user, item, str(form.get("title") or ""),
+                       form.get("assignee_id") or None, form.get("due_date") or None)
+    return _blocks(request, service.get_item(item_id), user, "ortak/eylemler.html", oob_feed=True)
+
+
+@app.patch("/action/{action_id}", response_class=HTMLResponse)
+async def patch_action(request: Request, action_id: str):
+    action = service.get_action(action_id)
+    user, item = _editable_item(request, action["item_id"])
+    form = await request.form()
+    service.require_deadline_scope(user, form)
+    changed = service.change_action(user, item, action, form)
+    return _blocks(request, service.get_item(item["id"]), user, "ortak/eylemler.html",
+                   oob_feed=changed)
+
+
+@app.post("/item/{item_id}/card", response_class=HTMLResponse)
+async def create_card(request: Request, item_id: str):
+    user, item = _editable_item(request, item_id)
+    form = await request.form()
+    cards.add(item["id"], str(form.get("card_type") or ""), str(form.get("title") or ""),
+              form, user["id"])
+    return _blocks(request, item, user, "ortak/kartlar.html")
+
+
+def _card_or_404(card_id: str) -> dict:
+    card = cards.get(card_id)
+    if card is None:
+        raise HTTPException(404, "kart yok")
+    return card
+
+
+@app.patch("/card/{card_id}", response_class=HTMLResponse)
+async def patch_card(request: Request, card_id: str):
+    card = _card_or_404(card_id)
+    user, item = _editable_item(request, card["item_id"])
+    form = await request.form()
+    cards.update(card["id"], str(form.get("title") or ""), form)
+    return _blocks(request, item, user, "ortak/kartlar.html")
+
+
+@app.delete("/card/{card_id}", response_class=HTMLResponse)
+def remove_card(request: Request, card_id: str):
+    card = _card_or_404(card_id)
+    user, item = _editable_item(request, card["item_id"])
+    cards.delete(card["id"])
+    return _blocks(request, item, user, "ortak/kartlar.html")
+
+
+@app.post("/card/{card_id}/media", response_class=HTMLResponse)
+async def add_card_media(request: Request, card_id: str):
+    """Medya kartina gorsel. Ek KARTIN kendisine asilir (owner_type='card'),
+    kaydin tamamina degil — ayni karttaki iki medya blogu ayirt edilebilsin."""
+    service.reject_oversized_upload(request)
+    card = _card_or_404(card_id)
+    user, item = _editable_item(request, card["item_id"])
+    form = await request.form()
+    image = form.get("image")
+    image = image if getattr(image, "filename", None) else None
+    saved = service.save_upload(image)
+    if saved is not None:
+        attachments.attach("card", card["id"], user["id"], saved)
+    return _blocks(request, item, user, "ortak/kartlar.html")
 
 
 # --- etiketler (CONTRACT-V2.md §6) ------------------------------------------

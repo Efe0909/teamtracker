@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException
 
-from . import attachments, auth, config, db, media, nodes
+from . import attachments, auth, cards, config, db, media, mentions, nodes
 from .tree import TreeIndex
 
 _log = logging.getLogger("ekiptakip.service")
@@ -20,7 +20,10 @@ _log = logging.getLogger("ekiptakip.service")
 STATUSES = {"open": "Açık", "in_progress": "Devam", "pending": "Beklemede", "closed": "Kapandı"}
 PRIORITIES = {"critical": "Kritik", "high": "Yüksek", "medium": "Orta", "low": "Düşük"}
 EDITABLE = {"status": STATUSES, "priority": PRIORITIES, "assignee_id": None, "due_date": None,
-            "team_id": None}
+            "team_id": None, "pillar_node_id": None}
+# Son tarih ayri bir kapsam ister (edit_deadline, goc 012). Liste BURADA cunku
+# kural hem kayit alanina hem eyleme ayni sekilde uygulaniyor; uclar bunu okur.
+DEADLINE_FIELDS = frozenset({"due_date"})
 ACTION_STATUS = {"open": "Açık", "in_progress": "Devam", "closed": "Kapandı", "cancelled": "İptal"}
 TEAM_ROLE = {"lead": "Lider", "mentor": "Mentor", "member": "Üye"}
 MONTHS = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"]
@@ -69,6 +72,60 @@ def _node_event(node_id, author_id, text: str) -> None:
         subject_type="node")
 
 
+# --- takim projeksiyonu (spec/72 §5) -------------------------------------
+#
+# Takim node'u bir PROJEKSIYON tasir: teams satiri. Ad ve aciklama node'dan
+# TURETILIR — iki yerde ad tutmak, ikisinin ayrismasi demek. Bu yuzden takim
+# adini degistirmenin yolu node'u yeniden adlandirmaktir; teams.name yazilir
+# ama kaynagi node'dur.
+#
+# Kimlik veritabanindan, renk rastgele, created_at insert'ten: kullanicidan
+# istenmeyen her alanin kaynagi tek yerde dursun.
+
+TEAM_COLORS = ["#8e6bff", "#1c8a5b", "#b4501a", "#2c74ad", "#d13350", "#b47a09",
+               "#5a5280", "#0f766e", "#9333ea", "#be185d"]
+
+
+def _free_team_name(name: str, exclude=None) -> str:
+    """teams.name TEKIL (goc 002). Ayni adda ikinci bir takim node'u kurulabilir
+    (agacta farkli dallarda ayni ad serbest) — o zaman takim adina sayi eklenir,
+    insert patlamaz."""
+    candidate, n = name, 1
+    while db.q1("select 1 from teams where name = %s and (%s::uuid is null or id <> %s)",
+                (candidate, exclude, exclude)) is not None:
+        n += 1
+        candidate = f"{name} ({n})"
+    return candidate
+
+
+def sync_team_projection(node_id, changed_by=None) -> dict | None:
+    """Takim node'unu teams ile hizalar. Cagrilabilir ve IDEMPOTENT.
+
+    - tur 'team' ve satir yoksa  -> takim dogar
+    - tur 'team' ve satir varsa  -> ad/aciklama tazelenir
+    - tur 'team' DEGILSE         -> hicbir sey (tur kilidi zaten projeksiyonu
+      olan dugumun turunu degistirmiyor, nodes.has_projection)
+    """
+    nid = db.uid(node_id)
+    node = TREE.nodes.get(nid)
+    if node is None or node.node_type != "team":
+        return None
+    description = (db.q1("select description from nodes where id = %s", (nid,)) or {}).get("description")
+    row = db.q1("select * from teams where node_id = %s", (nid,))
+    if row is None:
+        team_id = db.new_id()
+        color = TEAM_COLORS[int(team_id.int % len(TEAM_COLORS))]
+        db.x("insert into teams (id,name,description,node_id,color,created_at)"
+             " values (%s,%s,%s,%s,%s,%s)",
+             (team_id, _free_team_name(node.name), description, nid, color, db.now()))
+        _node_event(nid, changed_by, f"{node.name} takımı oluştu")
+        return db.q1("select * from teams where id = %s", (team_id,))
+    if row["name"] != node.name or row["description"] != description:
+        db.x("update teams set name = %s, description = %s where id = %s",
+             (_free_team_name(node.name, exclude=row["id"]), description, row["id"]))
+    return db.q1("select * from teams where id = %s", (row["id"],))
+
+
 def add_node(name: str, node_type: str, parent_id=None, description: str | None = None,
              created_by=None) -> dict | None:
     """Yeni dugum. parent_id None ise kok."""
@@ -96,6 +153,7 @@ def add_node(name: str, node_type: str, parent_id=None, description: str | None 
          db.uid(created_by) if created_by else None, db.now()))
     rebuild_tree()
     _node_event(row["id"], created_by, f"{name} eklendi ({node_type})")
+    sync_team_projection(row["id"], created_by)   # tur 'team' ise takim da dogar
     return row
 
 
@@ -139,6 +197,10 @@ def update_node(node_id, name: str | None = None, node_type: str | None = None,
     _node_event(id_, changed_by,
                 f"{previous_name} -> {new_name} olarak adlandirildi" if previous_name != new_name
                 else f"{new_name} guncellendi")
+    # Ad/aciklama node'da degisti -> takim karti da degisti. Tek gercek, iki
+    # gorunum (spec/72 §5): senkron BURADA, cagiran uclarda degil, yoksa mobil
+    # ve masaustu farkli davranirdi.
+    sync_team_projection(id_, changed_by)
     return True
 
 
@@ -236,10 +298,34 @@ def get_team(team_id):
     return r
 
 
+def rename_team(team_id, name: str, description: str | None, changed_by=None) -> bool:
+    """Takim adi/aciklamasi — node'u olan takimda KAYNAGA yazar.
+
+    Iki arayuz (veri yonetimi agaci ve takim sayfasi) ayni gercegi degistirir:
+    node'u olan takimda yazma node'a gider, teams satiri projeksiyondan tazelenir
+    (spec/72 §5). Node'u olmayan eski takimlarda dogrudan teams'e yazilir — onlar
+    icin baska bir kaynak yok.
+    """
+    team = db.q1("select * from teams where id = %s", (db.uid(team_id),))
+    if team is None or not (name or "").strip():
+        return False
+    if team["node_id"]:
+        return update_node(team["node_id"], name=name, description=description or "",
+                           changed_by=changed_by)
+    db.x("update teams set name = %s, description = %s where id = %s",
+         (_free_team_name(name.strip(), exclude=team["id"]),
+          (description or "").strip() or None, team["id"]))
+    return True
+
+
 def team_rows() -> list[dict]:
-    """Ekipler listesi: takim + uye/kayit/eylem sayilari, TEK sorgu."""
+    """Takimlar listesi: takim + uye/kayit/eylem sayilari, TEK sorgu.
+
+    is_active node'dan TURETILIR (spec/72 §6: durum tek yerde, node'da).
+    Node'u olmayan eski takimlar daima aktif sayilir.
+    """
     return db.q(
-        "select t.*,"
+        "select t.*, coalesce(n.is_active, true) is_active,"
         " (select count(*) from team_members m join users u on u.id = m.user_id"
         "  where m.team_id = t.id and u.is_active) member_count,"
         " (select count(*) from items i where i.team_id = t.id"
@@ -247,7 +333,7 @@ def team_rows() -> list[dict]:
         " (select count(*) from items i where i.team_id = t.id) all_count,"
         " (select count(*) from actions a join items i on i.id = a.item_id"
         "  where i.team_id = t.id and a.status in ('open','in_progress')) open_action_count"
-        " from teams t order by t.name")
+        " from teams t left join nodes n on n.id = t.node_id order by t.name")
 
 
 def members_by_team() -> dict:
@@ -507,13 +593,22 @@ def add_message(user, item, body: str, attachment: dict | None = None) -> dict |
     attachment, media.save()'in ciktisidir — olay ve ek satiri ayni mantiksal
     islemde yazilir: once olay (id gerekli), sonra attachments.attach() ile
     ona bagli ek (owner_type='event').
+
+    Yazan KENDILIGINDEN katilimci olur: kume buyumezse `@all`/`@here`
+    kimseye ulasmaz ve anma ozelligi ilk gunden anlamsiz kalirdi.
     """
     body = body.strip()
     if not body and not attachment:
         return None
+    mentions.join(item["id"], user["id"], user["id"])
     event_id = log(item["id"], "message", user["id"], body)
     saved = attachments.attach("event", event_id, user["id"], attachment) if attachment else None
     db.x("update items set updated_at = %s where id = %s", (db.now(), item["id"]))
+    pinged = mentions.resolve("item", item["id"], body, user, item=item)
+    if pinged:
+        mentions.notify(pinged, user, body, title=item["title"],
+                        url=mentions.mention_url("item", item["id"]),
+                        tag=f"item-{item['id']}")
     return {"type": "message", "body": body, "author": user, "mine": True,
             "time": short_time(db.now()), "media": _media_view([saved], user, *_tag_context([saved], user))
             if saved else []}
@@ -530,6 +625,13 @@ def add_team_message(user, team, body: str, attachment: dict | None = None) -> d
         return None
     event_id = log(team["id"], "message", user["id"], body, subject_type="team")
     saved = attachments.attach("event", event_id, user["id"], attachment) if attachment else None
+    # Duvarda katilimci kumesi = team_members. Uyelik BURADAN degismez: takim
+    # uyeligi ayri bir yonetim isi, bir mesaj onu sessizce genisletmemeli.
+    pinged = mentions.resolve("team", team["id"], body, user)
+    if pinged:
+        mentions.notify(pinged, user, body, title=team["name"],
+                        url=mentions.mention_url("team", team["id"]),
+                        tag=f"team-{team['id']}")
     return {"type": "message", "body": body, "author": user, "mine": True,
             "time": short_time(db.now()), "media": _media_view([saved], user, *_tag_context([saved], user))
             if saved else []}
@@ -548,12 +650,27 @@ def change_field(user, item, form) -> bool:
     labels = EDITABLE[field]
     if labels and value not in labels:
         raise HTTPException(400, "geçersiz değer")
+    # Formdan gelen METIN, sutun UUID. Cevrim BURADA: users_by_id()/teams_by_id()
+    # sozlukleri UUID ile anahtarli, metinle aranirsa hicbiri eslesmez ve her
+    # sorumlu/takim degisikligi sessizce "kullanici yok" diye 400 donerdi
+    # (change_action bu cevrimi zaten yapiyordu, change_field yapmiyordu).
+    if field in ("assignee_id", "team_id", "pillar_node_id") and value is not None:
+        value = db.uid(value)
+        if value is None:
+            # Bozuk metin SESSIZCE alani bosaltmasin: db.uid() gecersiz girdide
+            # None doner, o da "—" demek olurdu.
+            raise HTTPException(400, "geçersiz kimlik")
     users = users_by_id()
     teams = teams_by_id()
     if field == "assignee_id" and value is not None and value not in users:
         raise HTTPException(400, "kullanıcı yok")
     if field == "team_id" and value is not None and value not in teams:
         raise HTTPException(400, "takım yok")
+    if field == "pillar_node_id" and value is not None:
+        # Pillar ORTOGONAL: kaydin atasi olmak zorunda degil, ama bir pillar
+        # OLMAK zorunda — baska turde bir dugum buraya yazilamaz (goc 012).
+        if value not in TREE.nodes or TREE.nodes[value].node_type != "pillar":
+            raise HTTPException(400, "pillar yok")
     # kayit acik eylemi varken kapanamaz (spec/20-sema.md §3a)
     if field == "status" and value == "closed":
         n = open_action_count(item["id"])
@@ -569,6 +686,8 @@ def change_field(user, item, form) -> bool:
             return users[v]["name"]
         if field == "team_id":
             return teams[v]["name"]
+        if field == "pillar_node_id":
+            return TREE.name(v)
         return v
 
     old, new = label(item[field]), label(value)
@@ -577,15 +696,17 @@ def change_field(user, item, form) -> bool:
 
     db.x(f"update items set {field} = %s, updated_at = %s where id = %s",
          (value, db.now(), item["id"]))
+    if field == "assignee_id" and value is not None:
+        mentions.join(item["id"], value, user["id"])   # sorumlu sohbetin icinde olsun
     names = {"status": "durumu", "priority": "önceliği", "assignee_id": "sorumluyu",
-             "due_date": "son tarihi", "team_id": "takımı"}
+             "due_date": "son tarihi", "team_id": "takımı", "pillar_node_id": "pillar'ı"}
     log(item["id"], "system", user["id"], f"{user['name']} {names[field]} {old} → {new} yaptı")
     return True
 
 
 
 def new_item(user, node_id: str, kind: str, title: str, description: str = "",
-             team_id: str | None = None) -> str:
+             team_id: str | None = None, pillar_node_id: str | None = None) -> str:
     """Yeni kayit. Yetki burada: kapsam disinda dal secilemez (masaustu ve mobil ayni yol).
 
     Kayit istege bagli bir takima tanimlanir (spec/10-kararlar.md 'Kayıt takıma');
@@ -601,20 +722,81 @@ def new_item(user, node_id: str, kind: str, title: str, description: str = "",
     team_id = team_id or None
     if team_id and db.q1("select 1 from teams where id = %s", (team_id,)) is None:
         raise HTTPException(400, "takım yok")
+    # Pillar ORTOGONAL: kayit hem agacta bir yerde durur hem bir pillar'a
+    # sayilir; ikisi birbirinin atasi olmak zorunda degil (goc 012).
+    pillar_node_id = db.uid(pillar_node_id) if pillar_node_id else None
+    if pillar_node_id is not None and (
+            pillar_node_id not in TREE.nodes
+            or TREE.nodes[pillar_node_id].node_type != "pillar"):
+        raise HTTPException(400, "pillar yok")
     if not (db.as_bool(user["is_admin"]) or (
             user["scope_node_id"] and TREE.is_descendant(node_id, user["scope_node_id"]))):
         raise HTTPException(403, "bu dalda kayıt açma yetkin yok")
     now = db.now()
     item_id = db.new_id()
     db.x("insert into items (id,node_id,kind,title,description,status,priority,team_id,"
-         "assignee_id,created_by,created_at,updated_at) values (%s,%s,%s,%s,%s,'open','medium',%s,%s,%s,%s,%s)",
+         "pillar_node_id,assignee_id,created_by,created_at,updated_at)"
+         " values (%s,%s,%s,%s,%s,'open','medium',%s,%s,%s,%s,%s,%s)",
          (item_id, node_id, kind, title.strip(), description.strip() or None,
-          team_id, user["id"], user["id"], now, now))
+          team_id, pillar_node_id, user["id"], user["id"], now, now))
     db.x("insert into item_participants (item_id,user_id,added_by,added_at) values (%s,%s,%s,%s)",
          (item_id, user["id"], user["id"], now))
     extra = f", takım: {teams_by_id()[team_id]['name']}" if team_id else ""
     log(item_id, "system", user["id"], f"{user['name']} bu kaydı açtı ({TREE.name(node_id)}{extra})")
     return item_id
+
+
+# --- eylem + kart bloklari: IKI YUZUN de cizdigi ortak sozluk ---------------
+
+
+def can_edit_deadline(user) -> bool:
+    """Son tarih ayri bir kapsam ister (edit_deadline, goc 012).
+
+    Gec import: shared/scope.py service'i import ediyor, tersi modul
+    seviyesinde dongu olurdu — attachments.py'deki ayni kalip.
+    """
+    from . import scope
+    return scope.has_scope(user, "edit_deadline")
+
+
+def require_deadline_scope(user, form) -> None:
+    """Son tarih iceren bir form gonderildiyse edit_deadline kapsamini sart kos.
+
+    Kural TEK YERDE: kayit alani (PATCH .../field) ve eylem (PATCH /action/..)
+    ayni cagriyi yapiyor, ikisi de mobil ve masaustunden geliyor. Dagitilsaydi
+    dort yerde tekrar eder, biri unutulurdu.
+    """
+    if any(f in form for f in DEADLINE_FIELDS) and not can_edit_deadline(user):
+        raise HTTPException(403, "son tarihi değiştirmek edit_deadline kapsamı ister")
+
+
+def item_blocks_ctx(item, user) -> dict:
+    """ortak/eylemler.html ve ortak/kartlar.html'in bekledigi alanlar.
+
+    TEK yerde: iki yuz de ayni parcayi ciziyor, iki ayri sozluk kurulsaydi
+    biri eksik kalir ve o yuzde sessizce bos bir bolum gorunurdu.
+    """
+    users = users_by_id()
+    today = datetime.now(timezone.utc).date()
+    actions = [{
+        "id": a["id"], "title": a["title"], "status": a["status"],
+        "assignee": users.get(a["assignee_id"]), "due": a["due_date"],
+        "overdue": bool(a["due_date"]) and a["due_date"] < today
+                    and a["status"] in ("open", "in_progress"),
+        "done": a["status"] in ("closed", "cancelled"),
+    } for a in actions_of(item["id"])]
+    people = list(users.values())
+    return {
+        "item": item, "users": people,
+        "user_options": [(u["id"], u["name"]) for u in people],
+        "actions": actions,
+        "open_action_count": sum(1 for e in actions if not e["done"]),
+        "action_status": ACTION_STATUS,
+        "cards": cards.of_item(item["id"], user),
+        "card_types": cards.CARD_TYPES,
+        "can_edit": auth.can_edit_item(user, item, TREE),
+        "can_edit_deadline": can_edit_deadline(user),
+    }
 
 
 # --- eylemler: kayda bagli, kisiye atanan is (spec/20-sema.md §3a) ----------
@@ -634,6 +816,8 @@ def add_action(user, item, title: str, assignee_id: str | None = None,
          " values (%s,%s,%s,%s,'open',%s,%s,%s)",
          (action_id, item["id"], title.strip(), assignee_id, due_date or None, user["id"], now))
     db.x("update items set updated_at = %s where id = %s", (now, item["id"]))
+    if assignee_id:
+        mentions.join(item["id"], assignee_id, user["id"])   # eylem sahibi sohbetin icinde
     to_whom = f" → {users[assignee_id]['name']}" if assignee_id else " (havuzda, üstlenen bekliyor)"
     log(item["id"], "system", user["id"], f"{user['name']} eylem ekledi: {title.strip()}{to_whom}")
     return action_id
@@ -672,6 +856,8 @@ def change_action(user, item, action, form) -> bool:
     else:
         db.x(f"update actions set {field} = %s where id = %s", (value, action["id"]))
         if field == "assignee_id":
+            if value:
+                mentions.join(item["id"], value, user["id"])
             who = users[value]["name"] if value else "—"
             log(item["id"], "system", user["id"],
                 f"{user['name']} \"{action['title']}\" eylemini {who} kişisine atadı")

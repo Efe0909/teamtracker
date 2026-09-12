@@ -156,3 +156,55 @@ def test_pwa_files_are_served(client):
     assert manifest.status_code == 200 and manifest.json()["start_url"] == "/"
     assert client.get("/static/icon-180.png").status_code == 200
     assert 'rel="apple-touch-icon"' in client.get("/").text
+
+
+# --- kayit ekrani: figure2'nin mobil hali (kullanici istegi) ---------------
+
+
+def test_mobil_kayit_masaustuyle_ayni_bolumleri_tasir(client):
+    """Eskiden mobilde yalniz serit + akis vardi; eylemler ve kart bloklari yoktu."""
+    it = item_by_title("Bütçe onayı 6 gündür bekliyor")
+    page = client.get(f"/record/{it['id']}").text
+    assert 'data-fragment="mobile_strip"' in page
+    assert 'data-fragment="card_actions"' in page          # ORTAK sablon
+    assert 'data-fragment="card_blocks"' in page
+
+
+def test_mobil_serit_yatay_KAYMAZ(client):
+    """figure1: `.dstrip` overflow-x:auto idi, sagdaki alanlar gorunmuyordu."""
+    css = (ROOT / "sites/mobil/static/mobil.css").read_text(encoding="utf-8")
+    kural = css.split(".dstrip{", 1)[1].split("}", 1)[0]
+    assert "flex-wrap:wrap" in kural
+    assert "overflow-x:auto" not in kural
+
+
+def test_mobil_sohbet_balondan_acilir(client):
+    """Sohbet varsayilan olarak KAPALI; sag alttaki balon aciyor."""
+    it = item_by_title("Bütçe onayı 6 gündür bekliyor")
+    page = client.get(f"/record/{it['id']}").text
+    assert 'class="chatfab"' in page and 'data-sheet="#sohbet"' in page
+    assert 'class="sheet" id="sohbet"' in page
+    css = (ROOT / "sites/mobil/static/mobil.css").read_text(encoding="utf-8")
+    assert ".sheet{" in css and ".sheet.on{display:flex}" in css
+
+
+def test_mobil_sohbette_hizli_eylem_dugmesi(client):
+    """figure3'teki simsek: sohbet acikken popup, kart ekraninda eski form."""
+    it = item_by_title("Bütçe onayı 6 gündür bekliyor")
+    page = client.get(f"/record/{it['id']}").text
+    assert 'data-dialog="dlg-hizli-eylem"' in page
+    assert 'id="dlg-hizli-eylem"' in page
+    assert 'id="yeni-eylem"' in page                        # kartlar ekranindaki form duruyor
+
+
+def test_mobil_alanlar_dropdown_DEGIL_dialog(client):
+    it = item_by_title("Bütçe onayı 6 gündür bekliyor")
+    serit = client.get(f"/record/{it['id']}").text.split('id="serit"', 1)[1].split("</div>", 1)[0]
+    assert "<select" not in serit
+    assert 'data-dialog="dlg-f-who"' in serit
+
+
+def test_mobil_ek_iptali_var(client):
+    """Ek secildikten sonra gondermeden vazgecmenin yolu yoktu."""
+    it = item_by_title("Bütçe onayı 6 gündür bekliyor")
+    assert 'data-role="attach-clear"' in client.get(f"/record/{it['id']}").text

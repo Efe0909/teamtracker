@@ -16,13 +16,23 @@ Yürürlükteki şema PostgreSQL; kaynağı numaralı göçlerdir
 | `notifications`, `notification_prefs`, `mutes` | yok — mobil bildirimler bugün `events`'ten türetiliyor |
 | `push_subscriptions` | yok — `spec/40-push.md` |
 | `attachments` (§3b) | **kurulu** — `009_attachments.sql`; karar aşağıda §"Açık noktalar" madde 1 |
+| `item_cards` (§3c) | **kurulu** — `012_cards_pillar_pins.sql`; kayıt gövdesine yapıştırılan bloklar |
+| `user_pins` | **kurulu** — `012_cards_pillar_pins.sql`; kişi başına sol ray sabitleri |
 
 Kurulu tablolardaki farklar: `items`'a `dms` eklendi; okunabilir kısa kod sütunu
 (`BUT-1042`) **henüz yok** — arama bugün başlık/açıklama üzerinden çalışıyor.
 
 `items.pillar` (TEXT) **düşürüldü** (spec/72 §8): serbest metindi, `EDITABLE`'da
 olmadığı için arayüzden hiç set edilemiyordu ve üretimde 0 farklı değer taşıyordu
-— ölü sütun. Pillar ↔ kayıt bağı, pillar sayfası yazılırken karara bağlanacak.
+— ölü sütun.
+
+**Pillar ↔ kayıt bağı karara bağlandı** (`012_cards_pillar_pins.sql`):
+`items.pillar_node_id uuid references nodes(id) on delete set null`. Pillar'ın
+*tanımı* ağaçta kalır (`node_type='pillar'`, tek kaynak); kayıtla bağı
+**ortogonaldir** — pillar kaydın atası olmak zorunda değil. "Bütçe Onayı" kaydı
+hiyerarşide `Malzeme Temini` altında durur ama `SN` pillar'ına sayılabilir.
+Yazım varyasyonu yok (FK), boş kırılım yok; pivot ekranı pillar'ı gerçek bir
+boyut olarak sayabilir. Süzme `shared/filters.PillarFilter`.
 
 ---
 
@@ -418,6 +428,58 @@ create table push_subscriptions (
 Bir kullanıcının birden fazla aboneliği olur (telefon + dizüstü) — hepsine gönder.
 
 **Ölü abonelik:** push servisi `404`/`410` dönerse satırı sil. Başka hatalarda `fail_count` artır, belli sayıyı geçince sil. Bu adım atlanırsa sunucu ölü adreslere gönderim yapmaya devam eder.
+
+---
+
+## 3c. Kart blokları (`item_cards`)
+
+Kayıt gövdesine yapıştırılan **yeniden kullanılabilir bloklar** — kaynak
+sistemdeki (figure3) "hatayı doğuran formun kartları kayda yapışık gelir"
+kalıbının bizdeki karşılığı. Hedeflenen son hâl kartlardan kurulu özel bir
+kayıt açma formu; bu tur yalnızca bloğun kendisini kuruyor.
+
+```sql
+create table item_cards (
+  id         uuid primary key default gen_random_uuid(),
+  item_id    uuid not null references items(id) on delete cascade,
+  card_type  text not null check (card_type in ('media','meeting')),
+  title      text,
+  data       jsonb not null default '{}'::jsonb,
+  sort_order integer not null default 0,
+  created_by uuid not null references users(id),
+  created_at timestamptz not null default now()
+);
+```
+
+- **Tür kodda** (`shared/cards.py` `CARD_TYPES`), örnek veritabanında —
+  `NODE_TYPES` ve `SCOPES` ile birebir aynı kalıp. Tür davranış taşır.
+- **`data jsonb`**: türe özel alanlar. Ayrı tablo açılmadı çünkü türler
+  arasındaki tek ortak şey kimlik ve sıra; "toplantı" ile "medya"nın ortak
+  sütunu yok. Sorgulanacak bir alan çıkarsa o zaman sütuna terfi eder.
+  Yazarken **beyaz liste** uygulanır (`cards.FIELDS`): tanımsız anahtar girmez.
+- **Medya kartının ekleri karta asılır**: `attachments.owner_type='card'`,
+  `owner_id = item_cards.id` (göç 012 CHECK'i genişletti). `'item'` olsaydı
+  aynı kayıttaki iki medya bloğu ayırt edilemezdi.
+- Uçlar iki yüzde de ortak (`app.py`): `POST /item/{id}/card`,
+  `PATCH|DELETE /card/{id}`, `POST /card/{id}/media`.
+
+## 3d. Sohbette anma (@kişi / @all / @here / @team)
+
+**Yeni tablo YOK.** Anma, mesajın gövdesinden (`events.body`) okunur ve kime
+gideceği her seferinde kaynağından hesaplanır (`shared/mentions.py`). İkinci
+bir gerçek olsaydı, karttan çıkan biri eski anma satırı yüzünden pinglenmeye
+devam ederdi.
+
+Her sohbetin bir **katılımcı kümesi** var: kart sohbetinde `item_participants`,
+takım duvarında `team_members`. Grup anmaları bu kümenin **dışına çıkmaz**:
+`@all` kümenin tamamı, `@here` kümeden son 10 dakikada görülenler
+(`users.last_seen_at`), `@team` kartın takımının üyeleri ∩ küme. `@kişi` ayrı
+bir şeydir — açık niyet: kart sohbetinde adı yazılan kişi kümeye **alınır**,
+sonra pinglenir (katılımcı eklemenin başka yolu yok). Kümenin büyümesi için
+mesaj yazan ve atanan kişiler kendiliğinden katılımcı olur.
+
+Bildirim TEK olaydan doğar (`spec/40-push.md`): mesajın kendi `events` satırı
+hem uygulama içi bildirimi hem push'u besler.
 
 ---
 

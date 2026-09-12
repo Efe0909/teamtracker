@@ -6,12 +6,14 @@ gosterildigini bilmez, o yuzden paylasilabiliyor.
 from __future__ import annotations
 
 import hashlib
+import re
 from pathlib import Path
 
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
+from markupsafe import Markup, escape
 
-from . import auth, config, csrf, db, scope
+from . import auth, config, csrf, db, mentions, scope
 
 SHARED_DIR = Path(__file__).parent / "templates"
 ROOT = Path(__file__).resolve().parents[1]
@@ -55,6 +57,24 @@ def static_url(path: str) -> str:
     return f"{path}?v={STATIC_VERSION}"
 
 
+# --- anma vurgusu ---------------------------------------------------------
+#
+# Mesaj govdesi HAM metin olarak saklanir (events.body) — HTML uretilip
+# veritabanina yazilmaz, yoksa kacis kurali iki yere dagilirdi. Vurgu OKUMA
+# aninda: once kacilir (Jinja'nin yaptigi is burada elle yapiliyor cunku
+# Markup donuyoruz), sonra @anahtar sarilir.
+
+_MENTION = re.compile(r"@([\w.\-]+)", re.UNICODE)
+
+
+def mention_html(text: str) -> Markup:
+    safe = str(escape(text or ""))          # < > & " ' burada oldu — sonrasi guvenli
+    return Markup(_MENTION.sub(
+        lambda m: f'<span class="mention'
+                  f'{" grp" if m.group(1).lower() in mentions.GROUPS else ""}">'
+                  f'@{m.group(1)}</span>', safe))
+
+
 def _csrf_ctx(request):
     """Her sablon token'i gorur; <body hx-headers> ve gizli alanlar bunu kullanir."""
     return {"csrf_token": csrf.token(request) if hasattr(request, "session") else ""}
@@ -72,6 +92,9 @@ def site_templates(directory: Path) -> Jinja2Templates:
     # scope'u (spec/71-yonetim-paneli.md §2).
     t.env.globals["can_manage_users"] = lambda u: bool(u) and (
         db.as_bool(u["is_admin"]) or scope.has_scope(u, "manage_users"))
+    # Mesaj balonu bunu kullanir: {{ m.body | mention }} — sablonda mantik yok,
+    # yalniz bicimleme (spec/10-kararlar.md 'Yapma').
+    t.env.filters["mention"] = mention_html
     return t
 
 

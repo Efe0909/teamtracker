@@ -1,0 +1,56 @@
+{# Alan degistirme dialoglari — iki yuzun de kullandigi makrolar.
+
+   NEDEN DIALOG, dropdown degil: bir <select> tek dokunusla sorumluyu
+   degistiriyordu; yanlislikla atama bedava. Dialog degisimi iki adima
+   cikarir — bilincli bir hareket olur. (Kullanici istegi, figure2.)
+
+   Dialog, tazelenen parcanin ICINDE durur: htmx outerHTML ile parcayi
+   degistirince acik dialog DOM'dan cikar ve kendiliginden kapanir. Kapatma
+   icin ayri bir JS yolu gerekmez; yalnizca "Vazgec" bir satir ister
+   (shared/static/ortak.js, [data-dialog-close]).
+
+   Her degisim sunucuda zaman damgali bir sistem olayi yazar
+   (service.change_field / change_action) — bildirim akista gorunur. #}
+
+{% macro trigger(did, klass, text) %}
+<button type="button" class="{{ klass }}" data-dialog="{{ did }}">{{ text }}</button>
+{% endmacro %}
+
+
+{# Sabit secenekli alan: durum, oncelik, sorumlu, takim, pillar. #}
+{% macro choice(did, title, name, url, target, options, current, hint=None) %}
+<dialog id="{{ did }}" class="fdlg">
+  <h3>{{ title }}</h3>
+  {% if hint %}<p class="dhint">{{ hint }}</p>{% endif %}
+  <div class="opts">
+    {% for value, label in options %}
+    <button type="button" class="opt{% if value|string == current|string %} on{% endif %}"
+            hx-patch="{{ url }}" hx-vals='{"{{ name }}": "{{ value }}"}'
+            hx-target="{{ target }}" hx-swap="outerHTML">{{ label }}</button>
+    {% endfor %}
+  </div>
+  <div class="dact"><button type="button" class="ghost" data-dialog-close>Vazgeç</button></div>
+</dialog>
+{% endmacro %}
+
+
+{# Tarih alani. Ayri makro cunku secenek listesi degil, serbest girdi —
+   ve yetkisi de ayri (edit_deadline, goc 012). #}
+{% macro date(did, title, name, url, target, current, locked=False) %}
+<dialog id="{{ did }}" class="fdlg">
+  <h3>{{ title }}</h3>
+  {% if locked %}
+  <p class="dhint">🔒 Son tarihi değiştirmek <b>edit_deadline</b> kapsamı ister.
+     Yöneticinden iste.</p>
+  <div class="dact"><button type="button" class="ghost" data-dialog-close>Kapat</button></div>
+  {% else %}
+  <form hx-patch="{{ url }}" hx-target="{{ target }}" hx-swap="outerHTML">
+    <input type="date" name="{{ name }}" value="{{ current or '' }}">
+    <div class="dact">
+      <button type="submit" class="primary">Kaydet</button>
+      <button type="button" class="ghost" data-dialog-close>Vazgeç</button>
+    </div>
+  </form>
+  {% endif %}
+</dialog>
+{% endmacro %}

@@ -108,18 +108,22 @@ adı ve kapsamı değişiyor, `MODULES` kaydındaki `desc` ve `plan` güncellenm
       — bu yüzden `--workers 1` şart, konteynerde de öyle.
 - [ ] `is_editor` olmayanın değişikliği `change_requests`'e düşer, `prev_state`
       ile geri alınabilir (`spec/20-sema.md` §4).
-- [ ] **Pillar yönetimi.** `items.pillar` bugün serbest `text` — bir kayıt
-      listesi yok, yazım hatası yeni pillar yaratıyor. Karar gerekiyor:
-      ayrı tablo mu, `node_type` gibi serbest metin mi? IWS'i tek pillar'la
-      başlatacaksan bu ekranın ilk gerçek işi o tek pillar'ı tanımlamak.
+- [x] **Pillar yönetimi — KARARA BAĞLANDI** (göç `012_cards_pillar_pins.sql`).
+      Ne ayrı tablo ne serbest metin: pillar'ın *tanımı* ağaçta
+      (`node_type='pillar'`), kayıtla bağı **ortogonal bir FK**
+      (`items.pillar_node_id`). Kayıt hiyerarşide bir yerde durur, ayrıca bir
+      pillar'a sayılır — ikisi birbirinin atası olmak zorunda değil.
+      Süzme `filters.PillarFilter`, kart alanı `card_fields.html`.
 - [ ] Üye ataması: `users.scope_node_id` (kimin hangi dalda yetkisi var) ve
       `team_members` (takım + rol) buradan düzenlenir.
 
 ### Karar bekleyen
 
-- **Pillar bir sütun mu, bir tablo mu?** Bugün `items.pillar text`. Tek pillar'la
-  başlanacaksa serbest metin yeterli görünür, ama pivot ekranı pillar'ı bir
-  boyut olarak sayacak — yazım varyasyonu orada bozuk kırılım demek.
+- ~~**Pillar bir sütun mu, bir tablo mu?**~~ **Kapandı**: `items.pillar_node_id`
+  → `nodes(id)`, `node_type='pillar'` olanlara. Yazım varyasyonu yok (FK), pivot
+  ekranı pillar'ı gerçek bir boyut olarak sayabilir. Pillar node'unun kendi
+  sayfası (ortak dökümanlar, eğitim içerikleri) hâlâ yazılmadı — bu karar onu
+  engellemiyor, besliyor.
 - **Bu ekran ile Yönetim Paneli'nin sınırı ne?** Üye ataması ikisinde de
   geçiyor. Yetki bayrakları (`is_admin`/`is_editor`) panelde, kapsam ve takım
   üyeliği burada olabilir — ya da hepsi tek yerde. Bölmeden önce netleştir,
