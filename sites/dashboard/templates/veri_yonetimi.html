@@ -33,7 +33,12 @@
   <form id="yeni-kok" class="tform tkok" hx-post="/node"
         hx-target="#agac" hx-swap="outerHTML">
     <input name="name" placeholder="düğüm adı (ör. Maliye)" required>
-    <input name="type" placeholder="tür (ör. Bölüm)" required>
+    {# Kokte HER tur gecerli — liste sunucudan gelir (shared/nodes.NODE_TYPES). #}
+    <select name="type" title="tür">
+      {% for k, et in root_types.items() %}
+      <option value="{{ k }}">{{ et }}</option>
+      {% endfor %}
+    </select>
     <textarea name="description" rows="2"
               placeholder="açıklama — bu düğüm ne kapsıyor?"></textarea>
     <button class="tkaydet">Ekle</button>

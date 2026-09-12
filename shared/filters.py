@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from . import db, search, service
+from . import db, nodes as node_types, search, service
 
 # Sorgular items'i "i" takma adiyla kullanir; tum clause'lar buna gore yazilir.
 
@@ -29,7 +29,15 @@ OPEN_ACTION = "select item_id from actions where status in ('open','in_progress'
 
 
 class Filter:
-    """Taban sinif. options() sablondaki select'i besler, clause() SQL uretir."""
+    """Taban sinif. options() sablondaki select'i besler, clause() SQL uretir.
+
+    input_type ACIK BIR TUR ISARETI: sablon "options() bos mu" diye BAKMAZ.
+    Bakiyordu ve bos bir tabloda (ornegin hic takim yokken) select filtresi
+    sessizce metin kutusuna dusuyor, yazilan deger de clause() tarafindan
+    yutuluyordu — hicbir sey yapmayan bir input (TASK-220).
+    """
+
+    input_type = "select"
 
     def __init__(self, param: str, label: str):
         self.param, self.label = param, label
@@ -43,7 +51,7 @@ class Filter:
 
 
 class SelectFilter(Filter):
-    """Sabit sozluklu sutun esitligi: tur, durum, oncelik, pillar."""
+    """Sabit sozluklu sutun esitligi: tur, durum, oncelik."""
 
     def __init__(self, param: str, label: str, column: str, choices: dict[str, str]):
         super().__init__(param, label)
@@ -99,10 +107,13 @@ class NodeFilter(Filter):
     turlere (node_type) gore gruplanir — sema degisince filtre kendiliginden uyar."""
 
     def options(self):
+        # Pasif dugumler ILERIYE donuk kaybolur: suzme secenegi olarak
+        # cikmazlar. Var olan kayitlarin yolu etkilenmez (spec/72 §6).
         tree = service.TREE
         ordered = sorted(tree.nodes, key=lambda n: tree.tin[n])
-        return [(nid, "· " * tree.depth[nid] + tree.name(nid), tree.nodes[nid].node_type)
-                for nid in ordered]
+        return [(nid, "· " * tree.depth[nid] + tree.name(nid),
+                 node_types.label(tree.nodes[nid].node_type))
+                for nid in ordered if tree.nodes[nid].is_active]
 
     def clause(self, value, user):
         # subtree() bellekteki agactan; anahtar uuid, gelen deger metin.
@@ -115,8 +126,7 @@ class NodeFilter(Filter):
 class SearchFilter(Filter):
     """tsvector/GIN — sorgu ifadesi kullanici metniyle birlestirilmez (shared/search.py)."""
 
-    def options(self):
-        return []          # select degil metin girisi; sablon bunu options() bos diye anlar
+    input_type = "search"
 
     def clause(self, value, user):
         match = search.fts_query(value)
@@ -125,13 +135,13 @@ class SearchFilter(Filter):
         return "i.search_vector @@ to_tsquery('tr', %s)", [match]
 
 
-def _pillar_options() -> dict[str, str]:
-    return {r["pillar"]: r["pillar"] for r in
-            db.q("select distinct pillar from items where pillar is not null order by pillar")}
-
-
 def active_filters() -> list[Filter]:
-    """Her istekte kurulur: pillar secenekleri veriden, dugumler agactan gelir."""
+    """Her istekte kurulur: dugum secenekleri bellekteki agactan gelir.
+
+    PILLAR FILTRESI YOK (spec/72 §8): items.pillar olu sutundu ve dusuruldu.
+    Pillar artik bir dugum turu; kayitla bagi ertelendigi icin o boyutta
+    suzme kurulamaz. Pillar sayfasi yazilirken soru geri gelir.
+    """
     return [
         SelectFilter("kind", "Tür", "kind", {"issue": "Hata", "task": "Görev"}),
         SelectFilter("status", "Durum", "status", dict(service.STATUSES)),
@@ -139,7 +149,6 @@ def active_filters() -> list[Filter]:
         TeamFilter("team", "Takım"),
         PersonFilter("person", "Sorumlu", "assignee_id"),
         NodeFilter("node", "Düğüm"),
-        SelectFilter("pillar", "Pillar", "pillar", _pillar_options()),
         SearchFilter("search", "Ara"),
     ]
 
