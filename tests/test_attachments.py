@@ -638,3 +638,55 @@ def test_strip_renders_no_controls_when_can_tag_false():
     assert "hx-delete" not in kapalı        # ama kaldirilamaz
     assert "tag-add" not in kapalı          # ve yenisi eklenemez
     assert "disabled" not in kapalı         # kilitli degil: HIC YOK
+
+
+# --- ortam hatasi: medya dizinine yazilamiyor (issue #23) --------------------
+
+
+def test_yazilamayan_medya_dizini_GORUNUR_hata_verir(client, monkeypatch, tmp_path, caplog):
+    """Yayinda /data/media konteyner kullanicisina kapaliydi: _atomic_write
+    PermissionError firlatiyor, save_upload yalniz MediaError yakaladigi icin
+    istek CIPLAK bir 500'e donusuyordu — govdede mesaj yok, kullanici "Gonder"e
+    basip hicbir sey olmadigini goruyordu.
+
+    Beklenen: 500 AMA kullaniciya donen bir aciklamayla, ve traceback log'da.
+    """
+    import logging
+
+    from shared import service
+
+    login(client, "Efe")
+    it = item_by_title("Bütçe onayı 6 gündür bekliyor")
+    before_events, before_attachments = event_count(it["id"]), attachment_count()
+
+    def patlat(*a, **k):
+        raise PermissionError(13, "Permission denied", "/data/media/2026")
+
+    monkeypatch.setattr(service.media, "save", patlat)
+    with caplog.at_level(logging.ERROR, logger="ekiptakip.service"):
+        r = client.post(f"/item/{it['id']}/message", data={"body": "ekli deneme"},
+                        files={"image": ("a.jpg", jpeg_bytes(), "image/jpeg")})
+
+    assert r.status_code == 500
+    assert "medya dizinine yazamıyor" in r.json()["detail"]
+    # Yarim kayit birakmamali: olay da ek de yazilmamis olmali.
+    assert event_count(it["id"]) == before_events
+    assert attachment_count() == before_attachments
+    # Teshis kaybolmamali — istisnayi yakalamak uvicorn'un izini de goturur.
+    assert any("ek kaydedilemedi" in rec.getMessage() for rec in caplog.records)
+
+
+def test_kullanici_hatasi_hala_4xx_kalir(client, monkeypatch):
+    """OSError dali eklenirken MediaError dali bozulmasin: 'cok buyuk' 413."""
+    from shared import service
+
+    login(client, "Efe")
+    it = item_by_title("Bütçe onayı 6 gündür bekliyor")
+
+    def patlat(*a, **k):
+        raise service.media.MediaError("too_large", "Dosya cok buyuk.")
+
+    monkeypatch.setattr(service.media, "save", patlat)
+    r = client.post(f"/item/{it['id']}/message", data={"body": "x"},
+                    files={"image": ("a.jpg", jpeg_bytes(), "image/jpeg")})
+    assert r.status_code == 413

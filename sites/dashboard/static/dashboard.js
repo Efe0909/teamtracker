@@ -56,3 +56,41 @@ window.addEventListener('load', feedBottom);
   });
 })();
 // (ayni parca mobil.js'te de var: iki yuz ayni sozlugu okuyor)
+
+/* Yazma istegi BASARISIZ olunca kullanici GORSUN.
+
+   htmx 4xx/5xx'te hicbir sey swap etmez (responseHandling varsayilani) ve
+   sunucunun mesaji JSON govdede kalirdi: kullanici "Gonder"e basiyor, hicbir
+   sey olmuyordu — ne mesaj gidiyor ne bir uyari cikiyor (issue #23; yayinda
+   medya dizini yazilamadigi icin her ekli mesaj 500 aliyordu).
+
+   Bicim JS icinde: iki sitenin CSS'ine ayni kurallari kopyalamamak icin. */
+function ekipUyari(text) {
+  var el = document.getElementById("uyari-serit");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "uyari-serit";
+    el.setAttribute("role", "alert");
+    el.style.cssText = "position:fixed;left:50%;bottom:18px;transform:translateX(-50%);" +
+      "z-index:9999;max-width:min(92vw,440px);padding:11px 15px;border-radius:10px;" +
+      "background:#e5484d;color:#fff;font:500 13px/1.45 system-ui,sans-serif;" +
+      "box-shadow:0 6px 24px rgba(0,0,0,.25);cursor:pointer";
+    el.addEventListener("click", function () { el.remove(); });
+    document.body.appendChild(el);
+  }
+  el.textContent = text;
+  clearTimeout(el._t);
+  el._t = setTimeout(function () { el.remove(); }, 7000);
+}
+
+document.body.addEventListener("htmx:responseError", function (e) {
+  var x = e.detail.xhr, msg = "";
+  try { msg = (JSON.parse(x.responseText) || {}).detail || ""; } catch (_) { /* JSON degil */ }
+  if (!msg) msg = x.status === 413 ? "Dosya çok büyük." : "İşlem başarısız (HTTP " + x.status + ").";
+  ekipUyari(msg);
+});
+
+/* Ag koptu / sunucuya ulasilamadi: responseError bu durumda ATESLENMEZ. */
+document.body.addEventListener("htmx:sendError", function () {
+  ekipUyari("Sunucuya ulaşılamadı. Bağlantını kontrol et.");
+});
