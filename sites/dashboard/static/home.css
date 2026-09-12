@@ -72,3 +72,15 @@ body.home{display:block;height:auto;min-height:100vh;overflow:auto}
 .mcard p{color:var(--dim);font-size:13.5px;margin:0 0 16px;line-height:1.6}
 .mcard ul{margin:0;padding-left:19px;color:var(--dim);font-size:13px;line-height:1.8}
 .mcard li b{color:var(--txt);font-weight:600}
+
+/* ---- pano karti pini (fragments/panolar.html) ----
+   Kart bir <a>; pin dugmesi ICINDE olamaz (gecersiz HTML), o yuzden kardes
+   ve mutlak konumlu. */
+.modwrap{position:relative;display:flex}
+.modwrap > .mod{flex:1}
+.pin{position:absolute;top:9px;right:9px;z-index:2;border:1px solid transparent;
+     background:transparent;border-radius:9px;padding:3px 6px;font-size:13px;line-height:1;
+     opacity:.28;filter:grayscale(1)}
+.modwrap:hover .pin{opacity:.7}
+.pin:hover{opacity:1;background:var(--tint);border-color:var(--acc-s)}
+.pin.on{opacity:1;filter:none;background:var(--tint);border-color:var(--acc-s)}

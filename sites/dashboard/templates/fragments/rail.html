@@ -1,17 +1,15 @@
-{# fragment: rail — sol ray. Kendi kokunu dondurur. #}
+{# fragment: rail — sol ray. Kendi kokunu dondurur.
+
+   Baglantilar SABIT DEGIL: kisinin pinledigi moduller (goc 012, shared/pins.py).
+   Pinleme panolar ekranindaki 📌 ile yapilir (figure4). Pini olmayan kullanici
+   varsayilanlari gorur — bugunku davranis. #}
 <nav class="rail" data-fragment="rail">
-  <a class="rlogo" href="/" title="Ana sayfa" style="text-decoration:none">◆</a>
-  <a class="rbtn{% if aktif == 'tasks' %} on{% endif %}" href="/tasks"
+  <a class="rlogo" href="/" title="Panolar" style="text-decoration:none">◆</a>
+  {% for m in rail_pins %}
+  <a class="rbtn{% if aktif == m.slug %} on{% endif %}" href="{{ m.href }}"
      style="text-decoration:none;display:grid;place-items:center">
-    📋<span class="lbl">Görev Yöneticisi</span></a>
-  <a class="rbtn{% if aktif == 'teams' %} on{% endif %}" href="/teams"
-     style="text-decoration:none;display:grid;place-items:center">
-    👥<span class="lbl">Ekipler</span></a>
-  {% if can_manage_users(user) %}
-  <a class="rbtn{% if aktif == 'admin' %} on{% endif %}" href="/admin"
-     style="text-decoration:none;display:grid;place-items:center">
-    🛡<span class="lbl">Yönetim Paneli</span></a>
-  {% endif %}
+    {{ m.icon }}<span class="lbl">{{ m.name }}</span></a>
+  {% endfor %}
   <div style="flex:1"></div>
   <details style="position:relative">
     <summary class="rbtn" style="list-style:none">

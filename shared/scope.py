@@ -24,6 +24,7 @@ SCOPES: dict[str, str] = {
     "manage_users": "Kullanıcı ekle, kapat, yetki ver",
     "manage_teams": "Takım kur, üye ekle ve çıkar",
     "create_tags": "Etiket sözlüğünü genişlet — yeni etiket adı tanımla",
+    "edit_deadline": "Son tarih değiştir — kayıtların ve eylemlerin teslim tarihi",
     "tag_media": "Ekleri etiketle — katıldığın sohbetlerdeki görsellere etiket ekle/çıkar",
 }
 

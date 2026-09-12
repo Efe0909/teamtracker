@@ -1,12 +1,23 @@
-{# fragment: composer — mesaj yazma kutusu. #}
+{# fragment: composer — mesaj yazma kutusu.
+
+   Uc kucuk sey: ataci iptal (✕ — secilen dosyadan vazgecmenin yolu yoktu),
+   ⚡ hizli eylem (figure3), ve @ anma ipucu. ⚡ ayri bir uc acmaz: eylem
+   seridindeki dialogu (#dlg-hizli-eylem) aciyor, form ve uc ayni. #}
 <form class="comp" data-fragment="composer" hx-post="/item/{{ item.id }}/message"
       hx-target="#feed" hx-swap="beforeend" hx-encoding="multipart/form-data">
+  {% if can_edit %}
+  <button type="button" class="simsek" data-dialog="dlg-hizli-eylem"
+          title="Hızlı eylem — kim ne yapacak">⚡</button>
+  {% endif %}
   <label class="attach{% if not can_edit %} disabled{% endif %}" title="Görsel ekle">
     📎<span class="fname" data-role="attach-name"></span>
     <input type="file" name="image" accept="image/jpeg,image/png,image/webp,image/gif"
            {% if not can_edit %}disabled{% endif %} hidden>
   </label>
-  <input name="body" placeholder="{{ 'Mesaj yaz…' if can_edit else 'Bu kartta yazma yetkin yok' }}"
-         autocomplete="off" {% if not can_edit %}disabled{% endif %}>
+  <button type="button" class="fclear" data-role="attach-clear" hidden
+          title="Eki kaldır" aria-label="Eki kaldır">✕</button>
+  <input name="body" autocomplete="off"
+         placeholder="{{ 'Mesaj yaz…  (@kişi, @all, @here, @team)' if can_edit else 'Bu kartta yazma yetkin yok' }}"
+         {% if not can_edit %}disabled{% endif %}>
   <button class="primary" {% if not can_edit %}disabled{% endif %}>Gönder</button>
 </form>

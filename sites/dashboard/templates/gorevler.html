@@ -39,6 +39,16 @@
         {% for v, et, _g in f.options() %}<option value="{{ v }}">{{ et }}</option>{% endfor %}
       {% endfor %}
     </select>
+    {# Pillar ORTOGONAL: agactaki yerinden bagimsiz (goc 012). #}
+    {% for f in filters if f.param == "pillar" %}
+      {% set secenekler = f.options() %}
+      {% if secenekler | length > 1 %}
+      <select name="pillar_node_id" style="width:auto">
+        <option value="">Pillar yok</option>
+        {% for v, et, _g in secenekler if v != "none" %}<option value="{{ v }}">{{ et }}</option>{% endfor %}
+      </select>
+      {% endif %}
+    {% endfor %}
     <input name="title" placeholder="Başlık" required style="flex:1;min-width:160px">
     <button class="primary">Aç</button>
   </form>
@@ -47,6 +57,7 @@
   {% include "fragments/tablo.html" %}
 </div>
 
+<script src="{{ static('/static/ortak.js') }}"></script>
 <script src="{{ static('/static/d/dashboard.js') }}"></script>
 </body>
 </html>

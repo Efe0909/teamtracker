@@ -94,11 +94,10 @@ def test_dal_izni_virginligi_bozar(client):
 
 
 def test_takim_karti_virginligi_bozar(client):
-    """teams.node_id — projeksiyon (bugun gevsek bagli, 2. asamada sikilasacak)."""
+    """teams.node_id — projeksiyon. Takim node'u ACILIR ACILMAZ bir takim
+    satiri dogurur (goc 012), yani hicbir zaman virgin olmaz."""
     d = service.add_node("N-Takimli", "team")
-    db.x("update teams set node_id = %s where name = 'Maliye'", (d["id"],))
     assert not nodes.is_virgin(d["id"])
-    db.x("update teams set node_id = null where name = 'Maliye'")
 
 
 # --- has_projection: is_virgin'den DAR ------------------------------------
@@ -115,9 +114,7 @@ def test_cocuk_projeksiyon_SAYILMAZ(client):
 
 def test_takim_karti_projeksiyondur(client):
     d = service.add_node("N-PTakim", "team")
-    db.x("update teams set node_id = %s where name = 'Maliye'", (d["id"],))
     assert nodes.has_projection(d["id"])
-    db.x("update teams set node_id = null where name = 'Maliye'")
 
 
 # --- alt agac sayilari: silme onayinin yazdigi sayilar --------------------

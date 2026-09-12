@@ -72,9 +72,7 @@
   .tnode.on{background:var(--tint);box-shadow:inset 0 0 0 1.5px var(--acc-s)}
   .tw{width:14px;text-align:center;color:var(--acc-s);font-size:9px}
   .tn{flex:1;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .tb{font-size:10.5px;font-weight:700;border-radius:999px;padding:1px 7px}
-  .h0{background:#f0edf8;color:#a49dc0} .h1{background:#e2f5ec;color:#1c8a5b}
-  .h2{background:#fdf0d9;color:#b47a09} .h3{background:#fde4e8;color:#d13350}
+  /* Rozetler (.tb/.h0..h3) ORTAK: shared/static/base.css — ortak sablonlar kullaniyor. */
   .tkids{margin-left:12px;border-left:1.5px solid var(--line);padding-left:4px}
 
   /* ============ 3. İÇERİK ============ */
@@ -126,26 +124,8 @@
            background:var(--panel);margin-bottom:12px}
   .newform.on{display:flex;flex-wrap:wrap}
 
-  /* ---- eylem şeridi (spec/20-sema.md §3a): kayıt ne oldu, eylem kim ne yapacak ---- */
-  .acts{padding:9px 18px;border-top:1px solid var(--line);background:var(--panel)}
-  .ahead{font-size:12px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;
-         color:var(--dim);display:flex;align-items:center;gap:7px;margin-bottom:7px}
-  .arow{display:flex;align-items:center;gap:9px;padding:6px 8px;border:1px solid var(--line);
-        border-radius:9px;margin-bottom:5px;background:var(--panel2)}
-  .arow.done{opacity:.55}
-  .arow.done .at{text-decoration:line-through}
-  .arow .at{flex:1;font-size:13px;font-weight:600;min-width:120px}
-  .arow select,.arow input{width:auto;padding:3px 6px;font-size:12px;border:none;
-        background:transparent;font-weight:600}
-  .arow select:focus,.arow input:focus{outline:none;box-shadow:none}
-  .adur{font-size:12px}
-  .akisi{font-size:12px;color:var(--txt)}
-  .atarih{font-size:12px}
-  .atarih.gec,.arow input.gec{color:var(--err)}
-  .aform{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}
-  .aform input[name=title]{flex:1;min-width:150px}
-  .abolum{font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;
-          color:var(--dim);margin:9px 2px 5px}
+  /* Eylem seridi ORTAK sablon (shared/templates/ortak/eylemler.html) oldugu icin
+     bicimi de ORTAK: shared/static/base.css. Mobil yuz de ayni parcayi ciziyor. */
   .crumb .sep{color:var(--line)}
 
   /* ============ 4. EKİPLER (spec/60-kaynak-uyarlama.md 2.5) ============ */
@@ -204,10 +184,7 @@
 
 .teylem{margin-left:auto;display:flex;gap:2px;opacity:0;transition:opacity .12s}
 .trow:hover .teylem{opacity:1}
-.tmini{border:0;background:none;cursor:pointer;color:var(--dim);
-       padding:3px 6px;border-radius:6px;font-size:13px;line-height:1}
-.tmini:hover{background:var(--panel);color:var(--ink)}
-.tsil:hover{color:#e5484d}
+/* .tmini/.tsil ORTAK: shared/static/base.css (kart bloklari da kullaniyor). */
 
 /* Pasif dugum SOLUK cizilir. Kozmetik degil: pasiflik MIRAS KALMADIGI icin
    (her dugum kendi bayragini tasir) kapali bir dalin altindaki acik dugum

@@ -13,6 +13,16 @@
       {% for n in nodes %}<option value="{{ n.id }}">{{ n.name }}</option>{% endfor %}
     </select>
   </div>
+  {% if pillars %}
+  <div>
+    {# Pillar ORTOGONAL: dugum "nerede", pillar "hangi cerceveye sayiliyor". #}
+    <label>Pillar</label>
+    <select name="pillar_node_id">
+      <option value="">—</option>
+      {% for p in pillars %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}
+    </select>
+  </div>
+  {% endif %}
   <div>
     <label>Tür</label>
     <select name="kind">

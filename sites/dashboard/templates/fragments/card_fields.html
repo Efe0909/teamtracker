@@ -1,50 +1,49 @@
-{# fragment: card_fields — alan seridi. Serit ya da yan panel olarak calisir (kabi boyutlandirir).
-   Yetki: sablon sadece can_edit'e gore soluklastirir; asil kontrol PATCH ucunda. #}
+{# fragment: card_fields — alan seridi.
+
+   DROPDOWN YOK (kullanici istegi, figure2): her alan bir dialog aciyor.
+   Bir <select> tek dokunusla sorumluyu degistiriyordu; artik degisim iki
+   adim — bilincli bir hareket. Dialoglar bu parcanin ICINDE durur, htmx
+   parcayi degistirince kendiliginden kapanirlar (ortak/alan.html).
+
+   Her degisim akisa zaman damgali bir sistem olayi yaziyor
+   (service.change_field) — "kim ne zaman degistirdi" gorunur kalir.
+
+   Yetki: sablon sadece can_edit'e gore soluklastirir; asil kontrol PATCH
+   ucunda. Son tarih AYRICA edit_deadline kapsami ister (goc 012). #}
+{% import "ortak/alan.html" as alan %}
+{% set url = "/item/" ~ item.id ~ "/field" %}
 <div class="strip" id="fields" data-fragment="card_fields">
   <span class="fld{% if not can_edit %} ro{% endif %}"><span class="k">Durum</span>
-    {% if can_edit %}
-      <select name="status" class="v v-{{ item.status }}" hx-patch="/item/{{ item.id }}/field"
-              hx-target="#fields" hx-swap="outerHTML" hx-trigger="change">
-        {% for k, v in statuses.items() %}<option value="{{ k }}" {% if k == item.status %}selected{% endif %}>{{ v }}</option>{% endfor %}
-      </select>
+    {% if can_edit %}{{ alan.trigger("dlg-f-status", "v v-" ~ item.status, status_label) }}
     {% else %}<span class="v v-{{ item.status }}">{{ status_label }}</span>{% endif %}
   </span>
 
   <span class="fld{% if not can_edit %} ro{% endif %}"><span class="k">Öncelik</span>
-    {% if can_edit %}
-      <select name="priority" class="v v-{{ item.priority }}" hx-patch="/item/{{ item.id }}/field"
-              hx-target="#fields" hx-swap="outerHTML" hx-trigger="change">
-        {% for k, v in priorities.items() %}<option value="{{ k }}" {% if k == item.priority %}selected{% endif %}>{{ v }}</option>{% endfor %}
-      </select>
+    {% if can_edit %}{{ alan.trigger("dlg-f-priority", "v v-" ~ item.priority, priority_label) }}
     {% else %}<span class="v v-{{ item.priority }}">{{ priority_label }}</span>{% endif %}
   </span>
 
   <span class="fld{% if not can_edit %} ro{% endif %}"><span class="k">Takım</span>
     {% if team %}<span class="tdot" style="background:{{ team.color }}"></span>{% endif %}
-    {% if can_edit %}
-      <select name="team_id" class="v" hx-patch="/item/{{ item.id }}/field"
-              hx-target="#fields" hx-swap="outerHTML" hx-trigger="change">
-        <option value="">—</option>
-        {% for t in teams %}<option value="{{ t.id }}" {% if t.id == item.team_id %}selected{% endif %}>{{ t.name }}</option>{% endfor %}
-      </select>
+    {% if can_edit %}{{ alan.trigger("dlg-f-team", "v", team.name if team else "—") }}
     {% else %}<span class="v">{{ team.name if team else '—' }}</span>{% endif %}
+  </span>
+
+  {# Pillar ORTOGONAL: kayit agacta bir yerde durur, ayrica bir pillar'a
+     sayilir — ikisi birbirinin atasi olmak zorunda degil (goc 012). #}
+  <span class="fld{% if not can_edit %} ro{% endif %}"><span class="k">Pillar</span>
+    {% if can_edit %}{{ alan.trigger("dlg-f-pillar", "v", pillar or "—") }}
+    {% else %}<span class="v">{{ pillar or '—' }}</span>{% endif %}
   </span>
 
   <span class="fld who{% if not can_edit %} ro{% endif %}"><span class="k">Sorumlu</span>
     {% if assignee %}<span class="av" style="background:{{ assignee.color }}">{{ assignee.name[0] }}</span>{% endif %}
-    {% if can_edit %}
-      <select name="assignee_id" class="v" hx-patch="/item/{{ item.id }}/field"
-              hx-target="#fields" hx-swap="outerHTML" hx-trigger="change">
-        {% for u in users %}<option value="{{ u.id }}" {% if u.id == item.assignee_id %}selected{% endif %}>{{ u.name }}</option>{% endfor %}
-      </select>
+    {% if can_edit %}{{ alan.trigger("dlg-f-who", "v", assignee.name if assignee else "—") }}
     {% else %}<span class="v">{{ assignee.name if assignee else '—' }}</span>{% endif %}
   </span>
 
   <span class="fld{% if not can_edit %} ro{% endif %}"><span class="k">Son tarih</span>
-    {% if can_edit %}
-      <input type="date" name="due_date" class="v" value="{{ item.due_date or '' }}"
-             hx-patch="/item/{{ item.id }}/field" hx-target="#fields" hx-swap="outerHTML"
-             hx-trigger="change">
+    {% if can_edit %}{{ alan.trigger("dlg-f-due", "v", item.due_date or "—") }}
     {% else %}<span class="v">{{ item.due_date or '—' }}</span>{% endif %}
   </span>
 
@@ -56,7 +55,25 @@
     {% for p in participants %}<span class="av" style="background:{{ p.color }}">{{ p.name[0] }}</span>{% endfor %}
   </div>
   {% if not can_edit %}<span class="lock">🔒 salt okunur — kapsamın dışında</span>{% endif %}
+
+  {% if can_edit %}
+    {{ alan.choice("dlg-f-status", "Kayıt durumu", "status", url, "#fields",
+                   statuses.items()|list, item.status,
+                   "Açık eylem varken kayıt kapanmaz.") }}
+    {{ alan.choice("dlg-f-priority", "Öncelik", "priority", url, "#fields",
+                   priorities.items()|list, item.priority) }}
+    {{ alan.choice("dlg-f-team", "Takım", "team_id", url, "#fields",
+                   team_options, item.team_id or "") }}
+    {{ alan.choice("dlg-f-pillar", "Pillar", "pillar_node_id", url, "#fields",
+                   pillar_options, item.pillar_node_id or "",
+                   "Pillar hiyerarşiden bağımsız: kayıt ağaçta başka yerde durabilir.") }}
+    {{ alan.choice("dlg-f-who", "Sorumlu", "assignee_id", url, "#fields",
+                   [("", "—")] + user_options, item.assignee_id or "",
+                   "Değişiklik akışa zaman damgasıyla düşer.") }}
+    {{ alan.date("dlg-f-due", "Kaydın son tarihi", "due_date", url, "#fields",
+                 item.due_date, not can_edit_deadline) }}
+  {% endif %}
 </div>
 {% if oob_feed %}
-  {% with oob = True %}{% include "fragments/card_feed.html" %}{% endwith %}
+  {% with oob = True %}{% include "ortak/akis.html" %}{% endwith %}
 {% endif %}

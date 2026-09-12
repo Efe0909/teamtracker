@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="{{ static('/static/base.css') }}">
 <link rel="stylesheet" href="{{ static('/static/d/dashboard.css') }}">
 <link rel="stylesheet" href="{{ static('/static/d/home.css') }}">
+<script src="{{ static('/static/htmx.min.js') }}"></script>
 </head>
 <body class="home" hx-headers='{"X-CSRF-Token": "{{ csrf_token }}"}'>
 {% include "fragments/uyari_mobil.html" %}
@@ -52,21 +53,7 @@
     <div class="stat"><b>{{ stats.nodes }}</b><span>düğüm</span></div>
   </div>
 
-  <div class="hgrid">
-    {% for m in modules %}
-    <a class="mod {{ 'ready' if m.ready else 'soon' }}" href="{{ m.href }}">
-      <div class="ic">{{ m.icon }}</div>
-      <div class="nm">{{ m.name }}</div>
-      <div class="ds">{{ m.desc }}</div>
-      <div class="ft">
-        <span class="tag {{ 't-ready' if m.ready else 't-soon' }}">
-          {{ 'Hazır' if m.ready else 'Yakında' }}</span>
-        {% if m.ready and m.count is not none %}<span>{{ m.count }} {{ m.unit }}</span>{% endif %}
-        <span class="go">→</span>
-      </div>
-    </a>
-    {% endfor %}
-  </div>
+  {% include "fragments/panolar.html" %}
 
   {# Baglanti DEGIL, adres (tasarim karari, spec/50-yapi.md): iki site birbirine
      kopru kurmaz — telefondaki kisi telefon isini yapsin. #}
@@ -86,5 +73,6 @@
   </div>
 
 </div>
+<script src="{{ static('/static/ortak.js') }}"></script>
 </body>
 </html>

@@ -99,12 +99,14 @@ def test_node_filter_includes_subtree(client):
     assert "Kapak Ünitesi — tekrar eden kayıp" not in r.text   # baska kok
 
 
-def test_pillar_filtresi_kalkti(client):
-    """items.pillar olu sutundu (EDITABLE'da yok, hic set edilemiyordu) —
-    sutun da filtre de dusuruldu (spec/72 §8, TASK-220)."""
-    assert ">Pillar<" not in client.get("/tasks").text
+def test_pillar_ortogonal_sutun(client):
+    """Eski serbest metin `items.pillar` gitti (goc 011) ve GERI GELMEDI;
+    yerine agactaki pillar node'una bakan bir FK var (goc 012)."""
     assert db.q1("select 1 from information_schema.columns where table_name='items'"
                  " and column_name='pillar'") is None
+    assert db.q1("select 1 from information_schema.columns where table_name='items'"
+                 " and column_name='pillar_node_id'") is not None
+    assert ">Pillar<" in client.get("/tasks").text
 
 
 def test_team_filter(client):
@@ -228,3 +230,81 @@ def test_whoami_and_switch(client):
     client.post(f"/switch/{u['Selin']}", follow_redirects=False)
     assert client.get("/whoami").json()["is_admin"] is True
     client.cookies.delete("uid")
+
+
+# --- kompozer ve alan dialoglari (kullanici istegi, figure2) ----------------
+
+
+def test_kompozerde_ek_iptali_var(client):
+    """Dosya secildikten sonra gondermeden vazgecmenin yolu yoktu."""
+    it = db.q1("select id from items limit 1")
+    page = client.get(f"/tasks/{it['id']}").text
+    assert 'data-role="attach-clear"' in page
+    js = (ROOT / "shared/static/ortak.js").read_text(encoding="utf-8")
+    assert "attach-clear" in js and "ekTemizle" in js
+
+
+def test_alanlar_dropdown_DEGIL_dialog(client):
+    """Bir <select> tek dokunusla sorumluyu degistiriyordu; artik iki adim."""
+    it = db.q1("select id from items limit 1")
+    serit = client.get(f"/tasks/{it['id']}").text.split('id="fields"', 1)[1] \
+                  .split('data-fragment="card_actions"', 1)[0]
+    assert "<select" not in serit                      # dropdown kalmadi
+    assert 'data-dialog="dlg-f-who"' in serit          # tetikleyici
+    assert 'id="dlg-f-who"' in serit                   # ve dialogun kendisi
+
+
+def test_sohbette_hizli_eylem_simsegi(client):
+    it = db.q1("select id from items limit 1")
+    page = client.get(f"/tasks/{it['id']}").text
+    assert 'class="simsek" data-dialog="dlg-hizli-eylem"' in page
+
+
+def test_alan_degisimi_zaman_damgali_bildirim_birakir(client, csrf):
+    """Dialogla degistirmek de akisa sistem olayi yaziyor (kullanici istegi)."""
+    it = db.q1("select id from items where status <> 'closed' limit 1")
+    client.patch(f"/item/{it['id']}/field", data={"priority": "low"},
+                 headers={"HX-Request": "true"})
+    son = db.q1("select * from events where subject_id = %s order by created_at desc limit 1",
+                (it["id"],))
+    assert son["event_type"] == "system" and "önceliği" in son["body"]
+    assert son["created_at"] is not None
+
+
+def test_sorumlu_ve_takim_degisikligi_gercekten_yaziliyor(client, csrf):
+    """Formdan gelen METIN, sutun UUID: cevrim yapilmazsa users_by_id()
+    sozlugunde (UUID anahtarli) hicbir sey eslesmez ve her atama sessizce
+    400 'kullanici yok' donerdi."""
+    it = db.q1("select id from items limit 1")
+    hedef = db.q1("select id from users where is_active order by name limit 1")
+    takim = db.q1("select id from teams order by name limit 1")
+
+    r = client.patch(f"/item/{it['id']}/field", data={"assignee_id": str(hedef["id"])},
+                     headers={"HX-Request": "true"})
+    assert r.status_code == 200
+    assert db.q1("select assignee_id from items where id = %s", (it["id"],))["assignee_id"] == hedef["id"]
+
+    r = client.patch(f"/item/{it['id']}/field", data={"team_id": str(takim["id"])},
+                     headers={"HX-Request": "true"})
+    assert r.status_code == 200
+    assert db.q1("select team_id from items where id = %s", (it["id"],))["team_id"] == takim["id"]
+
+    # Bozuk metin alani SESSIZCE bosaltmaz.
+    assert client.patch(f"/item/{it['id']}/field", data={"assignee_id": "abc"},
+                        headers={"HX-Request": "true"}).status_code == 400
+    assert db.q1("select assignee_id from items where id = %s", (it["id"],))["assignee_id"] == hedef["id"]
+
+
+def test_pillar_karttan_secilir(client, csrf):
+    from shared import service
+    pillar = service.add_node("SN", "pillar")
+    it = db.q1("select id from items limit 1")
+    r = client.patch(f"/item/{it['id']}/field", data={"pillar_node_id": str(pillar["id"])},
+                     headers={"HX-Request": "true"})
+    assert r.status_code == 200
+    assert db.q1("select pillar_node_id from items where id = %s",
+                 (it["id"],))["pillar_node_id"] == pillar["id"]
+    # Pillar OLMAYAN bir dugum buraya yazilamaz.
+    baska = service.add_node("SN-degil", "generic")
+    assert client.patch(f"/item/{it['id']}/field", data={"pillar_node_id": str(baska["id"])},
+                        headers={"HX-Request": "true"}).status_code == 400

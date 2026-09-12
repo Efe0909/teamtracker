@@ -1,7 +1,8 @@
 # 72 — Node türleri: omurga + tür projeksiyonları
 
 **Durum: 1. aşama uygulandı** (göç `011_node_types.sql`, `shared/nodes.py`).
-Ertelenenler: `teams` projeksiyonu (§5) ve pillar ↔ kayıt bağı (§8).
+Ertelenenler **kapandı**: `teams` projeksiyonu (§5) ve pillar ↔ kayıt bağı (§8)
+göç `012_cards_pillar_pins.sql` ile uygulandı — ayrıntı `spec/20-sema.md`.
 
 Bu belge `spec/60-kaynak-uyarlama.md` §2.6'daki "node_type serbest metin kalır,
 tip kataloğu alınmaz" kararını **geçersiz kılar**. O karar yanlış değildi —
@@ -148,6 +149,15 @@ akışta yok). Gündelik kapatma `nodes.is_active` ile olur, satır silinmez.
 
 `teams.name` artık **türetilir** (node'un adı). İki yerde ad tutmak, ikisinin
 ayrışması demek — `teams.name` düşürülür ya da salt-okunur kabul edilir.
+
+**Uygulandı** (`service.sync_team_projection`, göç 012): `node_type='team'` bir
+düğüm açılır açılmaz `teams` satırı doğar — id veritabanından, ad ve açıklama
+node'dan türer, renk sabit paletten, `created_at` insert'ten. Düğümün adı ya da
+açıklaması değişince takım kartı da değişir; takım sayfasından yapılan yazma
+(`POST /team/{id}`, `service.rename_team`) **kaynağa** yani node'a gider. Bağ
+`teams.node_id` üzerinde kısmi tekil indeksle korunur (`teams_node_uniq`) —
+`not null` yapılmadı çünkü node'u olmayan eski takımlar var. Liste ekranındaki
+`is_active` de node'dan türetilir (`service.team_rows`).
 
 **`teams`'in kendi `is_active`'i YOKTUR.** Durum tek yerde, node'da (§6);
 iki tabloda ayrı bayrak, senkron tutulması gereken ikinci bir gerçek demekti.

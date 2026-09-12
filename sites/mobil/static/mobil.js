@@ -6,26 +6,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 document.body.addEventListener("htmx:afterSwap", e => {
   if (e.target.id === "feed") window.scrollTo({ top: document.body.scrollHeight });
 });
-/* Gonderilen form temizlenir. hx-on= yerine burada: CSP'de 'unsafe-eval' istemiyoruz.
-   YALNIZCA yazan formlar (POST): filtre cubugu da bir form ve hx-get ile calisiyor,
-   GET'ler de temizlenirse her filtre degisiminden sonra secimler "Hepsi"ye doner —
-   URL ve tablo dogru kalir, gorunen durum yalan soyler. */
-document.body.addEventListener("htmx:afterRequest", e => {
-  if ((e.detail.requestConfig?.verb || '').toLowerCase() === 'get') return;
-  const f = e.target.closest("form");
-  if (f && e.detail.successful) {
-    f.reset();
-    f.querySelectorAll(".fname").forEach(s => { s.textContent = ""; });
-  }
-});
-/* Ek dosya secilince ad, atasi kilibin (.attach) icindeki .fname'de gorunur —
-   "takildi mi?" hicbir zaman soru olmasin. hx-on= degil, burada: yukarida. */
-document.body.addEventListener("change", e => {
-  const inp = e.target.closest(".attach input[type=file]");
-  if (!inp) return;
-  const span = inp.closest(".attach")?.querySelector(".fname");
-  if (span) span.textContent = inp.files[0]?.name || "";
-});
+/* Form temizleme ve ek iliştirme ORTAK: shared/static/ortak.js. */
 
 /* --- web push abonelıgı (spec/40-push.md) ------------------------------
  *

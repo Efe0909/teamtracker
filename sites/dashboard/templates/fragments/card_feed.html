@@ -1,4 +1,4 @@
-{# fragment: card_feed — mesaj + sistem olaylari, tek kronolojik akis. #}
-<div class="chat" id="feed" data-fragment="card_feed"{% if oob %} hx-swap-oob="true"{% endif %}>
-  {% for m in feed %}{% include "ortak/mesaj.html" %}{% endfor %}
-</div>
+{# fragment: card_feed — ortak akisa ince kabuk.
+   Govde shared/templates/ortak/akis.html'de: mobil yuz de ayni parcayi
+   ciziyor, iki kopya zamanla ayrisirdi. #}
+{% include "ortak/akis.html" %}

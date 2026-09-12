@@ -28,7 +28,7 @@ from fastapi import HTTPException
 
 from . import auth, config, db, media
 
-OWNER_TYPES = frozenset({"event", "item", "node", "team"})
+OWNER_TYPES = frozenset({"event", "item", "node", "team", "card"})
 
 # Turkce I/i katlanmasi str.lower()'in varsaydigindan FARKLI: 'İ'.lower()
 # Python'da tek 'i' degil 'i' + birlesik nokta (iki karakter) verir; 'ı' zaten
@@ -359,6 +359,11 @@ def _participates(user, attachment) -> bool:
     if owner_type == "node":
         from . import scope  # dongusel import onlemi: scope service'i, service bizi kullanir
         return scope.authorized_on_node(user, owner_id)
+    if owner_type == "card":
+        # Kart blogu kaydin govdesinde durur: katilim sorusu KAYDIN sorusudur,
+        # ikinci bir model kurulmaz (goc 012).
+        row = db.q1("select item_id from item_cards where id = %s", (db.uid(owner_id),))
+        return row is not None and _participates_in_item(user, row["item_id"])
     return False
 
 

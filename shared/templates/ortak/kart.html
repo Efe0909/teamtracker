@@ -1,0 +1,75 @@
+{# fragment: card_block — TEK kart blogu. ortak/kartlar.html icinden dongude.
+
+   Tur basina gorunum tek `if` ile ayrilir; alanlar shared/cards.py FIELDS'ten
+   gelir, sablon alan listesi UYDURMAZ (spec/72 §7'deki "tek kaynak" kurali,
+   node turlerinde de ayni sekilde). #}
+<div class="kart k-{{ c.type }}" id="kart-{{ c.id }}">
+  <div class="khead">
+    <span class="kic">{{ c.icon }}</span>
+    <b class="knm">{{ c.title }}</b>
+    <span class="ktur">{{ c.label }}</span>
+    {% if can_edit %}
+    <button type="button" class="tmini" data-dialog="dlg-kart-{{ c.id }}"
+            title="Kartı düzenle">✎</button>
+    <button type="button" class="tmini tsil" title="Kartı sil"
+            hx-delete="/card/{{ c.id }}" hx-target="#kartlar" hx-swap="outerHTML"
+            hx-confirm="Bu kartı silmek istediğine emin misin?">✕</button>
+    {% endif %}
+  </div>
+
+  {% if c.type == 'meeting' %}
+  <div class="kgovde">
+    <div class="krow"><span class="k">Ne zaman</span>
+      <span class="v">{{ c.when_label or '— belirlenmedi —' }}</span></div>
+    {% if c.data.place %}<div class="krow"><span class="k">Yer</span>
+      <span class="v">{{ c.data.place }}</span></div>{% endif %}
+    {% if c.data.agenda %}<div class="kmetin">{{ c.data.agenda }}</div>{% endif %}
+  </div>
+  {% endif %}
+
+  {% if c.has_media %}
+  <div class="kgorseller">
+    {% for media in c.media %}
+    <a class="kgorsel" href="/media/{{ media.id }}" target="_blank" rel="noopener noreferrer">
+      <img src="/media/{{ media.id }}/thumb" loading="lazy"
+           alt="{{ media.original_name or 'Kart görseli' }}">
+    </a>
+    {% else %}
+    <div class="empty small" style="padding:4px">Henüz görsel yok.</div>
+    {% endfor %}
+  </div>
+  {% if can_edit %}
+  {# Yukleme ANINDA gider: dosya secilince form gonderilir (change tetikleyici),
+     ayri bir "yukle" dugmesi yok. #}
+  <form class="kyukle" hx-post="/card/{{ c.id }}/media" hx-target="#kartlar"
+        hx-swap="outerHTML" hx-encoding="multipart/form-data" hx-trigger="change from:find input">
+    <label class="attach" title="Görsel ekle">📎 Görsel ekle
+      <input type="file" name="image" accept="image/jpeg,image/png,image/webp,image/gif" hidden>
+    </label>
+  </form>
+  {% endif %}
+  {% endif %}
+
+  {% if can_edit %}
+  <dialog id="dlg-kart-{{ c.id }}" class="fdlg">
+    <h3>{{ c.icon }} {{ c.label }}</h3>
+    <form hx-patch="/card/{{ c.id }}" hx-target="#kartlar" hx-swap="outerHTML">
+      <label class="dfld"><span>Başlık</span>
+        <input name="title" value="{{ c.title }}" maxlength="120"></label>
+      {% for key, label, kind in c.fields %}
+      <label class="dfld"><span>{{ label }}</span>
+        {% if kind == 'textarea' %}
+        <textarea name="{{ key }}" rows="3">{{ c.data.get(key, '') }}</textarea>
+        {% else %}
+        <input type="{{ kind }}" name="{{ key }}" value="{{ c.data.get(key, '') }}">
+        {% endif %}
+      </label>
+      {% endfor %}
+      <div class="dact">
+        <button type="submit" class="primary">Kaydet</button>
+        <button type="button" class="ghost" data-dialog-close>Vazgeç</button>
+      </div>
+    </form>
+  </dialog>
+  {% endif %}
+</div>

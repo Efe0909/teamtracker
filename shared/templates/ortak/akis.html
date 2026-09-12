@@ -1,0 +1,7 @@
+{# fragment: card_feed — mesaj + sistem olaylari, tek kronolojik akis.
+   Iki yuz de AYNI parcayi kullanir (skin kurali): sinif adlari ikisinden de
+   tasinir, .chat masaustunun .dfeed mobilin — hicbiri digerinde tanimli degil,
+   yani birbirine karismaz. #}
+<div class="chat dfeed" id="feed" data-fragment="card_feed"{% if oob %} hx-swap-oob="true"{% endif %}>
+  {% for m in feed %}{% include "ortak/mesaj.html" %}{% endfor %}
+</div>
