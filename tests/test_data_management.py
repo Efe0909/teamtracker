@@ -233,3 +233,197 @@ def test_yetkisiz_kullanici_sayfayi_gorur_ama_form_yok(client):
         assert "editör yetkisi gerekiyor" in text
     finally:
         _switch(client, db.q1("select id from users where name = 'Efe'")["id"])
+
+
+# --- tur dogrulama (spec/72 §3) -------------------------------------------
+
+
+def test_serbest_metin_tur_reddedilir(client):
+    """Tur artik enum: kodun bilmedigi bir ture davranis baglanamaz."""
+    assert service.add_node("T-Uydurma", "Bölüm") is None
+    assert service.add_node("T-Uydurma2", "machine ") is not None   # kirpilir, gecerli
+
+
+def test_tur_degistirilebilir_ama_gecersize_degil(client):
+    d = service.add_node("T-Tur", "generic")
+    assert service.update_node(d["id"], node_type="task")
+    assert service.TREE.nodes[d["id"]].node_type == "task"
+    assert service.update_node(d["id"], node_type="Departman") is False
+    assert service.TREE.nodes[d["id"]].node_type == "task", "reddedilen tür yazılmamalı"
+
+
+# --- yerlesim: ROOT_ONLY (spec/72 §7) -------------------------------------
+
+
+def test_cell_yalnizca_kokte(client):
+    parent = service.add_node("T-Kok", "generic")
+    assert service.add_node("T-CellAlt", "cell", parent_id=parent["id"]) is None
+    assert service.add_node("T-CellKok", "cell") is not None
+
+
+def test_cell_alta_tasinamaz(client):
+    cell = service.add_node("T-TasinanCell", "cell")
+    hedef = service.add_node("T-Hedef", "generic")
+    assert service.move_node(cell["id"], hedef["id"]) is False
+    assert service.TREE.parent[cell["id"]] is None
+
+
+def test_machine_HERHANGI_bir_yere_girer(client):
+    """ROOT_ONLY DISINDA KURAL YOK (spec/72 §11). Tohumun kendi sekli bunu
+    gerektiriyor: Üretim Hattı A (cell) > Dolum Makinesi (machine) > Kapak
+    Ünitesi (machine). Şablon buna aykırı bir kural uydurursa sunucuyla
+    çelişir — o yüzden kural tek yerde, nodes.ROOT_ONLY'de."""
+    cell = service.add_node("T-MCell", "cell")
+    m1 = service.add_node("T-M1", "machine", parent_id=cell["id"])
+    assert m1 is not None
+    assert service.add_node("T-M2", "machine", parent_id=m1["id"]) is not None
+    step = service.add_node("T-MStep", "step", parent_id=cell["id"])
+    assert step is not None, "task/step icin machine ZORUNLU degil"
+
+
+def test_tur_degisiminde_yerlesim_yeniden_bakilir(client):
+    parent = service.add_node("T-YUst", "generic")
+    child = service.add_node("T-YAlt", "step", parent_id=parent["id"])
+    assert service.update_node(child["id"], node_type="cell") is False
+    assert service.TREE.nodes[child["id"]].node_type == "step"
+
+
+# --- tur kilidi (spec/72 §6.3) --------------------------------------------
+
+
+def test_projeksiyonu_olan_dugumun_turu_degismez(client):
+    d = service.add_node("T-Kilit", "team")
+    db.x("update teams set node_id = %s where name = 'Maliye'", (d["id"],))
+    try:
+        assert service.update_node(d["id"], node_type="generic") is False
+        assert service.TREE.nodes[d["id"]].node_type == "team"
+        # Ad DEGISEBILIR: kilit yalniz ture ait.
+        assert service.update_node(d["id"], name="T-KilitYeni")
+    finally:
+        db.x("update teams set node_id = null where name = 'Maliye'")
+
+
+def test_cocugu_olan_dugumun_turu_degisir(client):
+    """is_virgin kullanilsaydi bu calismazdi — yuklemler AYRI."""
+    parent = service.add_node("T-CUst", "generic")
+    service.add_node("T-CAlt", "step", parent_id=parent["id"])
+    assert service.update_node(parent["id"], node_type="operational")
+
+
+# --- pasiflestirme (spec/72 §6) -------------------------------------------
+
+
+def test_pasiflestirme_silmez_geri_alinir(client):
+    d = service.add_node("T-Pasif", "generic")
+    assert service.set_node_active(d["id"], False)
+    assert service.TREE.nodes[d["id"]].is_active is False
+    assert d["id"] in service.TREE.nodes, "agacta KALIR — gecmis kayitlarin yolu cizilebilsin"
+    assert service.set_node_active(d["id"], True)
+    assert service.TREE.nodes[d["id"]].is_active is True
+
+
+def test_pasiflik_MIRAS_KALMAZ(client):
+    """Bilincli tercih: her dugum kendi bayragini tasir, ata yuruyusu yok.
+    Bilinen sonucu — kapali dalin altindaki acik dugum dropdown'da kalir;
+    telafisi yonetim ekraninda soluk cizim (.tpasif)."""
+    parent = service.add_node("T-MUst", "generic")
+    child = service.add_node("T-MAlt", "step", parent_id=parent["id"])
+    service.set_node_active(parent["id"], False)
+    assert service.TREE.nodes[child["id"]].is_active is True
+
+
+def test_pasif_dugum_YETKI_kaybettirmez(client):
+    """Pasiflestirme bir yetki islemi DEGIL: dal izinleri yerinde kalir."""
+    from shared import scope as scope_mod
+    u = db.q1("select id from users where name = 'Deniz'")
+    parent = service.add_node("T-YPasif", "generic")
+    child = service.add_node("T-YPasifAlt", "step", parent_id=parent["id"])
+    scope_mod.grant_node_permission(u["id"], parent["id"])
+    scope_mod.grant_scope(u["id"], "edit_nodes")
+    try:
+        service.set_node_active(parent["id"], False)
+        assert scope_mod.authorized_on_node(db.q1("select * from users where id=%s", (u["id"],)),
+                                            child["id"]) is True
+    finally:
+        db.x("delete from user_node_scopes where user_id = %s", (u["id"],))
+        db.x("delete from user_scopes where user_id = %s", (u["id"],))
+
+
+def test_pasif_dugumun_altina_eklenmez(client):
+    d = service.add_node("T-PasifUst", "generic")
+    service.set_node_active(d["id"], False)
+    assert service.add_node("T-PasifAlt", "step", parent_id=d["id"]) is None
+
+
+def test_pasiflestirme_gecmise_yazilir(client):
+    d = service.add_node("T-PGecmis", "generic")
+    service.set_node_active(d["id"], False)
+    event = db.q1("select body from events where subject_type='node' and subject_id=%s"
+                  " order by created_at desc", (d["id"],))
+    assert "pasifleştirildi" in event["body"]
+
+
+def test_ayni_duruma_ikinci_kez_yazilmaz(client):
+    d = service.add_node("T-Idempotent", "generic")
+    before = db.q1("select count(*) c from events where subject_id=%s", (d["id"],))["c"]
+    assert service.set_node_active(d["id"], True)          # zaten aktif
+    assert db.q1("select count(*) c from events where subject_id=%s", (d["id"],))["c"] == before
+
+
+# --- uclar: pasiflestirme ve tur secimi -----------------------------------
+
+
+def test_uctan_pasiflestirilir(client):
+    d = service.add_node("T-UcPasif", "generic")
+    r = client.post(f"/node/{d['id']}/active", data={"active": "0"})
+    assert r.status_code == 200
+    assert service.TREE.nodes[d["id"]].is_active is False
+
+
+def test_gecersiz_tur_ucta_400(client):
+    """Donus degeri YUTULMUYOR: gecersiz girdi sessizce 200 donmemeli."""
+    r = client.post("/node", data={"name": "T-Uc400", "type": "Bölüm"})
+    assert r.status_code == 400
+    assert db.q1("select 1 from nodes where name = %s", ("T-Uc400",)) is None
+
+
+def test_tur_girdisi_SELECT_olarak_cizilir(client):
+    """Serbest metin girilemez — ekranda da, sunucuda da."""
+    text = client.get("/outcome-tree").text
+    assert '<input name="type"' not in text
+    assert '<select name="type"' in text
+    for key, label in nodes.NODE_TYPES.items():
+        assert f'value="{key}"' in text, key
+        assert label in text
+
+
+def test_kilitli_dugumun_tur_secimi_disabled(client):
+    d = service.add_node("T-UcKilit", "team")
+    db.x("update teams set node_id = %s where name = 'Maliye'", (d["id"],))
+    try:
+        service.rebuild_tree()
+        text = client.get("/outcome-tree").text
+        form = text.split(f'hx-patch="/node/{d["id"]}"', 1)[1].split("</form>", 1)[0]
+        assert "disabled" in form
+        # Gizli bir type girdisiyle kilidi delmeye calisma:
+        assert '<input type="hidden" name="type"' not in form
+    finally:
+        db.x("update teams set node_id = null where name = 'Maliye'")
+
+
+def test_pasif_dugum_agacta_soluk_cizilir(client):
+    """Karsiligi CSS'te OLMALI — pasiflik miras kalmadigi icin gorsel ayrim
+    o kararin uzerinde anlasilan telafisi."""
+    d = service.add_node("T-Soluk", "generic")
+    service.set_node_active(d["id"], False)
+    assert "tpasif" in client.get("/outcome-tree").text
+    css = (ROOT / "sites/dashboard/static/dashboard.css").read_text(encoding="utf-8")
+    assert ".tpasif" in css, "sınıf şablonda var ama CSS'te yok — pasif düğüm ayırt edilemez"
+
+
+def test_pasif_dugum_yeni_kayit_formunda_cikmaz(client):
+    from sites.dashboard.routes import node_options
+    d = service.add_node("T-Dropdown", "generic")
+    assert any(n["id"] == d["id"] for n in node_options())
+    service.set_node_active(d["id"], False)
+    assert not any(n["id"] == d["id"] for n in node_options())

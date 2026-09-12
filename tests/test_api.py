@@ -99,6 +99,14 @@ def test_node_filter_includes_subtree(client):
     assert "Kapak Ünitesi — tekrar eden kayıp" not in r.text   # baska kok
 
 
+def test_pillar_filtresi_kalkti(client):
+    """items.pillar olu sutundu (EDITABLE'da yok, hic set edilemiyordu) —
+    sutun da filtre de dusuruldu (spec/72 §8, TASK-220)."""
+    assert ">Pillar<" not in client.get("/tasks").text
+    assert db.q1("select 1 from information_schema.columns where table_name='items'"
+                 " and column_name='pillar'") is None
+
+
 def test_team_filter(client):
     team = db.q1("select id from teams where name = 'Maliye'")
     r = client.get(f"/tasks?team={team['id']}")

@@ -252,3 +252,112 @@ def test_tasima_gecmise_yazilir(client):
     event = db.q1("select body from events where subject_type = 'node' and subject_id = %s"
                  " order by created_at desc limit 1", (child["id"],))
     assert "taşındı" in event["body"] and "K-B" in event["body"]
+
+
+# --- iki kademeli silme (spec/72 §6.2) ------------------------------------
+#
+# Bos (virgin) dugumu silmek ayricalik ISTEMEZ: kaybolan gecmis yok, yanlislikla
+# acilmis bos bir dugumu ekleyebilen kaldirabilmeli de. Bagimlisi olani silmek
+# kayitlari, alt agaci ve dal izinlerini birlikte goturur — ayrica
+# hard_delete_nodes gerekir.
+
+
+def test_virgin_dugum_ek_kapsam_istemez(client):
+    u = person("Deniz")
+    scope.grant_scope(u["id"], "edit_nodes")
+    parent = node("Malzeme Temini")
+    scope.grant_node_permission(u["id"], parent["id"])
+    d = service.add_node("K-Virgin", "step", parent_id=parent["id"])
+    _switch(client, u["id"])
+    try:
+        assert "hard_delete_nodes" not in scope.active_scopes(person("Deniz"))
+        r = client.request("DELETE", f"/node/{d['id']}")
+        assert r.status_code == 200, r.text[:200]
+        assert d["id"] not in service.TREE.nodes
+    finally:
+        _switch(client, person("Efe")["id"])
+
+
+def test_bagimlisi_olan_dugum_ek_kapsam_ister(client):
+    u = person("Deniz")
+    scope.grant_scope(u["id"], "edit_nodes")
+    parent = node("Malzeme Temini")
+    scope.grant_node_permission(u["id"], parent["id"])
+    d = service.add_node("K-Dolu", "step", parent_id=parent["id"])
+    service.add_node("K-DoluAlt", "step", parent_id=d["id"])     # cocuk = bagimlilik
+    _switch(client, u["id"])
+    try:
+        assert client.request("DELETE", f"/node/{d['id']}").status_code == 403
+        assert d["id"] in service.TREE.nodes
+
+        scope.grant_scope(u["id"], "hard_delete_nodes")
+        assert client.request("DELETE", f"/node/{d['id']}").status_code == 200
+        assert d["id"] not in service.TREE.nodes
+    finally:
+        _switch(client, person("Efe")["id"])
+
+
+def test_kapsam_dal_disinda_islemez(client):
+    """hard_delete_nodes NODE_DEPENDENT: kapsam tek basina yetmez, silinecek
+    dalda izin de gerekir."""
+    u = person("Deniz")
+    scope.grant_scope(u["id"], "edit_nodes")
+    scope.grant_scope(u["id"], "hard_delete_nodes")
+    scope.grant_node_permission(u["id"], node("Malzeme Temini")["id"])
+    komsu = node("Mekan & Lojistik")
+    d = service.add_node("K-Komsu", "step", parent_id=komsu["id"])
+    service.add_node("K-KomsuAlt", "step", parent_id=d["id"])
+    _switch(client, u["id"])
+    try:
+        assert client.request("DELETE", f"/node/{d['id']}").status_code == 403
+        assert d["id"] in service.TREE.nodes
+    finally:
+        _switch(client, person("Efe")["id"])
+
+
+def test_kapsamsiz_eski_editor_yikici_yetkiyi_MIRAS_ALMAZ(client):
+    """_authorized_on_node'daki gecis donemi kacis kapisi (is_editor + hic
+    user_node_scopes satiri yok) ikinci kademeye TASINMAZ."""
+    efe = person("Efe")
+    assert db.as_bool(efe["is_editor"]) and not db.as_bool(efe["is_admin"])
+    assert scope.permitted_nodes(efe) == [], "kacis kapisinin kosulu"
+    assert "hard_delete_nodes" not in scope.active_scopes(efe)
+
+    parent = node("Malzeme Temini")
+    d = service.add_node("K-EskiEditor", "step", parent_id=parent["id"])
+    service.add_node("K-EskiEditorAlt", "step", parent_id=d["id"])
+    # Efe zaten oturumdaki kullanici.
+    assert client.request("DELETE", f"/node/{d['id']}").status_code == 403
+    assert d["id"] in service.TREE.nodes
+    # Ama BOS olani silebilir — kaybolan gecmis yok.
+    bos = service.add_node("K-EskiEditorBos", "step", parent_id=parent["id"])
+    assert client.request("DELETE", f"/node/{bos['id']}").status_code == 200
+
+
+def test_kullanici_kapsam_dugumu_de_bagimliliktir(client):
+    """users.scope_node_id — spec/72 §6.1'deki bes bagimliliktan biri.
+    Tohumda Deniz'in kapsami "Üretim Hattı A"ya bagli."""
+    from shared import nodes as node_lib
+    hat = node("Üretim Hattı A")
+    assert node_lib.counts_of(hat["id"])["user_scopes"] == 1
+    assert not node_lib.is_virgin(hat["id"])
+
+
+def test_pasiflestirme_ek_kapsam_ISTEMEZ(client):
+    """Yikici degil, geri alinabilir: edit_nodes yeter (spec/72 §6)."""
+    u = person("Deniz")
+    scope.grant_scope(u["id"], "edit_nodes")
+    parent = node("Malzeme Temini")
+    scope.grant_node_permission(u["id"], parent["id"])
+    d = service.add_node("K-Pasif", "step", parent_id=parent["id"])
+    _switch(client, u["id"])
+    try:
+        assert client.post(f"/node/{d['id']}/active", data={"active": "0"}).status_code == 200
+        assert service.TREE.nodes[d["id"]].is_active is False
+        # Komsu dalda yine 403:
+        disari = service.add_node("K-PasifDis", "step",
+                                  parent_id=node("Mekan & Lojistik")["id"])
+        assert client.post(f"/node/{disari['id']}/active",
+                           data={"active": "0"}).status_code == 403
+    finally:
+        _switch(client, person("Efe")["id"])
