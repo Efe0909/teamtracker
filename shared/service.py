@@ -44,7 +44,10 @@ TREE: TreeIndex = TreeIndex()
 
 def rebuild_tree() -> TreeIndex:
     global TREE
-    TREE = TreeIndex.build(db.q("select id,parent_id,name,node_type,sort_order from nodes"))
+    # Pasif dugumler de indekste DURUR: gecmis kayitlarin yolu cizilebilsin,
+    # yetki kontrolu (tin/tout) calismaya devam etsin. Suzme okuyan tarafin isi.
+    TREE = TreeIndex.build(
+        db.q("select id,parent_id,name,node_type,sort_order,is_active from nodes"))
     return TREE
 
 
@@ -71,12 +74,16 @@ def add_node(name: str, node_type: str, parent_id=None, description: str | None 
     """Yeni dugum. parent_id None ise kok."""
     name = (name or "").strip()
     node_type = (node_type or "").strip()
-    if not name or not node_type:
-        return None
+    if not name or not nodes.valid(node_type):
+        return None                       # tur artik serbest metin degil (spec/72 §3)
 
     parent = db.uid(parent_id) if parent_id else None
     if parent is not None and parent not in TREE.nodes:
         return None                       # olmayan ustun altina yazma
+    if parent is not None and not TREE.nodes[parent].is_active:
+        return None                       # pasif dalin altina yeni dugum acilmaz
+    if nodes.root_only(node_type) and parent is not None:
+        return None                       # spec/72 §7: cell yalnizca kokte
 
     # Kardeslerin sonuna: sira numarasi elle verilmiyor, ekleme sirasi korunuyor.
     siblings = TREE.children.get(parent, []) if parent else TREE.roots
@@ -105,9 +112,20 @@ def update_node(node_id, name: str | None = None, node_type: str | None = None,
             return False                  # adsiz dugum agacta okunmaz olur
         fields.append("name = %s"); values.append(name.strip())
     if node_type is not None:
-        if not node_type.strip():
+        node_type = node_type.strip()
+        if not nodes.valid(node_type):
             return False
-        fields.append("node_type = %s"); values.append(node_type.strip())
+        if node_type != TREE.nodes[id_].node_type:
+            # TUR KILIDI (spec/72 §6.3): projeksiyon satiri olan dugumun turu
+            # degisemez, yoksa o satir sessizce sahipsiz kalir. is_virgin DEGIL
+            # — cocugu olmak turu degistirmeye engel degil.
+            if nodes.has_projection(id_):
+                return False
+            # Yerlesim yeni ture gore yeniden kontrol edilir: mevcut yerinde
+            # gecerli olmayan bir ture donusturulemez.
+            if nodes.root_only(node_type) and TREE.parent.get(id_) is not None:
+                return False
+        fields.append("node_type = %s"); values.append(node_type)
     if description is not None:
         # Bos metin "aciklamayi sil" demek; None ile karistirma.
         fields.append("description = %s"); values.append(description.strip() or None)
@@ -134,6 +152,10 @@ def move_node(node_id, new_parent_id, moved_by=None) -> bool:
     if parent is not None:
         if parent not in TREE.nodes:
             return False
+        if not TREE.nodes[parent].is_active:
+            return False                  # pasif dalin altina tasinmaz
+        if nodes.root_only(TREE.nodes[id_].node_type):
+            return False                  # spec/72 §7: cell koke cakili
         # DONGU KORUMASI: hedef, tasinan dugumun alt agacinda olamaz. Olsaydi
         # agac bir halkaya donerdi ve Euler turu sonsuz donerdi.
         if TREE.is_descendant(parent, id_):
@@ -167,10 +189,28 @@ def delete_node(node_id, deleted_by=None) -> bool:
     return True
 
 
-def node_record_counts() -> dict:
-    """Dugum basina kayit sayisi — silmeden once ne kaybedilecegi gorunsun."""
-    return {r["node_id"]: r["c"]
-            for r in db.q("select node_id, count(*) c from items group by node_id")}
+def set_node_active(node_id, active: bool, changed_by=None) -> bool:
+    """Dugumu pasiflestirir / geri acar — GUNDELIK "bu artik kullanilmiyor"
+    isinin dogru araci (spec/72 §6). Silmez: kayitlar, gecmis, takim duvari,
+    dal izinleri yerinde kalir; pasif dugum yalniz ILERIYE donuk kaybolur
+    (dropdown, yeni kayit formu, aktif kart listesi).
+
+    MIRAS YOK: yalniz bu dugumun bayragi degisir, alt agac kendi bayragini
+    tasir. Ata yuruyusu olmadigi icin kapali bir dalin altindaki acik dugum
+    dropdown'da gorunmeye devam eder — bilincli tercih, telafisi yonetim
+    ekraninda pasif satirlarin soluk cizilmesi.
+    """
+    id_ = db.uid(node_id)
+    if id_ is None or id_ not in TREE.nodes:
+        return False
+    active = bool(active)
+    if TREE.nodes[id_].is_active == active:
+        return True                       # zaten o durumda: gecmise tekrar yazma
+    name = TREE.name(id_)
+    db.x("update nodes set is_active = %s where id = %s", (active, id_))
+    rebuild_tree()
+    _node_event(id_, changed_by, f"{name} {'yeniden açıldı' if active else 'pasifleştirildi'}")
+    return True
 
 
 def users_by_id() -> dict:

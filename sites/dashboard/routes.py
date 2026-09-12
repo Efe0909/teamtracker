@@ -13,7 +13,7 @@ from pathlib import Path
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from shared import auth, db, filters, scope, service, users
+from shared import auth, db, filters, nodes, scope, service, users
 from shared.config import site_address
 from shared.render import is_htmx, site_templates
 from shared.service import (ACTION_STATUS, PRIORITIES, STATUSES, add_action, add_message,
@@ -43,7 +43,7 @@ MODULES = [
      "desc": "Yapının düzenlendiği ekran: düğüm ekle, adlandır, açıklama yaz, taşı, sil.",
      "plan": []},
     {"slug": "pivot", "icon": "📊", "name": "Pivot & Veri Analizi", "ready": False,
-     "desc": "Kayıtları düğüm, takım, pillar, sorumlu ve zaman kırılımında çapraz say.",
+     "desc": "Kayıtları düğüm, takım, sorumlu ve zaman kırılımında çapraz say.",
      "plan": ["Gruplama ve sayım SQL'de; Python'a dönen satır ekranda görünen satırdır (spec/10-kararlar.md 'Sorgular').",
               "Alt ağaç kırılımı tin/tout aralık taramasıyla — recursive CTE yok.",
               "İkinci yüz: açık kayıtların hazır kırılımları (spec/60-kaynak-uyarlama.md 2.3).",
@@ -152,10 +152,15 @@ def table_ctx(request, user) -> dict:
 
 
 def node_options() -> list[dict]:
-    """Yeni kayit formu icin dugum listesi (girintili)."""
+    """Yeni kayit formu icin dugum listesi (girintili).
+
+    Pasif dugumler cikmaz: pasiflik ILERIYE doniktir, yeni kayit onlara
+    baglanmaz (spec/72 §6). Var olan kayitlar etkilenmez.
+    """
     tree = service.TREE
     ordered = sorted(tree.nodes, key=lambda n: tree.tin[n])
-    return [{"id": n, "name": tree.name(n), "depth": tree.depth[n]} for n in ordered]
+    return [{"id": n, "name": tree.name(n), "depth": tree.depth[n]}
+            for n in ordered if tree.nodes[n].is_active]
 
 
 def card_ctx(request, item, user) -> dict:
@@ -407,22 +412,47 @@ def _authorized_on_node(u, node_id) -> bool:
 
 
 def _tree_ctx(user) -> dict:
-    """Duz liste: sablon girintiyi depth ile ciziyor, ic ice dongu yok."""
+    """Duz liste: sablon girintiyi depth ile ciziyor, ic ice dongu yok.
+
+    YERLESIM KURALI TEK YERDE: her dugum, alabilecegi tur listesini hazir
+    tasir (`types`). Sablon `nodes.ROOT_ONLY`'yi yeniden yazmaz — yazsaydi
+    sunucuyla celisirdi ve hicbir test gormezdi.
+    """
     tree = service.TREE
-    counts = service.node_record_counts()
+    counts = nodes.counts_by_node()
     descriptions = {r["id"]: r["description"]
                    for r in db.q("select id, description from nodes")}
     ordered = sorted(tree.nodes, key=lambda n: tree.tin[n])
-    return {
-        "nodes": [{"id": nid, "name": tree.nodes[nid].name,
-                   "type": tree.nodes[nid].node_type,
-                   "depth": tree.depth[nid],
-                   "has_children": bool(tree.children.get(nid)),
-                   "record_count": counts.get(nid, 0),
-                   "description": descriptions.get(nid)}
-                  for nid in ordered],
-        "can_write": _can_edit_structure(user),
-    }
+    # Kokte her tur; kokun altinda ROOT_ONLY olanlar disinda her tur.
+    root_types = dict(nodes.NODE_TYPES)
+    child_types = {k: v for k, v in nodes.NODE_TYPES.items() if not nodes.root_only(k)}
+    # Kapsam kabaca burada, dalin kendisi ucta (DELETE /node) kontrol edilir.
+    has_hard_delete = scope.has_scope(user, "hard_delete_nodes")
+
+    out = []
+    for nid in ordered:
+        virgin = nodes.is_virgin(nid, counts)
+        out.append({
+            "id": nid, "name": tree.nodes[nid].name,
+            "type": tree.nodes[nid].node_type,
+            "type_label": nodes.label(tree.nodes[nid].node_type),
+            "depth": tree.depth[nid],
+            "is_active": tree.nodes[nid].is_active,
+            "has_children": bool(tree.children.get(nid)),
+            "record_count": nodes.counts_of(nid, counts)["records"],
+            "description": descriptions.get(nid),
+            "types": root_types if tree.parent.get(nid) is None else child_types,
+            # Projeksiyon satiri olan dugumun turu degismez (spec/72 §6.3).
+            "can_retype": not nodes.has_projection(nid, counts),
+            # Bos dugumu silmek ayricalik istemez; bagimlisi olan icin
+            # hard_delete_nodes gerekir (spec/72 §6.2).
+            "can_hard_delete": virgin or has_hard_delete,
+            "delete_counts": nodes.subtree_counts(tree.subtree(nid), counts),
+        })
+    return {"nodes": out, "can_write": _can_edit_structure(user),
+            # Kok formu icin her tur; "alt dugum ekle" formlari icin
+            # ROOT_ONLY olmayanlar — cocugun ustu var, cell olamaz.
+            "root_types": root_types, "child_types": child_types}
 
 
 @router.get("/outcome-tree", response_class=HTMLResponse)
@@ -443,7 +473,10 @@ def add_node(request: Request, name: str = Form(...), type: str = Form(...),
             raise HTTPException(403, "bu dalda düzenleme yetkisi yok")
     elif not (scope.can_do_root_operation(user) or _can_edit_structure(user)):
         raise HTTPException(403, "kök düğüm eklemek yönetici yetkisi ister")
-    service.add_node(name, type, parent or None, description, created_by=user["id"])
+    # Donus degeri ARTIK YUTULMUYOR: gecersiz tur ya da yerlesim ihlali
+    # sessizce 200 donuyordu, kullanici eklenmedigini gormuyordu.
+    if service.add_node(name, type, parent or None, description, created_by=user["id"]) is None:
+        raise HTTPException(400, "düğüm eklenemedi — tür ya da yerleşim geçersiz")
     return render(request, "fragments/agac.html", {"user": user, **_tree_ctx(user)})
 
 
@@ -454,10 +487,11 @@ async def update_node(request: Request, node_id: str):
         raise HTTPException(403, "bu düğümde düzenleme yetkisi yok")
     form = await request.form()
     # Alan gonderilmediyse None: "dokunma" ile "bosalt" farkli seyler.
-    service.update_node(
-        node_id,
-        name=form.get("name"), node_type=form.get("type"), description=form.get("description"),
-        changed_by=user["id"])
+    if not service.update_node(
+            node_id,
+            name=form.get("name"), node_type=form.get("type"),
+            description=form.get("description"), changed_by=user["id"]):
+        raise HTTPException(400, "düğüm güncellenemedi — ad, tür ya da tür kilidi")
     if "parent" in form:
         # Hedef dalda da yetki gerekir, yoksa yetkili oldugu dugumu
         # yetkisiz oldugu bir dala tasiyabilirdi.
@@ -472,10 +506,34 @@ async def update_node(request: Request, node_id: str):
 
 @router.delete("/node/{node_id}", response_class=HTMLResponse)
 def delete_node(request: Request, node_id: str):
+    """KALICI silme — gundelik is bu degil, pasiflestirme (POST .../active).
+
+    Iki kademe (spec/72 §6.2): bos (virgin) dugumu o dalda duzenleyebilen
+    herkes silebilir — kaybolan gecmis yok. Bagimlisi olani silmek kayitlari,
+    alt agaci ve dal izinlerini birlikte goturur, o yuzden ayrica
+    hard_delete_nodes kapsami gerekir.
+    """
     user = auth.current_user(request)
     if not _authorized_on_node(user, node_id):
         raise HTTPException(403, "bu düğümde silme yetkisi yok")
+    if not nodes.is_virgin(node_id):
+        # _authorized_on_node'daki eski is_editor kacis kapisi buraya
+        # TASINMAZ: kapsamsiz eski editor yeni yikici yetkiyi miras almasin.
+        if not scope.authorized_on_node(user, node_id, "hard_delete_nodes"):
+            raise HTTPException(403, "bağımlısı olan düğümü kalıcı silme yetkisi yok")
     service.delete_node(node_id, deleted_by=user["id"])
+    return render(request, "fragments/agac.html", {"user": user, **_tree_ctx(user)})
+
+
+@router.post("/node/{node_id}/active", response_class=HTMLResponse)
+def set_node_active(request: Request, node_id: str, active: str = Form("")):
+    """Pasiflestir / geri ac. YIKICI DEGIL, geri alinabilir — ek kapsam
+    istemez, yapiyi duzenleme yetkisi yeter (spec/72 §6)."""
+    user = auth.current_user(request)
+    if not _authorized_on_node(user, node_id):
+        raise HTTPException(403, "bu düğümde düzenleme yetkisi yok")
+    if not service.set_node_active(node_id, active == "1", changed_by=user["id"]):
+        raise HTTPException(404, "düğüm yok")
     return render(request, "fragments/agac.html", {"user": user, **_tree_ctx(user)})
 
 

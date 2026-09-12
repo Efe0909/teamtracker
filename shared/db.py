@@ -5,6 +5,7 @@ Yer tutucu %s'dir — SQLite'in ? isareti degil (spec/80-veritabani.md §2).
 """
 from __future__ import annotations
 
+import logging
 import os
 from datetime import datetime, timezone
 from pathlib import Path
@@ -18,6 +19,7 @@ DSN = os.getenv("DATABASE_URL") or "postgresql://ekiptakip:ekiptakip@127.0.0.1:5
 MIGRATIONS_DIR = Path(__file__).parent / "migrations"
 
 _pool: ConnectionPool | None = None
+_log = logging.getLogger("ekiptakip.db")
 
 
 def new_id() -> UUID:
@@ -120,8 +122,21 @@ def migrate() -> list[str]:
     for file in sorted(MIGRATIONS_DIR.glob("*.sql")):
         if file.name in applied:
             continue
+        # Sunucunun "raise warning/notice" ciktisi psycopg3'te VARSAYILAN OLARAK
+        # DUSER — handler takilmazsa hicbir yerde gorunmez. Goc tanilamalari
+        # (taninmayan node_type, ROOT_ONLY ihlali...) tam da bu yolla
+        # bildiriliyor; sessiz kalsalardi hicbir ise yaramazlardi.
+        def report(diag, name=file.name):
+            _log.warning("%s: %s", name, diag.message_primary)
+
         with pool().connection() as c:
-            c.execute(file.read_text(encoding="utf-8"))
-            c.execute("insert into schema_migrations (name) values (%s)", (file.name,))
+            c.add_notice_handler(report)
+            try:
+                c.execute(file.read_text(encoding="utf-8"))
+                c.execute("insert into schema_migrations (name) values (%s)", (file.name,))
+            finally:
+                # Baglanti HAVUZDAN geliyor: cikarilmazsa handler orada kalir
+                # ve sonraki her istegin notice'ini de yazardi.
+                c.remove_notice_handler(report)
         done.append(file.name)
     return done

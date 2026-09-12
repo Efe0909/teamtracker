@@ -68,7 +68,7 @@ def mobile_row(r, users: dict) -> dict:
     return {
         "id": r["id"], "kind": r["kind"], "title": r["title"], "status": r["status"],
         "status_label": STATUSES[r["status"]], "priority": r["priority"],
-        "priority_label": PRIORITIES[r["priority"]], "dms": r["dms"], "pillar": r["pillar"],
+        "priority_label": PRIORITIES[r["priority"]], "dms": r["dms"],
         "assignee": a,
         "node": service.TREE.name(r["node_id"]),
         "path": " › ".join(service.TREE.name(n) for n in service.TREE.ancestors(r["node_id"])[-2:]),

@@ -1,7 +1,7 @@
 # 72 — Node türleri: omurga + tür projeksiyonları
 
-**Durum: tasarım.** Kod yazılmadı. Açık karar kalmadı; pillar ↔ kayıt bağı
-bilerek ertelendi (§8).
+**Durum: 1. aşama uygulandı** (göç `011_node_types.sql`, `shared/nodes.py`).
+Ertelenenler: `teams` projeksiyonu (§5) ve pillar ↔ kayıt bağı (§8).
 
 Bu belge `spec/60-kaynak-uyarlama.md` §2.6'daki "node_type serbest metin kalır,
 tip kataloğu alınmaz" kararını **geçersiz kılar**. O karar yanlış değildi —
@@ -177,6 +177,17 @@ dropdown'larda, yeni kayıt formlarında, aktif kart listelerinde çıkmaz.
 
 Bu, §1'deki "bugünün pillar'ı yarın anlamsızlaşabilir" derdinin asıl cevabı.
 
+**Pasiflik MİRAS KALMAZ.** Her node kendi `is_active` bayrağını taşır; ata
+yürüyüşü yok, `effective_active` diye bir kavram yok. Bilinen sonucu: kapalı
+bir dalın altındaki açık node dropdown'larda görünmeye devam eder. Bilinçli
+tercih — alternatifi her okuma yolunda ata zinciri yürümekti. Telafisi
+yapının kendisinde durumu okunur kılmak: veri yönetimi ekranında pasif
+satırlar soluk çizilir (`.tpasif`).
+
+Pasifleştirme bir **yetki işlemi değildir**: dal izinleri (`user_node_scopes`)
+yerinde kalır, pasif bir düğümün altındaki node'da `authorized_on_node` hâlâ
+`True` döner.
+
 **Sert silme** normal akıştan çıkar (`service.delete_node`, bugün ağaçtaki ✕
 düğmesi): alt ağacı ve `items.node_id` üzerinden **kayıtları da** cascade ile
 götürüyor. Gündelik "bu artık kullanılmıyor" işinin doğru aracı
@@ -238,12 +249,22 @@ bilgi onaya taşınır.
 Gündelik "bu artık kullanılmıyor" işinin doğru aracı hâlâ **pasifleştirmedir**
 (§6): geçmişi korur, geri alınabilir.
 
-### 6.3 Tür değiştirme
+### 6.3 Tür değiştirme — AYRI, daha dar bir yüklem
 
-**Virgin değilse KİLİTLİ.** Aynı `is_virgin` yüklemi: node'un `node_id`'sini
-kullanan herhangi bir tabloda satır varsa (bugün `teams`, yarın pillar sayfası
-tabloları) tür değiştirilemez — önce o bağımlılıklar temizlenir. Yoksa
+**Projeksiyonu varsa KİLİTLİ.** Buradaki yüklem `is_virgin` DEĞİL,
+`has_projection`: yalnız node'un `node_id`'sini **birincil anahtar gibi**
+kullanan projeksiyon tablolarına bakar (bugün `teams`, yarın pillar sayfası
+tabloları). Satır varsa tür değiştirilemez — önce o bağ çözülür, yoksa
 projeksiyon değişir ve veri sessizce sahipsiz kalır.
+
+§6.1'deki beşli liste burada **fazla katı** olurdu: tür değişince çocuk
+sahipsiz kalmaz, kayıt sahipsiz kalmaz, dal izni sahipsiz kalmaz — sahipsiz
+kalan yalnızca projeksiyon satırıdır. Beşli yüklem kullanılsaydı **çocuğu
+olan hiçbir node'un türü değiştirilemezdi**, ki bu özelliği işe yaramaz hale
+getirirdi.
+
+Yerleşim de tür değişiminde yeniden bakılır: bulunduğu yerde geçerli olmayan
+bir türe dönüştürülemez (§7).
 
 ## 7. Yerleşim kuralları
 
@@ -313,13 +334,19 @@ değiştirmez; `user_node_scopes` tek yetki kaynağı olarak kalır.
 | `shared/scope.py` | yeni kapsam `hard_delete_nodes` (+ `NODE_DEPENDENT`) |
 | `shared/service.py` | `add_node`/`update_node`/`move_node` tür + yerleşim kontrolü |
 | `shared/tree.py` | `TreeIndex` tür-farkında dilim (`nodes_of_type`) |
-| `shared/filters.py` | `_pillar_options()` artık pillar node'larından — `TASK-220` kapanır |
+| `shared/filters.py` | pillar filtresi **kaldırılır** (§8); ayrım `Filter.input_type`'a taşınır — `TASK-220` kapanır |
 | `sites/dashboard/routes.py` | veri yönetimi formunda tür `<select>`; Ekipler node projeksiyonundan |
 | göç (yeni) | `nodes.is_active`, `node_type` enum'a eşleme, `teams.node_id` sıkılaştırma, `items.pillar` düşürme, `scopes`'a `hard_delete_nodes` satırı |
 
 `TASK-220` (pillar filtresi ölü metin kutusu) bu işin doğal sonucu olarak
-kapanır: seçenekler artık `select distinct pillar from items` yerine pillar
-türündeki node'lardan gelir, yani boş veritabanında bile `<select>` doğru çizilir.
+kapanır — ama §8'in seçtiği yoldan: sütun düştüğü için **filtre kaldırılır**,
+pillar node'larından beslenmez. (§8 ile §10 bir süre çelişti; doğru olan §8,
+çünkü kayıtla bağı olmayan bir boyutta süzme kurulamaz.)
+
+Task'ın asıl yükü ayrıca çözülür: şablon `options()` boşluğuna değil açık bir
+tür işaretine (`Filter.input_type`) bakar. Boş `teams` tablosunda Takım
+filtresi de metin kutusuna düşüyordu ve yazılan değer sessizce yutuluyordu —
+aynı hata, farklı boyut.
 
 ## 11. Alınmayanlar
 

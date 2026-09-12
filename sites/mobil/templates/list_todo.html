@@ -8,7 +8,6 @@
           {{ 'Hata' if r.kind == 'issue' else 'Görev' }}</span>
         {% if r.priority == 'critical' %}<span class="chip c-crit">Kritik</span>{% endif %}
         {% if r.dms %}<span class="chip c-dms">{{ r.dms }}</span>{% endif %}
-        {% if r.pillar %}<span class="chip c-pil">{{ r.pillar }}</span>{% endif %}
       </div>
       <div class="t">{{ r.title }}</div>
       <div class="k"><b>Konum:</b> {{ r.path }}</div>

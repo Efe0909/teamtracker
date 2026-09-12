@@ -16,6 +16,7 @@ class Node:
     name: str
     node_type: str
     sort_order: int
+    is_active: bool
 
 
 @dataclass
@@ -32,7 +33,10 @@ class TreeIndex:
     def build(cls, rows) -> "TreeIndex":
         ix = cls()
         for r in rows:
-            n = Node(r["id"], r["parent_id"], r["name"], r["node_type"], r["sort_order"])
+            # r["is_active"] — .get(..., True) DEGIL: eksik sutun sessizce
+            # "hepsi aktif" olmamali, goc kosmadan agac kurulmasin.
+            n = Node(r["id"], r["parent_id"], r["name"], r["node_type"], r["sort_order"],
+                     r["is_active"])
             ix.nodes[n.id] = n
             ix.parent[n.id] = n.parent_id
             ix.children.setdefault(n.id, [])
@@ -95,3 +99,14 @@ class TreeIndex:
     def name(self, node: str) -> str:
         n = self.nodes.get(node)
         return n.name if n else "?"
+
+    def nodes_of_type(self, node_type: str, *, active_only: bool = True) -> list[str]:
+        """"Su turdeki tum dugumler" — spec/72 §2'nin sorgu primitifi.
+
+        Bellekten, SQL'e gitmeden; sira Euler turu (ekrandaki agac sirasi).
+        Pasiflik MIRAS KALMAZ: ustu kapali olan bir dugum burada gorunmeye
+        devam eder, yalniz kendi bayragina bakilir (plan karari).
+        """
+        return [nid for nid in sorted(self.nodes, key=lambda i: self.tin[i])
+                if self.nodes[nid].node_type == node_type
+                and (not active_only or self.nodes[nid].is_active)]

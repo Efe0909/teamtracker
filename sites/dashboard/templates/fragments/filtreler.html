@@ -15,8 +15,11 @@
 
   <div class="fset">
     {% for f in filters %}
+      {# Ayrim TURDE, options() bosluğunda DEGIL: bos bir tabloda select
+         filtresi metin kutusuna dusuyordu ve yazilan deger yutuluyordu
+         (TASK-220, shared/filters.Filter.input_type). #}
+      {% if f.input_type == "select" %}
       {% set options = f.options() %}
-      {% if options %}
       <label class="ff"><span>{{ f.label }}</span>
         <select name="{{ f.param }}">
           <option value="">Hepsi</option>
