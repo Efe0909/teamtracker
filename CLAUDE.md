@@ -110,7 +110,7 @@ geçmişi hâlâ eski (Türkçe) adları anabilir — kod referans alınmalı.
 
 **Göç dosyası adları artık donuk.** `db.migrate()` uygulanan göçü *dosya
 adıyla* `schema_migrations`'a yazıyor (`shared/db.py`); `shared/migrations/`
-içindeki `001_schema.sql`…`007_scopes.sql` bir daha yeniden adlandırılmamalı —
+içindeki `001_schema.sql`…`011_node_types.sql` bir daha yeniden adlandırılmamalı —
 kurulu bir veritabanında yeniden adlandırılırsa uygulanmamış sayılır ve
 **yeniden koşar**. Rename bu geçişte serbestti çünkü henüz canlıya hiç
 kurulmamıştı (veritabanı boştu); artık ilk gerçek kurulumdan sonra donarlar.
