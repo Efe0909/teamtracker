@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException
 
-from . import attachments, auth, config, db, media
+from . import attachments, auth, config, db, media, nodes
 from .tree import TreeIndex
 
 _log = logging.getLogger("ekiptakip.service")
