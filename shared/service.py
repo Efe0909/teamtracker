@@ -7,12 +7,15 @@ TREE modul niteligi olarak okunur (service.TREE): yapi degisince yeniden kurulur
 """
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException
 
-from . import attachments, auth, db, media, nodes
+from . import attachments, auth, config, db, media
 from .tree import TreeIndex
+
+_log = logging.getLogger("ekiptakip.service")
 
 STATUSES = {"open": "Açık", "in_progress": "Devam", "pending": "Beklemede", "closed": "Kapandı"}
 PRIORITIES = {"critical": "Kritik", "high": "Yüksek", "medium": "Orta", "low": "Düşük"}
@@ -387,10 +390,24 @@ def reject_oversized_upload(request) -> None:
 
 
 def save_upload(image) -> dict | None:
-    """UploadFile'i diske yazar; MediaError HTTP hatasina cevrilir.
+    """UploadFile'i diske yazar; hatalari HTTP hatasina cevirir.
 
     image None ise (form alaninda dosya yoksa) sessizce None doner — govde
     yoksa metin-yalnizca mesaj akisindan hicbir sey degismez.
+
+    IKI AYRI HATA SINIFI, ikisi de yakalanmali:
+
+      MediaError  — KULLANICININ girdisiyle ilgili (cok buyuk, bozuk, resim
+                    degil). 4xx, mesaji dogrudan kullaniciya gosterilir.
+      OSError     — ORTAMLA ilgili (medya dizinine yazilamiyor, disk dolu,
+                    mount salt-okunur). 5xx.
+
+    OSError eskiden yakalanmiyordu ve ortadan kalkmis bir 500'e donusuyordu:
+    yayinda /data/media konteyner kullanicisina (uid 10001) kapali oldugu icin
+    `_atomic_write` PermissionError firlatiyor, kullanici "Gonder"e basip
+    hicbir sey olmadigini goruyordu (issue #23). Artik hem kullanici hem log
+    ne oldugunu ogreniyor — traceback'i BURADA yaziyoruz, cunku istisnayi
+    yakalamak uvicorn'un kendiliginden yazdigi izi de goturur.
     """
     if image is None:
         return None
@@ -398,6 +415,11 @@ def save_upload(image) -> dict | None:
         return media.save(image.file, image.filename)
     except media.MediaError as e:
         raise HTTPException(413 if e.code == "too_large" else 400, e.message) from e
+    except OSError as e:
+        _log.exception("ek kaydedilemedi (MEDIA_ROOT=%s)", config.MEDIA_ROOT)
+        raise HTTPException(
+            500, "Ek kaydedilemedi: sunucu medya dizinine yazamıyor. "
+                 "Mesajın gönderilmedi — yöneticine bildir.") from e
 
 
 def _media_view(rows: list[dict], user, tags_by_id: dict, can_tag: bool) -> list[dict]:
