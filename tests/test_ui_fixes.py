@@ -326,6 +326,33 @@ def test_kart_aciklamasi_jsonb_ye_yazilir_ve_ekranda_gorunur(client):
     assert "Sözleşme taslağı, 2. sayfa" in sayfa
 
 
+def test_govde_metni_EKIN_ALTINDA_cizilir(client, tmp_path, monkeypatch):
+    """Ekli mesajda metin ustte duruyorken balon "once bir cumle, sonra alakasiz
+    bir resim" gibi okunuyordu; metin ekin ALTYAZISI (kullanici istegi)."""
+    import io
+    from PIL import Image
+    from shared import attachments, config
+
+    monkeypatch.setattr(config, "MEDIA_ROOT", str(tmp_path))
+    attachments.sync_volume()
+    buf = io.BytesIO()
+    Image.new("RGB", (40, 30), (20, 160, 90)).save(buf, format="PNG")
+
+    item = item_of("Bütçe onayı")
+    r = client.post(f"/item/{item['id']}/message", data={"body": "bla bla bla"},
+                    files={"image": ("logo.png", buf.getvalue(), "image/png")})
+    assert r.status_code == 200
+    # Sira: once ek kutusu (.bmedia), sonra govde (.bmetin).
+    assert r.text.index("bmedia") < r.text.index("bmetin")
+
+
+def test_eksiz_mesajda_govde_yine_cizilir(client):
+    """Metin artik ayri bir kutuda; eksiz mesajda kaybolmamali."""
+    item = item_of("Bütçe onayı")
+    r = client.post(f"/item/{item['id']}/message", data={"body": "yalnız metin"})
+    assert "bmetin" in r.text and "yalnız metin" in r.text
+
+
 def test_sohbette_aciklama_kutusu_YOK(client):
     """Her balonun altina bir metin kutusu koymak akisi gurultulendiriyordu."""
     item = item_of("Bütçe onayı")

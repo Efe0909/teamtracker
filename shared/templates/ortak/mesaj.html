@@ -25,7 +25,9 @@
       </a>
       {% endif %}
 
-      {{ m.body | mention }}
+      {# GORSEL ONCE, METIN ALTINDA (kullanici istegi): mesajin konusu ek,
+         metin onun altyazisi — ustte duruyorken balon "once bir cumle, sonra
+         alakasiz bir resim" gibi okunuyordu. WhatsApp/Telegram kalibi da bu. #}
       {% for media in m.media %}
         {% if media.deleted %}
         <div class="bmedia mtomb">🖼 Görsel silindi</div>
@@ -54,6 +56,7 @@
         </div>
         {% endif %}
       {% endfor %}
+      {% if m.body %}<div class="bmetin">{{ m.body | mention }}</div>{% endif %}
       <div class="ts">
         {# Yanit ALINTILI: dugme kompozerin ustunde bir serit kurar, gonderim
            reply_to tasir ve yeni balon alintiyi icinde cizer.
