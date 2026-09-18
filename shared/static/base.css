@@ -70,10 +70,16 @@
       border:1.5px solid var(--panel)}
 
   /* ---- sohbet balonları: mesaj, sistem olayı ---- */
-  .msg{display:flex;gap:9px;max-width:74%}
+  .msg{display:flex;gap:9px;max-width:74%;min-width:0}
   .msg.me{align-self:flex-end;flex-direction:row-reverse}
+  /* min-width:0 ŞART: flex öğesinin varsayılanı min-width:auto, yani içeriğinin
+     altına inmez. Alıntı kutusundaki tek satırlık (nowrap) metin balonu kendi
+     max-content genişliğine çekiyordu ve balon .msg'nin %74'ünü aşıp sütunun
+     dışına taşıyordu. Sıfırlanınca balon daralıyor, taşan metin alıntının
+     kendi ellipsis'ine düşüyor. */
   .bub{background:var(--panel);border:1px solid var(--line);border-radius:15px;padding:8px 13px;
-       box-shadow:var(--sh);border-bottom-left-radius:5px;font-size:13.5px}
+       box-shadow:var(--sh);border-bottom-left-radius:5px;font-size:13.5px;
+       min-width:0;max-width:100%}
   .msg.me .bub{background:linear-gradient(135deg,var(--acc),#9a72ff);border-color:transparent;
        color:#fff;border-bottom-left-radius:15px;border-bottom-right-radius:5px}
   .bub .nm{font-size:11px;font-weight:700;color:var(--acc);margin-bottom:2px}
@@ -202,8 +208,6 @@
 .krow .v{font-weight:600}
 .kmetin{margin-top:4px;font-size:12.5px;color:var(--dim);line-height:1.55;white-space:pre-wrap}
 .kgorseller{margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:flex-start}
-.kgorsel-kutu{display:flex;flex-direction:column;gap:3px;width:92px}
-.kgorsel-kutu .bacik-form input{width:92px}
 .kgorsel img{display:block;width:92px;height:92px;object-fit:cover;border-radius:10px;
       background:var(--panel)}
 .kyukle{margin-top:8px}
@@ -254,8 +258,6 @@
 .klink{color:var(--acc);text-decoration:none;word-break:break-all}
 .klink:hover{text-decoration:underline}
 .kgorsel{position:relative;display:block;text-decoration:none;color:inherit}
-.kgacik{display:block;max-width:92px;margin-top:3px;font-size:10.5px;line-height:1.35;
-        color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 /* ---- kart katılımı: toplantıya kim geliyor / havuzu kim aldı (göç 013) ----
    Tek şerit, iki kullanım: ayrım hangi cevapların çizildiğinde (cards.SIGNUP),
@@ -276,19 +278,6 @@
 .kkkisi.kk-maybe{border-color:#f0d5a8;background:#fdf0d9}
 .kkkisi.kk-no{opacity:.6;text-decoration:line-through}
 
-/* ---- balondaki ek açıklaması (göç 013) ----
-   Etiketten AYRI: etiket paylaşılan sözlükten gelir ve aranır, açıklama yalnız
-   o eke aittir. Görselin altında, ona göre ikincil. */
-.bacik{margin-top:4px;font-size:12px;line-height:1.45;color:var(--txt)}
-.msg.me .bub .bacik{color:rgba(255,255,255,.92)}
-.bacik-form{display:flex;gap:4px;align-items:center;margin-top:4px}
-.bacik-form input{font-size:11.5px;padding:2px 7px;border:1px dashed var(--line);
-       border-radius:9px;background:transparent;color:inherit;width:100%}
-.bacik-form button{border:1px solid var(--line);background:none;border-radius:9px;
-       font-size:11px;line-height:1.5;padding:1px 7px;color:inherit;opacity:.7}
-.bacik-form button:hover{opacity:1}
-.msg.me .bub .bacik-form input,.msg.me .bub .bacik-form button{border-color:rgba(255,255,255,.35)}
-
 /* ---- yanıtla düğmesi (ortak/mesaj.html) ----
    Zaman damgasının solunda, ona göre sessiz: balonun üstünde ikinci bir eylem
    çağrısı gibi durmamalı. */
@@ -296,6 +285,48 @@
 .ryanit{border:none;background:transparent;padding:0;font:inherit;font-size:10px;
         font-weight:700;color:var(--acc);cursor:pointer;opacity:.75}
 .ryanit:hover{opacity:1;border-color:transparent;background:transparent}
+.msg.me .bub .ryanit{color:rgba(255,255,255,.9)}
+
+/* ---- alıntılı yanıt (göç 014) ----
+   Balonun İÇİNDE, gövdenin üstünde; sol kenarda yazarın rengiyle bir şerit —
+   WhatsApp/Telegram'ın okunmayı kolaylaştıran kalıbı. Alıntı gövdeden SÖNÜK:
+   yanıt yeni şeyi söyler, alıntı yalnız "neye cevap" sorusunu cevaplar. */
+.alinti{display:block;margin:0 0 5px;padding:4px 9px;border-radius:7px;overflow:hidden;
+        border-left:3px solid var(--acc);background:rgba(124,91,255,.09);
+        text-decoration:none;color:inherit;cursor:pointer}
+.alinti:hover{background:rgba(124,91,255,.16)}
+.alinti-kim{display:block;font-size:11px;font-weight:700;color:var(--acc);
+            line-height:1.5}
+.alinti-metin{display:block;font-size:12px;line-height:1.4;color:var(--dim);
+              overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Kendi balonum koyu/gradient: alıntı oraya göre. */
+.msg.me .bub .alinti{border-left-color:rgba(255,255,255,.75) !important;
+                     background:rgba(255,255,255,.16)}
+.msg.me .bub .alinti:hover{background:rgba(255,255,255,.26)}
+.msg.me .bub .alinti-kim{color:#fff}
+.msg.me .bub .alinti-metin{color:rgba(255,255,255,.85)}
+
+/* Alıntıdan zıplanan balon kısa süre vurgulanır: akış kendi içinde kayan bir
+   kutu, tarayıcının sessiz zıplaması "bir şey olmadı" hissi veriyordu. */
+@keyframes vurgu-sonumle{from{background:var(--acc2)}to{background:transparent}}
+.msg.vurgu .bub{animation:vurgu-sonumle 1.4s ease-out}
+
+/* ---- kompozerdeki "şuna yanıt veriyorsun" şeridi (ortak/yanit_serit.html) ----
+   Kompozerin ilk satırı; yazı kutusunun ÜSTÜNDE tam genişlikte durur, o yüzden
+   iki kompozer de sarmalı (.comp / .dcomp flex). */
+.yserit{display:flex;align-items:center;gap:8px;width:100%;padding:6px 10px;
+        margin-bottom:8px;border-radius:9px;border-left:3px solid var(--acc);
+        background:var(--tint);min-width:0}
+.yserit[hidden]{display:none}
+.yserit-ic{flex:1;min-width:0;display:flex;flex-direction:column}
+.yserit-kim{font-size:11px;font-weight:700;color:var(--acc);line-height:1.5}
+.yserit-metin{font-size:12px;color:var(--dim);overflow:hidden;
+              text-overflow:ellipsis;white-space:nowrap}
+.yserit-iptal{flex-shrink:0;border:none;background:transparent;color:var(--dim);
+              font-size:13px;line-height:1;padding:4px 6px;border-radius:6px}
+.yserit-iptal:hover{background:var(--panel);color:var(--err);border-color:transparent}
+/* Şerit tam satır kaplasın diye kompozerler sarmalı. */
+.comp,.dcomp{flex-wrap:wrap}
 
 /* ---- tam ekran görsel (lightbox, shared/static/ortak.js) ----
    /media/{id} ham dosyayı yeni sekmede açıyordu: çıplak resim, geri dönüş yok. */

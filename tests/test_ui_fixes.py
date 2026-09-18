@@ -300,37 +300,152 @@ def test_kapsam_disi_dal_ARTIK_TEKLIF_EDILMIYOR(client):
     assert "Üretim Hattı A" in [n["name"] for n in node_options(user("Efe"))]
 
 
-# --- ek aciklamasi ---------------------------------------------------------
+# --- medya kartinin aciklamasi (goc 015) ----------------------------------
 
 
-def test_aciklama_yazilir_ve_bosaltilabilir(client, tmp_path, monkeypatch):
-    """Bos metin aciklamayi KALDIRIR (null): "aciklama yok" ile "aciklama bos"
-    ayri seyler olmasin.
+def test_aciklama_EKTE_DEGIL_KARTTA(client):
+    """Ilk uygulama her EKE aciklama koymustu; yanlis katmandi.
 
-    Ek GERCEK yoldan yukleniyor (tests/test_attachments.py kalibi): satiri elle
-    insert etmek volume_id/byte_size gibi kisitlari atlar ve testi semadan
-    kopartir.
+    Ekin kendi anlatimi zaten ETIKET (goc 010) — ikinci bir serbest metin
+    alani "bu ne hakkinda" sorusunu iki yerden cevaplatiyordu. Istenen sey
+    blogun aciklamasiydi, tek tek gorsellerin degil.
     """
+    assert [k for k, _l, _t in cards.FIELDS["media"]] == ["description"]
+    assert "caption" not in db.q1(
+        "select string_agg(column_name, ',') c from information_schema.columns"
+        " where table_name = 'attachments'")["c"]
+
+
+def test_kart_aciklamasi_jsonb_ye_yazilir_ve_ekranda_gorunur(client):
+    card = make_card(client, "media")
+    r = client.patch(f"/card/{card['id']}",
+                     data={"title": "Medya eki", "description": "Sözleşme taslağı, 2. sayfa"})
+    assert r.status_code == 200
+    assert cards.get(card["id"])["data"]["description"] == "Sözleşme taslağı, 2. sayfa"
+    sayfa = client.get(f"/tasks/{card['item_id']}").text
+    assert "Sözleşme taslağı, 2. sayfa" in sayfa
+
+
+def test_sohbette_aciklama_kutusu_YOK(client):
+    """Her balonun altina bir metin kutusu koymak akisi gurultulendiriyordu."""
+    item = item_of("Bütçe onayı")
+    sayfa = client.get(f"/tasks/{item['id']}").text
+    assert "bacik-form" not in sayfa
+    assert "/caption" not in sayfa
+
+
+# --- alintili yanit (goc 014) ---------------------------------------------
+
+
+def son_mesaj(item_id):
+    return db.q1("select * from events where subject_type='item' and subject_id=%s"
+                 " and event_type='message' order by created_at desc limit 1", (item_id,))
+
+
+def test_yanit_ALINTI_tasir_anma_DEGIL(client):
+    """Ilk uygulama "yanitla"yi anmanin kisayoli yapmisti: govdeye "@ad "
+    yaziyordu. Istenen o degildi — yanitlanan mesajin KENDISI balonun icinde
+    gorunmeli, kime cevap verildigi metinden degil YAPIDAN okunmali."""
+    item = item_of("Bütçe onayı")
+    client.post(f"/item/{item['id']}/message", data={"body": "asıl mesaj"})
+    hedef = son_mesaj(item["id"])
+
+    r = client.post(f"/item/{item['id']}/message",
+                    data={"body": "cevabım", "reply_to": str(hedef["id"])})
+    assert r.status_code == 200
+    yanit = son_mesaj(item["id"])
+    assert yanit["reply_to_id"] == hedef["id"]
+    # Govdeye hicbir sey enjekte EDILMEDI.
+    assert yanit["body"] == "cevabım"
+    # Donen balon alintiyi zaten tasiyor (htmx onu dogrudan akisa ekliyor).
+    assert "asıl mesaj" in r.text and "alinti" in r.text
+
+
+def test_BASKA_konunun_mesaji_alintilanamaz(client):
+    """Alinti, okuyanin gormeye yetkili olmadigi bir metni balonun icinde
+    tasiyabilirdi — yetki konunun kendisinde kontrol ediliyor, alinti o kapiyi
+    delmemeli. Gecersiz hedef sessizce duz mesaja duser."""
+    a, b = item_of("Bütçe onayı"), item_of("Sevkiyat")
+    client.post(f"/item/{a['id']}/message", data={"body": "A kaydındaki gizli satır"})
+    yabanci = son_mesaj(a["id"])
+
+    r = client.post(f"/item/{b['id']}/message",
+                    data={"body": "sızdırma denemesi", "reply_to": str(yabanci["id"])})
+    assert r.status_code == 200
+    assert son_mesaj(b["id"])["reply_to_id"] is None
+    assert "A kaydındaki gizli satır" not in r.text
+
+
+def test_sistem_olayi_yanitlanamaz(client):
+    """"Durum degisti" satirina cevap verilmiyor; arayuz de dugmeyi orada
+    cizmiyor, uc de kabul etmiyor."""
+    item = item_of("Bütçe onayı")
+    sistem = db.q1("select * from events where subject_type='item' and subject_id=%s"
+                   " and event_type='system' order by created_at limit 1", (item["id"],))
+    assert sistem is not None
+    client.post(f"/item/{item['id']}/message",
+                data={"body": "sisteme cevap", "reply_to": str(sistem["id"])})
+    assert son_mesaj(item["id"])["reply_to_id"] is None
+
+
+def test_gecersiz_reply_to_400_DEGIL_sessizce_duz_mesaj(client):
+    """Yanit hedefi bozuksa mesaj GITMELI: kullanicinin yazdigi metin bir
+    kimlik hatasi yuzunden kaybolmamali."""
+    item = item_of("Bütçe onayı")
+    r = client.post(f"/item/{item['id']}/message",
+                    data={"body": "bozuk hedef", "reply_to": "abc-not-a-uuid"})
+    assert r.status_code == 200
+    assert son_mesaj(item["id"])["body"] == "bozuk hedef"
+
+
+def test_akista_alinti_EK_SORGU_OLMADAN_cozulur(client):
+    """Hedef ayni konunun olayi olmak zorunda, yani feed_of'un zaten cektigi
+    satirlarin icinde — ikinci bir select atmak elimizdekini tekrar istemek."""
+    item = item_of("Bütçe onayı")
+    client.post(f"/item/{item['id']}/message", data={"body": "kök mesaj"})
+    hedef = son_mesaj(item["id"])
+    client.post(f"/item/{item['id']}/message",
+                data={"body": "dallanan cevap", "reply_to": str(hedef["id"])})
+
+    akis = service.feed_of("item", item["id"], user("Efe"))
+    yanit = next(m for m in akis if m["body"] == "dallanan cevap")
+    assert yanit["reply"]["body"] == "kök mesaj"
+    assert yanit["reply"]["id"] == hedef["id"]
+    assert yanit["reply"]["author_name"]
+
+
+def test_govdesiz_gorsel_mesaji_alintida_bos_kalmaz(client, tmp_path, monkeypatch):
+    """Yalniz gorselli bir mesaj alintilaninca bos bir kutu gorunmemeli."""
     import io
     from PIL import Image
     from shared import attachments, config
 
     monkeypatch.setattr(config, "MEDIA_ROOT", str(tmp_path))
     attachments.sync_volume()
-
     buf = io.BytesIO()
     Image.new("RGB", (40, 30), (20, 160, 90)).save(buf, format="PNG")
-    db.x("update users set is_admin = true where id = %s", (user("Efe")["id"],))
-    item = item_of("Bütçe onayı")
-    r = client.post(f"/item/{item['id']}/message", data={"body": "ek denemesi"},
-                    files={"image": ("a.png", buf.getvalue(), "image/png")})
-    assert r.status_code == 200
-    row = db.q1("select * from attachments where deleted_at is null"
-                " order by created_at desc limit 1")
 
-    attachments.set_caption(row, "  Sözleşme taslağı  ")
-    assert db.q1("select caption from attachments where id = %s",
-                 (row["id"],))["caption"] == "Sözleşme taslağı"
-    attachments.set_caption(row, "   ")
-    assert db.q1("select caption from attachments where id = %s",
-                 (row["id"],))["caption"] is None
+    item = item_of("Bütçe onayı")
+    client.post(f"/item/{item['id']}/message", data={"body": ""},
+                files={"image": ("a.png", buf.getvalue(), "image/png")})
+    gorselli = son_mesaj(item["id"])
+    assert (gorselli["body"] or "") == ""
+
+    client.post(f"/item/{item['id']}/message",
+                data={"body": "görsele cevap", "reply_to": str(gorselli["id"])})
+    akis = service.feed_of("item", item["id"], user("Efe"))
+    yanit = next(m for m in akis if m["body"] == "görsele cevap")
+    assert yanit["reply"]["body"] == "📷 Görsel"
+
+
+def test_uzun_govde_alintida_kirpilir(client):
+    item = item_of("Bütçe onayı")
+    uzun = "x" * 400
+    client.post(f"/item/{item['id']}/message", data={"body": uzun})
+    hedef = son_mesaj(item["id"])
+    client.post(f"/item/{item['id']}/message",
+                data={"body": "kısa cevap", "reply_to": str(hedef["id"])})
+    akis = service.feed_of("item", item["id"], user("Efe"))
+    yanit = next(m for m in akis if m["body"] == "kısa cevap")
+    assert len(yanit["reply"]["body"]) <= service.QUOTE_LIMIT
+    assert yanit["reply"]["body"].endswith("…")

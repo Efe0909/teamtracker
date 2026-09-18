@@ -60,8 +60,13 @@ SIGNUP: dict[str, dict[str, str]] = {
 
 # Tur basina serbest alanlar: (anahtar, etiket, html input turu).
 # Sablon bunu okur; alan eklemek sablonu degil bu sozlugu degistirir.
+# Aciklama EKTE DEGIL KARTTA (goc 015). Ekin kendi anlatimi zaten ETIKET
+# (goc 010); her gorselin altina ikinci bir serbest metin kutusu koymak "bu ne
+# hakkinda" sorusunu iki yerden cevaplatiyordu. Kart bir blok, icindeki
+# gorseller o blogun parcasi — aciklama bloga ait ve buraya bir satir eklemek
+# hem jsonb'yi hem duzenleme dialogunu kendiliginden halleder.
 FIELDS: dict[str, list[tuple[str, str, str]]] = {
-    "media": [],
+    "media": [("description", "Açıklama", "textarea")],
     "meeting": [("when", "Tarih ve saat", "datetime-local"),
                 ("place", "Yer", "text"),
                 # Toplanti artik cogu zaman uzaktan: baglanti yeri "Yer"in
@@ -221,8 +226,7 @@ def of_item(item_id, user) -> list[dict]:
         data = dict(r["data"] or {})
         media = [{"id": m["id"], "mime": m["mime"], "width": m["width"], "height": m["height"],
                   "original_name": m["original_name"], "deleted": m["deleted_at"] is not None,
-                  "caption": m["caption"], "can_delete": attachments.can_delete(user, m),
-                  "can_caption": attachments.can_caption(user, m), "can_tag": False, "tags": []}
+                  "can_delete": attachments.can_delete(user, m), "can_tag": False, "tags": []}
                  for m in media_by_card.get(r["id"], [])]
         # Katilim seridi sablona HAZIR gelir: "ben ne dedim" ve "kimler var"
         # sorularinin ikisi de burada cevaplanir, sablon satir suzmez.

@@ -321,24 +321,6 @@ def can_delete(user, attachment) -> bool:
     return db.as_bool(user["is_admin"]) or attachment["uploader_id"] == user["id"]
 
 
-def can_caption(user, attachment) -> bool:
-    """Açıklama yazma: yükleyen ya da admin — silmeyle AYNI kural (goç 013).
-
-    Etiketten (can_tag) bilerek ayrı: etiket paylaşılan bir sözlüğe yazar ve
-    o yüzden `tag_media` kapsamı ister; açıklama yalnız o eke ait, onu koyan
-    da onu yükleyendir. Etiketle aynı kapıya bağlansaydı kendi görseline
-    açıklama yazmak için ayrı bir yetki istemek gerekirdi.
-    """
-    return can_delete(user, attachment)
-
-
-def set_caption(attachment, text: str | None) -> None:
-    """Açıklamayı yazar; boş metin açıklamayı KALDIRIR (null), boş dizgi değil —
-    "açıklama yok" ile "açıklama boş" ayrı şeyler olmasın."""
-    db.x("update attachments set caption = %s where id = %s",
-         ((text or "").strip() or None, attachment["id"]))
-
-
 def _participates_in_item(user, item_id) -> bool:
     item_id = db.uid(item_id)
     if item_id is None:

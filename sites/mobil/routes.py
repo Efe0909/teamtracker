@@ -315,7 +315,7 @@ async def post_message(request: Request, item_id: str):
     if not auth.can_edit_item(user, item, service.TREE):
         raise HTTPException(403, "bu kartta yetkin yok")
     attachment = service.save_upload(image)
-    m = add_message(user, item, body, attachment)
+    m = add_message(user, item, body, attachment, reply_to=form.get("reply_to"))
     if m is None:
         return HTMLResponse("")
     return render(request, "ortak/mesaj.html", {"m": m})

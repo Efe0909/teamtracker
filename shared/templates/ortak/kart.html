@@ -75,31 +75,24 @@
   {% endif %}
 
   {% if c.has_media %}
+  {# Kartin aciklamasi (goc 015): blogun tamamini anlatir. Ek BASINA aciklama
+     YOK — ekin kendi anlatimi etiket (goc 010), ikisi ayni isi yapmasin.
+     Duzenleme dialogu bu alani cards.FIELDS'ten kendiliginden ciziyor. #}
+  {% if c.data.description %}<div class="kmetin">{{ c.data.description }}</div>{% endif %}
   <div class="kgorseller">
     {% for media in c.media %}
     {# Tam ekran goruntuleyici: /media/{id} ham dosyayi ACIYORDU (yeni sekmede
        ciplak bir resim, geri donus yok). data-lightbox ile sayfa icinde acilir;
-       JS yoksa href hala calisir — ilerlemeli iyilestirme. #}
-    <div class="kgorsel-kutu">
-      <a class="kgorsel" href="/media/{{ media.id }}" data-lightbox
-         data-caption="{{ media.caption or '' }}"
-         target="_blank" rel="noopener noreferrer">
-        <img src="/media/{{ media.id }}/thumb" loading="lazy"
-             alt="{{ media.caption or media.original_name or 'Kart görseli' }}">
-        {% if media.caption %}<span class="kgacik">{{ media.caption }}</span>{% endif %}
-      </a>
-      {# Aciklama yazma kart gorselinde de var, yalniz sohbet balonunda degil:
-         gorseli buraya asan kisi onu burada adlandirmak ister. Ayni uc, ayni
-         yetki (attachments.can_caption) — yalnizca hedef parca farkli. #}
-      {% if media.can_caption %}
-      <form class="bacik-form" hx-post="/media/{{ media.id }}/caption"
-            hx-target="#kartlar" hx-swap="outerHTML">
-        <input type="text" name="caption" value="{{ media.caption or '' }}"
-               maxlength="200" autocomplete="off" placeholder="açıklama…">
-        <button type="submit" title="Açıklamayı kaydet">✓</button>
-      </form>
-      {% endif %}
-    </div>
+       JS yoksa href hala calisir — ilerlemeli iyilestirme.
+
+       Alinti metni KARTIN aciklamasi: gorseller bu blogun parcasi, hepsi ayni
+       seyi anlatiyor. Ek basina metin yok (goc 015). #}
+    <a class="kgorsel" href="/media/{{ media.id }}" data-lightbox
+       data-caption="{{ c.data.description or '' }}"
+       target="_blank" rel="noopener noreferrer">
+      <img src="/media/{{ media.id }}/thumb" loading="lazy"
+           alt="{{ media.original_name or 'Kart görseli' }}">
+    </a>
     {% else %}
     <div class="empty small" style="padding:4px">Henüz görsel yok.</div>
     {% endfor %}

@@ -4,7 +4,7 @@
 {% if m.type == 'system' %}
   <div class="sys">{{ m.body }} · {{ m.time }}</div>
 {% else %}
-  <div class="msg{% if m.mine %} me{% endif %}">
+  <div class="msg{% if m.mine %} me{% endif %}" id="olay-{{ m.id }}">
     {% if not m.mine and m.author %}
     <span class="avw{% if online(m.author) %} on{% endif %}">
       <span class="av" style="background:{{ m.author.color }}">{{ m.author.name[0] }}</span>
@@ -12,6 +12,19 @@
     {% endif %}
     <div class="bub">
       {% if not m.mine and m.author %}<div class="nm">{{ m.author.name }}</div>{% endif %}
+
+      {# ALINTI: yanitlanan mesaj balonun icinde. Anmadan AYRI bir sey —
+         anma "kime haber gitsin", yanit "hangi mesaja cevap" (goc 014).
+         Baglanti akistaki asil balona ziplar (#olay-<id>); o balon hala
+         akista, cunku yanit hedefi ayni konunun olayi olmak zorunda. #}
+      {% if m.reply %}
+      <a class="alinti" href="#olay-{{ m.reply.id }}"
+         {% if m.reply.color %}style="border-left-color:{{ m.reply.color }}"{% endif %}>
+        <b class="alinti-kim">{{ m.reply.author_name }}</b>
+        <span class="alinti-metin">{{ m.reply.body }}</span>
+      </a>
+      {% endif %}
+
       {{ m.body | mention }}
       {% for media in m.media %}
         {% if media.deleted %}
@@ -22,12 +35,11 @@
              bir resim, geri donus yok, aciklama ve etiket gorunmez. data-lightbox
              sayfa icinde acar; JS yoksa href hala calisir (ilerlemeli iyilestirme). #}
           <a href="/media/{{ media.id }}" data-lightbox
-             data-caption="{{ media.caption or '' }}"
              target="_blank" rel="noopener noreferrer">
             <img class="bimg" src="/media/{{ media.id }}/thumb"
                  {% if media.width %}width="{{ media.width }}"{% endif %}
                  {% if media.height %}height="{{ media.height }}"{% endif %}
-                 loading="lazy" alt="{{ media.caption or media.original_name or 'Ek görsel' }}">
+                 loading="lazy" alt="{{ media.original_name or 'Ek görsel' }}">
           </a>
           {% if media.can_delete %}
           <button type="button" class="mdel" title="Görseli sil"
@@ -35,31 +47,29 @@
                   hx-target="closest .msg" hx-swap="outerHTML"
                   hx-confirm="Bu görseli silmek istediğine emin misin?">🗑</button>
           {% endif %}
-          {# Aciklama ETIKETTEN ayri (goc 013): etiket paylasilan sozlukten gelir
-             ve aranir, aciklama yalniz bu eke aittir. Yazma yetkisi de ayri —
-             yukleyen kendi gorseline etiket kapsami olmadan aciklama yazabilir. #}
-          {% if media.caption %}<div class="bacik">{{ media.caption }}</div>{% endif %}
-          {% if media.can_caption %}
-          <form class="bacik-form" hx-post="/media/{{ media.id }}/caption"
-                hx-target="closest .msg" hx-swap="outerHTML">
-            <input type="text" name="caption" value="{{ media.caption or '' }}"
-                   maxlength="200" autocomplete="off" placeholder="açıklama ekle…">
-            <button type="submit" title="Açıklamayı kaydet">✓</button>
-          </form>
-          {% endif %}
+          {# Sohbetteki gorselin anlatimi ETIKET (goc 010). Aciklama kutusu
+             BILEREK YOK: her balonun altina ikinci bir metin kutusu koymak
+             akisi gurultulendiriyordu ve etiketle ayni isi yapiyordu. #}
           {% include "ortak/tag_strip.html" %}
         </div>
         {% endif %}
       {% endfor %}
       <div class="ts">
-        {# Yanit: ayri bir yanit tablosu ACMAZ — govdeye yazarin @anahtarini
-           koyar ve odagi kompozere verir. Anma zaten hedefi katilimci
-           kumesinden her seferinde cozuyor (KNOW-263), yani "yanit" burada
-           zaten var olan mekanizmanin kisayolu; ikinci bir gercek kurulmuyor. #}
-        {% if not m.mine and m.handle %}
-        <button type="button" class="ryanit" data-reply="{{ m.handle }}"
-                title="{{ m.author.name }} kişisine yanıt ver">↩ Yanıtla</button>
-        {% endif %}
+        {# Yanit ALINTILI: dugme kompozerin ustunde bir serit kurar, gonderim
+           reply_to tasir ve yeni balon alintiyi icinde cizer.
+
+           Ilk uygulama bunu anmanin kisayoli yapmisti (govdeye "@ad " yazip
+           odagi veriyordu) — kullanicinin istedigi o degildi: yanitlanan
+           mesajin KENDISI gorunmeli, kime cevap verildigi metinden degil
+           yapidan okunmali.
+
+           Kendi mesajina da yanit verilebilir; sistem olaylarinda dugme hic
+           cizilmez (bu dal zaten m.type == 'message' icinde). #}
+        <button type="button" class="ryanit" data-reply="{{ m.id }}"
+                data-reply-name="{{ m.author.name if m.author else 'Bilinmeyen' }}"
+                data-reply-body="{{ m.body or ('📷 Görsel' if m.media else '—') }}"
+                {% if m.author and m.author.color %}data-reply-color="{{ m.author.color }}"{% endif %}
+                title="Bu mesajı yanıtla">↩ Yanıtla</button>
         {{ m.time }}
       </div>
     </div>

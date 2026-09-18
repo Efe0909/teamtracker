@@ -311,7 +311,7 @@ async def post_message(request: Request, item_id: str):
     if not auth.can_edit_item(user, item, service.TREE):
         raise HTTPException(403, "bu kartta yetkin yok")
     attachment = service.save_upload(image)
-    m = add_message(user, item, body, attachment)
+    m = add_message(user, item, body, attachment, reply_to=form.get("reply_to"))
     if m is None:
         return HTMLResponse("")
     return render(request, "ortak/mesaj.html", {"m": m})
@@ -403,7 +403,7 @@ async def post_team_message(request: Request, team_id: str):
     if not auth.can_post_team(user, team["id"]):
         raise HTTPException(403, "bu takımın üyesi değilsin")
     attachment = service.save_upload(image)
-    m = service.add_team_message(user, team, body, attachment)
+    m = service.add_team_message(user, team, body, attachment, reply_to=form.get("reply_to"))
     if m is None:
         return HTMLResponse("")
     return render(request, "ortak/mesaj.html", {"m": m})

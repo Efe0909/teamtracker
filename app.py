@@ -453,30 +453,6 @@ def remove_media_tag(request: Request, attachment_id: str, tag_id: str):
     return _tag_strip(request, row)
 
 
-@app.post("/media/{attachment_id}/caption", response_class=HTMLResponse)
-async def set_media_caption(request: Request, attachment_id: str):
-    """Ekin aciklamasi (goc 013). Yetki: yukleyen ya da admin (can_caption).
-
-    Yanit, ekin ASILI OLDUGU seye gore degisir: akistaki bir gorsel balonu
-    yeniden cizilir, kart blogundaki gorsel kart seridini tazeler. Tek bir
-    sablon dondurulseydi biri digerinin yerine yanlis parcayi basardi.
-    """
-    user = auth.current_user(request)
-    row = _attachment_or_404(attachment_id)
-    if not attachments.can_caption(user, row):
-        raise HTTPException(403, "bu ekin açıklamasını değiştirme yetkin yok")
-    form = await request.form()
-    attachments.set_caption(row, str(form.get("caption") or ""))
-    if row["owner_type"] == "card":
-        card = _card_or_404(str(row["owner_id"]))
-        item = service.get_item(card["item_id"])
-        return _blocks(request, item, user, "ortak/kartlar.html")
-    m = service.event_message(row["owner_id"], user)
-    if m is None:
-        return HTMLResponse("")
-    return _MEDIA_TPL.TemplateResponse(request, "ortak/mesaj.html", {"m": m})
-
-
 @app.post("/settings/notify")
 async def set_notify_level(request: Request):
     """Varsayilan bildirim tercihi (goc 013). Iki yuzde de ayni uc.

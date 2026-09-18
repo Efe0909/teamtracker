@@ -61,7 +61,7 @@ document.body.addEventListener("click", function (e) {
 document.body.addEventListener("htmx:afterRequest", function (e) {
   if ((e.detail.requestConfig?.verb || "").toLowerCase() === "get") return;
   var f = e.target.closest("form");
-  if (f && e.detail.successful) { f.reset(); ekTemizle(f); }
+  if (f && e.detail.successful) { f.reset(); ekTemizle(f); yanitTemizle(f); }
 });
 
 /* --- mobil sohbet sayfasi (sag alt balon) ------------------------------
@@ -81,29 +81,71 @@ document.body.addEventListener("click", function (e) {
   }
 });
 
-/* --- yanit dugmesi (ortak/mesaj.html) -----------------------------------
-   Ayri bir yanit tablosu ACMAZ: govdeye yazarin @anahtarini koyup odagi
-   kompozere verir. Anma zaten hedefi katilimci kumesinden her seferinde
-   cozuyor (KNOW-263) — yanit o mekanizmanin kisayolu, ikinci bir gercek degil.
+/* --- alintili yanit (ortak/mesaj.html + ortak/yanit_serit.html) ---------
+   ILK UYGULAMA YANLISTI: dugme govdeye "@ad " yaziyordu, yani anmanin
+   kisayoluydu. Istenen o degil — yanitlanan mesajin KENDISI yeni balonun
+   icinde alinti olarak gorunmeli (WhatsApp/Telegram kalibi, goc 014).
 
-   Kompozer BU BALONUN yakinindan bulunur, sayfadaki ilk kutudan degil: mobilde
-   sohbet ayri bir sayfa (.sheet), masaustunde sag sutun — "en yakin form"
-   ikisinde de dogru cevabi veriyor, yerlesimi bilmeye gerek kalmiyor. */
+   Burasi yalnizca KOMPOZERIN durumunu kuruyor: hangi olaya cevap verildigi
+   gizli bir alanda (reply_to), serit de onu gosteriyor. Alintinin kendisini
+   sunucu ciziyor — istemcinin urettigi bir HTML akisa girmiyor.
+
+   Kompozer BU BALONUN yakinindan bulunuyor, sayfadaki ilk formdan degil:
+   mobilde sohbet ayri bir sayfa (.sheet), masaustunde sag sutun, takim
+   duvarinda ayri bir form. "En yakin kok" ucunde de dogru cevabi veriyor. */
+function yanitSeridi(el) {
+  var kok = el.closest(".sheet") || el.closest(".ksag") || document;
+  return kok.querySelector(".yserit") || document.querySelector(".yserit");
+}
+
+function yanitTemizle(kap) {
+  (kap || document).querySelectorAll(".yserit").forEach(function (y) {
+    y.hidden = true;
+    y.querySelector("input[name=reply_to]").value = "";
+    y.querySelector(".yserit-kim").textContent = "";
+    y.querySelector(".yserit-metin").textContent = "";
+    y.style.removeProperty("border-left-color");
+  });
+}
+
 document.body.addEventListener("click", function (e) {
   var b = e.target.closest("[data-reply]");
   if (!b) return;
   e.preventDefault();
-  var kok = b.closest(".sheet") || b.closest(".ksag") || document;
-  var kutu = kok.querySelector("input[name=body]")
-          || document.querySelector("input[name=body]");
-  if (!kutu || kutu.disabled) return;
-  var etiket = "@" + b.getAttribute("data-reply") + " ";
-  /* Ayni kisiye iki kez basmak etiketi iki kez yazmasin. */
-  if (kutu.value.indexOf(etiket) === -1) {
-    kutu.value = etiket + kutu.value.replace(/^\s+/, "");
-  }
+  var serit = yanitSeridi(b);
+  if (!serit) return;
+  var form = serit.closest("form");
+  var kutu = form && form.querySelector("input[name=body]");
+  if (!kutu || kutu.disabled) return;          // yazma yetkisi yoksa yanit da yok
+
+  serit.querySelector("input[name=reply_to]").value = b.getAttribute("data-reply");
+  serit.querySelector(".yserit-kim").textContent = b.getAttribute("data-reply-name") || "";
+  serit.querySelector(".yserit-metin").textContent = b.getAttribute("data-reply-body") || "";
+  var renk = b.getAttribute("data-reply-color");
+  if (renk) serit.style.borderLeftColor = renk;
+  serit.hidden = false;
   kutu.focus();
-  kutu.setSelectionRange(kutu.value.length, kutu.value.length);
+});
+
+document.body.addEventListener("click", function (e) {
+  var x = e.target.closest("[data-reply-cancel]");
+  if (x) { e.preventDefault(); yanitTemizle(x.closest("form")); }
+});
+
+/* Alintiya tiklayinca asil mesaja ziplanir. Baglanti zaten #olay-<id>'ye
+   gidiyor ama akis kendi icinde kayan bir kutu: tarayicinin ziplamasi
+   sessiz kaliyor, kullanici "bir sey olmadi" saniyor. Kisa bir vurgu
+   nereye gidildigini soyluyor. */
+document.body.addEventListener("click", function (e) {
+  var a = e.target.closest("a.alinti");
+  if (!a) return;
+  var hedef = document.getElementById(a.getAttribute("href").slice(1));
+  if (!hedef) return;                          // akista degil (olmamali ama)
+  e.preventDefault();
+  hedef.scrollIntoView({ block: "center", behavior: "smooth" });
+  hedef.classList.remove("vurgu");
+  void hedef.offsetWidth;                      // animasyonu yeniden baslat
+  hedef.classList.add("vurgu");
 });
 
 /* --- tam ekran gorsel (lightbox) ----------------------------------------

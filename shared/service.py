@@ -505,7 +505,7 @@ def get_item(item_id):
 
 
 def log(subject_id: str, etype: str, author_id: str | None, body: str,
-        subject_type: str = "item"):
+        subject_type: str = "item", reply_to=None):
     """Olay yaz, ID'sini dondurur.
 
     Donus degeri gerekli: bir eke sahip mesajda attachments.attach() owner_id
@@ -513,10 +513,31 @@ def log(subject_id: str, etype: str, author_id: str | None, body: str,
     olayin id'si elde olmali.
     """
     event_id = db.new_id()
-    db.x("insert into events (id,subject_type,subject_id,event_type,author_id,body,created_at)"
-         " values (%s,%s,%s,%s,%s,%s,%s)",
-         (event_id, subject_type, subject_id, etype, author_id, body, db.now()))
+    db.x("insert into events (id,subject_type,subject_id,event_type,author_id,body,"
+         "created_at,reply_to_id) values (%s,%s,%s,%s,%s,%s,%s,%s)",
+         (event_id, subject_type, subject_id, etype, author_id, body, db.now(),
+          valid_reply_target(subject_type, subject_id, reply_to)))
     return event_id
+
+
+def valid_reply_target(subject_type: str, subject_id, reply_to):
+    """Yanitlanan olayin kimligi — gecersizse None (yanit sessizce duz mesaj olur).
+
+    AYNI KONUNUN olayi olmak ZORUNDA: yoksa bir karttaki mesaj baska bir
+    kartin (ya da bir takim duvarinin) mesajini alintilayabilirdi ve alinti,
+    okuyanin gormeye yetkili olmadigi bir metni balonun icinde tasirdi.
+    Yetki kontrolu konunun kendisinde yapiliyor; alinti o kapiyi delmemeli.
+
+    Sistem olaylari da yanitlanamaz — "durum degisti" satirina cevap
+    verilmiyor, arayuz de dugmeyi orada cizmiyor.
+    """
+    target = db.uid(reply_to) if reply_to else None
+    if target is None:
+        return None
+    row = db.q1("select id from events where id = %s and subject_type = %s"
+                " and subject_id = %s and event_type = 'message'",
+                (target, subject_type, db.uid(subject_id)))
+    return row["id"] if row else None
 
 
 # --- medya ekleri (sozlesme §7-8, genis sahiplik CONTRACT-V2.md §4) --------
@@ -586,8 +607,7 @@ def _media_view(rows: list[dict], user, tags_by_id: dict, can_tag: bool) -> list
     """
     return [{"id": r["id"], "mime": r["mime"], "width": r["width"], "height": r["height"],
              "original_name": r["original_name"], "deleted": r["deleted_at"] is not None,
-             "caption": r["caption"], "can_delete": attachments.can_delete(user, r),
-             "can_caption": attachments.can_caption(user, r),
+             "can_delete": attachments.can_delete(user, r),
              "can_tag": can_tag, "tags": tags_by_id.get(r["id"], [])} for r in rows]
 
 
@@ -602,6 +622,30 @@ def _tag_context(rows: list[dict], user) -> tuple[dict, bool]:
     if not rows:
         return {}, False
     return attachments.tags_for([r["id"] for r in rows]), attachments.can_tag(user, rows[0])
+
+
+# Alintida gosterilecek en fazla karakter. Balon alintinin ustune cikmamali:
+# yanit yeni sey soyler, alinti yalnizca "neye cevap" sorusunu cevaplar.
+QUOTE_LIMIT = 120
+
+
+def _quote(event, users: dict, has_media: bool = False) -> dict | None:
+    """Bir olayin ALINTI bicimi — yanit balonunun icinde gorunen kutu.
+
+    Govdesi olmayan (yalniz gorselli) mesaj bos bir alinti birakmasin:
+    "📷 Görsel" yazar. Ayni yedek service.last_line'da da var.
+    """
+    if event is None:
+        return None
+    author = users.get(event["author_id"])
+    body = (event["body"] or "").strip().replace("\n", " ")
+    if not body:
+        body = "📷 Görsel" if has_media else "—"
+    if len(body) > QUOTE_LIMIT:
+        body = body[:QUOTE_LIMIT - 1] + "…"
+    return {"id": event["id"], "body": body,
+            "author_name": author["name"] if author else "Bilinmeyen",
+            "color": author["color"] if author else None}
 
 
 def feed_of(subject_type: str, subject_id, user) -> list[dict]:
@@ -619,15 +663,18 @@ def feed_of(subject_type: str, subject_id, user) -> list[dict]:
     # Etiketler ve etiketleme yetkisi de TEK sefer, akisin tamami icin.
     flat = [r for rs in media_by_event.values() for r in rs]
     tags_by_id, can_tag = _tag_context(flat, user)
+    # Alinti icin EK SORGU YOK: yanit hedefi AYNI konunun olayi olmak zorunda
+    # (valid_reply_target), yani zaten `rows` icinde. Ikinci bir select atmak
+    # elimizdeki satirlari veritabanindan tekrar istemek olurdu.
+    by_id = {e["id"]: e for e in rows}
     out = []
     for e in rows:
         a = users.get(e["author_id"])
+        hedef = by_id.get(e["reply_to_id"]) if e["reply_to_id"] else None
         out.append({"id": e["id"], "type": e["event_type"], "body": e["body"], "author": a,
                     "mine": a is not None and a["id"] == user["id"],
-                    # Yanit dugmesi (ortak/mesaj.html) yazari @anahtariyla
-                    # cagirir; anahtar mentions.handle ile uretilir ki
-                    # cozumleme tarafiyla ayni katlamayi kullansin.
-                    "handle": mentions.handle(a["name"]) if a else None,
+                    "reply": _quote(hedef, users,
+                                    bool(media_by_event.get(hedef["id"]))) if hedef else None,
                     "time": short_time(e["created_at"]),
                     "media": _media_view(media_by_event.get(e["id"], []), user,
                                          tags_by_id, can_tag)})
@@ -649,14 +696,21 @@ def event_message(event_id, user) -> dict | None:
     media_by_event = attachments.for_owners("event", [e["id"]])
     rows = media_by_event.get(e["id"], [])
     tags_by_id, can_tag = _tag_context(rows, user)
+    # feed_of'un aksine burada hedef elde degil: tek olay ciziliyor, TEK ek
+    # sorgu (events_reply_idx uzerinden).
+    hedef = db.q1("select * from events where id = %s", (e["reply_to_id"],)) \
+        if e["reply_to_id"] else None
     return {"id": e["id"], "type": e["event_type"], "body": e["body"], "author": a,
             "mine": a is not None and a["id"] == user["id"],
-            "handle": mentions.handle(a["name"]) if a else None,
+            "reply": _quote(hedef, users,
+                            bool(attachments.for_owners("event", [hedef["id"]])))
+                     if hedef else None,
             "time": short_time(e["created_at"]),
             "media": _media_view(rows, user, tags_by_id, can_tag)}
 
 
-def add_message(user, item, body: str, attachment: dict | None = None) -> dict | None:
+def add_message(user, item, body: str, attachment: dict | None = None,
+                reply_to=None) -> dict | None:
     """Mesaj yaz, istege bagli TEK ekle. Yetki cagiran ucta kontrol edilir.
 
     attachment, media.save()'in ciktisidir — olay ve ek satiri ayni mantiksal
@@ -670,7 +724,7 @@ def add_message(user, item, body: str, attachment: dict | None = None) -> dict |
     if not body and not attachment:
         return None
     mentions.join(item["id"], user["id"], user["id"])
-    event_id = log(item["id"], "message", user["id"], body)
+    event_id = log(item["id"], "message", user["id"], body, reply_to=reply_to)
     saved = attachments.attach("event", event_id, user["id"], attachment) if attachment else None
     db.x("update items set updated_at = %s where id = %s", (db.now(), item["id"]))
     pinged = mentions.resolve("item", item["id"], body, user, item=item)
@@ -679,12 +733,24 @@ def add_message(user, item, body: str, attachment: dict | None = None) -> dict |
                         url=mentions.mention_url("item", item["id"]),
                         tag=f"item-{item['id']}")
     return {"id": event_id, "type": "message", "body": body, "author": user, "mine": True,
-            "handle": mentions.handle(user["name"]),
+            "reply": _quote_of(event_id, users_by_id()),
             "time": short_time(db.now()),
             "media": _media_view([saved], user, *_tag_context([saved], user)) if saved else []}
 
 
-def add_team_message(user, team, body: str, attachment: dict | None = None) -> dict | None:
+def _quote_of(event_id, users: dict) -> dict | None:
+    """Yeni yazilan mesajin alintisi. Balon htmx ile DOGRUDAN akisa ekleniyor
+    (hx-swap=beforeend), yani sayfa yenilenmiyor — alinti burada kurulmazsa
+    kullanici kendi yanitini alintisiz gorur ve gitmedi saniyordu."""
+    row = db.q1("select reply_to_id from events where id = %s", (event_id,))
+    if row is None or row["reply_to_id"] is None:
+        return None
+    hedef = db.q1("select * from events where id = %s", (row["reply_to_id"],))
+    return _quote(hedef, users, bool(attachments.for_owners("event", [row["reply_to_id"]])))
+
+
+def add_team_message(user, team, body: str, attachment: dict | None = None,
+                     reply_to=None) -> dict | None:
     """Takim duvarina mesaj, istege bagli TEK ekle. Yetki cagiran ucta (auth.can_post_team).
 
     Kartin aksine `updated_at` dokunulmaz: takimin "son hareket"i diye bir
@@ -693,7 +759,8 @@ def add_team_message(user, team, body: str, attachment: dict | None = None) -> d
     body = body.strip()
     if not body and not attachment:
         return None
-    event_id = log(team["id"], "message", user["id"], body, subject_type="team")
+    event_id = log(team["id"], "message", user["id"], body, subject_type="team",
+                   reply_to=reply_to)
     saved = attachments.attach("event", event_id, user["id"], attachment) if attachment else None
     # Duvarda katilimci kumesi = team_members. Uyelik BURADAN degismez: takim
     # uyeligi ayri bir yonetim isi, bir mesaj onu sessizce genisletmemeli.
@@ -703,7 +770,7 @@ def add_team_message(user, team, body: str, attachment: dict | None = None) -> d
                         url=mentions.mention_url("team", team["id"]),
                         tag=f"team-{team['id']}")
     return {"id": event_id, "type": "message", "body": body, "author": user, "mine": True,
-            "handle": mentions.handle(user["name"]),
+            "reply": _quote_of(event_id, users_by_id()),
             "time": short_time(db.now()),
             "media": _media_view([saved], user, *_tag_context([saved], user)) if saved else []}
 
