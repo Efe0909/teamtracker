@@ -13,7 +13,7 @@ from pathlib import Path
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from shared import auth, db, filters, nodes, pins, scope, service, users
+from shared import auth, cards, db, filters, nodes, pins, scope, service, users
 from shared.config import site_address
 from shared.render import is_htmx, site_templates
 from shared.service import (PRIORITIES, STATUSES, add_message, change_field, get_item,
@@ -171,16 +171,28 @@ def table_ctx(request, user) -> dict:
             "statuses": STATUSES, "priorities": PRIORITIES}
 
 
-def node_options() -> list[dict]:
+def node_options(user=None) -> list[dict]:
     """Yeni kayit formu icin dugum listesi (girintili).
 
     Pasif dugumler cikmaz: pasiflik ILERIYE doniktir, yeni kayit onlara
     baglanmaz (spec/72 §6). Var olan kayitlar etkilenmez.
+
+    KAPSAM DISI DUGUMLER DE CIKMAZ. Liste eskiden butun agaci veriyordu ama
+    service.new_item kapsami zorluyor: kullanici kendi dalinin disindaki bir
+    dugumu seciyor, formu dolduruyor ve gonderince 403 aliyordu — yazdigi her
+    sey de gidiyordu. Mobil form (mobil.routes.new_item_form) bu suzmeyi zaten
+    yapiyordu; iki yuz ayni cevabi versin.
+
+    user=None: cagiran kullaniciyi bilmiyorsa (ya da vermek istemiyorsa) eski
+    davranis — suzme yok. Bugun butun cagiranlar veriyor.
     """
     tree = service.TREE
     ordered = sorted(tree.nodes, key=lambda n: tree.tin[n])
+    scope_id = user["scope_node_id"] if user else None
+    allow_all = user is None or db.as_bool(user["is_admin"])
     return [{"id": n, "name": tree.name(n), "depth": tree.depth[n]}
-            for n in ordered if tree.nodes[n].is_active]
+            for n in ordered if tree.nodes[n].is_active
+            and (allow_all or (scope_id and tree.is_descendant(n, scope_id)))]
 
 
 def pillar_options() -> list[tuple]:
@@ -203,7 +215,10 @@ def card_ctx(request, item, user) -> dict:
         "creator": users.get(item["created_by"]),
         "team": teams.get(item["team_id"]),
         "teams": list(teams.values()),
-        "team_options": [("", "—")] + [(t["id"], t["name"]) for t in teams.values()],
+        # Ucuncu oge RENK (ortak/alan.choice okur): takim secim dialogunda da
+        # ekranin geri kalanindaki nokta gorunsun — "hangisiydi bu" sorusu her
+        # seferinde yeniden sorulmasin (kullanici istegi).
+        "team_options": [("", "—")] + [(t["id"], t["name"], t["color"]) for t in teams.values()],
         "pillar": service.TREE.name(item["pillar_node_id"]) if item["pillar_node_id"] else None,
         "pillar_options": pillar_options(),
         "participants": [users[p] for p in auth.participant_ids(item["id"]) if p in users],
@@ -254,7 +269,14 @@ def tasks(request: Request, item: str | None = None):
     ctx = {"user": user, "all_users": auth.all_users(), **table_ctx(request, user)}
     if is_htmx(request):
         return render(request, "fragments/tablo.html", ctx)
-    ctx["nodes"] = node_options()
+    ctx["nodes"] = node_options(user)
+    # Kayit acma dialogu takimlari RENKLERIYLE cizer (kullanici istegi):
+    # filtre cubugundaki secenek listesi yalniz (deger, etiket) tasiyor, renk
+    # tasimiyor — bu yuzden ayri ve tam liste.
+    ctx["teams"] = list(service.teams_by_id().values())
+    ctx["pillars"] = [{"id": nid, "name": service.TREE.name(nid)}
+                      for nid in service.TREE.nodes_of_type("pillar")]
+    ctx["card_types"] = cards.CARD_TYPES
     ctx["app_address"] = site_address(request, app_site=True)
     return render(request, "gorevler.html", ctx)
 
@@ -289,7 +311,7 @@ async def post_message(request: Request, item_id: str):
     if not auth.can_edit_item(user, item, service.TREE):
         raise HTTPException(403, "bu kartta yetkin yok")
     attachment = service.save_upload(image)
-    m = add_message(user, item, body, attachment)
+    m = add_message(user, item, body, attachment, reply_to=form.get("reply_to"))
     if m is None:
         return HTMLResponse("")
     return render(request, "ortak/mesaj.html", {"m": m})
@@ -325,6 +347,11 @@ def team_ctx(request, team, user) -> dict:
     today = datetime.now(timezone.utc).date()
     records = [record_row(r, users, today) for r in service.team_items(team["id"])]
     members = service.team_members(team["id"])
+    # "Kim eklenebilir": zaten uye olanlar listede cikmasin — uye ekleme kutusu
+    # rol degistirme kutusuyla ayni uca gidiyor, ama secim listesinde varolan
+    # uyeyi gostermek "ekle" dugmesini "rolu degistir"e cevirirdi ve kullanici
+    # hangisini yaptigini bilmezdi.
+    member_ids = {m["id"] for m in members}
     return {
         "request": request, "user": user, "team": team, "members": members,
         "rows": records, "open": service.team_open_count(team["id"]),
@@ -335,6 +362,7 @@ def team_ctx(request, team, user) -> dict:
         "statuses": STATUSES, "priorities": PRIORITIES,
         "node": service.TREE.name(team["node_id"]) if team["node_id"] else None,
         "can_manage": _can_manage_teams(user),
+        "addable": [u for u in users.values() if u["id"] not in member_ids],
     }
 
 
@@ -358,7 +386,7 @@ def team_page(request: Request, team_id: str):
     team = service.get_team(team_id)
     ctx = team_ctx(request, team, user)
     ctx["all_users"] = auth.all_users()
-    ctx["nodes"] = node_options()
+    ctx["nodes"] = node_options(user)
     ctx["app_address"] = site_address(request, app_site=True)
     return render(request, "takim.html", ctx)
 
@@ -375,7 +403,7 @@ async def post_team_message(request: Request, team_id: str):
     if not auth.can_post_team(user, team["id"]):
         raise HTTPException(403, "bu takımın üyesi değilsin")
     attachment = service.save_upload(image)
-    m = service.add_team_message(user, team, body, attachment)
+    m = service.add_team_message(user, team, body, attachment, reply_to=form.get("reply_to"))
     if m is None:
         return HTMLResponse("")
     return render(request, "ortak/mesaj.html", {"m": m})
@@ -395,6 +423,42 @@ async def rename_team(request: Request, team_id: str):
     return RedirectResponse(f"/teams/{team_id}", status_code=303)
 
 
+def _team_fragment(request, team_id, user) -> HTMLResponse:
+    """Uye seridini tek basina cizer — uyelik uclarinin ortak donusu.
+
+    Uc parcayi birden degil yalniz #uyeler'i doner: rol degistirmek kayit
+    tablosunu ya da duvari ilgilendirmiyor. Duvara dusen sistem olayi bir
+    sonraki yenilemede gorunur; akisi da OOB tazelemek her rol degisiminde
+    butun duvari yeniden cizmek olurdu.
+    """
+    team = service.get_team(team_id)
+    return render(request, "fragments/takim_uyeler.html", team_ctx(request, team, user))
+
+
+@router.post("/team/{team_id}/members", response_class=HTMLResponse)
+def add_team_member(request: Request, team_id: str, user_id: str = Form(...),
+                    role: str = Form("member")):
+    """Uye ekle ya da rolunu degistir (upsert — service.set_team_member)."""
+    user = auth.current_user(request)
+    if not _can_manage_teams(user):
+        raise HTTPException(403, "takım yönetimi yetkisi yok")
+    team = service.get_team(team_id)
+    if not service.set_team_member(team["id"], user_id, role, changed_by=user["id"]):
+        raise HTTPException(400, "üye eklenemedi — kullanıcı ya da rol geçersiz")
+    return _team_fragment(request, team["id"], user)
+
+
+@router.delete("/team/{team_id}/members/{user_id}", response_class=HTMLResponse)
+def drop_team_member(request: Request, team_id: str, user_id: str):
+    user = auth.current_user(request)
+    if not _can_manage_teams(user):
+        raise HTTPException(403, "takım yönetimi yetkisi yok")
+    team = service.get_team(team_id)
+    if not service.remove_team_member(team["id"], user_id, changed_by=user["id"]):
+        raise HTTPException(404, "bu takımda böyle bir üye yok")
+    return _team_fragment(request, team["id"], user)
+
+
 @router.post("/pins/{slug}", response_class=HTMLResponse)
 def toggle_pin(request: Request, slug: str):
     """Panolardaki pin isareti (figure4): modulu raya sabitler ya da birakir."""
@@ -406,12 +470,30 @@ def toggle_pin(request: Request, slug: str):
 
 
 @router.post("/item")
-def create_item(request: Request, node_id: str = Form(...), title: str = Form(...),
-                kind: str = Form("issue"), description: str = Form(""),
-                team_id: str = Form(""), pillar_node_id: str = Form("")):
+async def create_item(request: Request):
+    """Yeni kayit — artik dialogtan, daha dolu bir formla (kullanici istegi).
+
+    Form okumasi Form(...) parametreleriyle DEGIL elle: `card_type` cok degerli
+    (kullanici acilista birden fazla blok isteyebilir) ve FastAPI'nin tekil
+    Form()'u onlardan yalnizca birini gorurdu.
+    """
     user = auth.current_user(request)
-    item_id = new_item(user, node_id, kind, title, description, team_id or None,
-                       pillar_node_id or None)
+    form = await request.form()
+    # Alan formda YOKSA hic gecirilmez: new_item'in nobetcisi devreye girer ve
+    # acan kisi sorumlu olur (eski davranis). VARSA — bos bile olsa —
+    # kullanicinin secimi gecerlidir, yani "sorumlusuz ac" da soylenebiliyor.
+    who = {"assignee_id": form.get("assignee_id")} if "assignee_id" in form else {}
+    item_id = new_item(
+        user, str(form.get("node_id") or ""), str(form.get("kind") or "issue"),
+        str(form.get("title") or ""), str(form.get("description") or ""),
+        str(form.get("team_id") or "") or None,
+        str(form.get("pillar_node_id") or "") or None, **who)
+    # Acilista kart blogu: "google forms gibi" tam formun ilk adimi degil, sadece
+    # bos blogu hazir dogurmak — icerigi kayit sayfasinda doldurulur.
+    item = get_item(item_id)
+    for card_type in form.getlist("card_type"):
+        if cards.valid(str(card_type)):
+            cards.add(item["id"], str(card_type), "", form, user["id"])
     return RedirectResponse(f"/tasks/{item_id}", status_code=303)
 
 
@@ -474,9 +556,15 @@ def _tree_ctx(user) -> dict:
             "type": tree.nodes[nid].node_type,
             "type_label": nodes.label(tree.nodes[nid].node_type),
             "depth": tree.depth[nid],
+            # Katlama ISTEMCIDE (fragments/agac.html): hangi satirin kimin
+            # altinda oldugunu JS bu iki alandan okur, ikinci bir agac kurmaz.
+            "parent": tree.parent.get(nid),
             "is_active": tree.nodes[nid].is_active,
             "has_children": bool(tree.children.get(nid)),
-            "record_count": nodes.counts_of(nid, counts)["records"],
+            # Kayit sayisi DEGIL alt dugum sayisi: agac ekraninda "bu dugumde
+            # kac kayit var" hicbir karari beslemiyordu (kullanici istegi).
+            # Kapali bir dalda "altinda ne kadar var" ise dogrudan isine yarar.
+            "child_count": len(tree.children.get(nid, [])),
             "description": descriptions.get(nid),
             "types": root_types if tree.parent.get(nid) is None else child_types,
             # Projeksiyon satiri olan dugumun turu degismez (spec/72 §6.3).

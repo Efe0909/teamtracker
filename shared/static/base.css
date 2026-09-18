@@ -33,12 +33,21 @@
   .c-crit{background:#fde4e8;color:#d13350}
 
   /* ---- avatar + alan hapı (iki sitede de kart alanlarında) ---- */
+  /* .fld artık bir <button>: hapın TAMAMI tetikleyici (ortak/alan.pill).
+     Eskiden sadece değer bir düğmeydi, etikete basmak hiçbir şey yapmıyordu.
+     text-align/font-weight button varsayılanını geri alır. */
   .fld{display:flex;align-items:center;gap:5px;background:var(--panel);border:1px solid var(--line);
-       border-radius:8px;padding:4px 9px;font-size:12px;cursor:pointer}
+       border-radius:8px;padding:4px 9px;font-size:12px;cursor:pointer;
+       text-align:left;font-weight:400;color:var(--txt);font-family:inherit}
   .fld:hover{border-color:var(--acc-s)}
   .fld .k{color:var(--dim);font-size:11px}
   .fld .v{font-weight:600}
   .who{display:flex;align-items:center;gap:5px}
+  /* Takım rengi noktası. ORTAK, çünkü iki yüz de çiziyor: alan hapları
+     (card_fields / strip) ve seçim dialogları (ortak/alan.choice). Yalnız
+     dashboard.css'te dursaydı mobilde renksiz bir boşluk olurdu. */
+  .tdot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px;
+        flex-shrink:0}
   .av{width:21px;height:21px;border-radius:50%;display:grid;place-items:center;color:#fff;
       font-size:10px;font-weight:700;flex-shrink:0}
   .stack{display:flex}
@@ -61,14 +70,24 @@
       border:1.5px solid var(--panel)}
 
   /* ---- sohbet balonları: mesaj, sistem olayı ---- */
-  .msg{display:flex;gap:9px;max-width:74%}
+  .msg{display:flex;gap:9px;max-width:74%;min-width:0}
   .msg.me{align-self:flex-end;flex-direction:row-reverse}
+  /* min-width:0 ŞART: flex öğesinin varsayılanı min-width:auto, yani içeriğinin
+     altına inmez. Alıntı kutusundaki tek satırlık (nowrap) metin balonu kendi
+     max-content genişliğine çekiyordu ve balon .msg'nin %74'ünü aşıp sütunun
+     dışına taşıyordu. Sıfırlanınca balon daralıyor, taşan metin alıntının
+     kendi ellipsis'ine düşüyor. */
   .bub{background:var(--panel);border:1px solid var(--line);border-radius:15px;padding:8px 13px;
-       box-shadow:var(--sh);border-bottom-left-radius:5px;font-size:13.5px}
+       box-shadow:var(--sh);border-bottom-left-radius:5px;font-size:13.5px;
+       min-width:0;max-width:100%}
   .msg.me .bub{background:linear-gradient(135deg,var(--acc),#9a72ff);border-color:transparent;
        color:#fff;border-bottom-left-radius:15px;border-bottom-right-radius:5px}
   .bub .nm{font-size:11px;font-weight:700;color:var(--acc);margin-bottom:2px}
   .bub .ts{font-size:10px;color:var(--dim);margin-top:3px;text-align:right}
+  /* Gövde metni artık ekin ALTINDA (altyazı gibi). Üst boşluk YALNIZCA bir ekin
+     hemen ardından geliyorsa: eksiz mesajda üstteki boşluk fazlalık olurdu. */
+  .bmetin{line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere}
+  .bmedia + .bmetin{margin-top:6px}
   .msg.me .bub .ts{color:rgba(255,255,255,.75)}
   .sys{align-self:center;font-size:11.5px;color:var(--dim);background:var(--panel);
        border:1px solid var(--line);border-radius:999px;padding:4px 14px;box-shadow:var(--sh)}
@@ -160,10 +179,11 @@
 .dact{display:flex;gap:8px;align-items:center;justify-content:flex-end;margin-top:4px}
 .dact .ghost{background:transparent;border-color:transparent;color:var(--dim)}
 .dfld{display:flex;flex-direction:column;gap:3px;font-size:11.5px;color:var(--dim)}
-/* Dialog tetikleyicileri dugme ama alan hapinin icinde metin gibi dursun. */
-.fld button.v,.arow button{border:none;background:transparent;padding:0;font:inherit;
+/* Eylem satırındaki tetikleyiciler düğme ama metin gibi dursun. (Alan hapları
+   artık düğmenin KENDİSİ — ayrı bir iç düğme yok, bkz. ortak/alan.pill.) */
+.arow button{border:none;background:transparent;padding:0;font:inherit;
       font-size:12px;font-weight:600;cursor:pointer;text-align:left}
-.fld button.v:hover,.arow button:hover{color:var(--acc);border-color:transparent}
+.arow button:hover{color:var(--acc);border-color:transparent}
 
 /* ---- kompozer: ek iptali + hizli eylem ---- */
 .fclear{flex-shrink:0;border:1px solid var(--line);background:var(--panel);color:var(--dim);
@@ -191,7 +211,21 @@
 .krow .k{color:var(--dim);min-width:74px}
 .krow .v{font-weight:600}
 .kmetin{margin-top:4px;font-size:12.5px;color:var(--dim);line-height:1.55;white-space:pre-wrap}
-.kgorseller{margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:flex-start}
+/* Medya kartı gövdesi: görseller solda, açıklama sağda — dar kalırsa açıklama
+   alta sarar. .kaciklama'nın flex-basis'i 200px: satırda o kadar yer kalmazsa
+   flex-wrap onu bir alt satıra, yani küçük resimlerin ALTINA indirir. */
+.kmedya{margin-top:8px;display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start}
+.kgorseller{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start;flex:0 1 auto}
+.kgorsel-kutu{display:flex;flex-direction:column;gap:4px;width:92px}
+/* Küçük resmin altındaki etiket şeridi dar: chip'ler zaten sarıyor. */
+.kgorsel-kutu .tag-strip{margin-top:0}
+.kgorsel-kutu .tag-add{width:100%}
+.kgorsel-kutu .tag-add input{width:100%;min-width:0}
+/* Açıklama artık HAYALET METİN DEĞİL, kendi kutusu var (kullanıcı isteği):
+   görsellerin üstünde soluk bir satır olarak duruyordu. */
+.kaciklama{flex:1 1 200px;min-width:0;font-size:12.5px;line-height:1.55;color:var(--txt);
+      background:var(--panel);border:1px solid var(--line);border-radius:10px;
+      padding:8px 11px;white-space:pre-wrap;overflow-wrap:anywhere}
 .kgorsel img{display:block;width:92px;height:92px;object-fit:cover;border-radius:10px;
       background:var(--panel)}
 .kyukle{margin-top:8px}
@@ -237,3 +271,119 @@
 .mention.grp{color:#b4501a;background:#ffe9d9}
 .msg.me .bub .mention{color:#fff;background:rgba(255,255,255,.22)}
 .msg.me .bub .mention.grp{color:#fff;background:rgba(255,255,255,.3)}
+
+/* ---- kart bloğu: toplantı bağlantısı ve görsel açıklaması ---- */
+.klink{color:var(--acc);text-decoration:none;word-break:break-all}
+.klink:hover{text-decoration:underline}
+.kgorsel{position:relative;display:block;text-decoration:none;color:inherit}
+
+/* ---- kart katılımı: toplantıya kim geliyor / havuzu kim aldı (göç 013) ----
+   Tek şerit, iki kullanım: ayrım hangi cevapların çizildiğinde (cards.SIGNUP),
+   biçimde değil. */
+.kkatilim{margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)}
+.kkbtns{display:flex;gap:5px;flex-wrap:wrap}
+.kkbtn{border:1px solid var(--line);background:var(--panel);border-radius:999px;
+       padding:4px 12px;font-size:12px;font-weight:600;line-height:1.4}
+.kkbtn:hover{border-color:var(--acc-s);background:var(--tint);color:var(--acc)}
+.kkbtn.on{border-color:var(--acc);background:var(--acc);color:#fff}
+.kkbtn.on:hover{background:var(--acc-s);color:#fff}
+.kkliste{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px;align-items:center}
+.kkkisi{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;
+        border:1px solid var(--line);border-radius:999px;padding:1px 9px 1px 2px;
+        background:var(--panel)}
+.kkkisi .av{width:17px;height:17px;font-size:8.5px}
+.kkkisi.kk-yes{border-color:#9fdcbe;background:#e2f5ec}
+.kkkisi.kk-maybe{border-color:#f0d5a8;background:#fdf0d9}
+.kkkisi.kk-no{opacity:.6;text-decoration:line-through}
+
+/* ---- yanıtla düğmesi (ortak/mesaj.html) ----
+   Zaman damgasının solunda, ona göre sessiz: balonun üstünde ikinci bir eylem
+   çağrısı gibi durmamalı. */
+.ts{display:flex;align-items:center;gap:7px;justify-content:flex-end}
+.ryanit{border:none;background:transparent;padding:0;font:inherit;font-size:10px;
+        font-weight:700;color:var(--acc);cursor:pointer;opacity:.75}
+.ryanit:hover{opacity:1;border-color:transparent;background:transparent}
+.msg.me .bub .ryanit{color:rgba(255,255,255,.9)}
+
+/* ---- alıntılı yanıt (göç 014) ----
+   Balonun İÇİNDE, gövdenin üstünde; sol kenarda yazarın rengiyle bir şerit —
+   WhatsApp/Telegram'ın okunmayı kolaylaştıran kalıbı. Alıntı gövdeden SÖNÜK:
+   yanıt yeni şeyi söyler, alıntı yalnız "neye cevap" sorusunu cevaplar. */
+.alinti{display:block;margin:0 0 5px;padding:4px 9px;border-radius:7px;overflow:hidden;
+        border-left:3px solid var(--acc);background:rgba(124,91,255,.09);
+        text-decoration:none;color:inherit;cursor:pointer}
+.alinti:hover{background:rgba(124,91,255,.16)}
+.alinti-kim{display:block;font-size:11px;font-weight:700;color:var(--acc);
+            line-height:1.5}
+.alinti-metin{display:block;font-size:12px;line-height:1.4;color:var(--dim);
+              overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Kendi balonum koyu/gradient: alıntı oraya göre. */
+.msg.me .bub .alinti{border-left-color:rgba(255,255,255,.75) !important;
+                     background:rgba(255,255,255,.16)}
+.msg.me .bub .alinti:hover{background:rgba(255,255,255,.26)}
+.msg.me .bub .alinti-kim{color:#fff}
+.msg.me .bub .alinti-metin{color:rgba(255,255,255,.85)}
+
+/* Alıntıdan zıplanan balon kısa süre vurgulanır: akış kendi içinde kayan bir
+   kutu, tarayıcının sessiz zıplaması "bir şey olmadı" hissi veriyordu. */
+@keyframes vurgu-sonumle{from{background:var(--acc2)}to{background:transparent}}
+.msg.vurgu .bub{animation:vurgu-sonumle 1.4s ease-out}
+
+/* ---- kompozerdeki "şuna yanıt veriyorsun" şeridi (ortak/yanit_serit.html) ----
+   Kompozerin ilk satırı; yazı kutusunun ÜSTÜNDE tam genişlikte durur, o yüzden
+   iki kompozer de sarmalı (.comp / .dcomp flex). */
+.yserit{display:flex;align-items:center;gap:8px;width:100%;padding:6px 10px;
+        margin-bottom:8px;border-radius:9px;border-left:3px solid var(--acc);
+        background:var(--tint);min-width:0}
+.yserit[hidden]{display:none}
+.yserit-ic{flex:1;min-width:0;display:flex;flex-direction:column}
+.yserit-kim{font-size:11px;font-weight:700;color:var(--acc);line-height:1.5}
+.yserit-metin{font-size:12px;color:var(--dim);overflow:hidden;
+              text-overflow:ellipsis;white-space:nowrap}
+.yserit-iptal{flex-shrink:0;border:none;background:transparent;color:var(--dim);
+              font-size:13px;line-height:1;padding:4px 6px;border-radius:6px}
+.yserit-iptal:hover{background:var(--panel);color:var(--err);border-color:transparent}
+/* Şerit tam satır kaplasın diye kompozerler sarmalı. */
+.comp,.dcomp{flex-wrap:wrap}
+
+/* ---- tam ekran görsel (lightbox, shared/static/ortak.js) ----
+   /media/{id} ham dosyayı yeni sekmede açıyordu: çıplak resim, geri dönüş yok. */
+.lightbox{position:fixed;inset:0;z-index:120;background:rgba(20,12,45,.88);
+          display:flex;flex-direction:column;align-items:center;justify-content:center;
+          gap:12px;padding:32px 20px}
+.lightbox img{max-width:min(96vw,1200px);max-height:82vh;width:auto;height:auto;
+              border-radius:12px;box-shadow:0 18px 60px rgba(0,0,0,.5)}
+.lbacik{margin:0;max-width:min(92vw,70ch);color:#fff;font-size:13.5px;line-height:1.55;
+        text-align:center}
+.lbkapat{position:absolute;top:calc(14px + env(safe-area-inset-top));right:16px;
+         width:38px;height:38px;border-radius:50%;border:none;background:rgba(255,255,255,.14);
+         color:#fff;font-size:16px;line-height:1}
+.lbkapat:hover{background:rgba(255,255,255,.28);color:#fff;border-color:transparent}
+
+/* ---- @anma otomatik tamamlama (kompozer) ----
+   Kompozerin ÜSTÜNDE açılır: altında alt sekme çubuğu / ekran kenarı var. */
+.anmapop{position:absolute;bottom:calc(100% + 6px);left:0;z-index:60;min-width:min(260px,80vw);
+         max-height:230px;overflow:auto;background:var(--panel);border:1px solid var(--acc2);
+         border-radius:12px;box-shadow:var(--sh-lg);padding:4px}
+.anmasat{display:flex;align-items:baseline;gap:7px;width:100%;text-align:left;border:none;
+         background:transparent;border-radius:8px;padding:6px 9px;font-size:13px}
+.anmasat b{color:var(--acc);font-weight:700}
+.anmasat span{color:var(--dim);font-size:11.5px;overflow:hidden;text-overflow:ellipsis;
+              white-space:nowrap}
+.anmasat:hover,.anmasat.on{background:var(--tint);border-color:transparent}
+/* Kompozer konumlandırma bağlamı olmalı, yoksa açılır kutu sayfaya göre durur. */
+.comp,.dcomp .in{position:relative}
+
+/* ---- açılışta kart bloğu seçimi (yeni kayıt formu/dialogu) ---- */
+.kartsec-satir{display:flex;gap:7px;flex-wrap:wrap}
+.kartsec-kutu{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);
+              border-radius:999px;padding:5px 12px;font-size:12.5px;cursor:pointer;
+              background:var(--panel);color:var(--txt)}
+.kartsec-kutu input{width:auto;margin:0}
+.kartsec-kutu:has(input:checked){border-color:var(--acc);background:var(--tint);color:var(--acc)}
+
+/* ---- ayarlar dialogundaki radyo seçenekleri (ortak/ayarlar.html) ----
+   .opt düğmeler için yazılmıştı; burada <label>: aynı görünüm, tıklanan yer
+   radyonun kendisi olmak zorunda kalmasın. */
+.opts label.opt{cursor:pointer;gap:9px}
+.opts label.opt input{width:auto;flex-shrink:0;margin:0}

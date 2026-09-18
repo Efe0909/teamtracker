@@ -171,3 +171,34 @@ body.sheet-on .chatfab{display:none}
 .pushbtn{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(64px + env(safe-area-inset-bottom));
   z-index:40;padding:9px 16px;border-radius:999px;border:1px solid var(--line);
   background:var(--panel);color:var(--ink);font:600 13px/1 inherit;box-shadow:var(--sh-lg)}
+
+/* ---- yeni kayıt formundaki kart bloğu kutuları ----
+   .mform input kuralı 16px/12px dolgu veriyor (iOS yakınlaştırma önlemi);
+   onay kutusu için yanlış — o bir metin girdisi değil. */
+.mform .kartsec-kutu input{font-size:inherit;padding:0;border-radius:0;width:auto}
+.mform .kartsec-satir{gap:8px}
+
+/* ---- alan hapı artık <button> (ortak/alan.pill) ----
+   .dstrip .fld zaten sarıyor; düğme varsayılan yüksekliği şeridi şişirmesin. */
+.dstrip .fld{line-height:1.4}
+
+/* ---- kart katılımı dar ekranda ----
+   Toplantı üç cevap taşıyor; 360px'te tek satıra sığmıyor, sarsın. */
+.dwrap .kkbtns{gap:6px}
+.dwrap .kkbtn{flex:1 1 auto;min-width:0}
+
+/* ---- tam ekran görsel: çentik ve ev düğmesi alanına girme ---- */
+.lightbox{padding:calc(52px + env(safe-area-inset-top)) 12px
+          calc(24px + env(safe-area-inset-bottom))}
+.lightbox img{max-height:74vh}
+
+/* ---- dokunma hedefleri ----
+   Alan hapı artık düğme (ortak/alan.pill) ama 27px yüksekliğindeydi; parmakla
+   güvenilir biçimde vurulamıyordu. Kart başlığındaki ✎/✕ daha da küçüktü —
+   "kart silme tuşu çalışmıyor" şikâyetinin nedeni buydu: tuş çalışıyordu,
+   isabet etmiyordu. 40px dokunulabilir alt sınır. */
+.dstrip .fld{min-height:40px;padding:6px 11px}
+.dwrap .kart .khead .tmini{min-width:40px;min-height:40px;font-size:16px;
+  display:inline-grid;place-items:center}
+.dwrap .kkbtn{min-height:40px}
+.sheet .mdel{width:34px;height:34px;font-size:14px}

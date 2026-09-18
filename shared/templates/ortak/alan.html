@@ -17,16 +17,47 @@
 {% endmacro %}
 
 
-{# Sabit secenekli alan: durum, oncelik, sorumlu, takim, pillar. #}
+{# Alan hapinin TAMAMI tetikleyici.
+
+   Eskiden yalnizca degerin kendisi bir dugmeydi: "Sorumlu" yazisina ya da
+   hapin bosluguna basmak hicbir sey yapmiyordu ve hedef alan avatarla
+   birlikte ~20 pikseldi (kullanici istegi). Simdi hapin kendisi <button>:
+   tiklanabilir yuzey tamami, klavyeyle de gezilebilir — <span> yapilsaydi
+   sekme sirasindan duserdi.
+
+   Icerik cagirandan gelir ({% call %}) cunku her alanin onunde farkli bir sey
+   duruyor: takimda renk noktasi, sorumluda avatar, digerlerinde hicbir sey. #}
+{% macro pill(did, label, editable=True) %}
+{% if editable %}
+<button type="button" class="fld" data-dialog="{{ did }}">
+  <span class="k">{{ label }}</span>{{ caller() }}
+</button>
+{% else %}
+<span class="fld ro"><span class="k">{{ label }}</span>{{ caller() }}</span>
+{% endif %}
+{% endmacro %}
+
+
+{# Sabit secenekli alan: durum, oncelik, sorumlu, takim, pillar.
+
+   options ogesi (deger, etiket) ya da (deger, etiket, RENK) olabilir. Renk
+   varsa secenegin onune nokta cizilir — takim secerken ekranin geri kalaninda
+   kullanilan rengi gormemek "hangisiydi bu" sorusunu her seferinde yeniden
+   sorduruyordu (kullanici istegi). Ucuncu oge ISTEGE BAGLI: renksiz alanlarin
+   (durum, oncelik) cagrilari degismedi. #}
 {% macro choice(did, title, name, url, target, options, current, hint=None) %}
 <dialog id="{{ did }}" class="fdlg">
   <h3>{{ title }}</h3>
   {% if hint %}<p class="dhint">{{ hint }}</p>{% endif %}
   <div class="opts">
-    {% for value, label in options %}
+    {% for o in options %}
+    {% set value = o[0] %}{% set label = o[1] %}
+    {% set color = o[2] if o | length > 2 else none %}
     <button type="button" class="opt{% if value|string == current|string %} on{% endif %}"
             hx-patch="{{ url }}" hx-vals='{"{{ name }}": "{{ value }}"}'
-            hx-target="{{ target }}" hx-swap="outerHTML">{{ label }}</button>
+            hx-target="{{ target }}" hx-swap="outerHTML">
+      {% if color %}<span class="tdot" style="background:{{ color }}"></span>{% endif %}{{ label }}
+    </button>
     {% endfor %}
   </div>
   <div class="dact"><button type="button" class="ghost" data-dialog-close>Vazgeç</button></div>

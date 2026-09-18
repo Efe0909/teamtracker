@@ -1,16 +1,56 @@
 {% extends "base.html" %}
 
+{# Mobil yeni kayit — masaustundeki dialogla AYNI alanlar (kullanici istegi).
+   Eskiden takim ve sorumlu yoktu: telefondan acilan her kayit eksik doguyor ve
+   masaustunden tamamlanmayi bekliyordu.
+
+   Burada DIALOG yok, tam sayfa var: mobilde zaten kendi ekrani, ustune bir de
+   modal koymak ayni yerlesimi iki kez cizmek olurdu. #}
+
 {% block top_left %}
-<a class="slot" href="{{ mroot }}" aria-label="Geri">‹</a>
+<a class="slot" href="{{ mroot }}" data-back aria-label="Geri">‹</a>
 {% endblock %}
 
 {% block content %}
 <form class="mform" method="post" action="{{ mp }}/new">
   <input type="hidden" name="csrf" value="{{ csrf_token }}">
   <div>
+    <label>Başlık</label>
+    <input name="title" required autocomplete="off" placeholder="Kısa ve aranabilir bir başlık">
+  </div>
+  <div>
     <label>Düğüm (zorunlu)</label>
     <select name="node_id" required>
       {% for n in nodes %}<option value="{{ n.id }}">{{ n.name }}</option>{% endfor %}
+    </select>
+  </div>
+  <div>
+    <label>Tür</label>
+    <select name="kind">
+      <option value="issue">Hata</option>
+      <option value="task">Görev</option>
+    </select>
+  </div>
+  {% if teams %}
+  <div>
+    {# Takim rengi secimde de gorunsun (kullanici istegi): <option> icine nokta
+       cizilemez, renk secenegin kenarina veriliyor. #}
+    <label>Takım</label>
+    <select name="team_id">
+      <option value="">— takım yok —</option>
+      {% for t in teams %}
+      <option value="{{ t.id }}" style="border-left:6px solid {{ t.color }}">{{ t.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  {% endif %}
+  <div>
+    <label>Sorumlu</label>
+    <select name="assignee_id">
+      <option value="">— sorumlu yok —</option>
+      {% for u in people %}
+      <option value="{{ u.id }}" {% if u.id == user.id %}selected{% endif %}>{{ u.name }}</option>
+      {% endfor %}
     </select>
   </div>
   {% if pillars %}
@@ -24,19 +64,19 @@
   </div>
   {% endif %}
   <div>
-    <label>Tür</label>
-    <select name="kind">
-      <option value="issue">Hata</option>
-      <option value="task">Görev</option>
-    </select>
-  </div>
-  <div>
-    <label>Başlık</label>
-    <input name="title" required autocomplete="off" placeholder="Kısa ve arananabilir bir başlık">
-  </div>
-  <div>
     <label>Açıklama</label>
     <textarea name="description" placeholder="Ne oldu, nerede, ne zaman?"></textarea>
+  </div>
+  <div>
+    <label>Kart blokları (isteğe bağlı)</label>
+    <div class="kartsec-satir">
+      {% for key, info in card_types.items() %}
+      <label class="kartsec-kutu">
+        <input type="checkbox" name="card_type" value="{{ key }}">
+        <span>{{ info.icon }} {{ info.label }}</span>
+      </label>
+      {% endfor %}
+    </div>
   </div>
   <button class="primary">Kaydı aç</button>
   {% if not nodes %}

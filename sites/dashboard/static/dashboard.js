@@ -75,3 +75,154 @@ document.body.addEventListener("htmx:responseError", function (e) {
 document.body.addEventListener("htmx:sendError", function () {
   ekipUyari("Sunucuya ulaşılamadı. Bağlantını kontrol et.");
 });
+
+/* --- veri yonetimi agaci: katlama + akilli arama -------------------------
+ *
+ * NEDEN ISTEMCIDE: satirlarin hepsi zaten DOM'da (duz liste, Euler turu
+ * sirasinda) ve hiyerarsi data-id/data-parent'ta duruyor. Her ok tiklamasi
+ * icin sunucuya gitmek ayni agaci ikinci kez kurmak olurdu; TreeIndex zaten
+ * surec belleginde, bir de tarayicida kopyasini tutmuyoruz — yalnizca ust
+ * baglantisini okuyup gorunurluk hesapliyoruz.
+ *
+ * DURUM SWAP'I ASAR: agac her dugum degisikliginden sonra htmx ile bastan
+ * ciziliyor (hx-target="#agac"). Acik dallar bu yuzden DOM'da degil burada,
+ * modul kapsaminda bir kumede duruyor — yoksa her kaydetmeden sonra agac
+ * kokune katlanir ve kullanici yerini kaybederdi.
+ */
+(function () {
+  var acik = new Set();          // acik (expanded) dugum kimlikleri
+  var arama = "";
+
+  function satirlar() { return document.querySelectorAll("#agac .tnode"); }
+
+  /* Kokten bu dugume kadar butun ustleri — gorunurluk kararinin girdisi. */
+  function ustler(el, ustOf) {
+    var yol = [], p = el.dataset.parent;
+    while (p && ustOf[p]) { yol.push(p); p = ustOf[p].dataset.parent; }
+    return yol;
+  }
+
+  function ciz() {
+    var hepsi = satirlar();
+    if (!hepsi.length) return;
+    var ustOf = {};
+    hepsi.forEach(function (el) { ustOf[el.dataset.id] = el; });
+
+    /* Arama varken kume ESLESENLER + onlarin butun ustleri: bir dal yalnizca
+       icinde eslesme varsa acilir ("akilli fold"). Aramasiz halde kural daha
+       basit — yalniz kokler, gerisi kullanicinin actigi kadar. */
+    var gorunur = null;
+    if (arama) {
+      gorunur = new Set();
+      hepsi.forEach(function (el) {
+        if ((el.dataset.name || "").toLocaleLowerCase("tr").indexOf(arama) === -1) return;
+        gorunur.add(el.dataset.id);
+        ustler(el, ustOf).forEach(function (id) { gorunur.add(id); acik.add(id); });
+      });
+    }
+
+    var bulundu = 0;
+    hepsi.forEach(function (el) {
+      var id = el.dataset.id;
+      /* Butun ustleri acik olmayan satir cizilmez — tek bir kapali ata
+         altindaki her sey kapanir, derinlik farketmez. */
+      var kapaliAta = ustler(el, ustOf).some(function (p) { return !acik.has(p); });
+      var goster = gorunur ? gorunur.has(id) && !kapaliAta : !kapaliAta;
+      el.hidden = !goster;
+      if (goster) bulundu++;
+
+      var ok = el.querySelector(":scope > .trow > .tkol[data-fold]");
+      if (ok) {
+        var a = acik.has(id);
+        ok.textContent = a ? "▾" : "▸";
+        ok.setAttribute("aria-expanded", a ? "true" : "false");
+      }
+    });
+
+    var bos = document.querySelector("#agac .tbos");
+    if (bos) bos.hidden = !(arama && bulundu === 0);
+  }
+
+  document.body.addEventListener("click", function (e) {
+    var ok = e.target.closest("#agac .tkol[data-fold]");
+    if (!ok) return;
+    e.preventDefault();
+    var id = ok.closest(".tnode").dataset.id;
+    if (acik.has(id)) acik.delete(id); else acik.add(id);
+    ciz();
+  });
+
+  document.body.addEventListener("input", function (e) {
+    if (!e.target.closest("#agac-ara")) return;
+    arama = e.target.value.trim().toLocaleLowerCase("tr");
+    ciz();
+  });
+
+  /* "Hepsini ac / kapat": derin bir yapida tek tek tiklamak iskence. */
+  document.body.addEventListener("click", function (e) {
+    var b = e.target.closest("[data-tree-all]");
+    if (!b) return;
+    if (b.dataset.treeAll === "open") {
+      satirlar().forEach(function (el) { acik.add(el.dataset.id); });
+    } else {
+      acik.clear();
+    }
+    ciz();
+  });
+
+  /* Agac her yazmadan sonra bastan ciziliyor: durumu yeni DOM'a yeniden uygula. */
+  document.body.addEventListener("htmx:afterSwap", function (e) {
+    if (e.target.id === "agac" || e.target.querySelector?.("#agac")) ciz();
+  });
+  document.addEventListener("DOMContentLoaded", ciz);
+})();
+
+/* --- tablo satir secimi --------------------------------------------------
+ * Kutular bir uca BAGLI DEGIL: toplu islem henuz tanimlanmadi. Burada olan
+ * tek sey secimi gorunur kilmak (kac satir) ve "hepsini sec" kutusunu satir
+ * kutularina bagli tutmak. Toplu islem geldiginde eklenecek yer .secserit,
+ * kolonun kendisi degil.
+ *
+ * Durum DOM'da (checked), ayri bir kumede degil: tablo htmx ile bastan
+ * ciziliyor ve secim o tazelemeden sagkalmamali — filtre degisince ekranda
+ * olmayan satirlar "secili" kalirsa toplu islem gormedigin satiri vurur.
+ */
+(function () {
+  function say() {
+    var tablo = document.getElementById("sonuc");
+    if (!tablo) return;
+    var kutular = tablo.querySelectorAll("[data-sec]");
+    var secili = tablo.querySelectorAll("[data-sec]:checked").length;
+    var serit = tablo.querySelector(".secserit");
+    if (serit) {
+      serit.hidden = secili === 0;
+      serit.querySelector(".secsay").textContent = secili;
+    }
+    var hepsi = tablo.querySelector("[data-sec-all]");
+    if (hepsi) {
+      hepsi.checked = secili > 0 && secili === kutular.length;
+      hepsi.indeterminate = secili > 0 && secili < kutular.length;
+    }
+  }
+
+  document.body.addEventListener("change", function (e) {
+    if (e.target.matches("[data-sec-all]")) {
+      document.querySelectorAll("#sonuc [data-sec]").forEach(function (k) {
+        k.checked = e.target.checked;
+      });
+      say();
+    } else if (e.target.matches("[data-sec]")) {
+      say();
+    }
+  });
+
+  document.body.addEventListener("click", function (e) {
+    if (!e.target.closest("[data-sec-clear]")) return;
+    document.querySelectorAll("#sonuc [data-sec],#sonuc [data-sec-all]").forEach(function (k) {
+      k.checked = false;
+    });
+    say();
+  });
+
+  document.body.addEventListener("htmx:afterSwap", say);
+})();

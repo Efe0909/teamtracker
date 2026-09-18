@@ -8,7 +8,10 @@
    HTML'i ciziyor, uclar da ayni (app.py). Burada yalnizca yerlesim var. #}
 
 {% block top_left %}
-<a class="slot" href="javascript:history.back()" aria-label="Geri">‹</a>
+{# `javascript:` URI CSP'ye takiliyordu (script-src 'self', shared/hardening.py)
+   — tus hic calismiyordu, sessizce. Davranis artik ortak.js'te bir dinleyicide;
+   href yedek olarak duruyor, yani JS calismasa da liste ekranina donuluyor. #}
+<a class="slot" href="{{ mroot }}" data-back aria-label="Geri">‹</a>
 {% endblock %}
 
 {% block content %}
@@ -41,6 +44,7 @@
 
   <form class="dcomp" hx-post="{{ mp }}/record/{{ item.id }}/message" hx-target="#feed"
         hx-swap="beforeend" hx-encoding="multipart/form-data">
+    {% include "ortak/yanit_serit.html" %}
     <div class="in">
       {% if can_edit %}
       {# figure3'teki simsek: sohbetten cikmadan eylem ac. Dialog #acts icinde

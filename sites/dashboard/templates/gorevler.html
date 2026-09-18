@@ -19,39 +19,89 @@
   <div class="thead row">
     <h1>Görev Yöneticisi</h1>
     <div style="flex:1"></div>
-    <button class="primary" data-toggle="#newform">＋ Kayıt</button>
+    <button class="primary" data-dialog="dlg-yeni-kayit">＋ Kayıt</button>
   </div>
 
-  {# yeni kayit: duz form — kayit sayfasina 303 ile gider (URL paylasilabilir) #}
-  <form class="newform" id="newform" method="post" action="/item">
-    <input type="hidden" name="csrf" value="{{ csrf_token }}">
-    <select name="node_id" style="width:auto">
-      {% for n in nodes %}
-      <option value="{{ n.id }}">{{ '— ' * n.depth }}{{ n.name }}</option>
-      {% endfor %}
-    </select>
-    <select name="kind" style="width:auto">
-      <option value="issue">Hata</option><option value="task">Görev</option>
-    </select>
-    <select name="team_id" style="width:auto">
-      <option value="">Takım yok</option>
-      {% for f in filters if f.param == "team" %}
-        {% for v, et, _g in f.options() %}<option value="{{ v }}">{{ et }}</option>{% endfor %}
-      {% endfor %}
-    </select>
-    {# Pillar ORTOGONAL: agactaki yerinden bagimsiz (goc 012). #}
-    {% for f in filters if f.param == "pillar" %}
-      {% set secenekler = f.options() %}
-      {% if secenekler | length > 1 %}
-      <select name="pillar_node_id" style="width:auto">
-        <option value="">Pillar yok</option>
-        {% for v, et, _g in secenekler if v != "none" %}<option value="{{ v }}">{{ et }}</option>{% endfor %}
-      </select>
+  {# Yeni kayit artik DIALOG (kullanici istegi): satir ici serit yalniz dugum,
+     tur, takim ve baslik aliyordu — sorumlu ve aciklama icin kaydi acip ikinci
+     bir tura cikmak gerekiyordu.
+
+     Kayit SAYFASI hala sayfa, modal degil (KNOW-112: URL paylasilabilir olmali).
+     Modal olan yalniz ACMA formu; gonderim 303 ile kaydin kendi adresine gider. #}
+  <dialog id="dlg-yeni-kayit" class="fdlg fdlg-genis">
+    <h3>＋ Yeni kayıt</h3>
+    <form method="post" action="/item">
+      <input type="hidden" name="csrf" value="{{ csrf_token }}">
+
+      <label class="dfld"><span>Başlık</span>
+        <input name="title" required autocomplete="off" maxlength="200"
+               placeholder="Kısa ve aranabilir bir başlık"></label>
+
+      <div class="dgrid">
+        <label class="dfld"><span>Düğüm (zorunlu)</span>
+          <select name="node_id" required>
+            {% for n in nodes %}
+            <option value="{{ n.id }}">{{ '— ' * n.depth }}{{ n.name }}</option>
+            {% endfor %}
+          </select></label>
+
+        <label class="dfld"><span>Tür</span>
+          <select name="kind">
+            <option value="issue">Hata</option>
+            <option value="task">Görev</option>
+          </select></label>
+      </div>
+
+      <div class="dgrid">
+        {# Takim renkleri secimde de gorunsun (kullanici istegi): <option>
+           icinde nokta cizilemez, o yuzden renk option'in kendi zeminine
+           veriliyor — ayni bilgi, secilebilir bir kontrolun izin verdigi yerde. #}
+        <label class="dfld"><span>Takım</span>
+          <select name="team_id" class="renkli">
+            <option value="">— takım yok —</option>
+            {% for t in teams %}
+            <option value="{{ t.id }}" style="border-left:6px solid {{ t.color }}">{{ t.name }}</option>
+            {% endfor %}
+          </select></label>
+
+        <label class="dfld"><span>Sorumlu</span>
+          <select name="assignee_id">
+            <option value="">— sorumlu yok —</option>
+            {% for u in all_users %}
+            <option value="{{ u.id }}" {% if u.id == user.id %}selected{% endif %}>{{ u.name }}</option>
+            {% endfor %}
+          </select></label>
+      </div>
+
+      {% if pillars %}
+      {# Pillar ORTOGONAL: agactaki yerinden bagimsiz (goc 012). #}
+      <label class="dfld"><span>Pillar</span>
+        <select name="pillar_node_id">
+          <option value="">— pillar yok —</option>
+          {% for p in pillars %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}
+        </select></label>
       {% endif %}
-    {% endfor %}
-    <input name="title" placeholder="Başlık" required style="flex:1;min-width:160px">
-    <button class="primary">Aç</button>
-  </form>
+
+      <label class="dfld"><span>Açıklama</span>
+        <textarea name="description" rows="3"
+                  placeholder="Ne oldu, nerede, ne zaman?"></textarea></label>
+
+      <label class="dfld"><span>Kart blokları (isteğe bağlı)</span></label>
+      <div class="kartsec-satir">
+        {% for key, info in card_types.items() %}
+        <label class="kartsec-kutu">
+          <input type="checkbox" name="card_type" value="{{ key }}">
+          <span>{{ info.icon }} {{ info.label }}</span>
+        </label>
+        {% endfor %}
+      </div>
+
+      <div class="dact">
+        <button type="submit" class="primary">Kaydı aç</button>
+        <button type="button" class="ghost" data-dialog-close>Vazgeç</button>
+      </div>
+    </form>
+  </dialog>
 
   {% include "fragments/filtreler.html" %}
   {% include "fragments/tablo.html" %}

@@ -49,6 +49,15 @@
   </p>
   {% endif %}
 
+  {# Arama kutusu agacIN DISINDA: #agac her yazmadan sonra htmx ile bastan
+     ciziliyor, icinde olsaydi yazilan kelime her kaydetmede silinirdi. #}
+  <div class="tarabar">
+    <input type="search" id="agac-ara" autocomplete="off"
+           placeholder="Ağaçta ara — eşleşen dallar kendiliğinden açılır…">
+    <button type="button" class="tmini" data-tree-all="open" title="Hepsini aç">⤋ Hepsini aç</button>
+    <button type="button" class="tmini" data-tree-all="close" title="Hepsini kapat">⤊ Kapat</button>
+  </div>
+
   {% include "fragments/agac.html" %}
 </div>
 <script src="{{ static('/static/ortak.js') }}"></script>

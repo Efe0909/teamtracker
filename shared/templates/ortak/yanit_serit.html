@@ -1,0 +1,20 @@
+{# fragment: reply_bar — "şuna yanıt veriyorsun" şeridi (göç 014).
+
+   Üç kompozerin de içinde duruyor (kart sohbeti, mobil sohbet, takım duvarı);
+   nerede gösterildiğini bilmiyor — skin kuralı.
+
+   Varsayılan olarak GİZLİ ve BOŞ. Yanıtla düğmesine basınca shared/static/ortak.js
+   dolduruyor, ✕ ile ya da gönderimden sonra temizleniyor.
+
+   Gizli alan formun İÇİNDE: htmx form değerlerini toplarken onu da alıyor,
+   ayrı bir hx-vals gerekmiyor. form.reset() değeri öznitelikteki varsayılana
+   ("") döndürdüğü için gönderim sonrası temizlik bedava. #}
+<div class="yserit" hidden>
+  <span class="yserit-ic">
+    <b class="yserit-kim"></b>
+    <span class="yserit-metin"></span>
+  </span>
+  <button type="button" class="yserit-iptal" data-reply-cancel
+          title="Yanıtlamaktan vazgeç" aria-label="Yanıtlamaktan vazgeç">✕</button>
+  <input type="hidden" name="reply_to" value="">
+</div>

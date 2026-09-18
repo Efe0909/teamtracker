@@ -5,6 +5,9 @@
    adim — bilincli bir hareket. Dialoglar bu parcanin ICINDE durur, htmx
    parcayi degistirince kendiliginden kapanirlar (ortak/alan.html).
 
+   HAPIN TAMAMI TIKLANABILIR (alan.pill): eskiden yalniz degerin kendisi
+   dugmeydi, etikete ya da bosluga basmak hicbir sey yapmiyordu.
+
    Her degisim akisa zaman damgali bir sistem olayi yaziyor
    (service.change_field) — "kim ne zaman degistirdi" gorunur kalir.
 
@@ -13,41 +16,35 @@
 {% import "ortak/alan.html" as alan %}
 {% set url = "/item/" ~ item.id ~ "/field" %}
 <div class="strip" id="fields" data-fragment="card_fields">
-  <span class="fld{% if not can_edit %} ro{% endif %}"><span class="k">Durum</span>
-    {% if can_edit %}{{ alan.trigger("dlg-f-status", "v v-" ~ item.status, status_label) }}
-    {% else %}<span class="v v-{{ item.status }}">{{ status_label }}</span>{% endif %}
-  </span>
+  {% call alan.pill("dlg-f-status", "Durum", can_edit) %}
+    <span class="v v-{{ item.status }}">{{ status_label }}</span>
+  {% endcall %}
 
-  <span class="fld{% if not can_edit %} ro{% endif %}"><span class="k">Öncelik</span>
-    {% if can_edit %}{{ alan.trigger("dlg-f-priority", "v v-" ~ item.priority, priority_label) }}
-    {% else %}<span class="v v-{{ item.priority }}">{{ priority_label }}</span>{% endif %}
-  </span>
+  {% call alan.pill("dlg-f-priority", "Öncelik", can_edit) %}
+    <span class="v v-{{ item.priority }}">{{ priority_label }}</span>
+  {% endcall %}
 
-  <span class="fld{% if not can_edit %} ro{% endif %}"><span class="k">Takım</span>
+  {% call alan.pill("dlg-f-team", "Takım", can_edit) %}
     {% if team %}<span class="tdot" style="background:{{ team.color }}"></span>{% endif %}
-    {% if can_edit %}{{ alan.trigger("dlg-f-team", "v", team.name if team else "—") }}
-    {% else %}<span class="v">{{ team.name if team else '—' }}</span>{% endif %}
-  </span>
+    <span class="v">{{ team.name if team else '—' }}</span>
+  {% endcall %}
 
   {# Pillar ORTOGONAL: kayit agacta bir yerde durur, ayrica bir pillar'a
      sayilir — ikisi birbirinin atasi olmak zorunda degil (goc 012). #}
-  <span class="fld{% if not can_edit %} ro{% endif %}"><span class="k">Pillar</span>
-    {% if can_edit %}{{ alan.trigger("dlg-f-pillar", "v", pillar or "—") }}
-    {% else %}<span class="v">{{ pillar or '—' }}</span>{% endif %}
-  </span>
+  {% call alan.pill("dlg-f-pillar", "Pillar", can_edit) %}
+    <span class="v">{{ pillar or '—' }}</span>
+  {% endcall %}
 
-  <span class="fld who{% if not can_edit %} ro{% endif %}"><span class="k">Sorumlu</span>
+  {% call alan.pill("dlg-f-who", "Sorumlu", can_edit) %}
     {% if assignee %}<span class="av" style="background:{{ assignee.color }}">{{ assignee.name[0] }}</span>{% endif %}
-    {% if can_edit %}{{ alan.trigger("dlg-f-who", "v", assignee.name if assignee else "—") }}
-    {% else %}<span class="v">{{ assignee.name if assignee else '—' }}</span>{% endif %}
-  </span>
+    <span class="v">{{ assignee.name if assignee else '—' }}</span>
+  {% endcall %}
 
-  <span class="fld{% if not can_edit %} ro{% endif %}"><span class="k">Son tarih</span>
-    {% if can_edit %}{{ alan.trigger("dlg-f-due", "v", item.due_date or "—") }}
-    {% else %}<span class="v">{{ item.due_date or '—' }}</span>{% endif %}
-  </span>
+  {% call alan.pill("dlg-f-due", "Son tarih", can_edit) %}
+    <span class="v">{{ item.due_date or '—' }}</span>
+  {% endcall %}
 
-  {% if item.dms %}<span class="fld"><span class="k">DMS</span><span class="v">{{ item.dms }}</span></span>{% endif %}
+  {% if item.dms %}<span class="fld ro"><span class="k">DMS</span><span class="v">{{ item.dms }}</span></span>{% endif %}
 
   <div style="flex:1"></div>
   {% if creator %}<span class="small muted">Açan: {{ creator.name }} · {{ created }}</span>{% endif %}
@@ -62,6 +59,8 @@
                    "Açık eylem varken kayıt kapanmaz.") }}
     {{ alan.choice("dlg-f-priority", "Öncelik", "priority", url, "#fields",
                    priorities.items()|list, item.priority) }}
+    {# team_options ucuncu oge olarak RENK tasir (routes.card_ctx) — secim
+       ekraninda da takimin rengi gorunsun (kullanici istegi). #}
     {{ alan.choice("dlg-f-team", "Takım", "team_id", url, "#fields",
                    team_options, item.team_id or "") }}
     {{ alan.choice("dlg-f-pillar", "Pillar", "pillar_node_id", url, "#fields",

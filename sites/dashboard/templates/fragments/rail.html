@@ -33,6 +33,11 @@
       {% endfor %}
       {% endif %}
 
+      <button type="button" class="tnode" data-dialog="dlg-ayarlar"
+              style="width:100%;border:none;background:transparent;border-top:1px solid var(--line);padding-top:8px">
+        <span class="tw">⚙</span><span class="tn" style="text-align:left">Bildirim ayarları</span>
+      </button>
+
       <form method="post" action="/logout" style="margin:6px 0 0;border-top:1px solid var(--line);padding-top:6px"><input type="hidden" name="csrf" value="{{ csrf_token }}">
         <button class="tnode" style="width:100%;border:none;background:transparent">
           <span class="tw">⏻</span><span class="tn" style="text-align:left">Çıkış</span>
@@ -40,4 +45,8 @@
       </form>
     </div>
   </details>
+{# Dialog ray'in ICINDE degil KARDESI olmali mi? Hayir — <details> kapandiginda
+   icindeki dialog da DOM'da kalir, showModal() onu ust katmana tasir. Rayin
+   icinde durmasi her sayfada tek bir include yeter demek. #}
+{% include "ortak/ayarlar.html" %}
 </nav>

@@ -1,0 +1,19 @@
+-- attachments.caption geri alindi — aciklama YANLIS KATMANDAYDI.
+--
+-- Goc 013 her EKE bir aciklama alani koymustu. Yanlisti:
+--
+--   * Ekin zaten bir anlatimi var: ETIKETLER (goc 010). Aciklama alani onun
+--     yanina ikinci, serbest metinli bir anlatim koyuyordu — "bu ne hakkinda"
+--     sorusu iki yerden cevaplanir olmustu.
+--   * Istenen sey ekin degil MEDYA KARTININ aciklamasiydi: kart bir blok,
+--     icindeki gorseller o blogun parcasi. Aciklama bloga ait.
+--   * Sohbet balonlarindaki gorsellerde aciklama kutusu hic istenmemisti;
+--     her gorselin altina bir metin kutusu koymak akisi gurultulendiriyordu.
+--
+-- Yeni yeri: item_cards.data->>'description' (shared/cards.py FIELDS["media"]).
+-- Ayri bir sutun gerekmiyor — kart turlerinin serbest alanlari zaten jsonb'de
+-- duruyor ve kartin duzenleme dialogu FIELDS'ten kendiliginde ciziliyor.
+--
+-- Sutun HIC KULLANILMADI (yalniz bu dalda yasadi, yayina cikmadi), o yuzden
+-- dusurmek veri goturmuyor.
+alter table attachments drop column if exists caption;

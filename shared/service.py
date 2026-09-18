@@ -361,6 +361,69 @@ def team_members(team_id) -> list[dict]:
         (db.uid(team_id),))
 
 
+# --- takim uyeligi (kullanici istegi) --------------------------------------
+#
+# Uyelik BUGUNE KADAR yalnizca tohumdan geliyordu: arayuzden kimse takima
+# eklenemiyordu ve "uyelikler Yonetim Paneli'nden (🚧) tanimlanacak" notu
+# bekliyordu. Ekran TAKIM SAYFASI oldu, yonetim paneli degil: uyeyi ekleyen
+# kisi takimin kendi sayfasinda duruyor, ayri bir ekrana gitmesi icin sebep yok.
+#
+# Yetki cagiran ucta (manage_teams kapsami ya da admin) — buradaki islevler
+# yalnizca uygular, spec/71'deki "panel gorunen yuz, kapi degil" kuralı gibi.
+#
+# Duvara SISTEM OLAYI yazilir: uygulamadaki her degisim gorunur bir iz
+# birakiyor (change_field, set_node_active...), uyelik de istisna olmasin —
+# "beni kim ekledi/cikardi" sorusunun cevabi akista dursun.
+
+
+def set_team_member(team_id, user_id, role: str, changed_by=None) -> bool:
+    """Uye ekle ya da rolunu degistir. Doner: yazildi mi.
+
+    UPSERT: "uye ekle" ile "rolu degistir" ayni hareket — ayri iki uc olsaydi
+    zaten uye olan birini eklemek benzersizlik hatasi verirdi ve arayuz once
+    "uye mi" diye sormak zorunda kalirdi.
+    """
+    tid, uid = db.uid(team_id), db.uid(user_id)
+    if tid is None or uid is None or role not in TEAM_ROLE:
+        return False
+    person = db.q1("select name from users where id = %s and is_active", (uid,))
+    if person is None:
+        return False
+    onceki = db.q1("select role from team_members where team_id = %s and user_id = %s", (tid, uid))
+    db.x("insert into team_members (team_id,user_id,role,added_at) values (%s,%s,%s,%s)"
+         " on conflict (team_id,user_id) do update set role = excluded.role",
+         (tid, uid, role, db.now()))
+    who = db.q1("select name from users where id = %s", (db.uid(changed_by),))["name"] \
+        if changed_by else "Biri"
+    if onceki is None:
+        metin = f"{who}, {person['name']} kişisini takıma ekledi ({TEAM_ROLE[role]})"
+    elif onceki["role"] != role:
+        metin = (f"{who}, {person['name']} rolünü {TEAM_ROLE[onceki['role']]} → "
+                 f"{TEAM_ROLE[role]} yaptı")
+    else:
+        return True                      # ayni rol: gecmise tekrar yazma
+    log(tid, "system", db.uid(changed_by) if changed_by else None, metin, subject_type="team")
+    return True
+
+
+def remove_team_member(team_id, user_id, changed_by=None) -> bool:
+    """Uyeyi cikar. Kayitlari ve eylemleri DURUR — uyelik bir yetki bagi,
+    gecmisin sahipligi degil (spec/10-kararlar.md 'Kayit takima')."""
+    tid, uid = db.uid(team_id), db.uid(user_id)
+    if tid is None or uid is None:
+        return False
+    if db.q1("select 1 from team_members where team_id = %s and user_id = %s", (tid, uid)) is None:
+        return False
+    person = db.q1("select name from users where id = %s", (uid,))
+    db.x("delete from team_members where team_id = %s and user_id = %s", (tid, uid))
+    who = db.q1("select name from users where id = %s", (db.uid(changed_by),))["name"] \
+        if changed_by else "Biri"
+    log(tid, "system", db.uid(changed_by) if changed_by else None,
+        f"{who}, {person['name'] if person else 'bir kişiyi'} takımdan çıkardı",
+        subject_type="team")
+    return True
+
+
 def team_open_count(team_id) -> int:
     """Takimin acik kayit sayisi — team_items kirpilmis olabilir, rozet tami soyler."""
     r = db.q1("select count(*) c from items where team_id = %s and status <> 'closed'",
@@ -442,7 +505,7 @@ def get_item(item_id):
 
 
 def log(subject_id: str, etype: str, author_id: str | None, body: str,
-        subject_type: str = "item"):
+        subject_type: str = "item", reply_to=None):
     """Olay yaz, ID'sini dondurur.
 
     Donus degeri gerekli: bir eke sahip mesajda attachments.attach() owner_id
@@ -450,10 +513,31 @@ def log(subject_id: str, etype: str, author_id: str | None, body: str,
     olayin id'si elde olmali.
     """
     event_id = db.new_id()
-    db.x("insert into events (id,subject_type,subject_id,event_type,author_id,body,created_at)"
-         " values (%s,%s,%s,%s,%s,%s,%s)",
-         (event_id, subject_type, subject_id, etype, author_id, body, db.now()))
+    db.x("insert into events (id,subject_type,subject_id,event_type,author_id,body,"
+         "created_at,reply_to_id) values (%s,%s,%s,%s,%s,%s,%s,%s)",
+         (event_id, subject_type, subject_id, etype, author_id, body, db.now(),
+          valid_reply_target(subject_type, subject_id, reply_to)))
     return event_id
+
+
+def valid_reply_target(subject_type: str, subject_id, reply_to):
+    """Yanitlanan olayin kimligi — gecersizse None (yanit sessizce duz mesaj olur).
+
+    AYNI KONUNUN olayi olmak ZORUNDA: yoksa bir karttaki mesaj baska bir
+    kartin (ya da bir takim duvarinin) mesajini alintilayabilirdi ve alinti,
+    okuyanin gormeye yetkili olmadigi bir metni balonun icinde tasirdi.
+    Yetki kontrolu konunun kendisinde yapiliyor; alinti o kapiyi delmemeli.
+
+    Sistem olaylari da yanitlanamaz — "durum degisti" satirina cevap
+    verilmiyor, arayuz de dugmeyi orada cizmiyor.
+    """
+    target = db.uid(reply_to) if reply_to else None
+    if target is None:
+        return None
+    row = db.q1("select id from events where id = %s and subject_type = %s"
+                " and subject_id = %s and event_type = 'message'",
+                (target, subject_type, db.uid(subject_id)))
+    return row["id"] if row else None
 
 
 # --- medya ekleri (sozlesme §7-8, genis sahiplik CONTRACT-V2.md §4) --------
@@ -540,6 +624,30 @@ def _tag_context(rows: list[dict], user) -> tuple[dict, bool]:
     return attachments.tags_for([r["id"] for r in rows]), attachments.can_tag(user, rows[0])
 
 
+# Alintida gosterilecek en fazla karakter. Balon alintinin ustune cikmamali:
+# yanit yeni sey soyler, alinti yalnizca "neye cevap" sorusunu cevaplar.
+QUOTE_LIMIT = 120
+
+
+def _quote(event, users: dict, has_media: bool = False) -> dict | None:
+    """Bir olayin ALINTI bicimi — yanit balonunun icinde gorunen kutu.
+
+    Govdesi olmayan (yalniz gorselli) mesaj bos bir alinti birakmasin:
+    "📷 Görsel" yazar. Ayni yedek service.last_line'da da var.
+    """
+    if event is None:
+        return None
+    author = users.get(event["author_id"])
+    body = (event["body"] or "").strip().replace("\n", " ")
+    if not body:
+        body = "📷 Görsel" if has_media else "—"
+    if len(body) > QUOTE_LIMIT:
+        body = body[:QUOTE_LIMIT - 1] + "…"
+    return {"id": event["id"], "body": body,
+            "author_name": author["name"] if author else "Bilinmeyen",
+            "color": author["color"] if author else None}
+
+
 def feed_of(subject_type: str, subject_id, user) -> list[dict]:
     """Olay akisi (sistem + mesaj, tek kronoloji).
 
@@ -555,11 +663,18 @@ def feed_of(subject_type: str, subject_id, user) -> list[dict]:
     # Etiketler ve etiketleme yetkisi de TEK sefer, akisin tamami icin.
     flat = [r for rs in media_by_event.values() for r in rs]
     tags_by_id, can_tag = _tag_context(flat, user)
+    # Alinti icin EK SORGU YOK: yanit hedefi AYNI konunun olayi olmak zorunda
+    # (valid_reply_target), yani zaten `rows` icinde. Ikinci bir select atmak
+    # elimizdeki satirlari veritabanindan tekrar istemek olurdu.
+    by_id = {e["id"]: e for e in rows}
     out = []
     for e in rows:
         a = users.get(e["author_id"])
-        out.append({"type": e["event_type"], "body": e["body"], "author": a,
+        hedef = by_id.get(e["reply_to_id"]) if e["reply_to_id"] else None
+        out.append({"id": e["id"], "type": e["event_type"], "body": e["body"], "author": a,
                     "mine": a is not None and a["id"] == user["id"],
+                    "reply": _quote(hedef, users,
+                                    bool(media_by_event.get(hedef["id"]))) if hedef else None,
                     "time": short_time(e["created_at"]),
                     "media": _media_view(media_by_event.get(e["id"], []), user,
                                          tags_by_id, can_tag)})
@@ -581,13 +696,21 @@ def event_message(event_id, user) -> dict | None:
     media_by_event = attachments.for_owners("event", [e["id"]])
     rows = media_by_event.get(e["id"], [])
     tags_by_id, can_tag = _tag_context(rows, user)
-    return {"type": e["event_type"], "body": e["body"], "author": a,
+    # feed_of'un aksine burada hedef elde degil: tek olay ciziliyor, TEK ek
+    # sorgu (events_reply_idx uzerinden).
+    hedef = db.q1("select * from events where id = %s", (e["reply_to_id"],)) \
+        if e["reply_to_id"] else None
+    return {"id": e["id"], "type": e["event_type"], "body": e["body"], "author": a,
             "mine": a is not None and a["id"] == user["id"],
+            "reply": _quote(hedef, users,
+                            bool(attachments.for_owners("event", [hedef["id"]])))
+                     if hedef else None,
             "time": short_time(e["created_at"]),
             "media": _media_view(rows, user, tags_by_id, can_tag)}
 
 
-def add_message(user, item, body: str, attachment: dict | None = None) -> dict | None:
+def add_message(user, item, body: str, attachment: dict | None = None,
+                reply_to=None) -> dict | None:
     """Mesaj yaz, istege bagli TEK ekle. Yetki cagiran ucta kontrol edilir.
 
     attachment, media.save()'in ciktisidir — olay ve ek satiri ayni mantiksal
@@ -601,7 +724,7 @@ def add_message(user, item, body: str, attachment: dict | None = None) -> dict |
     if not body and not attachment:
         return None
     mentions.join(item["id"], user["id"], user["id"])
-    event_id = log(item["id"], "message", user["id"], body)
+    event_id = log(item["id"], "message", user["id"], body, reply_to=reply_to)
     saved = attachments.attach("event", event_id, user["id"], attachment) if attachment else None
     db.x("update items set updated_at = %s where id = %s", (db.now(), item["id"]))
     pinged = mentions.resolve("item", item["id"], body, user, item=item)
@@ -609,12 +732,25 @@ def add_message(user, item, body: str, attachment: dict | None = None) -> dict |
         mentions.notify(pinged, user, body, title=item["title"],
                         url=mentions.mention_url("item", item["id"]),
                         tag=f"item-{item['id']}")
-    return {"type": "message", "body": body, "author": user, "mine": True,
-            "time": short_time(db.now()), "media": _media_view([saved], user, *_tag_context([saved], user))
-            if saved else []}
+    return {"id": event_id, "type": "message", "body": body, "author": user, "mine": True,
+            "reply": _quote_of(event_id, users_by_id()),
+            "time": short_time(db.now()),
+            "media": _media_view([saved], user, *_tag_context([saved], user)) if saved else []}
 
 
-def add_team_message(user, team, body: str, attachment: dict | None = None) -> dict | None:
+def _quote_of(event_id, users: dict) -> dict | None:
+    """Yeni yazilan mesajin alintisi. Balon htmx ile DOGRUDAN akisa ekleniyor
+    (hx-swap=beforeend), yani sayfa yenilenmiyor — alinti burada kurulmazsa
+    kullanici kendi yanitini alintisiz gorur ve gitmedi saniyordu."""
+    row = db.q1("select reply_to_id from events where id = %s", (event_id,))
+    if row is None or row["reply_to_id"] is None:
+        return None
+    hedef = db.q1("select * from events where id = %s", (row["reply_to_id"],))
+    return _quote(hedef, users, bool(attachments.for_owners("event", [row["reply_to_id"]])))
+
+
+def add_team_message(user, team, body: str, attachment: dict | None = None,
+                     reply_to=None) -> dict | None:
     """Takim duvarina mesaj, istege bagli TEK ekle. Yetki cagiran ucta (auth.can_post_team).
 
     Kartin aksine `updated_at` dokunulmaz: takimin "son hareket"i diye bir
@@ -623,7 +759,8 @@ def add_team_message(user, team, body: str, attachment: dict | None = None) -> d
     body = body.strip()
     if not body and not attachment:
         return None
-    event_id = log(team["id"], "message", user["id"], body, subject_type="team")
+    event_id = log(team["id"], "message", user["id"], body, subject_type="team",
+                   reply_to=reply_to)
     saved = attachments.attach("event", event_id, user["id"], attachment) if attachment else None
     # Duvarda katilimci kumesi = team_members. Uyelik BURADAN degismez: takim
     # uyeligi ayri bir yonetim isi, bir mesaj onu sessizce genisletmemeli.
@@ -632,9 +769,10 @@ def add_team_message(user, team, body: str, attachment: dict | None = None) -> d
         mentions.notify(pinged, user, body, title=team["name"],
                         url=mentions.mention_url("team", team["id"]),
                         tag=f"team-{team['id']}")
-    return {"type": "message", "body": body, "author": user, "mine": True,
-            "time": short_time(db.now()), "media": _media_view([saved], user, *_tag_context([saved], user))
-            if saved else []}
+    return {"id": event_id, "type": "message", "body": body, "author": user, "mine": True,
+            "reply": _quote_of(event_id, users_by_id()),
+            "time": short_time(db.now()),
+            "media": _media_view([saved], user, *_tag_context([saved], user)) if saved else []}
 
 
 def change_field(user, item, form) -> bool:
@@ -705,8 +843,16 @@ def change_field(user, item, form) -> bool:
 
 
 
+# new_item'in "sorumlu verilmedi" nobetcisi. None DEGIL, cunku None artik
+# gecerli bir cevap: "sorumlusuz ac". Nobetci olmasaydi alani hic gondermeyen
+# eski cagiranlar (mobil form, takim sayfasindaki hizli acma) sessizce
+# bugunku davranisi kaybederdi — kayitlar bir anda sahipsiz dogardi.
+_CREATOR = object()
+
+
 def new_item(user, node_id: str, kind: str, title: str, description: str = "",
-             team_id: str | None = None, pillar_node_id: str | None = None) -> str:
+             team_id: str | None = None, pillar_node_id: str | None = None,
+             assignee_id=_CREATOR) -> str:
     """Yeni kayit. Yetki burada: kapsam disinda dal secilemez (masaustu ve mobil ayni yol).
 
     Kayit istege bagli bir takima tanimlanir (spec/10-kararlar.md 'Kayıt takıma');
@@ -729,6 +875,19 @@ def new_item(user, node_id: str, kind: str, title: str, description: str = "",
             pillar_node_id not in TREE.nodes
             or TREE.nodes[pillar_node_id].node_type != "pillar"):
         raise HTTPException(400, "pillar yok")
+    # Sorumlu ARTIK ACILISTA secilebiliyor (kullanici istegi): eskiden alan hic
+    # yoktu ve kaydi acan kisi otomatik sorumlu oluyordu. O varsayilan DURUYOR —
+    # yalnizca alani gonderen cagiran onu degistirebilir, bos gondererek
+    # "sorumlusuz" da diyebilir.
+    #
+    # Metin -> UUID cevrimi BURADA, change_field'daki ayni tuzak (KNOW-264):
+    # users_by_id() UUID ile anahtarli, ham metin hicbiriyle eslesmez.
+    if assignee_id is _CREATOR:
+        assignee_id = user["id"]
+    else:
+        assignee_id = db.uid(assignee_id) if assignee_id else None
+        if assignee_id is not None and assignee_id not in users_by_id():
+            raise HTTPException(400, "kullanıcı yok")
     if not (db.as_bool(user["is_admin"]) or (
             user["scope_node_id"] and TREE.is_descendant(node_id, user["scope_node_id"]))):
         raise HTTPException(403, "bu dalda kayıt açma yetkin yok")
@@ -738,9 +897,14 @@ def new_item(user, node_id: str, kind: str, title: str, description: str = "",
          "pillar_node_id,assignee_id,created_by,created_at,updated_at)"
          " values (%s,%s,%s,%s,%s,'open','medium',%s,%s,%s,%s,%s,%s)",
          (item_id, node_id, kind, title.strip(), description.strip() or None,
-          team_id, pillar_node_id, user["id"], user["id"], now, now))
+          team_id, pillar_node_id, assignee_id, user["id"], now, now))
     db.x("insert into item_participants (item_id,user_id,added_by,added_at) values (%s,%s,%s,%s)",
          (item_id, user["id"], user["id"], now))
+    # Sorumlu da sohbetin icinde olsun — change_field atama yaparken ayni seyi
+    # yapiyor; acilista atanan kisi disarida kalsaydi @all ona ulasmazdi.
+    # (Acan zaten yukarida katilimci yazildi; ayni kisiyse on conflict eler.)
+    if assignee_id is not None:
+        mentions.join(item_id, assignee_id, user["id"])
     extra = f", takım: {teams_by_id()[team_id]['name']}" if team_id else ""
     log(item_id, "system", user["id"], f"{user['name']} bu kaydı açtı ({TREE.name(node_id)}{extra})")
     return item_id
@@ -788,7 +952,9 @@ def item_blocks_ctx(item, user) -> dict:
     people = list(users.values())
     return {
         "item": item, "users": people,
-        "user_options": [(u["id"], u["name"]) for u in people],
+        # Ucuncu oge RENK (ortak/alan.choice okur): kisinin avatar rengi secim
+        # listesinde de gorunsun — takim renkleriyle ayni gerekce.
+        "user_options": [(u["id"], u["name"], u["color"]) for u in people],
         "actions": actions,
         "open_action_count": sum(1 for e in actions if not e["done"]),
         "action_status": ACTION_STATUS,
