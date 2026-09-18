@@ -13,7 +13,7 @@ from pathlib import Path
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 
-from shared import auth, db, search, service
+from shared import auth, cards, db, search, service
 from shared.config import mp
 from shared.render import is_htmx, site_templates
 from shared.service import (MINE_SQL, MINE_SQL_I, MONTHS, PRIO_SQL, PRIORITIES, STATUSES,
@@ -158,7 +158,8 @@ def mobile_card_ctx(request, item, user) -> dict:
         "request": request, "user": user, "row": mobile_row(item, users),
         "assignee": users.get(item["assignee_id"]),
         "team": teams.get(item["team_id"]),
-        "team_options": [("", "—")] + [(t["id"], t["name"]) for t in teams.values()],
+        # Ucuncu oge RENK — masaustuyle ayni sozlesme (ortak/alan.choice).
+        "team_options": [("", "—")] + [(t["id"], t["name"], t["color"]) for t in teams.values()],
         "pillar": tree.name(item["pillar_node_id"]) if item["pillar_node_id"] else None,
         "pillar_options": [("", "—")] + [(n, tree.name(n)) for n in tree.nodes_of_type("pillar")],
         "feed": feed,
@@ -261,17 +262,37 @@ def new_item_form(request: Request):
              if db.as_bool(user["is_admin"]) or (scope_id and service.TREE.is_descendant(nid, scope_id))]
     pillars = [{"id": nid, "name": service.TREE.name(nid)}
                for nid in service.TREE.nodes_of_type("pillar")]
+    # Mobil form masaustundeki dialogla AYNI alanlari tasir (kullanici istegi):
+    # eskiden takim ve sorumlu yoktu, telefondan acilan her kayit eksik doguyor
+    # ve masaustunden tamamlanmayi bekliyordu.
     return render(request, "yeni.html",
-                  mobile_ctx(request, user, None, "Yeni kayıt", nodes=nodes, pillars=pillars))
+                  mobile_ctx(request, user, None, "Yeni kayıt", nodes=nodes, pillars=pillars,
+                             teams=list(service.teams_by_id().values()),
+                             people=auth.all_users(), card_types=cards.CARD_TYPES))
 
 
 @router.post("/new")
-def create_item(request: Request, node_id: str = Form(...), title: str = Form(...),
-                kind: str = Form("issue"), description: str = Form(""),
-                pillar_node_id: str = Form("")):
+async def create_item(request: Request):
+    """Yeni kayit — masaustundeki /item ucuyla AYNI alanlar.
+
+    Form okumasi elle: `card_type` cok degerli (acilista birden fazla blok
+    secilebilir), FastAPI'nin tekil Form()'u onlardan yalnizca birini gorurdu.
+    """
     user = auth.current_user(request)
-    item_id = new_item(user, node_id, kind, title, description,
-                       pillar_node_id=pillar_node_id or None)
+    form = await request.form()
+    # Alan formda YOKSA hic gecirilmez: new_item'in nobetcisi devreye girer ve
+    # acan kisi sorumlu olur (eski davranis). VARSA — bos bile olsa —
+    # kullanicinin secimi gecerlidir.
+    who = {"assignee_id": form.get("assignee_id")} if "assignee_id" in form else {}
+    item_id = new_item(
+        user, str(form.get("node_id") or ""), str(form.get("kind") or "issue"),
+        str(form.get("title") or ""), str(form.get("description") or ""),
+        str(form.get("team_id") or "") or None,
+        str(form.get("pillar_node_id") or "") or None, **who)
+    item = get_item(item_id)
+    for card_type in form.getlist("card_type"):
+        if cards.valid(str(card_type)):
+            cards.add(item["id"], str(card_type), "", form, user["id"])
     return RedirectResponse(f"{mp(request)}/record/{item_id}", status_code=303)
 
 

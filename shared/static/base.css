@@ -33,12 +33,21 @@
   .c-crit{background:#fde4e8;color:#d13350}
 
   /* ---- avatar + alan hapı (iki sitede de kart alanlarında) ---- */
+  /* .fld artık bir <button>: hapın TAMAMI tetikleyici (ortak/alan.pill).
+     Eskiden sadece değer bir düğmeydi, etikete basmak hiçbir şey yapmıyordu.
+     text-align/font-weight button varsayılanını geri alır. */
   .fld{display:flex;align-items:center;gap:5px;background:var(--panel);border:1px solid var(--line);
-       border-radius:8px;padding:4px 9px;font-size:12px;cursor:pointer}
+       border-radius:8px;padding:4px 9px;font-size:12px;cursor:pointer;
+       text-align:left;font-weight:400;color:var(--txt);font-family:inherit}
   .fld:hover{border-color:var(--acc-s)}
   .fld .k{color:var(--dim);font-size:11px}
   .fld .v{font-weight:600}
   .who{display:flex;align-items:center;gap:5px}
+  /* Takım rengi noktası. ORTAK, çünkü iki yüz de çiziyor: alan hapları
+     (card_fields / strip) ve seçim dialogları (ortak/alan.choice). Yalnız
+     dashboard.css'te dursaydı mobilde renksiz bir boşluk olurdu. */
+  .tdot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px;
+        flex-shrink:0}
   .av{width:21px;height:21px;border-radius:50%;display:grid;place-items:center;color:#fff;
       font-size:10px;font-weight:700;flex-shrink:0}
   .stack{display:flex}
@@ -160,10 +169,11 @@
 .dact{display:flex;gap:8px;align-items:center;justify-content:flex-end;margin-top:4px}
 .dact .ghost{background:transparent;border-color:transparent;color:var(--dim)}
 .dfld{display:flex;flex-direction:column;gap:3px;font-size:11.5px;color:var(--dim)}
-/* Dialog tetikleyicileri dugme ama alan hapinin icinde metin gibi dursun. */
-.fld button.v,.arow button{border:none;background:transparent;padding:0;font:inherit;
+/* Eylem satırındaki tetikleyiciler düğme ama metin gibi dursun. (Alan hapları
+   artık düğmenin KENDİSİ — ayrı bir iç düğme yok, bkz. ortak/alan.pill.) */
+.arow button{border:none;background:transparent;padding:0;font:inherit;
       font-size:12px;font-weight:600;cursor:pointer;text-align:left}
-.fld button.v:hover,.arow button:hover{color:var(--acc);border-color:transparent}
+.arow button:hover{color:var(--acc);border-color:transparent}
 
 /* ---- kompozer: ek iptali + hizli eylem ---- */
 .fclear{flex-shrink:0;border:1px solid var(--line);background:var(--panel);color:var(--dim);
@@ -192,6 +202,8 @@
 .krow .v{font-weight:600}
 .kmetin{margin-top:4px;font-size:12.5px;color:var(--dim);line-height:1.55;white-space:pre-wrap}
 .kgorseller{margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:flex-start}
+.kgorsel-kutu{display:flex;flex-direction:column;gap:3px;width:92px}
+.kgorsel-kutu .bacik-form input{width:92px}
 .kgorsel img{display:block;width:92px;height:92px;object-fit:cover;border-radius:10px;
       background:var(--panel)}
 .kyukle{margin-top:8px}
@@ -237,3 +249,92 @@
 .mention.grp{color:#b4501a;background:#ffe9d9}
 .msg.me .bub .mention{color:#fff;background:rgba(255,255,255,.22)}
 .msg.me .bub .mention.grp{color:#fff;background:rgba(255,255,255,.3)}
+
+/* ---- kart bloğu: toplantı bağlantısı ve görsel açıklaması ---- */
+.klink{color:var(--acc);text-decoration:none;word-break:break-all}
+.klink:hover{text-decoration:underline}
+.kgorsel{position:relative;display:block;text-decoration:none;color:inherit}
+.kgacik{display:block;max-width:92px;margin-top:3px;font-size:10.5px;line-height:1.35;
+        color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ---- kart katılımı: toplantıya kim geliyor / havuzu kim aldı (göç 013) ----
+   Tek şerit, iki kullanım: ayrım hangi cevapların çizildiğinde (cards.SIGNUP),
+   biçimde değil. */
+.kkatilim{margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)}
+.kkbtns{display:flex;gap:5px;flex-wrap:wrap}
+.kkbtn{border:1px solid var(--line);background:var(--panel);border-radius:999px;
+       padding:4px 12px;font-size:12px;font-weight:600;line-height:1.4}
+.kkbtn:hover{border-color:var(--acc-s);background:var(--tint);color:var(--acc)}
+.kkbtn.on{border-color:var(--acc);background:var(--acc);color:#fff}
+.kkbtn.on:hover{background:var(--acc-s);color:#fff}
+.kkliste{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px;align-items:center}
+.kkkisi{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;
+        border:1px solid var(--line);border-radius:999px;padding:1px 9px 1px 2px;
+        background:var(--panel)}
+.kkkisi .av{width:17px;height:17px;font-size:8.5px}
+.kkkisi.kk-yes{border-color:#9fdcbe;background:#e2f5ec}
+.kkkisi.kk-maybe{border-color:#f0d5a8;background:#fdf0d9}
+.kkkisi.kk-no{opacity:.6;text-decoration:line-through}
+
+/* ---- balondaki ek açıklaması (göç 013) ----
+   Etiketten AYRI: etiket paylaşılan sözlükten gelir ve aranır, açıklama yalnız
+   o eke aittir. Görselin altında, ona göre ikincil. */
+.bacik{margin-top:4px;font-size:12px;line-height:1.45;color:var(--txt)}
+.msg.me .bub .bacik{color:rgba(255,255,255,.92)}
+.bacik-form{display:flex;gap:4px;align-items:center;margin-top:4px}
+.bacik-form input{font-size:11.5px;padding:2px 7px;border:1px dashed var(--line);
+       border-radius:9px;background:transparent;color:inherit;width:100%}
+.bacik-form button{border:1px solid var(--line);background:none;border-radius:9px;
+       font-size:11px;line-height:1.5;padding:1px 7px;color:inherit;opacity:.7}
+.bacik-form button:hover{opacity:1}
+.msg.me .bub .bacik-form input,.msg.me .bub .bacik-form button{border-color:rgba(255,255,255,.35)}
+
+/* ---- yanıtla düğmesi (ortak/mesaj.html) ----
+   Zaman damgasının solunda, ona göre sessiz: balonun üstünde ikinci bir eylem
+   çağrısı gibi durmamalı. */
+.ts{display:flex;align-items:center;gap:7px;justify-content:flex-end}
+.ryanit{border:none;background:transparent;padding:0;font:inherit;font-size:10px;
+        font-weight:700;color:var(--acc);cursor:pointer;opacity:.75}
+.ryanit:hover{opacity:1;border-color:transparent;background:transparent}
+
+/* ---- tam ekran görsel (lightbox, shared/static/ortak.js) ----
+   /media/{id} ham dosyayı yeni sekmede açıyordu: çıplak resim, geri dönüş yok. */
+.lightbox{position:fixed;inset:0;z-index:120;background:rgba(20,12,45,.88);
+          display:flex;flex-direction:column;align-items:center;justify-content:center;
+          gap:12px;padding:32px 20px}
+.lightbox img{max-width:min(96vw,1200px);max-height:82vh;width:auto;height:auto;
+              border-radius:12px;box-shadow:0 18px 60px rgba(0,0,0,.5)}
+.lbacik{margin:0;max-width:min(92vw,70ch);color:#fff;font-size:13.5px;line-height:1.55;
+        text-align:center}
+.lbkapat{position:absolute;top:calc(14px + env(safe-area-inset-top));right:16px;
+         width:38px;height:38px;border-radius:50%;border:none;background:rgba(255,255,255,.14);
+         color:#fff;font-size:16px;line-height:1}
+.lbkapat:hover{background:rgba(255,255,255,.28);color:#fff;border-color:transparent}
+
+/* ---- @anma otomatik tamamlama (kompozer) ----
+   Kompozerin ÜSTÜNDE açılır: altında alt sekme çubuğu / ekran kenarı var. */
+.anmapop{position:absolute;bottom:calc(100% + 6px);left:0;z-index:60;min-width:min(260px,80vw);
+         max-height:230px;overflow:auto;background:var(--panel);border:1px solid var(--acc2);
+         border-radius:12px;box-shadow:var(--sh-lg);padding:4px}
+.anmasat{display:flex;align-items:baseline;gap:7px;width:100%;text-align:left;border:none;
+         background:transparent;border-radius:8px;padding:6px 9px;font-size:13px}
+.anmasat b{color:var(--acc);font-weight:700}
+.anmasat span{color:var(--dim);font-size:11.5px;overflow:hidden;text-overflow:ellipsis;
+              white-space:nowrap}
+.anmasat:hover,.anmasat.on{background:var(--tint);border-color:transparent}
+/* Kompozer konumlandırma bağlamı olmalı, yoksa açılır kutu sayfaya göre durur. */
+.comp,.dcomp .in{position:relative}
+
+/* ---- açılışta kart bloğu seçimi (yeni kayıt formu/dialogu) ---- */
+.kartsec-satir{display:flex;gap:7px;flex-wrap:wrap}
+.kartsec-kutu{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);
+              border-radius:999px;padding:5px 12px;font-size:12.5px;cursor:pointer;
+              background:var(--panel);color:var(--txt)}
+.kartsec-kutu input{width:auto;margin:0}
+.kartsec-kutu:has(input:checked){border-color:var(--acc);background:var(--tint);color:var(--acc)}
+
+/* ---- ayarlar dialogundaki radyo seçenekleri (ortak/ayarlar.html) ----
+   .opt düğmeler için yazılmıştı; burada <label>: aynı görünüm, tıklanan yer
+   radyonun kendisi olmak zorunda kalmasın. */
+.opts label.opt{cursor:pointer;gap:9px}
+.opts label.opt input{width:auto;flex-shrink:0;margin:0}

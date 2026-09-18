@@ -13,7 +13,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup, escape
 
-from . import auth, config, csrf, db, mentions, scope
+from . import auth, config, csrf, db, mentions, push, scope
 
 SHARED_DIR = Path(__file__).parent / "templates"
 ROOT = Path(__file__).resolve().parents[1]
@@ -92,6 +92,10 @@ def site_templates(directory: Path) -> Jinja2Templates:
     # scope'u (spec/71-yonetim-paneli.md §2).
     t.env.globals["can_manage_users"] = lambda u: bool(u) and (
         db.as_bool(u["is_admin"]) or scope.has_scope(u, "manage_users"))
+    # Ayarlar dialogu (ortak/ayarlar.html) bunu okur. Kademelerin metni suzmeyi
+    # yapan modulde duruyor (shared/push.py): ekrandaki yazi ile koddaki kural
+    # ayrisirsa kullanici kapattigini sandigi bildirimi almaya devam eder.
+    t.env.globals["notify_levels"] = lambda: push.NOTIFY_LEVELS
     # Mesaj balonu bunu kullanir: {{ m.body | mention }} — sablonda mantik yok,
     # yalniz bicimleme (spec/10-kararlar.md 'Yapma').
     t.env.filters["mention"] = mention_html

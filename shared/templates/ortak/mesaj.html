@@ -18,11 +18,16 @@
         <div class="bmedia mtomb">🖼 Görsel silindi</div>
         {% else %}
         <div class="bmedia">
-          <a href="/media/{{ media.id }}" target="_blank" rel="noopener noreferrer">
+          {# Tam ekran: /media/{id} ham dosyayi yeni sekmede aciyordu — ciplak
+             bir resim, geri donus yok, aciklama ve etiket gorunmez. data-lightbox
+             sayfa icinde acar; JS yoksa href hala calisir (ilerlemeli iyilestirme). #}
+          <a href="/media/{{ media.id }}" data-lightbox
+             data-caption="{{ media.caption or '' }}"
+             target="_blank" rel="noopener noreferrer">
             <img class="bimg" src="/media/{{ media.id }}/thumb"
                  {% if media.width %}width="{{ media.width }}"{% endif %}
                  {% if media.height %}height="{{ media.height }}"{% endif %}
-                 loading="lazy" alt="{{ media.original_name or 'Ek görsel' }}">
+                 loading="lazy" alt="{{ media.caption or media.original_name or 'Ek görsel' }}">
           </a>
           {% if media.can_delete %}
           <button type="button" class="mdel" title="Görseli sil"
@@ -30,11 +35,33 @@
                   hx-target="closest .msg" hx-swap="outerHTML"
                   hx-confirm="Bu görseli silmek istediğine emin misin?">🗑</button>
           {% endif %}
+          {# Aciklama ETIKETTEN ayri (goc 013): etiket paylasilan sozlukten gelir
+             ve aranir, aciklama yalniz bu eke aittir. Yazma yetkisi de ayri —
+             yukleyen kendi gorseline etiket kapsami olmadan aciklama yazabilir. #}
+          {% if media.caption %}<div class="bacik">{{ media.caption }}</div>{% endif %}
+          {% if media.can_caption %}
+          <form class="bacik-form" hx-post="/media/{{ media.id }}/caption"
+                hx-target="closest .msg" hx-swap="outerHTML">
+            <input type="text" name="caption" value="{{ media.caption or '' }}"
+                   maxlength="200" autocomplete="off" placeholder="açıklama ekle…">
+            <button type="submit" title="Açıklamayı kaydet">✓</button>
+          </form>
+          {% endif %}
           {% include "ortak/tag_strip.html" %}
         </div>
         {% endif %}
       {% endfor %}
-      <div class="ts">{{ m.time }}</div>
+      <div class="ts">
+        {# Yanit: ayri bir yanit tablosu ACMAZ — govdeye yazarin @anahtarini
+           koyar ve odagi kompozere verir. Anma zaten hedefi katilimci
+           kumesinden her seferinde cozuyor (KNOW-263), yani "yanit" burada
+           zaten var olan mekanizmanin kisayolu; ikinci bir gercek kurulmuyor. #}
+        {% if not m.mine and m.handle %}
+        <button type="button" class="ryanit" data-reply="{{ m.handle }}"
+                title="{{ m.author.name }} kişisine yanıt ver">↩ Yanıtla</button>
+        {% endif %}
+        {{ m.time }}
+      </div>
     </div>
   </div>
 {% endif %}

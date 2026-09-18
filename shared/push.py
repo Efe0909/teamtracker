@@ -64,6 +64,56 @@ def unsubscribe(endpoint: str) -> None:
     db.x("delete from push_subscriptions where endpoint = %s", (endpoint,))
 
 
+# --- bildirim tercihi (goc 013) -------------------------------------------
+#
+# Kademeler users.notify_level'da, kisi basina TEK deger. Suzme send()'in
+# ICINDE: gonderim yolunun tek kapisi orasi, cagiranlarin her biri ayrica
+# kontrol etseydi biri unuturdu ve "kapattim ama geliyor" olurdu.
+
+NOTIFY_LEVELS: dict[str, str] = {
+    "all": "Her hareket — kartlarımdaki her şey",
+    "mentions": "Yalnızca anıldığımda (@adım, @all, @here, @team)",
+    "none": "Hiçbiri — bildirim gönderme",
+}
+DEFAULT_LEVEL = "all"
+
+
+def valid_level(level: str) -> bool:
+    return level in NOTIFY_LEVELS
+
+
+def set_notify_level(user_id, level: str) -> bool:
+    """Kisinin varsayilan bildirim tercihi. Gecersiz deger YAZILMAZ."""
+    if not valid_level(level):
+        return False
+    db.x("update users set notify_level = %s where id = %s", (level, db.uid(user_id)))
+    return True
+
+
+def notify_level(user) -> str:
+    """Sozlukte olmayan (elle bozulmus) deger varsayilana duser — bilinmeyen bir
+    kademe yuzunden kimse sessizce susturulmasin."""
+    level = (user or {}).get("notify_level") or DEFAULT_LEVEL
+    return level if valid_level(level) else DEFAULT_LEVEL
+
+
+def _wants(user_ids, kind: str) -> list:
+    """Bu bildirimi isteyen kullanicilar. TEK sorgu, gonderimden once."""
+    ids = [db.uid(k) for k in user_ids if db.uid(k) is not None]
+    if not ids:
+        return []
+    rows = db.q("select id, notify_level from users where id = any(%s)", (ids,))
+    out = []
+    for r in rows:
+        level = notify_level(r)
+        if level == "none":
+            continue
+        if level == "mentions" and kind != "mention":
+            continue
+        out.append(r["id"])
+    return out
+
+
 def subscriptions(user_ids) -> list[dict]:
     ids = [db.uid(k) for k in user_ids if db.uid(k) is not None]
     if not ids:
@@ -75,16 +125,25 @@ def subscriptions(user_ids) -> list[dict]:
 
 
 def send(user_ids, title: str, body: str, url: str | None = None,
-         tag: str | None = None) -> dict:
+         tag: str | None = None, kind: str = "mention") -> dict:
     """Verilen kullanicilarin TUM cihazlarina bildirim yollar.
 
     `tag`: ayni tag'li bildirimler telefonda ust uste yigilmaz, birbirini
     gunceller (spec/40-push.md). Kart bildirimlerinde kart kimligi verilirse
     bir kart icin tek satir gorunur.
 
+    `kind`: bildirimin turu — kisinin tercihiyle (users.notify_level, goc 013)
+    burada karsilastirilir. Varsayilan "mention" cunku bugun push'u ureten tek
+    yol anma (mentions.notify); baska bir tur eklendiginde cagiran onu ACIKCA
+    vermeli, yoksa "yalnizca anildigimda" diyen kisiye de gider.
+
     Doner: {"sent": n, "removed": n, "failed": n}
     """
     if not enabled():
+        return {"sent": 0, "removed": 0, "failed": 0}
+
+    user_ids = _wants(user_ids, kind)
+    if not user_ids:
         return {"sent": 0, "removed": 0, "failed": 0}
 
     # Yol oneki SABIT YAZILMAZ: mobil yuz kendi alan adinda kokte duruyor

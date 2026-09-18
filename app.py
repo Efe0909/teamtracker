@@ -25,7 +25,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from shared import (attachments, auth, cards, config, csrf, db, hardening, identity, media,
-                    push, service)
+                    mentions, push, service)
 from shared.render import SHARED_DIR, site_templates
 from sites.dashboard import routes as dashboard
 from sites.mobil import routes as mobil
@@ -382,6 +382,25 @@ def remove_card(request: Request, card_id: str):
     return _blocks(request, item, user, "ortak/kartlar.html")
 
 
+@app.post("/card/{card_id}/signup", response_class=HTMLResponse)
+async def sign_card(request: Request, card_id: str):
+    """Karta katilim: toplantiya geliyorum / havuzdaki isi aliyorum (goc 013).
+
+    YAZMA YETKISI ISTEMEZ — bilerek. Kaydi duzenleyemeyen biri de kendi adina
+    "geliyorum" diyebilmeli; aksi halde toplanti katilimi yalnizca kartin
+    sahiplerine sorulurdu ve ozellik anlamsiz kalirdi. Yazilan tek sey kisinin
+    KENDI satiri (card_signups birincil anahtari card_id+user_id), yani
+    baskasi adina cevap verilemez.
+    """
+    card = _card_or_404(card_id)
+    user = auth.current_user(request)
+    item = service.get_item(card["item_id"])
+    form = await request.form()
+    cards.sign(card["id"], user["id"], str(form.get("answer") or ""),
+               str(form.get("note") or ""))
+    return _blocks(request, item, user, "ortak/kartlar.html")
+
+
 @app.post("/card/{card_id}/media", response_class=HTMLResponse)
 async def add_card_media(request: Request, card_id: str):
     """Medya kartina gorsel. Ek KARTIN kendisine asilir (owner_type='card'),
@@ -432,6 +451,69 @@ def remove_media_tag(request: Request, attachment_id: str, tag_id: str):
         raise HTTPException(403, "bu eki etiketleme yetkin yok")
     attachments.remove_tag(user, row, tag_id)
     return _tag_strip(request, row)
+
+
+@app.post("/media/{attachment_id}/caption", response_class=HTMLResponse)
+async def set_media_caption(request: Request, attachment_id: str):
+    """Ekin aciklamasi (goc 013). Yetki: yukleyen ya da admin (can_caption).
+
+    Yanit, ekin ASILI OLDUGU seye gore degisir: akistaki bir gorsel balonu
+    yeniden cizilir, kart blogundaki gorsel kart seridini tazeler. Tek bir
+    sablon dondurulseydi biri digerinin yerine yanlis parcayi basardi.
+    """
+    user = auth.current_user(request)
+    row = _attachment_or_404(attachment_id)
+    if not attachments.can_caption(user, row):
+        raise HTTPException(403, "bu ekin açıklamasını değiştirme yetkin yok")
+    form = await request.form()
+    attachments.set_caption(row, str(form.get("caption") or ""))
+    if row["owner_type"] == "card":
+        card = _card_or_404(str(row["owner_id"]))
+        item = service.get_item(card["item_id"])
+        return _blocks(request, item, user, "ortak/kartlar.html")
+    m = service.event_message(row["owner_id"], user)
+    if m is None:
+        return HTMLResponse("")
+    return _MEDIA_TPL.TemplateResponse(request, "ortak/mesaj.html", {"m": m})
+
+
+@app.post("/settings/notify")
+async def set_notify_level(request: Request):
+    """Varsayilan bildirim tercihi (goc 013). Iki yuzde de ayni uc.
+
+    Kisi YALNIZ KENDI tercihini degistirir — hedef kimlik formdan gelmez,
+    oturumdan okunur; baska bir kullaniciyi susturmanin yolu yok.
+    """
+    user = auth.current_user(request)
+    form = await request.form()
+    if not push.set_notify_level(user["id"], str(form.get("level") or "")):
+        # Sessizce yutma: kullanici "kaydettim" sanip eski tercihiyle kalmasin.
+        raise HTTPException(400, "geçersiz bildirim tercihi")
+    back = urlparse(request.headers.get("referer") or "").path or "/"
+    return RedirectResponse(back, status_code=303)
+
+
+@app.get("/mentions")
+def list_mentions(request: Request):
+    """Anma sozlugu — kompozerdeki otomatik tamamlama icin.
+
+    KIMIN anilabilecegini DEGIL, kimin VAR oldugunu doner: hedef kumesi her
+    mesajda sunucuda yeniden cozuluyor (KNOW-263, mentions.resolve) ve kart
+    disindan biri anildiginda davet sayiliyor. Liste burada daraltilsaydi
+    "davet" yolu arayuzden hic kullanilamazdi.
+
+    Tek sorgu, sayfa omru boyunca bir kez cekilir (ortak.js).
+    """
+    user = auth.current_user(request)
+    if user is None:
+        return JSONResponse({"hata": "oturum yok"}, status_code=401)
+    people = [{"handle": mentions.handle(u["name"]), "name": u["name"], "color": u["color"]}
+              for u in auth.all_users()]
+    groups = [{"handle": g, "name": label, "color": None} for g, label in (
+        ("all", "herkes — bu sohbetin katılımcıları"),
+        ("here", "şu an buradakiler (son 10 dk)"),
+        ("team", "kaydın takımı"))]
+    return JSONResponse({"people": people, "groups": groups})
 
 
 @app.get("/tags")

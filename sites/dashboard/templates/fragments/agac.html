@@ -4,6 +4,12 @@
    Duz liste + girinti: ic ice dongu yerine derinlik degeri. Agac zaten Euler
    turu sirasinda geliyor (tin), yani liste sirasi dogru gorunumu veriyor.
 
+   KATLAMA ISTEMCIDE: satirlar zaten hepsi DOM'da (duz liste) ve agac surec
+   belleginde kurulu — hangi dalin acik oldugunu sunucuya sormak her ok
+   tiklamasinda bir istek demekti. data-id/data-parent bu yuzden var:
+   dashboard.js hiyerarsiyi bu iki ozellikten okuyup gorunurlugu hesapliyor,
+   ikinci bir agac kurmuyor.
+
    YERLESIM KURALI BURADA YAZILMAZ: her dugum alabilecegi tur listesini
    (d.types) sunucudan hazir alir, alt dugum formlari child_types'i kullanir.
    Sablonun kendi kuralini uydurmasi sunucuyla celiski demek (spec/72 §7). #}
@@ -18,13 +24,26 @@
 
   <ul class="tree">
     {% for d in nodes %}
-    <li class="tnode{% if not d.is_active %} tpasif{% endif %}" style="--derinlik:{{ d.depth }}">
+    <li class="tnode{% if not d.is_active %} tpasif{% endif %}"
+        style="--derinlik:{{ d.depth }}"
+        data-id="{{ d.id }}" data-parent="{{ d.parent or '' }}"
+        data-name="{{ d.name }}{% if d.description %} {{ d.description }}{% endif %}">
       <div class="trow">
-        <span class="tkol">{% if d.has_children %}▾{% else %}·{% endif %}</span>
+        {# Ok GERCEK BIR DUGME: eskiden ▾ duz bir yaziydi, tiklanabilir degildi
+           ve gri oldugu icin zar zor goruluyordu (kullanici istegi). Yonu
+           dashboard.js ceviriyor; sunucu acik/kapali durumu bilmiyor. #}
+        {% if d.has_children %}
+        <button type="button" class="tkol" data-fold aria-expanded="false"
+                title="Alt düğümleri aç / kapat">▸</button>
+        {% else %}
+        <span class="tkol tyaprak">·</span>
+        {% endif %}
         <span class="tad">{{ d.name }}</span>
         <span class="ttur">{{ d.type_label }}</span>
+        {% if d.child_count %}
+        <span class="tsayi" title="alt düğüm sayısı">{{ d.child_count }}</span>
+        {% endif %}
         {% if not d.is_active %}<span class="tpasif-etiket" title="pasif — yeni kayıt ve dropdown'larda çıkmaz">pasif</span>{% endif %}
-        {% if d.record_count %}<span class="tkayit" title="bu düğümdeki kayıt sayısı">{{ d.record_count }}</span>{% endif %}
         {% if can_write %}
         <span class="teylem">
           <button class="tmini" data-toggle="#duzenle-{{ d.id }}" title="Düzenle">✎</button>
@@ -93,4 +112,8 @@
     </li>
     {% endfor %}
   </ul>
+
+  {# Arama hicbir sey bulamayinca liste bos gorunurdu ve "arama mi bozuk, dal mi
+     yok" ayirt edilemezdi. Kutu HER ZAMAN basilir, gorunurlugu JS ceviriyor. #}
+  <div class="tbos" hidden>Bu aramayla eşleşen düğüm yok.</div>
 </div>

@@ -15,6 +15,11 @@
     <thead><tr>
       <th style="width:38%">Kayıt</th><th>Düğüm</th><th>Takım</th><th>Öncelik</th>
       <th>Durum</th><th>Sorumlu</th><th>Son tarih</th><th>Hareket</th>
+      {# Secim kutulari: HENUZ BIR UCA BAGLI DEGIL (kullanici "ne yapacagimizi
+         sonra baglariz" dedi). Isaretli kimlikler .sec-say seridinde gorunur,
+         toplu islem geldiginde bu kolon degil yalnizca serit degisecek. #}
+      <th class="seccol"><input type="checkbox" data-sec-all
+                                title="Hepsini seç" aria-label="Hepsini seç"></th>
     </tr></thead>
     <tbody>
     {% for r in rows %}
@@ -35,10 +40,19 @@
         <td>{% if r.due %}<span {% if r.overdue %}class="gec"{% endif %}>{{ r.due }}</span>
             {% else %}<span class="dim">—</span>{% endif %}</td>
         <td class="dim">{{ r.time }}</td>
+        <td class="seccol"><input type="checkbox" data-sec value="{{ r.id }}"
+                                  aria-label="{{ r.title }} — seç"></td>
       </tr>
     {% else %}
-      <tr><td colspan="8"><div class="empty">Bu filtrelerle kayıt yok.</div></td></tr>
+      <tr><td colspan="9"><div class="empty">Bu filtrelerle kayıt yok.</div></td></tr>
     {% endfor %}
     </tbody>
   </table>
+
+  {# Secim seridi: kac satir isaretli. Hicbir sey secili degilken cizilmez. #}
+  <div class="secserit" hidden>
+    <b class="secsay">0</b> kayıt seçili
+    <button type="button" class="tmini" data-sec-clear>seçimi bırak</button>
+    <span class="small muted">— toplu işlemler henüz bağlanmadı</span>
+  </div>
 </div>

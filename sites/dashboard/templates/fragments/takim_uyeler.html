@@ -1,24 +1,83 @@
 {# fragment: takim_uyeler — uyeler, rolleri ve uzerlerindeki acik eylem sayisi.
    Kayit takima tanimlanir, eylem KISIYE atanir (spec/10-kararlar.md): bu liste
-   "bu takimin isi kimin uzerinde" sorusunun cevabi. #}
-<div class="uyeler" data-fragment="takim_uyeler">
+   "bu takimin isi kimin uzerinde" sorusunun cevabi.
+
+   UYELIK YONETIMI BURADA (kullanici istegi): eskiden "uyelikler Yonetim
+   Paneli'nden (🚧) tanimlanacak" yaziyordu ve arayuzden hicbir yol yoktu —
+   uyeler yalnizca tohumdan geliyordu. Ekran takim sayfasi oldu cunku ekleyen
+   kisi zaten burada duruyor.
+
+   Yetki: sablon can_manage'e gore cizer, asil kontrol ucta (manage_teams
+   kapsami ya da admin) — spec/71'deki "panel gorunen yuz, kapi degil" kurali. #}
+<div class="uyeler" id="uyeler" data-fragment="takim_uyeler">
   <div class="ahead">👥 Üyeler
     <span class="tb h0">{{ members | length }}</span>
     {% if open_action_count %}<span class="tb h2">{{ open_action_count }} açık eylem</span>{% endif %}
+    {% if can_manage and addable %}
+    <button type="button" class="kekle" data-dialog="dlg-uye-ekle">+ Üye ekle</button>
+    {% endif %}
   </div>
 
   {% for u in members %}
   <div class="urow">
     <span class="av" style="background:{{ u.color }}">{{ u.name[0] }}</span>
     <span class="un">{{ u.name }}</span>
+    {% if can_manage %}
+    {# Rol degistirme AYNI uca gider (upsert): "ekle" ile "rolu degistir" ayni
+       hareket, ikinci bir uc kurulmadi. #}
+    <select class="urol" name="role"
+            hx-post="/team/{{ team.id }}/members" hx-vals='{"user_id": "{{ u.id }}"}'
+            hx-target="#uyeler" hx-swap="outerHTML" hx-trigger="change"
+            aria-label="{{ u.name }} — rol">
+      {% for k, et in roles.items() %}
+      <option value="{{ k }}" {% if u.role == k %}selected{% endif %}>{{ et }}</option>
+      {% endfor %}
+    </select>
+    {% else %}
     <span class="tb {{ 'h3' if u.role == 'lead' else ('h2' if u.role == 'mentor' else 'h0') }}">
       {{ roles[u.role] }}</span>
+    {% endif %}
     <span class="small muted">{{ u.email }}</span>
     <span style="flex:1"></span>
     {% if u.open_action_count %}<span class="chip c-eyl" title="bu takımın işindeki açık eylemi">
       ⚡{{ u.open_action_count }}</span>{% else %}<span class="small muted">—</span>{% endif %}
+    {% if can_manage %}
+    {# Cikarmak uyelik bagini koparir, GECMISI GOTURMEZ: kisinin bu takimdaki
+       kayitlari ve eylemleri yerinde kalir. Onay metni bunu soyluyor. #}
+    <button type="button" class="tmini tsil" title="Takımdan çıkar"
+            hx-delete="/team/{{ team.id }}/members/{{ u.id }}"
+            hx-target="#uyeler" hx-swap="outerHTML"
+            hx-confirm="{{ u.name }} takımdan çıkarılsın mı? Kayıtları ve eylemleri yerinde kalır, yalnızca üyelik bağı kopar.">✕</button>
+    {% endif %}
   </div>
   {% else %}
-  <div class="empty small" style="padding:8px">Üye yok — üyelikler Yönetim Paneli'nden (🚧) tanımlanacak.</div>
+  <div class="empty small" style="padding:8px">
+    Üye yok.{% if can_manage %} Yukarıdaki <b>+ Üye ekle</b> ile başla.
+    {% else %} Üye eklemek <b>manage_teams</b> yetkisi ister.{% endif %}
+  </div>
   {% endfor %}
+
+  {% if can_manage and addable %}
+  <dialog id="dlg-uye-ekle" class="fdlg">
+    <h3>👥 Takıma üye ekle</h3>
+    <p class="dhint">Üyelik bir yetki bağı: üye takımın duvarına yazabilir ve
+       <b>@all</b> / <b>@here</b> anmaları ona ulaşır.</p>
+    <form hx-post="/team/{{ team.id }}/members" hx-target="#uyeler" hx-swap="outerHTML">
+      <label class="dfld"><span>Kişi</span>
+        <select name="user_id" required>
+          {% for u in addable %}<option value="{{ u.id }}">{{ u.name }} — {{ u.email }}</option>{% endfor %}
+        </select></label>
+      <label class="dfld"><span>Rol</span>
+        <select name="role">
+          {% for k, et in roles.items() %}
+          <option value="{{ k }}" {% if k == 'member' %}selected{% endif %}>{{ et }}</option>
+          {% endfor %}
+        </select></label>
+      <div class="dact">
+        <button type="submit" class="primary">Ekle</button>
+        <button type="button" class="ghost" data-dialog-close>Vazgeç</button>
+      </div>
+    </form>
+  </dialog>
+  {% endif %}
 </div>

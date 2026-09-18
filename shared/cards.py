@@ -39,6 +39,23 @@ CARD_TYPES: dict[str, dict] = {
         "has_media": False,
         "hint": "Ne zaman, nerede, kim — konuşulacaklar tek yerde.",
     },
+    "pool": {
+        "label": "Havuz kartı",
+        "icon": "🫱",
+        "has_media": False,
+        "hint": "İş burada durur, isteyen üstüne alır — atama yok, gönüllülük var.",
+    },
+}
+
+# Katilim kabul eden turler ve o turde hangi cevaplar anlamli (goc 013).
+# Sozluk kart turunun YANINDA degil AYRI: her turun katilimi yok, olan turde de
+# cevap kumesi farkli — CARD_TYPES'a gomulseydi "katilimi yok" bir None ile
+# anlatilirdi ve sablon her yerde onu elemek zorunda kalirdi.
+SIGNUP: dict[str, dict[str, str]] = {
+    "meeting": {"yes": "Katılıyorum", "maybe": "Belki", "no": "Katılamıyorum"},
+    # Havuzda "belki" yok: is ya alinir ya alinmaz. "no" da cizilmez — yazilmamak
+    # zaten cevaptir; ucta kabul edilir ki kayitli biri geri cekilebilsin.
+    "pool": {"yes": "Bu işi alıyorum"},
 }
 
 # Tur basina serbest alanlar: (anahtar, etiket, html input turu).
@@ -47,7 +64,12 @@ FIELDS: dict[str, list[tuple[str, str, str]]] = {
     "media": [],
     "meeting": [("when", "Tarih ve saat", "datetime-local"),
                 ("place", "Yer", "text"),
+                # Toplanti artik cogu zaman uzaktan: baglanti yeri "Yer"in
+                # icinde serbest metin olarak kayboluyordu, tiklanabilir degildi.
+                ("link", "Bağlantı (Meet/Zoom)", "url"),
                 ("agenda", "Gündem", "textarea")],
+    "pool": [("need", "Kaç kişi lazım", "number"),
+             ("detail", "Ne yapılacak", "textarea")],
 }
 
 
@@ -114,6 +136,60 @@ def delete(card_id) -> None:
     db.x("delete from item_cards where id = %s", (db.uid(card_id),))
 
 
+# --- katilim (goc 013) ----------------------------------------------------
+#
+# "Toplantiya kim geliyor" ile "havuza kim yazildi" AYNI sorunun iki adi: bir
+# karta bagli, kisi basina TEK cevap. O yuzden tek tablo, tek uc, tek serit
+# sablonu; ayrim yalnizca hangi cevaplarin cizildiginde (SIGNUP).
+
+
+def signup_answers(card_type: str) -> dict[str, str]:
+    """Bu turde anlamli cevaplar; katilim kabul etmeyen turde bos sozluk."""
+    return SIGNUP.get(card_type, {})
+
+
+def sign(card_id, user_id, answer: str, note: str | None = None) -> bool:
+    """Katilim yaz ya da degistir. Doner: yazildi mi.
+
+    UPSERT: "fikrimi degistirdim" ikinci bir satir degil ayni satirin yeni
+    hali — yoksa kartta iki cevap gorunur, hangisi gecerli belirsiz kalirdi.
+    Bos answer KAYDI SILER: geri cekilmenin yolu ayri bir uc degil.
+    """
+    card = get(card_id)
+    if card is None:
+        return False
+    cid, uid = card["id"], db.uid(user_id)
+    if not answer:
+        db.x("delete from card_signups where card_id = %s and user_id = %s", (cid, uid))
+        return True
+    # Beyaz liste TURDEN gelir: havuz kartina "belki" yazilamaz, cunku o turde
+    # "belki" diye bir cevap yok (SIGNUP). Serbest metin girerse 400.
+    if answer not in signup_answers(card["card_type"]):
+        raise HTTPException(400, "bu kart türünde geçersiz katılım")
+    db.x("insert into card_signups (card_id,user_id,answer,note,signed_at)"
+         " values (%s,%s,%s,%s,%s)"
+         " on conflict (card_id,user_id) do update"
+         " set answer = excluded.answer, note = excluded.note, signed_at = excluded.signed_at",
+         (cid, uid, answer, (note or "").strip() or None, db.now()))
+    return True
+
+
+def signups_for(card_ids: list) -> dict:
+    """Kart basina katilim satirlari — TEK sorgu (spec/10-kararlar.md N+1 yasagi)."""
+    if not card_ids:
+        return {}
+    ids = [i for i in (db.uid(c) for c in card_ids) if i is not None]
+    if not ids:
+        return {}
+    rows = db.q("select s.*, u.name, u.color from card_signups s"
+                " join users u on u.id = s.user_id"
+                " where s.card_id = any(%s) order by s.signed_at", (ids,))
+    out: dict = {}
+    for r in rows:
+        out.setdefault(r["card_id"], []).append(r)
+    return out
+
+
 # --- okuma ---------------------------------------------------------------
 
 
@@ -139,13 +215,22 @@ def of_item(item_id, user) -> list[dict]:
     if not rows:
         return []
     media_by_card = attachments.for_owners("card", [r["id"] for r in rows])
+    signups_by_card = signups_for([r["id"] for r in rows])
     out = []
     for r in rows:
         data = dict(r["data"] or {})
         media = [{"id": m["id"], "mime": m["mime"], "width": m["width"], "height": m["height"],
                   "original_name": m["original_name"], "deleted": m["deleted_at"] is not None,
-                  "can_delete": attachments.can_delete(user, m), "can_tag": False, "tags": []}
+                  "caption": m["caption"], "can_delete": attachments.can_delete(user, m),
+                  "can_caption": attachments.can_caption(user, m), "can_tag": False, "tags": []}
                  for m in media_by_card.get(r["id"], [])]
+        # Katilim seridi sablona HAZIR gelir: "ben ne dedim" ve "kimler var"
+        # sorularinin ikisi de burada cevaplanir, sablon satir suzmez.
+        answers = signup_answers(r["card_type"])
+        signups = [{"user_id": s["user_id"], "name": s["name"], "color": s["color"],
+                    "answer": s["answer"], "answer_label": answers.get(s["answer"], s["answer"]),
+                    "note": s["note"]} for s in signups_by_card.get(r["id"], [])]
+        mine = next((s for s in signups if s["user_id"] == user["id"]), None) if user else None
         out.append({
             "id": r["id"], "type": r["card_type"], "title": r["title"],
             "label": label(r["card_type"]), "icon": CARD_TYPES.get(r["card_type"], {}).get("icon", "🗂"),
@@ -153,5 +238,8 @@ def of_item(item_id, user) -> list[dict]:
             "fields": FIELDS.get(r["card_type"], []),
             "data": data, "when_label": _when_label(data.get("when")),
             "media": [m for m in media if not m["deleted"]],
+            "answers": answers, "signups": signups,
+            "my_answer": mine["answer"] if mine else "",
+            "yes_count": sum(1 for s in signups if s["answer"] == "yes"),
         })
     return out
