@@ -28,3 +28,10 @@ deploy/olusan/
 
 # isletim sistemi
 .DS_Store
+
+.claude/
+.codegraph/
+.mcp.json
+.rtk/
+plan.md
+spec/.zennotes/
