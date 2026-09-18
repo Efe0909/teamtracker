@@ -75,28 +75,39 @@
   {% endif %}
 
   {% if c.has_media %}
-  {# Kartin aciklamasi (goc 015): blogun tamamini anlatir. Ek BASINA aciklama
-     YOK — ekin kendi anlatimi etiket (goc 010), ikisi ayni isi yapmasin.
-     Duzenleme dialogu bu alani cards.FIELDS'ten kendiliginden ciziyor. #}
-  {% if c.data.description %}<div class="kmetin">{{ c.data.description }}</div>{% endif %}
-  <div class="kgorseller">
-    {% for media in c.media %}
-    {# Tam ekran goruntuleyici: /media/{id} ham dosyayi ACIYORDU (yeni sekmede
-       ciplak bir resim, geri donus yok). data-lightbox ile sayfa icinde acilir;
-       JS yoksa href hala calisir — ilerlemeli iyilestirme.
+  {# Gorseller SOLDA, aciklama SAGDA — dar kalirsa aciklama altina sarar
+     (.kmedya flex-wrap, .kaciklama flex-basis 200px). Aciklama eskiden
+     gorsellerin USTUNDE soluk bir satirdi ve hayalet metin gibi duruyordu;
+     artik kendi kutusu var (kullanici istegi).
 
-       Alinti metni KARTIN aciklamasi: gorseller bu blogun parcasi, hepsi ayni
-       seyi anlatiyor. Ek basina metin yok (goc 015). #}
-    <a class="kgorsel" href="/media/{{ media.id }}" data-lightbox
-       data-caption="{{ c.data.description or '' }}"
-       target="_blank" rel="noopener noreferrer">
-      <img src="/media/{{ media.id }}/thumb" loading="lazy"
-           alt="{{ media.original_name or 'Kart görseli' }}">
-    </a>
-    {% else %}
-    <div class="empty small" style="padding:4px">Henüz görsel yok.</div>
-    {% endfor %}
+     Etiketler HER GORSELIN ALTINDA: ekin anlatimi etikettir (goc 010, kartin
+     aciklamasi blogun tamamini anlatir — ikisi ayri soru). #}
+  <div class="kmedya">
+    <div class="kgorseller">
+      {% for media in c.media %}
+      <div class="kgorsel-kutu">
+        {# Tam ekran goruntuleyici: /media/{id} ham dosyayi ACIYORDU (yeni
+           sekmede ciplak bir resim, geri donus yok). data-lightbox sayfa
+           icinde acar; JS yoksa href hala calisir — ilerlemeli iyilestirme.
+           Alinti metni KARTIN aciklamasi: gorseller bu blogun parcasi. #}
+        <a class="kgorsel" href="/media/{{ media.id }}" data-lightbox
+           data-caption="{{ c.data.description or '' }}"
+           target="_blank" rel="noopener noreferrer">
+          <img src="/media/{{ media.id }}/thumb" loading="lazy"
+               alt="{{ media.original_name or 'Kart görseli' }}">
+        </a>
+        {% include "ortak/tag_strip.html" %}
+      </div>
+      {% else %}
+      <div class="empty small" style="padding:4px">Henüz görsel yok.</div>
+      {% endfor %}
+    </div>
+
+    {% if c.data.description %}
+    <div class="kaciklama">{{ c.data.description }}</div>
+    {% endif %}
   </div>
+
   {% if can_edit %}
   {# Yukleme ANINDA gider: dosya secilince form gonderilir (change tetikleyici),
      ayri bir "yukle" dugmesi yok. #}

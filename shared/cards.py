@@ -221,12 +221,26 @@ def of_item(item_id, user) -> list[dict]:
         return []
     media_by_card = attachments.for_owners("card", [r["id"] for r in rows])
     signups_by_card = signups_for([r["id"] for r in rows])
+    # Etiketler kart ekleri icin de gecerli. Eskiden burada "can_tag": False
+    # SABIT yaziliydi: sohbetteki gorsel etiketlenebiliyor, ayni kaydin kart
+    # blogundaki gorsel etiketlenemiyordu — ekin nerede durdugu etiketlenip
+    # etiketlenemeyecegini belirlememeli (attachments._participates zaten
+    # owner_type='card' dalini tasiyor).
+    #
+    # TEK sorgu, butun kartlarin ekleri icin (spec/10-kararlar.md N+1 yasagi);
+    # yetki de TEK ek icin hesaplanip hepsine uygulaniyor, cunku kartlarin
+    # hepsi AYNI kaydin govdesinde — katilim sorusunun cevabi hepsinde ayni
+    # (service._tag_context akista ayni gerekceyle boyle yapiyor).
+    flat = [m for ms in media_by_card.values() for m in ms]
+    tags_by_id = attachments.tags_for([m["id"] for m in flat]) if flat else {}
+    can_tag = attachments.can_tag(user, flat[0]) if flat else False
     out = []
     for r in rows:
         data = dict(r["data"] or {})
         media = [{"id": m["id"], "mime": m["mime"], "width": m["width"], "height": m["height"],
                   "original_name": m["original_name"], "deleted": m["deleted_at"] is not None,
-                  "can_delete": attachments.can_delete(user, m), "can_tag": False, "tags": []}
+                  "can_delete": attachments.can_delete(user, m),
+                  "can_tag": can_tag, "tags": tags_by_id.get(m["id"], [])}
                  for m in media_by_card.get(r["id"], [])]
         # Katilim seridi sablona HAZIR gelir: "ben ne dedim" ve "kimler var"
         # sorularinin ikisi de burada cevaplanir, sablon satir suzmez.

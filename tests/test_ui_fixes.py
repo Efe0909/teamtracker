@@ -353,6 +353,35 @@ def test_eksiz_mesajda_govde_yine_cizilir(client):
     assert "bmetin" in r.text and "yalnız metin" in r.text
 
 
+def test_kart_ekleri_de_ETIKETLENEBILIR(client, tmp_path, monkeypatch):
+    """cards.of_item "can_tag": False SABIT yaziyordu: sohbetteki gorsel
+    etiketlenebiliyor, AYNI kaydin kart blogundaki gorsel etiketlenemiyordu.
+    Ekin nerede durdugu etiketlenip etiketlenemeyecegini belirlememeli —
+    attachments._participates zaten owner_type='card' dalini tasiyor.
+    """
+    import io
+    from PIL import Image
+    from shared import attachments, config, db as _db
+
+    monkeypatch.setattr(config, "MEDIA_ROOT", str(tmp_path))
+    attachments.sync_volume()
+    buf = io.BytesIO()
+    Image.new("RGB", (40, 30), (20, 160, 90)).save(buf, format="PNG")
+
+    me = user("Efe")
+    _db.x("update users set is_admin = true where id = %s", (me["id"],))
+    card = make_card(client, "media")
+    r = client.post(f"/card/{card['id']}/media",
+                    files={"image": ("k.png", buf.getvalue(), "image/png")})
+    assert r.status_code == 200
+
+    goruntu = cards.of_item(card["item_id"], user("Efe"))
+    blok = next(c for c in goruntu if c["id"] == card["id"])
+    assert blok["media"], "karta ek asilmadi"
+    assert blok["media"][0]["can_tag"] is True
+    assert blok["media"][0]["tags"] == []       # henuz etiket yok ama alan var
+
+
 def test_sohbette_aciklama_kutusu_YOK(client):
     """Her balonun altina bir metin kutusu koymak akisi gurultulendiriyordu."""
     item = item_of("Bütçe onayı")
