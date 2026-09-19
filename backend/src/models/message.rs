@@ -1,0 +1,1 @@
+//! `message` satir tipi.

@@ -1,0 +1,1 @@
+//! `team` satir tipi.

@@ -1,0 +1,1 @@
+//! `user` satir tipi.

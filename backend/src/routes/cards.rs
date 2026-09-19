@@ -1,0 +1,1 @@
+//! Kart bloklari + karta katilim.

@@ -1,0 +1,13 @@
+[package]
+name = "ekiptakip"
+version = "0.2.0"
+edition = "2021"
+
+[dependencies]
+# `cargo add` ile doldurulacak — backend/README.md'deki komuta bak.
+# Versiyonlar elle yazilmiyor: cozumleme cargo'nun isi.
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
