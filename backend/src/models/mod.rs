@@ -29,7 +29,7 @@
 //! `"acik"` yazip kacabiliyordun, burada derlenmiyor.
 //!
 //! IKI ISTISNA, ikisi de bilincli:
-//!   - `item_cards.card_type` — CHECK'i dustu (spec/21-sema-v2.md §3).
+//!   - `cards.card_type` — CHECK'i dustu (spec/21-sema-v2.md §3).
 //!     Taninmayan tur BROKEN olarak cizilmeli, derleme hatasi vermemeli.
 //!   - `activity.verb` — serbest anahtar, sablon cevirir.
 //! Ikisi de `String` kalir.
@@ -39,7 +39,7 @@ pub mod activity;
 pub mod attachment;
 pub mod card;
 pub mod enums;
-pub mod item;
+pub mod record;
 pub mod message;
 pub mod node;
 pub mod team;

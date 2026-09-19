@@ -6,8 +6,8 @@ use crate::{handlers::chat as h, state::AppState};
 
 pub fn router() -> Router<AppState> {
     Router::new()
-        // Masaustu ve mobil AYNI handler'a girer, yol adlari farkli (tarihsel).
-        .route("/item/{item_id}/message", post(h::post_message))
-        .route("/record/{item_id}/message", post(h::post_message))
+        // v1'de iki yol vardi (/item/... ve /record/...), ayni handler'a
+        // giriyorlardi. Tek ada indi (spec/21-sema-v2.md §14).
+        .route("/record/{record_id}/message", post(h::post_message))
         .route("/team/{team_id}/message", post(h::post_team_message))
 }

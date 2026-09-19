@@ -5,7 +5,7 @@ onun yerine geçmez: Rust yeniden yazımıyla (`axum + askama + HTMX`, faz 0.2)
 birlikte devreye girecek **hedefi** tarif eder.
 
 Yalnız **değişen** tablolar burada. Geçmeyenler — `users`, `nodes`, `teams`,
-`team_members`, `item_participants`, `tags`, `attachment_tags`,
+`team_members`, `record_participants`, `tags`, `attachment_tags`,
 `storage_volumes`, scope/rol tabloları, `push_subscriptions`, `user_pins`,
 `security_events` — için `20-sema.md` geçerli.
 
@@ -33,10 +33,10 @@ döngüsü, tek tablo.
 |---|---|---|
 | `events.event_type` | konuşma mı denetim mi — **belli değil** | **böl** |
 | `attachments.owner_type` | neye asılı — **belli değil**, üstelik FK yok | **böl** |
-| `items.kind` | başlıklı, durumlu, sahipli kayıt — belli | tek tablo |
+| `records.kind` | başlıklı, durumlu, sahipli kayıt — belli | tek tablo |
 | `nodes.node_type` | ebeveynli, adlı, sıralı ağaç node'u — belli | tek tablo |
 | `activity.verb` | günlük satırı — belli | tek tablo |
-| `item_cards.card_type` | bir bloğun sunum verisi — belli | tek tablo |
+| `cards.card_type` | bir bloğun sunum verisi — belli | tek tablo |
 
 Ayrımı yapan şey: `card_type` **şablon** seçer, `event_type` **yaşam döngüsü**
 ayırıyordu. Tür sütunu tek başına suç değil; iki farklı ömrü tek tabloya
@@ -44,13 +44,13 @@ tıkması suç.
 
 ---
 
-## 1. `items` — kayıt (soyut iş)
+## 1. `records` — kayıt (soyut iş)
 
 Ürün dilinde: "duyuru paylaş" gibi kapsayıcı iş. Altındaki ısırık büyüklüğünde
 işler `actions`'ta durur.
 
 ```sql
-create table items (
+create table records (
   id          uuid primary key default gen_random_uuid(),
   unit_id     uuid not null references nodes(id) on delete cascade,
   pillar_id   uuid          references nodes(id) on delete set null,
@@ -108,7 +108,7 @@ atanır** — yukarıdan aşağı. Mobilde "Eylemler" sekmesi bunu gösterir.
 ```sql
 create table actions (
   id          uuid primary key default gen_random_uuid(),
-  item_id     uuid not null references items(id) on delete cascade,
+  record_id     uuid not null references records(id) on delete cascade,
   title       text not null,
   owner_id    uuid          references users(id) on delete set null,
   created_by  uuid not null references users(id) on delete restrict,
@@ -119,8 +119,8 @@ create table actions (
   resolved_at timestamptz,
   created_at  timestamptz not null default now()
 );
-create index actions_item_idx on actions(item_id);
-create index actions_open_idx on actions(item_id) where status in ('open','in_progress');
+create index actions_record_idx on actions(record_id);
+create index actions_open_idx on actions(record_id) where status in ('open','in_progress');
 create index actions_owner_idx on actions(owner_id) where status in ('open','in_progress');
 ```
 
@@ -134,31 +134,31 @@ alsın, kampüse afiş asılacak" bir şablonla çizilir, `actions` satırı olm
 
 ```sql
 -- "Yapılacaklar" — katılımcısı olduğum kayıtlar, yalnız sahibi olduklarım değil
-select i.* from items i
-  join item_participants p on p.item_id = i.id
+select i.* from records i
+  join record_participants p on p.record_id = i.id
  where p.user_id = $me and i.status <> 'closed';
 
 -- "Eylemler" sekmesi — bana atanmış işler
 select * from actions where owner_id = $me and status in ('open','in_progress');
 ```
 
-## 3. `item_cards` — sunum blokları
+## 3. `cards` — sunum blokları
 
 Kart = **arayüzde önceden tanımlı bir HTML şablonu** + onu dolduran JSON.
 Sorgulanacak varlık değil; kayıt gövdesine yapıştırılan bilgi kutusu.
 Türler bugün: `media`, `meeting`, `pool`.
 
 ```sql
-create table item_cards (
+create table cards (
   id         uuid primary key default gen_random_uuid(),
-  item_id    uuid not null references items(id) on delete cascade,
+  record_id    uuid not null references records(id) on delete cascade,
   card_type  text not null,
   data       jsonb not null default '{}'::jsonb,
   sort_order integer not null default 0,
   created_by uuid not null references users(id) on delete restrict,
   created_at timestamptz not null default now()
 );
-create index item_cards_item_idx on item_cards(item_id, sort_order, created_at);
+create index cards_record_idx on cards(record_id, sort_order, created_at);
 ```
 
 v1'den iki fark:
@@ -190,10 +190,10 @@ yaptığı işi sözlük yapısı yapıyor, çift cevap imkânsız.
 
 ```sql
 -- cevap ver / değiştir
-update item_cards set data = jsonb_set(data, array['signups', $2], $3::jsonb, true)
+update cards set data = jsonb_set(data, array['signups', $2], $3::jsonb, true)
  where id = $1;
 -- geri çek
-update item_cards set data = data #- array['signups', $2] where id = $1;
+update cards set data = data #- array['signups', $2] where id = $1;
 ```
 
 Postgres ifade boyunca satır kilidi tutar, iki eşzamanlı yazım sıraya girer.
@@ -238,8 +238,8 @@ create table messages (
 create index messages_chat_idx on messages(chat_id, created_at);
 ```
 
-`chats` **kendi başına bir varlık**: içinde `item_id`/`node_id` taşımaz.
-Bağ ters yönde kurulur — `items.chat_id` ve `teams.chat_id`, ikisi de
+`chats` **kendi başına bir varlık**: içinde `record_id`/`node_id` taşımaz.
+Bağ ters yönde kurulur — `records.chat_id` ve `teams.chat_id`, ikisi de
 `not null unique`. Sohbet kayıtla aynı işlemde doğar; "bu kaydın sohbeti
 var mı" diye bir dal hiçbir yerde olmaz.
 
@@ -249,28 +249,28 @@ uygulama kontrolü tamamen düşer.
 
 ### Yetim sohbet: tetikleyici şart
 
-FK `items → chats` yönünde olduğu için cascade ters akıyor. Kayıt silinince
+FK `records → chats` yönünde olduğu için cascade ters akıyor. Kayıt silinince
 sohbet satırı, mesajları ve o `messages` satırlarının `attachments`'ları arkada kalırdı:
 
 ```sql
 create function drop_chat() returns trigger as $$
 begin delete from chats where id = old.chat_id; return null; end $$ language plpgsql;
 
-create trigger items_chat_gc after delete on items
+create trigger items_chat_gc after delete on records
   for each row execute function drop_chat();
 -- teams için aynısı
 ```
 
-`items.chat_id`'deki `on delete restrict` sırayı güvenli kılar: kayıt
+`records.chat_id`'deki `on delete restrict` sırayı güvenli kılar: kayıt
 satırı gittikten sonra tetikleyici sohbeti siler.
 
-> **Neyi takas ettik.** Sohbeti `chats.item_id` olarak tutsaydık cascade
+> **Neyi takas ettik.** Sohbeti `chats.record_id` olarak tutsaydık cascade
 > doğal yönde akar, tetikleyici gerekmezdi. Varlık ayrımını seçtik;
 > tetikleyici onun bedeli, tercih değil.
 
 ### Aynı sohbetin iki yere bağlanması — *ertelendi*
 
-`unique` aynı tablo içinde paylaşımı engelliyor. Bir sohbetin hem `items`
+`unique` aynı tablo içinde paylaşımı engelliyor. Bir sohbetin hem `records`
 hem `teams` tarafından gösterilmesini engellemek `chats.host` + bileşik FK
 ister; alpha'da alınmadı, çünkü bunun olması için hatayı bilerek yazmak
 gerekir. Eklenmesi katkısal, veri göçü istemez.
@@ -294,11 +294,11 @@ create table activity (
 create index activity_chat_idx on activity(chat_id, created_at) where chat_id is not null;
 ```
 
-**TEK FK.** Önceki taslakta `item_id` ve `node_id` diye iki nullable sütun
-vardı — "konusu ya bir `items` ya bir `nodes` satırı" demek, yani polimorfizmin
+**TEK FK.** Önceki taslakta `record_id` ve `node_id` diye iki nullable sütun
+vardı — "konusu ya bir `records` ya bir `nodes` satırı" demek, yani polimorfizmin
 sütun kılığına girmiş hâli. Düştü.
 
-Yerine `chat_id`: `items` ve `teams`'in zaten birer `chats` satırı var (§5) ve
+Yerine `chat_id`: `records` ve `teams`'in zaten birer `chats` satırı var (§5) ve
 activity **sohbet kutusunda** çiziliyor, başka yerde değil.
 
 `nodes` olayları `chat_id = null` ile yazılır ve hiçbir yerde çizilmez — bu
@@ -340,7 +340,7 @@ create table attachments (
 );
 
 create table card_attachments (
-  card_id       uuid not null references item_cards(id) on delete cascade,
+  card_id       uuid not null references cards(id) on delete cascade,
   attachment_id uuid not null references attachments(id) on delete cascade,
   sort_order    integer not null default 0,
   primary key (card_id, attachment_id)
@@ -404,7 +404,7 @@ select 'activity'::text,
  where a.chat_id is not null;
 ```
 
-**Hiç join yok.** Önceki taslak üç daldı ve ikisi `items`/`teams` üzerinden
+**Hiç join yok.** Önceki taslak üç daldı ve ikisi `records`/`teams` üzerinden
 `chat_id`'yi bulmak için join yapıyordu; `activity.chat_id` gelince ikisi de
 gereksizleşti.
 
@@ -419,7 +419,7 @@ döner, ad ve renk uygulamadaki kullanıcı sözlüğünden çözülür (satır 
 üçüncü bir join olmaz).
 
 Silinen kaydın denetim satırları view'den **düşer** ama `activity`'de
-kalır: `item_id` null'a düştüğü için join tutmaz. Kayıt yoksa sohbet kutusu
+kalır: `record_id` null'a düştüğü için join tutmaz. Kayıt yoksa sohbet kutusu
 da yok; genel denetim ekranı ise satırı etiketleriyle görmeye devam eder.
 
 ## 9. Bozuk kart blobu
@@ -456,7 +456,7 @@ Kurallar:
   saklanır — silme düğmesi yıkıcıdır, eksik bir kartın önüne konmaz.
 - Bozuk kart şablonunda ham blob `|safe` ile **basılmaz**. Askama varsayılan
   olarak kaçırır; `reason` göstermek güvenli, ham içeriği dökmek değil.
-- Silme yetkisi `created_by` ve `items`'ın scope'undan gelir — blob okunmaz. Zaten
+- Silme yetkisi `created_by` ve `records`'ın scope'undan gelir — blob okunmaz. Zaten
   ayrıştırılamayan bir kartın silinebilir kalması buna bağlı.
 
 ---
@@ -467,16 +467,16 @@ Kurallar:
 
 - `pending_cr_id`, `pending_delete` — yalnız `001_schema.sql`'de varlar. Kod,
   şablon, test, tohum: sıfır referans. `change_requests` için konmuşlardı, o
-  tablo hiç yazılmadı. `items.dms`/`escalated` ile aynı kader.
+  tablo hiç yazılmadı. `records.dms`/`escalated` ile aynı kader.
 
-Gelen altı FK aynen kalıyor — `items.unit_id`, `items.pillar_id`,
+Gelen altı FK aynen kalıyor — `records.unit_id`, `records.pillar_id`,
 `nodes.parent_id`, `teams.node_id`, `user_node_scopes.node_id`,
 `users.scope_node_id`. `nodes` şemanın omurgası; `delete_node`'un patlama
 yarıçapı buradan geliyor.
 
 ### `unit`, `node_type`'ın bir ALT KÜMESİDİR
 
-`items.unit_id` adı bilinçli: ekranda "Birim" yazıyor, "Düğüm" değil —
+`records.unit_id` adı bilinçli: ekranda "Birim" yazıyor, "Düğüm" değil —
 kullanıcılar mühendis değil. Ve ad doğru, çünkü **`team` ve `pillar` tipli `nodes` satırları
 unit olamaz**:
 
@@ -484,7 +484,7 @@ unit olamaz**:
 UNIT_TYPES = NODE_TYPES - {"team", "pillar"}   # ROOT_ONLY'nin yanına (shared/nodes.py)
 ```
 
-Neden: kayıt pillar'a `items.pillar_id` ile, takıma `items.team_id` ile
+Neden: kayıt pillar'a `records.pillar_id` ile, takıma `records.team_id` ile
 bağlanır — ikisi de ayrı alan. Birim listesinde görünmeleri kullanıcıya
 "buraya da atayabilirim" dedirtir; atayamaz.
 
@@ -517,7 +517,7 @@ olur.
 
 - **`unit_id` → `node_id`'ye dönsün.** Reddedildi: ekran dili "Birim", ve unit
   gerçekten bir alt küme — ad hedefi doğru tarif ediyor.
-- **`node_type='task'` ile `items.kind='task'` çakışması çözülsün.**
+- **`node_type='task'` ile `records.kind='task'` çakışması çözülsün.**
   Reddedildi: ikisi hiçbir ekranda yan yana görünmüyor, biri kart tablosunda
   biri ağaçta, ikisi de kendi bağlamında enum. Leksik endişe, gerçek değil.
 - **`teams` tablosu `nodes`'a katlansın.** Reddedildi: `teams` source of truth
@@ -532,7 +532,7 @@ Bugün **iki ayrı yetki modeli var ve hiç birleşmemişler**:
 | | Model 1 (eski) | Model 2 (göç 007/008) |
 |---|---|---|
 | nerede | `users.is_admin` · `is_editor` · `scope_node_id` | `scopes` · `user_scopes` · `roles` · `role_scopes` · `user_roles` · `user_node_scopes` |
-| neyi korur | `items` düzenleme | `nodes` işlemleri |
+| neyi korur | `records` düzenleme | `nodes` işlemleri |
 | giriş | `auth.can_edit_item` | `scope.authorized_on_node` |
 
 `can_edit_item` scope sistemine hiç bakmıyor — beş yolu var (admin,
@@ -607,7 +607,7 @@ kod tarafında yapılacak bir şey yok. Grant arayüzü ihtiyaç netleşince gel
 
 ## 12. Kalan tablolar — düz, iki ölü sütun daha
 
-`users`, `teams`, `team_members`, `item_participants`, `tags`,
+`users`, `teams`, `team_members`, `record_participants`, `tags`,
 `attachment_tags`, `storage_volumes`, `push_subscriptions`, `user_pins`,
 `security_events` tarandı. Yapısal sorun yok; §"Kural" testinden hepsi geçiyor.
 
@@ -617,8 +617,8 @@ Bu oturumda bulunan, v2'de düşecek sütunlar:
 
 | sütun | durum |
 |---|---|
-| `items.dms` | yalnız `seed.py` yazıyor, hiçbir yer okumuyor |
-| `items.escalated` | aynı |
+| `records.dms` | yalnız `seed.py` yazıyor, hiçbir yer okumuyor |
+| `records.escalated` | aynı |
 | `nodes.pending_cr_id` | yalnız `001_schema.sql`'de — `change_requests` hiç yazılmadı |
 | `nodes.pending_delete` | aynı |
 | `tags.color` | SELECT ediliyor ama `add_tag`'in INSERT'inde yok — üretimde hep NULL |
@@ -655,7 +655,7 @@ Postgres bileşik indeksi yalnız baştan kullanabilir, o yüzden PK işe yarama
 
 | sorgu | nerede | bugün |
 |---|---|---|
-| `item_participants where user_id = ?` | mobil "Yapılacaklar" | PK `(item_id, user_id)` — baş sütun yanlış |
+| `record_participants where user_id = ?` | mobil "Yapılacaklar" | PK `(record_id, user_id)` — baş sütun yanlış |
 | `team_members where user_id = ?` | `auth.team_ids()` | PK `(team_id, user_id)` — aynı |
 | `actions where owner_id = ?` | "Eylemler" sekmesi | indeks yok |
 
@@ -663,7 +663,7 @@ Postgres bileşik indeksi yalnız baştan kullanabilir, o yüzden PK işe yarama
 yani her yetki kontrolünde.
 
 ```sql
-create index item_participants_user_idx on item_participants(user_id);
+create index record_participants_user_idx on record_participants(user_id);
 create index team_members_user_idx      on team_members(user_id);
 create index actions_owner_idx          on actions(owner_id)
        where status in ('open','in_progress');
@@ -681,7 +681,7 @@ Yani şema bir yerde fazladan indeks tutuyor, tam ihtiyaç olan yerde tutmuyor.
 
 ### `updated_at` elle sürülüyor
 
-`service.py` içinde beş ayrı yerde `update items set updated_at = ...`. Unutulan
+`service.py` içinde beş ayrı yerde `update records set updated_at = ...`. Unutulan
 bir yazma yolu `filters.py`'deki `activity` sıralamasını (`i.updated_at desc`)
 sessizce bozar — hata vermez, sadece kayıt listede yanlış yere düşer.
 
@@ -689,7 +689,7 @@ sessizce bozar — hata vermez, sadece kayıt listede yanlış yere düşer.
 create function touch_updated_at() returns trigger as $$
 begin new.updated_at = now(); return new; end $$ language plpgsql;
 
-create trigger items_touch before update on items
+create trigger items_touch before update on records
   for each row execute function touch_updated_at();
 ```
 
@@ -707,21 +707,15 @@ olanlar onlar. Şemayı sıfırdan yazarken düzeltmek bedava, sonra sıkıcı.
 `tr` arama yapılandırması göçte düzgün kuruluyor (`001_schema.sql`, `simple` +
 `unaccent`) · `storage_volumes_single_active` tek aktif diski kısıtla
 garantiliyor · `users_email_nocase_idx` büyük/küçük harf tekilliğini tutuyor
-(`KNOW-167`'deki hatanın yaması) · `items_open_idx` kısmi indeks, doğru kullanım.
+(`KNOW-167`'deki hatanın yaması) · `records_open_idx` kısmi indeks, doğru kullanım.
 
 ---
 
 ## Açık noktalar
 
-1. **Kayıt için ürün kelimesi.** Ekipte "BUT-1042" diye konuşuluyor, yani şeyin
-   bir kodu var ama tablo adı (`items`) hiçbir şey anlatmıyor. Şablon dosyaları
-   da ikiye bölünmüş: `kart.html`/`kartlar.html` `item_cards` çiziyor,
-   `kayit.html` ise `items` çiziyor ve ilk satırında konusuna "kart" diyor.
-   Tek UI kelimesi → tek tablo, şablon dosyası da o kelime olmalı.
-   **Karar sahibinde:** ekip bir `items` satırına konuşurken ne diyor?
-2. **`db-scheme-export.sql` üç göç geride** (`card_signups`, `notify_level`,
+1. **`db-scheme-export.sql` üç göç geride** (`card_signups`, `notify_level`,
    `reply_to_id` yok). Yeniden üretmek çalışan bir Postgres istiyor.
-3. **`10-kararlar.md` "Taşınabilirlik kuralları"** SQLite döneminden kalma ve
+2. **`10-kararlar.md` "Taşınabilirlik kuralları"** SQLite döneminden kalma ve
    kendi dosyasıyla çelişiyor: aynı bölüm PostgreSQL'in `jsonb`'sini sayıyor,
    birkaç satır sonra "jsonb yok" diyor. `id TEXT` / zaman `TEXT` / `0/1`
    boolean kuralları da yürürlükte değil. Bağlayıcı kararlar dosyası olduğu
@@ -732,6 +726,46 @@ garantiliyor · `users_email_nocase_idx` büyük/küçük harf tekilliğini tutu
 
 | soru | cevap |
 |---|---|
-| `items.kind` gerçek boyut mu? | **Hayır, etiket** — §1. Kod tarandı, dallanan tek şey rozet ve filtre. |
+| `records.kind` gerçek boyut mu? | **Hayır, etiket** — §1. Kod tarandı, dallanan tek şey rozet ve filtre. |
 | `node`/`team` attachment'larının yolu? | **Gerek yok** — §7. v1'de de üreten yol yoktu, ölü kapıydı. |
+| Ekip bir kayda ne diyor? | **"kayıt"** → tablo `records`, şablon `record.html`. Bkz. §14. |
 | Veri ağacı sayfası kapılı mı? | **Kapılı** — §11. `KNOW-47` ilkesi bilinçli olarak ağaç sayfası için terk edildi. |
+
+---
+
+## 14. Adlandırma: tek UI kelimesi → tek tablo
+
+Ekip bir kayda **"kayıt"** diyor. Zincir buradan türüyor:
+
+| ekranda | tablo | şablon | rota |
+|---|---|---|---|
+| Kayıt | `records` | `record.html` | `/record/{id}` |
+| Kart | `cards` | `card.html`, `cards.html` | `/record/{id}/card` |
+
+Bu, oturumun başındaki "yeni mühendis parmak basıp tabloyu bilebiliyor mu"
+testini geçiren son parça. Eskiden **"kart" iki tabloyu birden** gösteriyordu:
+`kart.html`/`kartlar.html` `item_cards`'ı çiziyordu, `kayit.html` ise `items`'ı
+çiziyordu ve ilk satırında konusuna "kart" diyordu. `items` → `records` olunca
+`cards` adı serbest kaldı ve çakışma kendiliğinden düştü.
+
+### `/item` değil `/record`
+
+Mobil zaten doğru adlandırmıştı: `/record/{id}`, `/record/{id}/message`.
+Masaüstü `/item/{id}` diyordu — aynı işe iki ad. `record` kazanıyor, `/item`
+yolları düşüyor.
+
+### Etkilenen adlar
+
+```
+items              -> records
+item_cards         -> cards
+item_participants  -> record_participants
+*.item_id          -> record_id
+/item/*            -> /record/*
+kayit.html         -> record.html
+kart.html          -> card.html
+kartlar.html       -> cards.html
+```
+
+`kind`, `status`, `priority` gibi sütunlar değişmiyor — tablo adı değişti,
+alanlar değil.

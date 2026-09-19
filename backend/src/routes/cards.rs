@@ -4,7 +4,7 @@ use crate::{handlers::cards as h, state::AppState};
 
 pub fn router() -> Router<AppState> {
     Router::new()
-        .route("/item/{item_id}/card", post(h::create))
+        .route("/record/{record_id}/card", post(h::create))
         .route("/card/{card_id}", patch(h::update).delete(h::remove))
         // Katilim YAZMA YETKISI ISTEMEZ — bilerek: kaydi duzenleyemeyen biri de
         // kendi adina "geliyorum" diyebilmeli. Yazilan tek sey KENDI satiri.

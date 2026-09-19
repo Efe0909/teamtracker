@@ -31,7 +31,7 @@ pub mod auth;
 pub mod cards;
 pub mod chat;
 pub mod dashboard;
-pub mod items;
+pub mod records;
 pub mod mobile;
 pub mod nodes;
 pub mod shared;
@@ -53,7 +53,7 @@ pub fn router() -> Router<AppState> {
         .merge(auth::router())
         // Iki sitenin de kullandigi uclar (KNOW-265).
         .merge(shared::router())
-        .merge(items::router())
+        .merge(records::router())
         .merge(actions::router())
         .merge(cards::router())
         .merge(chat::router())

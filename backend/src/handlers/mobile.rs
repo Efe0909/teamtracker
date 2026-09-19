@@ -34,6 +34,3 @@ pub async fn record_page() -> Response {
     todo!("mobile::record_page")
 }
 
-pub async fn change_field() -> Response {
-    todo!("mobile::change_field")
-}

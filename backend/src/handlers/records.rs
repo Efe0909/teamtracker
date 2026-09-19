@@ -5,13 +5,10 @@
 use axum::response::Response;
 
 pub async fn create() -> Response {
-    todo!("items::create")
+    todo!("records::create")
 }
 
-pub async fn fetch() -> Response {
-    todo!("items::fetch")
-}
 
 pub async fn change_field() -> Response {
-    todo!("items::change_field")
+    todo!("records::change_field")
 }

@@ -8,7 +8,7 @@ use crate::{handlers::dashboard as h, state::AppState};
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/tasks", get(h::table))
-        .route("/tasks/{item_id}", get(h::record_page))
+        .route("/tasks/{record_id}", get(h::record_page))
         .route("/admin", get(h::admin_page))
         // Ray sabitleri KISIYE ait bir tercih (goc 012).
         .route("/pins/{slug}", post(h::toggle_pin))

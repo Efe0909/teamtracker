@@ -9,7 +9,7 @@ pub mod auth;
 pub mod cards;
 pub mod chat;
 pub mod dashboard;
-pub mod items;
+pub mod records;
 pub mod mobile;
 pub mod nodes;
 pub mod shared;

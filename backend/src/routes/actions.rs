@@ -6,6 +6,6 @@ use crate::{handlers::actions as h, state::AppState};
 
 pub fn router() -> Router<AppState> {
     Router::new()
-        .route("/item/{item_id}/action", post(h::create))
+        .route("/record/{record_id}/action", post(h::create))
         .route("/action/{action_id}", patch(h::update))
 }
