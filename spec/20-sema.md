@@ -1,7 +1,15 @@
 # 20 — Veri şeması
 
 Yürürlükteki şema PostgreSQL; kaynağı numaralı göçlerdir
-(`shared/gocler/*.sql`, çalıştırma sırası: `spec/80-veritabani.md`).
+(`shared/migrations/*.sql`, çalıştırma sırası: `spec/80-veritabani.md`).
+
+> **Bu dosya bugünkü Python şemasını anlatır ve yürürlüktedir.** Rust portuyla
+> (faz 0.2) gelecek hedef şema ayrı dosyada: `spec/21-sema-v2.md`. Orada
+> `events` → `chats`/`messages`/`activity` bölünüyor, `attachments` polimorfik
+> sahipliği düşüyor ve `items` sütunları yeniden adlandırılıyor. Bu dosyadaki
+> göç dosyası adları (`001_sema.sql`, `002_takimlar_eylemler.sql`, …) eski
+> Türkçe adlar — depo 2026-09-09'da İngilizceye çevrildi, güncel adlar için
+> `shared/migrations/` dizinine bak.
 
 ## Bugün ne var, ne yok
 

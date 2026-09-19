@@ -5,6 +5,7 @@
 | `README.md` | spec yazım kalıbı (rapor + iskelet kuralları) |
 | `10-kararlar.md` | mimari kararlar ve gerekçeleri — bağlayıcı |
 | `20-sema.md` | veri şeması; bugün ne kurulu, ne bekliyor |
+| `21-sema-v2.md` | Rust portunun hedef şeması: `events` bölünmesi, ek sahipliği, kart blobu — **tasarım** |
 | `30-mobil.md` | mobil site çözümlemesi (kaynak ekranlardan uyarlama) |
 | `40-push.md` | web push: hazır olan, eksik olan, denemeden çıkan dersler |
 | `50-yapi.md` | repo yapısı, iki site ayrımı, ayrık veritabanı yolu |
