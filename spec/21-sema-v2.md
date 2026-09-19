@@ -283,8 +283,7 @@ de satır yaşamalı, o yüzden FK'lar zayıf ve etiket denormalize.
 ```sql
 create table activity (
   id            uuid primary key default gen_random_uuid(),
-  item_id       uuid references items(id) on delete set null,
-  node_id       uuid references nodes(id) on delete set null,
+  chat_id       uuid references chats(id) on delete set null,
   actor_id      uuid references users(id) on delete set null,
   verb          text not null,   -- 'action_added' — anahtar İngilizce
   subject_label text not null,   -- "filament alınması"
@@ -292,9 +291,20 @@ create table activity (
   detail        text,
   created_at    timestamptz not null default now()
 );
-create index activity_item_idx on activity(item_id, created_at) where item_id is not null;
-create index activity_node_idx on activity(node_id, created_at) where node_id is not null;
+create index activity_chat_idx on activity(chat_id, created_at) where chat_id is not null;
 ```
+
+**TEK FK.** Önceki taslakta `item_id` ve `node_id` diye iki nullable sütun
+vardı — "konusu ya bir `items` ya bir `nodes` satırı" demek, yani polimorfizmin
+sütun kılığına girmiş hâli. Düştü.
+
+Yerine `chat_id`: `items` ve `teams`'in zaten birer `chats` satırı var (§5) ve
+activity **sohbet kutusunda** çiziliyor, başka yerde değil.
+
+`nodes` olayları `chat_id = null` ile yazılır ve hiçbir yerde çizilmez — bu
+bugünkü davranışın aynısı: `_node_event()` altı çeşit olay yazıyor ama
+`feed_of()` yalnız `"item"` ve `"team"` ile çağrılıyor, `nodes` olaylarını
+gösteren ekran **yok**. Denetim kaydı olarak kalırlar.
 
 `verb` kodda İngilizce anahtar, ekranda Türkçe metin — `SCOPES` ile aynı
 kalıp. `subject_label` ve `target_label` denormalize çünkü satır kaynağını
@@ -307,13 +317,12 @@ kavramdır. `events`'in hatası genellik değil, konuşmayı günlüğe karışt
 
 ## 7. `attachments`
 
-Polimorfizm düştü. Attachment ya bir `item_cards` satırına asılır ya bir `messages` satırına; `items`'a doğrudan asılmaz.
+Polimorfizm düştü. `attachments` artık **saf blob meta verisi** — neye asılı
+olduğunu bilmez; bağ ayrı tablolarda durur.
 
 ```sql
 create table attachments (
   id          uuid primary key default gen_random_uuid(),
-  card_id     uuid references item_cards(id) on delete cascade,
-  message_id  uuid references messages(id)   on delete cascade,
   volume_id   uuid not null references storage_volumes(id) on delete restrict,
   uploader_id uuid references users(id) on delete set null,
   mime        text not null
@@ -327,26 +336,37 @@ create table attachments (
   thumb_key   text,
   created_at  timestamptz not null default now(),
   deleted_at  timestamptz,
-  deleted_by  uuid references users(id) on delete set null,
-  constraint attachment_one_parent check (num_nonnulls(card_id, message_id) = 1)
+  deleted_by  uuid references users(id) on delete set null
 );
+
+create table card_attachments (
+  card_id       uuid not null references item_cards(id) on delete cascade,
+  attachment_id uuid not null references attachments(id) on delete cascade,
+  sort_order    integer not null default 0,
+  primary key (card_id, attachment_id)
+);
+create index card_attachments_attachment_idx on card_attachments(attachment_id);
+
+create table message_attachments (
+  message_id    uuid not null references messages(id) on delete cascade,
+  attachment_id uuid not null references attachments(id) on delete cascade,
+  primary key (message_id, attachment_id)
+);
+create index message_attachments_attachment_idx on message_attachments(attachment_id);
 ```
 
-`num_nonnulls()` Postgres'in kendi fonksiyonu. sqlx iki `Option<Uuid>`
-görür — bütün join'ler derleme zamanında denetlenir, elle tür dağıtımı
-yazılmaz. `OWNER_TYPES` frozenset'i düşer.
+Ters yöndeki iki indeks **`KNOW-283` gereği**: birincil anahtarlar `card_id` /
+`message_id` ile başlıyor, `attachment_id` üzerinden arama (bir blob'un nereye
+asılı olduğu) onlardan yararlanamaz.
 
-### `node` ve `team` attachment'ları: kaybolan bir şey yok — karara bağlandı
+v1'in `(owner_type, owner_id)` çifti ve `OWNER_TYPES` frozenset'i düşer.
+Ara taslakta `card_id` XOR `message_id` vardı — tip etiketi yoktu ama "ebeveyn
+şu iki türden biri" anlamı duruyordu; junction'larda o da kalmıyor.
 
-v1'in `owner_type` CHECK'i `'node'` ve `'team'` değerlerini kabul ediyordu ama
-kod tarandı: bu değerleri **üreten hiçbir yol yok**. `attachments.attach()`
-yalnız `'event'` (mesaj eki) ve `'card'` (medya kartı) ile çağrılıyor.
-`attachments.py`'deki `'node'`/`'team'` dalları yalnızca *görme* yetkisini
-hesaplıyor — hiç satır doğmadığı için hiç çalışmıyorlar.
-
-Yani v2'nin `card_id XOR message_id` ikilisi bir yeteneği kaldırmıyor,
-ulaşılamayan bir kapıyı kapatıyor. `node` veya `team` attachment'ı gerçekten istenirse bir `messages` satırına
-asılır — ikisinin de zaten `chats` satırı var (§5).
+**Bedeli, dürüstçe:** ebeveyni bulmak artık bir join, ve junction satırı
+cascade ile gidince `attachments` satırı öksüz kalır. İkincisi yeni bir iş
+değil — blob süpürmesi zaten gerekiyordu, aynı geçişte öksüz satırlar da
+toplanır.
 
 **Blob toplama hâlâ gerekli.** Cascade satırı siler, diskteki dosyayı
 silmez. v1'de bu sessiz bir sızıntıydı: bir `nodes` satırı silinince kayıtlar cascade
@@ -376,23 +396,17 @@ select 'message'::text as kind,
 union all
 
 select 'activity'::text,
-       a.id, i.chat_id, a.created_at,
+       a.id, a.chat_id, a.created_at,
        a.actor_id, a.verb, a.subject_label, a.target_label,
        a.detail,
        null::uuid, null::timestamptz
   from activity a
-  join items i on i.id = a.item_id
-
-union all
-
-select 'activity'::text,
-       a.id, t.chat_id, a.created_at,
-       a.actor_id, a.verb, a.subject_label, a.target_label,
-       a.detail,
-       null::uuid, null::timestamptz
-  from activity a
-  join teams t on t.node_id = a.node_id;
+ where a.chat_id is not null;
 ```
+
+**Hiç join yok.** Önceki taslak üç daldı ve ikisi `items`/`teams` üzerinden
+`chat_id`'yi bulmak için join yapıyordu; `activity.chat_id` gelince ikisi de
+gereksizleşti.
 
 Çizicinin tüm sorgusu:
 
