@@ -34,7 +34,7 @@ döngüsü, tek tablo.
 | `events.event_type` | konuşma mı denetim mi — **belli değil** | **böl** |
 | `attachments.owner_type` | neye asılı — **belli değil**, üstelik FK yok | **böl** |
 | `items.kind` | başlıklı, durumlu, sahipli kayıt — belli | tek tablo |
-| `nodes.node_type` | ebeveynli, adlı, sıralı ağaç düğümü — belli | tek tablo |
+| `nodes.node_type` | ebeveynli, adlı, sıralı ağaç node'u — belli | tek tablo |
 | `activity.verb` | günlük satırı — belli | tek tablo |
 | `item_cards.card_type` | bir bloğun sunum verisi — belli | tek tablo |
 
@@ -171,7 +171,7 @@ v1'den iki fark:
   türü zaten karşılıyor.
 
 Yetki **asla blob okumaz**: silme/düzenleme hakkı `created_by` ve kaydın
-kapsamından çıkar. Bozuk bir kart bu yüzden silinebilir kalır (§6).
+scope'undan çıkar. Bozuk bir kart bu yüzden silinebilir kalır (§6).
 
 ## 4. Karta katılım — `card_signups` tablosu düştü, blob'a girdi
 
@@ -250,7 +250,7 @@ uygulama kontrolü tamamen düşer.
 ### Yetim sohbet: tetikleyici şart
 
 FK `items → chats` yönünde olduğu için cascade ters akıyor. Kayıt silinince
-sohbet satırı, mesajları ve o mesajların ekleri arkada kalırdı:
+sohbet satırı, mesajları ve o `messages` satırlarının `attachments`'ları arkada kalırdı:
 
 ```sql
 create function drop_chat() returns trigger as $$
@@ -305,10 +305,9 @@ kaybolduğu için geçmiş "bir şey silindi" demekten öteye gidemiyordu
 `activity.verb`'in genel olması sorun değil — bir günlük gerçekten **tek**
 kavramdır. `events`'in hatası genellik değil, konuşmayı günlüğe karıştırmaktı.
 
-## 7. `attachments` — ek
+## 7. `attachments`
 
-Polimorfizm düştü. Ek ya bir **karta** asılır ya bir **mesaja**; kayda
-doğrudan asılmaz.
+Polimorfizm düştü. Attachment ya bir `item_cards` satırına asılır ya bir `messages` satırına; `items`'a doğrudan asılmaz.
 
 ```sql
 create table attachments (
@@ -337,7 +336,7 @@ create table attachments (
 görür — bütün join'ler derleme zamanında denetlenir, elle tür dağıtımı
 yazılmaz. `OWNER_TYPES` frozenset'i düşer.
 
-### Düğüm ve takım ekleri: kaybolan bir şey yok — karara bağlandı
+### `node` ve `team` attachment'ları: kaybolan bir şey yok — karara bağlandı
 
 v1'in `owner_type` CHECK'i `'node'` ve `'team'` değerlerini kabul ediyordu ama
 kod tarandı: bu değerleri **üreten hiçbir yol yok**. `attachments.attach()`
@@ -346,12 +345,12 @@ yalnız `'event'` (mesaj eki) ve `'card'` (medya kartı) ile çağrılıyor.
 hesaplıyor — hiç satır doğmadığı için hiç çalışmıyorlar.
 
 Yani v2'nin `card_id XOR message_id` ikilisi bir yeteneği kaldırmıyor,
-ulaşılamayan bir kapıyı kapatıyor. Düğüm veya takım eki gerçekten istenirse
-sohbet mesajına asılır — düğüm ve takımın zaten sohbeti var (§5).
+ulaşılamayan bir kapıyı kapatıyor. `node` veya `team` attachment'ı gerçekten istenirse bir `messages` satırına
+asılır — ikisinin de zaten `chats` satırı var (§5).
 
 **Blob toplama hâlâ gerekli.** Cascade satırı siler, diskteki dosyayı
-silmez. v1'de bu sessiz bir sızıntıydı: düğüm silinince kayıtlar cascade
-ile gidiyor, ekler FK'sız olduğu için `deleted_at is null` hâlde kalıyor ve
+silmez. v1'de bu sessiz bir sızıntıydı: bir `nodes` satırı silinince kayıtlar cascade
+ile gidiyor, `attachments` FK'sız olduğu için `deleted_at is null` hâlde kalıyor ve
 dosyalar diskte öksüz kalıyordu. Tek süpürme yeter — diskteki anahtarlar
 eksi tablodaki anahtarlar. Yetim sohbet süpürmesi gerekirse aynı işte koşar.
 
@@ -443,7 +442,7 @@ Kurallar:
   saklanır — silme düğmesi yıkıcıdır, eksik bir kartın önüne konmaz.
 - Bozuk kart şablonunda ham blob `|safe` ile **basılmaz**. Askama varsayılan
   olarak kaçırır; `reason` göstermek güvenli, ham içeriği dökmek değil.
-- Silme yetkisi `created_by` ve kapsamdan gelir — blob okunmaz. Zaten
+- Silme yetkisi `created_by` ve `items`'ın scope'undan gelir — blob okunmaz. Zaten
   ayrıştırılamayan bir kartın silinebilir kalması buna bağlı.
 
 ---
@@ -461,10 +460,10 @@ Gelen altı FK aynen kalıyor — `items.unit_id`, `items.pillar_id`,
 `users.scope_node_id`. `nodes` şemanın omurgası; `delete_node`'un patlama
 yarıçapı buradan geliyor.
 
-### `unit`, düğümlerin bir ALT KÜMESİDİR
+### `unit`, `node_type`'ın bir ALT KÜMESİDİR
 
 `items.unit_id` adı bilinçli: ekranda "Birim" yazıyor, "Düğüm" değil —
-kullanıcılar mühendis değil. Ve ad doğru, çünkü **takım ve pillar düğümleri
+kullanıcılar mühendis değil. Ve ad doğru, çünkü **`team` ve `pillar` tipli `nodes` satırları
 unit olamaz**:
 
 ```python
@@ -475,10 +474,8 @@ Neden: kayıt pillar'a `items.pillar_id` ile, takıma `items.team_id` ile
 bağlanır — ikisi de ayrı alan. Birim listesinde görünmeleri kullanıcıya
 "buraya da atayabilirim" dedirtir; atayamaz.
 
-Takım ve pillar düğümleri ağaçta **yerleşim işareti** olarak durur: takımın
-hiyerarşide nereye düştüğü, kime hesap verdiği. Takımın gerçek kaydı `teams`
-tablosundadır (`KNOW-129`, `KNOW-262`) ve genişleyecek. Pillar'ın henüz kendi
-sayfası yok — düğüm türü yalnız büyük resme dahil olsun diye var. Bunun
+`team` ve `pillar` tipli `nodes` satırları ağaçta **yerleşim işareti** olarak durur: `teams` satırının hiyerarşide nereye düştüğü, kime hesap verdiği. Gerçek kayıt `teams` tablosundadır (`KNOW-129`, `KNOW-262`) ve genişleyecek. Pillar'ın henüz kendi
+sayfası yok — `node_type` yalnız büyük resme dahil olsun diye var. Bunun
 getirdiği bookkeeping bilerek kabul edildi.
 
 ### Nerede uygulanır
@@ -493,13 +490,13 @@ Yazma yolundaki kontrol **şart**: dropdown'ı süzmek istemciyi düzeltir, ucu
 değil — `change_field` serbest değer alıyor. DB kısıtı gerekmiyor; etkisi veri
 düzeni, güvenlik değil.
 
-`NodeFilter.clause()` etkilenmez: `subtree()` seçilen düğümün altındaki her
-şeyi alır, altta bir pillar düğümü varsa yine süpürülür — yalnız *seçilemez*
+`NodeFilter.clause()` etkilenmez: `subtree()` seçilen node'un altındaki her
+şeyi alır, altta bir `pillar` tipli node varsa yine süpürülür — yalnız *seçilemez*
 olur.
 
 > **Bugünkü kodda hata var, v2'yi beklemesi gerekmiyor.** `pillar_options()`
 > zaten `node_type='pillar'` süzüyor, ama `NodeFilter.options()` hiç tür
-> süzmüyor — aktif olan her düğümü döküyor. Takım ve pillar satırları bu
+> süzmüyor — aktif olan her node'u döküyor. `team` ve `pillar` satırları bu
 > yüzden birim listesinde görünüyor.
 
 ### Reddedilen öneriler
@@ -510,7 +507,7 @@ olur.
   Reddedildi: ikisi hiçbir ekranda yan yana görünmüyor, biri kart tablosunda
   biri ağaçta, ikisi de kendi bağlamında enum. Leksik endişe, gerçek değil.
 - **`teams` tablosu `nodes`'a katlansın.** Reddedildi: `teams` source of truth
-  ve genişleyecek; düğüm yalnız yerleşim işareti.
+  ve genişleyecek; node yalnız yerleşim işareti.
 
 ---
 
@@ -521,7 +518,7 @@ Bugün **iki ayrı yetki modeli var ve hiç birleşmemişler**:
 | | Model 1 (eski) | Model 2 (göç 007/008) |
 |---|---|---|
 | nerede | `users.is_admin` · `is_editor` · `scope_node_id` | `scopes` · `user_scopes` · `roles` · `role_scopes` · `user_roles` · `user_node_scopes` |
-| neyi korur | **kayıt** düzenleme | **düğüm** işlemleri |
+| neyi korur | `items` düzenleme | `nodes` işlemleri |
 | giriş | `auth.can_edit_item` | `scope.authorized_on_node` |
 
 `can_edit_item` scope sistemine hiç bakmıyor — beş yolu var (admin,
@@ -538,25 +535,25 @@ ilişki   → atanan / açan / katılımcı / takım üyesi   bu senin işin
 süper    → users.is_admin                    tek kalan bayrak
 ```
 
-**Yetenek ile ilişki bilerek birleştirilmedi.** "Kapsamın var, o dalda
+**Yetenek ile ilişki bilerek birleştirilmedi.** "Scope'un var, o dalda
 düzenlersin" ile "bu kayıt senin, düzenlersin" farklı sorular (`KNOW-64`).
 
 ### `edit_nodes` anlamı değişiyor
 
 | | v1 | v2 |
 |---|---|---|
-| `edit_nodes` | düğüm başına kontrol (`authorized_on_node`) | **veri ağacı sayfasının kapısı** |
-| `user_node_scopes` | `NODE_DEPENDENT` kapsamların dal koşulu | **düzenlenebilen alt ağaçlar** |
+| `edit_nodes` | `node` başına kontrol (`authorized_on_node`) | **veri ağacı sayfasının kapısı** |
+| `user_node_scopes` | `NODE_DEPENDENT` scope'ların dal koşulu | **düzenlenebilen alt ağaçlar** |
 
-Kapsam sayfayı açar, dal satırları içeride neye dokunabileceğini söyler.
+Scope sayfayı açar, dal satırları içeride neye dokunabileceğini söyler.
 
 **Bu ayrım `is_editor` bypass'ının sebebini ortadan kaldırıyor.** v1'de
-"kapsam var, dal satırı yok" kırık bir durumdu — kullanıcı hiçbir şey
+"scope var, `user_node_scopes` satırı yok" kırık bir durumdu — kullanıcı hiçbir şey
 düzenleyemiyordu, o yüzden `routes.py` içine kaçış kapısı konmuştu:
 
 ```python
 if u and db.as_bool(u["is_editor"]) and not scope.permitted_nodes(u):
-    return True     # her düğümde yetkili
+    return True     # her node'da yetkili
 ```
 
 v2'de aynı durum geçerli bir hâl: sayfayı görürsün, hiçbir şeyi
@@ -565,23 +562,23 @@ değiştiremezsin. Kaçış kapısı gereksiz, `is_editor` sütunuyla birlikte d
 ### Düşenler
 
 - **`users.is_editor`** — sütun ve iki kaçış kapısı (`_can_edit_structure`,
-  `_authorized_on_node`). Sahipleri `edit_nodes` kapsamı + `user_node_scopes`
+  `_authorized_on_node`). Sahipleri `edit_nodes` scope'u + `user_node_scopes`
   satırı kazanır.
 - **`users.scope_node_id`** — ikinci dal mekanizmasıydı (kullanıcı başına TEK
-  düğüm), `user_node_scopes`'a (çok satır + alt ağaç mirası) katlanır.
+  node), `user_node_scopes`'a (çok satır + alt ağaç mirası) katlanır.
   `can_edit_item`'ın son maddesi tek sütun yerine `permitted_nodes(user)` okur.
 
-> **Sessiz genişleme — kabul edildi.** `scope_node_id` tek düğümdü. Katlandıktan
+> **Sessiz genişleme — kabul edildi.** `scope_node_id` tek node'du. Katlandıktan
 > sonra kayıt düzenleme yetkisi *izinli her daldan* miras alınır, yalnız
 > birinden değil.
 
 ### Şimdilik: yalnız admin
 
-Dal izni verme arayüzü **yazılmayacak**. Bugünkü durum zaten bu:
+`user_node_scopes` izni verme arayüzü **yazılmayacak**. Bugünkü durum zaten bu:
 `scope.grant_node_permission()` var ama hiçbir route'tan çağrılmıyor — yalnız
 testlerden. Yani `user_node_scopes` satırı üretimde hiç doğmuyor.
 
-Admin bütün kök düğümlerden tüm ağacı kontrol eder; `active_scopes()` admin'e
+Admin bütün kök `nodes` satırlarından tüm ağacı kontrol eder; `active_scopes()` admin'e
 `SCOPES`'un tamamını, `authorized_on_node()` doğrudan `True` döndürüyor —
 kod tarafında yapılacak bir şey yok. Grant arayüzü ihtiyaç netleşince gelir.
 
@@ -589,7 +586,7 @@ kod tarafında yapılacak bir şey yok. Grant arayüzü ihtiyaç netleşince gel
 > giriş yapan herkes açabiliyor, `_can_edit_structure` yalnız şablona
 > `can_write` basıyor. Sayfayı `edit_nodes`'a bağlamak `KNOW-47`'deki
 > "görülme genel, değiştirme kapsamlı" ilkesini **ters çeviriyor** ve bu kabul
-> edildi: veri ağacı sayfası kapsam ister. `KNOW-47` bundan sonra kartlar için
+> edildi: veri ağacı sayfası scope ister. `KNOW-47` bundan sonra kartlar için
 > geçerli, ağaç sayfası için değil.
 
 ---
@@ -621,7 +618,7 @@ sütun düşer. Karar verilmeden taşınmamalı.
 ### İki günlük tablosu, ikisi de kalıyor
 
 `security_events` (giriş, yetki reddi, rol verme) ile `activity` (§6: alan
-değişti, düğüm silindi) ayrı kalır. Tür sütununu silme testi ikisini de
+değişti, node silindi) ayrı kalır. Tür sütununu silme testi ikisini de
 geçiriyor: `event_type` olmadan satır hâlâ bir güvenlik denetim kaydı,
 `verb` olmadan hâlâ bir alan günlüğü. Farklı izleyici, farklı ekran, örtüşen
 değer yok.
@@ -722,5 +719,5 @@ garantiliyor · `users_email_nocase_idx` büyük/küçük harf tekilliğini tutu
 | soru | cevap |
 |---|---|
 | `items.kind` gerçek boyut mu? | **Hayır, etiket** — §1. Kod tarandı, dallanan tek şey rozet ve filtre. |
-| Düğüm/takım eklerinin yolu? | **Gerek yok** — §7. v1'de de üreten yol yoktu, ölü kapıydı. |
+| `node`/`team` attachment'larının yolu? | **Gerek yok** — §7. v1'de de üreten yol yoktu, ölü kapıydı. |
 | Veri ağacı sayfası kapılı mı? | **Kapılı** — §11. `KNOW-47` ilkesi bilinçli olarak ağaç sayfası için terk edildi. |
