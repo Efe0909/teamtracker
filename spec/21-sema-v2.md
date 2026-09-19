@@ -85,6 +85,17 @@ v1'den farklar:
 | — | `chat_id` | sohbet artık ayrı varlık (§5) |
 | `status` 4 değer | + `cancelled` | `actions` ile simetri |
 
+### `kind` bir ETİKET, boyut değil — karara bağlandı
+
+Kod tarandı: `kind` üzerinden dallanan tek şey **görünüm**. Şablonlarda
+"Hata"/"Görev" rozeti ve CSS sınıfı (`card_head.html`, `takim_kayitlar.html`),
+`filters.py`'de bir açılır liste, `service.py`'de değerin geçerliliği. **Hiçbir
+alan farklı değil, hiçbir davranış farklı değil.**
+
+Tür sütununu silme testi: `kind` gitse satır hâlâ başlıklı, durumlu, öncelikli,
+sahipli bir kayıt. Kategorize ediyor, kimliklendirmiyor → **tek tablo, sütun
+kalır.**
+
 `created_by` artık **açıkça** `on delete restrict`. v1'de bu bir kaza idi
 (varsayılan `NO ACTION`); kullanıcı silmeyi fiilen imkânsız kılıyordu ve
 `users.is_active` bu yüzden var. Karar olarak yazıldı, miras olarak değil.
@@ -326,6 +337,18 @@ create table attachments (
 görür — bütün join'ler derleme zamanında denetlenir, elle tür dağıtımı
 yazılmaz. `OWNER_TYPES` frozenset'i düşer.
 
+### Düğüm ve takım ekleri: kaybolan bir şey yok — karara bağlandı
+
+v1'in `owner_type` CHECK'i `'node'` ve `'team'` değerlerini kabul ediyordu ama
+kod tarandı: bu değerleri **üreten hiçbir yol yok**. `attachments.attach()`
+yalnız `'event'` (mesaj eki) ve `'card'` (medya kartı) ile çağrılıyor.
+`attachments.py`'deki `'node'`/`'team'` dalları yalnızca *görme* yetkisini
+hesaplıyor — hiç satır doğmadığı için hiç çalışmıyorlar.
+
+Yani v2'nin `card_id XOR message_id` ikilisi bir yeteneği kaldırmıyor,
+ulaşılamayan bir kapıyı kapatıyor. Düğüm veya takım eki gerçekten istenirse
+sohbet mesajına asılır — düğüm ve takımın zaten sohbeti var (§5).
+
 **Blob toplama hâlâ gerekli.** Cascade satırı siler, diskteki dosyayı
 silmez. v1'de bu sessiz bir sızıntıydı: düğüm silinince kayıtlar cascade
 ile gidiyor, ekler FK'sız olduğu için `deleted_at is null` hâlde kalıyor ve
@@ -562,11 +585,12 @@ Admin bütün kök düğümlerden tüm ağacı kontrol eder; `active_scopes()` a
 `SCOPES`'un tamamını, `authorized_on_node()` doğrudan `True` döndürüyor —
 kod tarafında yapılacak bir şey yok. Grant arayüzü ihtiyaç netleşince gelir.
 
-> **AÇIK — davranış değişikliği.** `/outcome-tree` bugün **hiç korunmuyor**:
+> **KARAR — bilinçli davranış değişikliği.** `/outcome-tree` bugün **hiç korunmuyor**:
 > giriş yapan herkes açabiliyor, `_can_edit_structure` yalnız şablona
 > `can_write` basıyor. Sayfayı `edit_nodes`'a bağlamak `KNOW-47`'deki
-> "görülme genel, değiştirme kapsamlı" ilkesini ters çeviriyor. Ağaç bir org
-> şeması olduğu için okumaya açık kalması da savunulabilir — karar verilmeli.
+> "görülme genel, değiştirme kapsamlı" ilkesini **ters çeviriyor** ve bu kabul
+> edildi: veri ağacı sayfası kapsam ister. `KNOW-47` bundan sonra kartlar için
+> geçerli, ağaç sayfası için değil.
 
 ---
 
@@ -678,26 +702,25 @@ garantiliyor · `users_email_nocase_idx` büyük/küçük harf tekilliğini tutu
 
 ## Açık noktalar
 
-1. **Veri ağacı sayfası kapılı mı kalsın?** §11'deki karar `edit_nodes`'u
-   sayfa kapısı yapıyor, ama sayfa bugün herkese açık ve `KNOW-47` "görülme
-   genel, değiştirme kapsamlı" diyor. Ağaç org şeması — okuması herkese açık
-   kalabilir, o zaman `edit_nodes` yalnız yazma formlarını açar.
-2. **`items.kind` (issue/task) gerçek bir boyut mu?** Hata ve görev farklı
-   alanlar taşıyorsa tür sütunu yaşam döngüsü ayırıyor demektir ve §"Kural"
-   gereği bölünmeli. Aynı şeyin iki etiketiyse sütun doğru.
-3. **Düğüm ve takım ekleri.** v1'de `attachments.owner_type` `'node'` ve
-   `'team'` değerlerini kabul ediyordu; v2'de ek yalnız karta ya da mesaja
-   asılıyor (§7) ve bu ikisinin yolu yok. Düğüm/takım sohbetindeki bir mesaja
-   asılmaları yeterli mi, yoksa doğrudan ek gerekiyor mu?
-4. **Kayıt için ürün kelimesi.** Ekipte "BUT-1042" diye konuşuluyor, yani
-   şeyin bir kodu var ama tablo adı (`items`) hiçbir şey anlatmıyor. Şablon
-   dosyaları da ikiye bölünmüş durumda: `kart.html`/`kartlar.html`
-   `item_cards` çiziyor, `kayit.html` ise `items` çiziyor ve ilk satırında
-   konusuna "kart" diyor. Tek UI kelimesi → tek tablo, şablon dosyası da o
-   kelime olmalı.
-5. **`db-scheme-export.sql` üç göç geride** (`card_signups`, `notify_level`,
-   `reply_to_id` yok). Port için referans alınacaksa önce yeniden üretilmeli.
-6. **`10-kararlar.md` "Taşınabilirlik kuralları"** SQLite döneminden kalma ve
+1. **Kayıt için ürün kelimesi.** Ekipte "BUT-1042" diye konuşuluyor, yani şeyin
+   bir kodu var ama tablo adı (`items`) hiçbir şey anlatmıyor. Şablon dosyaları
+   da ikiye bölünmüş: `kart.html`/`kartlar.html` `item_cards` çiziyor,
+   `kayit.html` ise `items` çiziyor ve ilk satırında konusuna "kart" diyor.
+   Tek UI kelimesi → tek tablo, şablon dosyası da o kelime olmalı.
+   **Karar sahibinde:** ekip bir `items` satırına konuşurken ne diyor?
+2. **`db-scheme-export.sql` üç göç geride** (`card_signups`, `notify_level`,
+   `reply_to_id` yok). Yeniden üretmek çalışan bir Postgres istiyor.
+3. **`10-kararlar.md` "Taşınabilirlik kuralları"** SQLite döneminden kalma ve
    kendi dosyasıyla çelişiyor: aynı bölüm PostgreSQL'in `jsonb`'sini sayıyor,
    birkaç satır sonra "jsonb yok" diyor. `id TEXT` / zaman `TEXT` / `0/1`
-   boolean kuralları da yürürlükte değil.
+   boolean kuralları da yürürlükte değil. Bağlayıcı kararlar dosyası olduğu
+   için dokunulmadı — silinsin mi, yoksa "SQLite dönemi, geçersiz" notuyla mı
+   kalsın?
+
+### Kapananlar
+
+| soru | cevap |
+|---|---|
+| `items.kind` gerçek boyut mu? | **Hayır, etiket** — §1. Kod tarandı, dallanan tek şey rozet ve filtre. |
+| Düğüm/takım eklerinin yolu? | **Gerek yok** — §7. v1'de de üreten yol yoktu, ölü kapıydı. |
+| Veri ağacı sayfası kapılı mı? | **Kapılı** — §11. `KNOW-47` ilkesi bilinçli olarak ağaç sayfası için terk edildi. |
