@@ -1,0 +1,1 @@
+//! `activity` satir tipi.
