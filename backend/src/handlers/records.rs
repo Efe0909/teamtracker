@@ -42,6 +42,39 @@ pub async fn editable(st: &AppState, u: &User, id: Uuid) -> Result<Record> {
     Ok(rec)
 }
 
+/// Akis bildiriminde gorunen alan adi: "önceliği Orta → Düşük".
+fn field_label(field: &str) -> &'static str {
+    match field {
+        "status" => "durumu",
+        "priority" => "önceliği",
+        "owner_id" => "sorumlusu",
+        "team_id" => "takımı",
+        "pillar_id" => "pillar'ı",
+        _ => "son tarihi",
+    }
+}
+
+/// Bos dizgi = ALANI BOSALT. Bozuk metin = HATA.
+///
+/// `parse().ok()` kullanmak ikisini birlestirirdi ve "abc" yazan kullanici
+/// alaninin SESSIZCE bosaldigini gorurdu — yazma niyeti vardi, yok sayilmasi
+/// veri kaybi olur.
+fn opt_uuid(value: &str) -> Result<Option<Uuid>> {
+    if value.is_empty() {
+        return Ok(None);
+    }
+    value.parse().map(Some)
+        .map_err(|_| AppError::BadRequest("geçersiz kimlik".into()))
+}
+
+fn opt_date(value: &str) -> Result<Option<chrono::NaiveDate>> {
+    if value.is_empty() {
+        return Ok(None);
+    }
+    value.parse().map(Some)
+        .map_err(|_| AppError::BadRequest("geçersiz tarih".into()))
+}
+
 fn label_of(field: &str, value: &str) -> String {
     let table = match field {
         "status" => STATUSES,
@@ -52,8 +85,71 @@ fn label_of(field: &str, value: &str) -> String {
         .unwrap_or_else(|| value.to_string())
 }
 
-pub async fn create() -> Response {
-    todo!("records::create")
+#[derive(serde::Deserialize)]
+pub struct NewRecord {
+    title: String,
+    unit_id: String,
+    #[serde(default)]
+    kind: String,
+    #[serde(default)]
+    description: String,
+    #[serde(default)]
+    priority: String,
+}
+
+/// Yeni kayit.
+///
+/// `chat_id` NOT NULL: sohbet kayitla AYNI islemde dogar. Islem sart —
+/// yarida kalirsa sahipsiz bir `chats` satiri kalirdi.
+pub async fn create(
+    State(st): State<AppState>,
+    CurrentUser(u): CurrentUser,
+    Form(f): Form<NewRecord>,
+) -> Result<Response> {
+    let title = f.title.trim();
+    if title.is_empty() {
+        return Err(AppError::BadRequest("başlıksız kayıt".into()));
+    }
+    // Gecersiz dugum kimligi 400: istek bozuk. Kapsam disi dugum 403: istek
+    // dogru ama yetki yok. Ikisi AYRI cevap.
+    let unit: Uuid = f.unit_id.trim().parse()
+        .map_err(|_| AppError::BadRequest("geçersiz düğüm".into()))?;
+
+    {
+        let tree = st.tree.read().expect("agac kilidi");
+        let node = tree.get(unit)
+            .ok_or_else(|| AppError::BadRequest("düğüm yok".into()))?;
+        // Kayit TAKIM ya da PILLAR dugumune baglanmaz (spec §10): onlarin
+        // kendi alanlari var (team_id, pillar_id).
+        if !node.node_type.is_unit() {
+            return Err(AppError::BadRequest("bu düğüm tipine kayıt açılamaz".into()));
+        }
+    }
+    if !crate::db::scope::can_create_in(&st.pool, &u, unit, &st.tree).await? {
+        return Err(AppError::Forbidden("bu dalda kayıt açma yetkin yok".into()));
+    }
+
+    let kind = if f.kind.trim() == "task" { "task" } else { "issue" };
+    let priority = match f.priority.trim() {
+        p @ ("critical" | "high" | "low") => p,
+        _ => "medium",
+    };
+
+    let mut tx = st.pool.begin().await?;
+    let chat: Uuid = sqlx::query_scalar("insert into chats default values returning id")
+        .fetch_one(&mut *tx).await?;
+    let id: Uuid = sqlx::query_scalar(
+        "insert into records (unit_id, chat_id, kind, title, description, priority, created_by)
+         values ($1, $2, $3, $4, nullif($5, \'\'), $6, $7) returning id")
+        .bind(unit).bind(chat).bind(kind).bind(title)
+        .bind(f.description.trim()).bind(priority).bind(u.id)
+        .fetch_one(&mut *tx).await?;
+    // Acan kisi kendiliginden katilimci: kendi actigi kaydin akisini gormeli.
+    sqlx::query("insert into record_participants (record_id, user_id) values ($1, $2)")
+        .bind(id).bind(u.id).execute(&mut *tx).await?;
+    tx.commit().await?;
+
+    Ok(axum::response::Redirect::to(&format!("/tasks/{id}")).into_response())
 }
 
 
@@ -103,13 +199,28 @@ pub async fn change_field(
         "priority" => { sqlx::query("update records set priority = $1 where id = $2")
             .bind(value).bind(id).execute(&st.pool).await?; }
         "owner_id" => { sqlx::query("update records set owner_id = $1 where id = $2")
-            .bind(value.parse::<Uuid>().ok()).bind(id).execute(&st.pool).await?; }
+            .bind(opt_uuid(value)?).bind(id).execute(&st.pool).await?; }
         "team_id" => { sqlx::query("update records set team_id = $1 where id = $2")
-            .bind(value.parse::<Uuid>().ok()).bind(id).execute(&st.pool).await?; }
-        "pillar_id" => { sqlx::query("update records set pillar_id = $1 where id = $2")
-            .bind(value.parse::<Uuid>().ok()).bind(id).execute(&st.pool).await?; }
+            .bind(opt_uuid(value)?).bind(id).execute(&st.pool).await?; }
+        "pillar_id" => {
+            // Pillar ALANINA yalniz pillar TIPLI dugum yazilabilir. Tanim
+            // agacta (node_type='pillar'), tek kaynak — FK tek basina bunu
+            // tutmuyor, cunku FK butun nodes'u kabul ediyor.
+            let pid = opt_uuid(value)?;
+            if let Some(p) = pid {
+                let is_pillar = {
+                    let tree = st.tree.read().expect("agac kilidi");
+                    tree.get(p).map(|n| n.node_type == crate::models::enums::NodeType::Pillar)
+                };
+                if is_pillar != Some(true) {
+                    return Err(AppError::BadRequest("pillar olmayan düğüm seçilemez".into()));
+                }
+            }
+            sqlx::query("update records set pillar_id = $1 where id = $2")
+                .bind(pid).bind(id).execute(&st.pool).await?;
+        }
         _ => { sqlx::query("update records set due_date = $1 where id = $2")
-            .bind(value.parse::<chrono::NaiveDate>().ok()).bind(id).execute(&st.pool).await?; }
+            .bind(opt_date(value)?).bind(id).execute(&st.pool).await?; }
     }
     // updated_at ELLE surulmuyor — tetikleyici yapiyor (TASK-282).
 
@@ -127,7 +238,7 @@ pub async fn change_field(
          values ($1, $2, $3, $4, $5)")
         .bind(rec.chat_id).bind(u.id).bind("field_changed")
         .bind(&rec.title)
-        .bind(format!("{} → {}", pretty(&before), pretty(value)))
+        .bind(format!("{} {} → {}", field_label(field), pretty(&before), pretty(value)))
         .execute(&st.pool).await?;
 
     // Alan seridi + akis, tek yanitta. `oob_feed` sablona akisin

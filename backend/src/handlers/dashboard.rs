@@ -73,6 +73,7 @@ pub async fn home(
 pub async fn table(
     State(st): State<AppState>,
     CurrentUser(u): CurrentUser,
+    headers: axum::http::HeaderMap,
     Query(params): Query<HashMap<String, String>>,
     jar: SignedCookieJar,
 ) -> Result<Response> {
@@ -134,8 +135,12 @@ pub async fn table(
         }).collect()
     };
 
+    // Filtre degisince TAM SAYFA degil yalnizca tablo parcasi doner: htmx
+    // #sonuc'u yerine koyuyor, ray ve filtre formu yerinde kaliyor.
+    let fragment = headers.contains_key("hx-request");
+
     let tok = crate::csrf::token(&jar);
-    let html = render::page_with_token(&st, &u, "dashboard/tasks.html", context! {
+    let ctx = context! {
         rows => rows,
         summary => context! {
             open => summary.0, closed => summary.1, all => summary.2,
@@ -154,7 +159,12 @@ pub async fn table(
         pillars => pillar_options(&st),
         teams   => team_options(&st).await?,
         card_types => BTreeMap::<String, u8>::new(),
-    }, &tok).await?;
+    };
+    let html = if fragment {
+        st.tpl.get_template("dashboard/fragments/table.html")?.render(ctx)?
+    } else {
+        render::page_with_token(&st, &u, "dashboard/tasks.html", ctx, &tok).await?
+    };
     Ok((crate::csrf::attach(jar, &tok, st.cfg.in_production()),
         Html(html)).into_response())
 }
