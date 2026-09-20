@@ -9,7 +9,10 @@ use axum::{
 use serde_json::json;
 use uuid::Uuid;
 
-use crate::{auth::CurrentUser, error::Result, state::AppState};
+use axum::{extract::Path, http::HeaderMap, response::Redirect};
+use axum_extra::extract::cookie::SignedCookieJar;
+
+use crate::{auth::CurrentUser, error::{AppError, Result}, models::user::User, state::AppState};
 
 /// Iki yuzun cakistigi TEK yol. Mobil yuz de masaustu yuzu de KOKTE duruyor
 /// ("/m" yok), o yuzden "/" iki router'da birden tanimlanamaz — Host'a gore
@@ -72,8 +75,38 @@ pub async fn subscribe() -> Response {
     todo!("shared::subscribe")
 }
 
-pub async fn switch_user() -> Response {
-    todo!("shared::switch_user")
+/// Kullanici degistirme — YALNIZCA sahte kimlik modunda.
+///
+/// Yayin kurulumunda bu rota da calismaz: `Config` sahte kimligi acilista
+/// reddediyor, ama uc yine de kendi kapisini tutuyor — rota tablosuna bakan
+/// biri "bu yayinda da var mi" diye merak etmesin.
+pub async fn switch_user(
+    State(st): State<AppState>,
+    jar: SignedCookieJar,
+    headers: HeaderMap,
+    Path(user_id): Path<Uuid>,
+) -> Result<Response> {
+    if !st.cfg.fake_identity() {
+        return Err(AppError::NotFound("sayfa yok".into()));
+    }
+    if User::active(&st.pool, user_id).await?.is_none() {
+        return Err(AppError::NotFound("kullanıcı yok".into()));
+    }
+    let jar = crate::auth::open_session(jar, &st.cfg, user_id);
+
+    // Geldigi sayfaya don. Referer'in YALNIZ YOLU alinir — tam URL'yi
+    // kullanmak acik yonlendirme olurdu.
+    let back = headers.get(axum::http::header::REFERER)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|r| r.split_once("://").map(|(_, rest)| rest).unwrap_or(r)
+            .find('/').map(|i| {
+                let raw = r.split_once("://").map(|(_, rest)| &rest[i..]).unwrap_or(&r[i..]);
+                raw.split(['?', '#']).next().unwrap_or("/").to_string()
+            }))
+        .filter(|p| p.starts_with('/'))
+        .unwrap_or_else(|| "/".into());
+
+    Ok((jar, Redirect::to(&back)).into_response())
 }
 
 pub async fn test_notification() -> Response {

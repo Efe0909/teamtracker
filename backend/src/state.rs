@@ -6,6 +6,8 @@
 
 use std::sync::{Arc, RwLock};
 
+use axum::extract::FromRef;
+use axum_extra::extract::cookie::Key;
 use minijinja::Environment;
 use sqlx::PgPool;
 
@@ -23,10 +25,22 @@ pub struct AppState {
     /// hata olurdu. `tokio::sync::RwLock` buna izin verir ve sorunu gizler.
     pub tree: Arc<RwLock<TreeIndex>>,
     pub tpl: Arc<Environment<'static>>,
+    /// Cerez imzalama anahtari. `SignedCookieJar` bunu state'ten `FromRef`
+    /// ile aliyor — extractor'in calismasinin sarti.
+    pub key: Key,
+}
+
+/// `SignedCookieJar` icin. Anahtari her istekte yeniden turetmek yerine
+/// state'te tutuyoruz: turetme ucuz degil ve her istekte yapiliyordu.
+impl FromRef<AppState> for Key {
+    fn from_ref(st: &AppState) -> Self {
+        st.key.clone()
+    }
 }
 
 impl AppState {
     pub async fn new(pool: PgPool, cfg: Config) -> Result<Self, sqlx::Error> {
+        let cfg_for_key = cfg.clone();
         let tree = load_tree(&pool).await?;
         let mut env = Environment::new();
         env.set_loader(minijinja::path_loader("templates"));
@@ -78,6 +92,7 @@ impl AppState {
             pool,
             cfg: Arc::new(cfg),
             tree: Arc::new(RwLock::new(tree)),
+            key: crate::auth::key_from(&cfg_for_key),
             tpl: Arc::new(env),
         })
     }

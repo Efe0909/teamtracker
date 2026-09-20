@@ -24,6 +24,12 @@ use crate::{config::Config, error::AppError, models::user::User, state::AppState
 
 const SESSION_KEY: &str = "uid";
 
+/// Imzasiz, duz `uid` cerezi — YALNIZCA sahte kimlik modunda okunur.
+/// Gelistirme/test kolayligi: tarayicidan ya da testten tek satirla kullanici
+/// degistirilebilsin. Yayinda `Config` sahte kimligi acilista REDDETTIGI icin
+/// bu dal hic calismaz.
+const DEV_COOKIE: &str = "uid";
+
 pub fn key_from(cfg: &Config) -> Key {
     // Yayinda Config >= 32 karakter dayatiyor; gelistirmede kisa anahtari
     // uzatarak kabul ediyoruz ki `cargo run` bos ortamla da calissin.
@@ -72,7 +78,7 @@ impl OptionalFromRequestParts<AppState> for CurrentUser {
 }
 
 async fn resolve(p: &mut Parts, st: &AppState) -> Result<Option<User>, AppError> {
-    let jar = SignedCookieJar::from_headers(&p.headers, key_from(&st.cfg));
+    let jar = SignedCookieJar::from_headers(&p.headers, st.key.clone());
 
     if let Some(id) = jar.get(SESSION_KEY).and_then(|c| c.value().parse::<Uuid>().ok()) {
         // HER ISTEKTE DB: kapatilan kullanici bir sonraki istekte duser.
@@ -82,9 +88,23 @@ async fn resolve(p: &mut Parts, st: &AppState) -> Result<Option<User>, AppError>
         }
     }
 
-    // Sahte kimlik: giris ekrani yok, ilk kullanici olarak acilir. Config
-    // yayinda bu modu acilista REDDEDIYOR — burada ikinci bir kapi yok.
+    // Sahte kimlik: giris ekrani yok. Once duz `uid` cerezi (test/gelistirme
+    // degistiricisi), sonra ilk kullanici. Config yayinda bu modu acilista
+    // REDDEDIYOR — burada ikinci bir kapi yok.
     if st.cfg.fake_identity() {
+        let dev = p.headers.get_all(axum::http::header::COOKIE).iter()
+            .filter_map(|v| v.to_str().ok())
+            .flat_map(|v| v.split(';'))
+            .filter_map(|c| c.trim().split_once('='))
+            .find(|(k, _)| *k == DEV_COOKIE)
+            .and_then(|(_, v)| v.parse::<Uuid>().ok());
+
+        if let Some(id) = dev {
+            if let Some(u) = User::active(&st.pool, id).await? {
+                touch_presence(st, u.id).await;
+                return Ok(Some(u));
+            }
+        }
         if let Some(u) = User::first_active(&st.pool).await? {
             touch_presence(st, u.id).await;
             return Ok(Some(u));
