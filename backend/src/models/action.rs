@@ -42,7 +42,11 @@ pub struct Action {
 }
 
 #[derive(Debug, Serialize)]
-pub struct Assignee { pub name: String, pub color: Option<String> }
+pub struct Assignee {
+    pub id: Uuid,
+    pub name: String,
+    pub color: Option<String>,
+}
 
 impl Action {
     pub async fn of_record(
@@ -66,7 +70,7 @@ impl Action {
             Action {
                 status_label: ACTION_STATUS.iter().find(|(k, _)| *k == r.status)
                     .map(|(_, v)| *v).unwrap_or("?"),
-                assignee: p.map(|p| Assignee { name: p.name.clone(), color: p.color.clone() }),
+                assignee: p.map(|p| Assignee { id: p.id, name: p.name.clone(), color: p.color.clone() }),
                 overdue: !done && r.due_date.map(|d| d < today).unwrap_or(false),
                 done, first_done,
                 id: r.id, title: r.title, status: r.status, due: r.due_date,

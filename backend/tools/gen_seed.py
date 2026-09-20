@@ -64,6 +64,18 @@ for i, (key, parent, name, ntype) in enumerate(ns["NODES"]):
       f"({q(uid('n', key))},{q(uid('n', parent)) if parent else 'null'},"
       f"{q(name)},{q(ntype)},{i});")
 
+# users.scope_node_id DUSTU (yetki dort katman, spec §11). Dal izni artik
+# user_node_scopes: COK satir + alt agac mirasi, tek dugum degil.
+P("\n-- === dal izinleri (v1: users.scope_node_id) ===")
+_by_name = {n[2]: n[0] for n in ns["NODES"]}
+for key, _e, _n, _c, admin, _a, scope in ns["USERS"]:
+    if not scope or admin:
+        continue                      # admin zaten her daldan gecer
+    P(f"insert into user_node_scopes (user_id,node_id) values "
+      f"({q(uid('u', key))},{q(uid('n', _by_name[scope]))});")
+    # Dal izninin ise yaramasi icin `edit_nodes` kapsami da gerekli.
+    P(f"insert into user_scopes (user_id,scope) values ({q(uid('u', key))},'edit_nodes');")
+
 P("\n-- === takimlar (her birine bir chats satiri) ===")
 for key, name, desc, color in ns["TEAMS"]:
     P(f"insert into chats (id) values ({q(uid('c-team', key))});")

@@ -42,8 +42,9 @@ pub async fn post_message(
     if body.is_empty() {
         return Err(AppError::BadRequest("boş mesaj".into()));
     }
-    let rec = Record::fetch(&st.pool, id).await?
-        .ok_or_else(|| AppError::NotFound("kayıt yok".into()))?;
+    // Mesaj yazmak da KART YETKISI ister: sohbet kaydin parcasi, ayri bir
+    // kapi degil.
+    let rec = crate::handlers::records::editable(&st, &u, id).await?;
 
     let reply: Option<Uuid> = f.reply_to.trim().parse().ok();
     let msg_id: Uuid = sqlx::query_scalar(

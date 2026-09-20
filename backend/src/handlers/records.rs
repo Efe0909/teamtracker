@@ -13,6 +13,7 @@ use uuid::Uuid;
 
 use crate::{
     auth::CurrentUser,
+    models::user::User,
     error::{AppError, Result},
     models::record::{Record, PRIORITIES, STATUSES},
     render,
@@ -23,8 +24,22 @@ use crate::{
 ///
 /// BEYAZ LISTE: sutun adi kullanici girdisinden gelemez (KNOW-104). Listede
 /// olmayan alan sessizce degil ACIKCA reddedilir — yazma niyeti vardi.
-fn editable(field: &str) -> bool {
+fn is_editable_field(field: &str) -> bool {
     matches!(field, "status" | "priority" | "owner_id" | "due_date" | "team_id" | "pillar_id")
+}
+
+/// Kaydi getir ve DEGISTIRME yetkisini kontrol et.
+///
+/// 403 yalniz DEGISTIREN uclarda (KNOW-47): gorulme genel, degistirme
+/// kapsamli. Bu yuzden okuma yollari bunu cagirmiyor.
+pub async fn editable(st: &AppState, u: &User, id: Uuid) -> Result<Record> {
+    let rec = Record::fetch(&st.pool, id).await?
+        .ok_or_else(|| AppError::NotFound("kayıt yok".into()))?;
+    let allowed = crate::db::scope::can_edit_record(&st.pool, u, &rec, &st.tree).await?;
+    if !allowed {
+        return Err(AppError::Forbidden("bu kayıtta yetkin yok".into()));
+    }
+    Ok(rec)
 }
 
 fn label_of(field: &str, value: &str) -> String {
@@ -54,10 +69,9 @@ pub async fn change_field(
     Path(id): Path<Uuid>,
     Form(form): Form<HashMap<String, String>>,
 ) -> Result<Response> {
-    let rec = Record::fetch(&st.pool, id).await?
-        .ok_or_else(|| AppError::NotFound("kayıt yok".into()))?;
+    let rec = editable(&st, &u, id).await?;
 
-    let (field, value) = form.iter().find(|(k, _)| editable(k))
+    let (field, value) = form.iter().find(|(k, _)| is_editable_field(k))
         .ok_or_else(|| AppError::BadRequest("düzenlenebilir alan yok".into()))?;
     let value = value.trim();
 
@@ -69,6 +83,16 @@ pub async fn change_field(
         "pillar_id" => rec.pillar_id.map(|i| i.to_string()).unwrap_or_default(),
         _ => rec.due_date.map(|d| d.to_string()).unwrap_or_default(),
     };
+
+    // ACIK EYLEMI VARKEN kayit KAPANAMAZ (spec/20 §3a). 400: istek bicimsel
+    // olarak dogru ama su anda yapilamaz — 403 degil, yetki sorunu degil.
+    if field == "status" && value == "closed" {
+        let open = crate::handlers::actions::open_count(&st, id).await?;
+        if open > 0 {
+            return Err(AppError::BadRequest(
+                format!("{open} açık eylem var; önce onları kapat")));
+        }
+    }
 
     // Sutun adi SABIT dallardan geliyor, girdi yalniz DEGER olarak baglaniyor.
     // sqlx zaten dinamik sorgu dizgisini reddediyor; bu dallanma o kurali
