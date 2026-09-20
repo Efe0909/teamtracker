@@ -50,6 +50,46 @@ impl AppState {
         // Ray'deki kullanici degistirici yalniz sahte kimlikte cizilir.
         let fake = cfg.fake_identity();
         env.add_function("fake_identity", move || fake);
+        // Cevrimici: satirdaki last_seen_at esikten yeni mi. Ayri bir sorgu
+        // YOK — kimlik cozulen her istek damgayi tazeliyor.
+        env.add_function("online", |v: minijinja::Value| {
+            v.get_attr("last_seen_at").ok()
+                .and_then(|t| t.as_str().and_then(|s| {
+                    chrono::DateTime::parse_from_rfc3339(s).ok()
+                }))
+                .map(|t| chrono::Utc::now().signed_duration_since(t)
+                     < chrono::Duration::minutes(2))   // shared/auth.ONLINE_THRESHOLD
+                .unwrap_or(false)
+        });
+        // Anma vurgusu. Mesaj govdesi HAM metin saklanir (messages.body) —
+        // HTML uretilip veritabanina YAZILMAZ, yoksa kacis kurali iki yere
+        // dagilirdi. Vurgu OKUMA aninda: once kacilir, sonra @anahtar sarilir.
+        //
+        // `|safe` donduruyoruz, o yuzden kacis BURADA elle yapilmali.
+        env.add_filter("mention", |text: Option<&str>| {
+            static RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+            let re = RE.get_or_init(|| regex::Regex::new(r"@([\w.\-]+)").expect("sabit desen"));
+
+            let mut safe = String::new();
+            for ch in text.unwrap_or("").chars() {
+                match ch {
+                    '&' => safe.push_str("&amp;"),
+                    '<' => safe.push_str("&lt;"),
+                    '>' => safe.push_str("&gt;"),
+                    '"' => safe.push_str("&quot;"),
+                    '\'' => safe.push_str("&#x27;"),
+                    _ => safe.push(ch),
+                }
+            }
+            // @all / @here / @team GRUP anmasi — ayri sinif alir.
+            const GROUPS: &[&str] = &["all", "here", "team"];
+            let out = re.replace_all(&safe, |c: &regex::Captures| {
+                let who = &c[1];
+                let grp = if GROUPS.contains(&who.to_lowercase().as_str()) { " grp" } else { "" };
+                format!("<span class=\"mention{grp}\">@{who}</span>")
+            }).into_owned();
+            minijinja::Value::from_safe_string(out)
+        });
         env.add_function("notify_levels", || {
             crate::push::NOTIFY_LEVELS.iter().copied()
                 .collect::<std::collections::BTreeMap<_, _>>()

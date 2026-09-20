@@ -5,13 +5,16 @@ use std::collections::{BTreeMap, HashMap};
 
 use minijinja::context;
 use serde::Serialize;
+use uuid::Uuid;
+
+use crate::models::user::User;
 use sqlx::{Postgres, QueryBuilder};
 
 use crate::{
     auth::CurrentUser,
     error::{AppError, Result},
     db::filters::{Filters, QUICK_FILTERS},
-    models::{module, record::{short_time, Chip, RecordListRow, RecordRow, PRIORITIES, STATUSES}},
+    models::{action::Action, module, record::Record, record::{short_time, Chip, RecordListRow, RecordRow, PRIORITIES, STATUSES}},
     render,
     state::AppState,
 };
@@ -154,7 +157,86 @@ pub async fn table(
     Ok(Html(html).into_response())
 }
 
-pub async fn record_page() -> Response { todo!("dashboard::record_page") }
+/// Kayit sayfasi. MODAL DEGIL, tam sayfa: URL paylasilabilir, mobil geri
+/// tusu calisir (KNOW-112).
+pub async fn record_page(
+    State(st): State<AppState>,
+    CurrentUser(u): CurrentUser,
+    Path(id): Path<Uuid>,
+) -> Result<Response> {
+    let html = render::page(&st, &u, "dashboard/record.html",
+                            record_ctx(&st, &u, id).await?).await?;
+    Ok(Html(html).into_response())
+}
+
+/// Kayit sayfasinin baglami. Masaustu ve mobil AYNI parcalari ciziyor
+/// (KNOW-265), o yuzden baglam da ortak.
+pub async fn record_ctx(st: &AppState, u: &User, id: Uuid) -> Result<minijinja::Value> {
+    let rec = Record::fetch(&st.pool, id).await?
+        .ok_or_else(|| AppError::NotFound("kayıt yok".into()))?;
+
+    let people = render::all_users(st).await?;
+    let feed = crate::db::feed::of_chat(&st.pool, rec.chat_id, u.id, &people).await?;
+
+    let parts: Vec<Uuid> = sqlx::query_scalar(
+        "select user_id from record_participants where record_id = $1")
+        .bind(id).fetch_all(&st.pool).await?;
+
+    let actions = Action::of_record(&st.pool, id, &people).await?;
+    let teams = team_options(st).await?;
+    let find = |uid: Option<Uuid>| uid.and_then(|i| people.iter().find(|p| p.id == i));
+
+    let (crumbs, pillar) = {
+        let tree = st.tree.read().expect("agac kilidi");
+        (tree.ancestors(rec.unit_id).into_iter()
+            .map(|n| (n.to_string(), tree.name(n).to_string()))
+            .collect::<Vec<_>>(),
+         rec.pillar_id.map(|p| tree.name(p).to_string()))
+    };
+
+    let status_label = STATUSES.iter().find(|(k, _)| *k == rec.status).map(|(_, v)| *v);
+    let priority_label = PRIORITIES.iter().find(|(k, _)| *k == rec.priority).map(|(_, v)| *v);
+
+    Ok(context! {
+        item => &rec,
+        assignee => find(rec.owner_id),
+        creator => find(Some(rec.created_by)),
+        team => teams.iter().find(|t| Some(t.id.as_str()) == rec.team_id.map(|i| i.to_string()).as_deref()),
+        teams => &teams,
+        // Ucuncu oge RENK: takim secim dialogunda da ekranin geri kalanindaki
+        // nokta gorunsun — "hangisiydi bu" her seferinde sorulmasin.
+        team_options => [("".to_string(), "—".to_string(), None)].into_iter()
+            .chain(teams.iter().map(|t| (t.id.clone(), t.name.clone(), t.color.clone())))
+            .collect::<Vec<_>>(),
+        pillar => pillar,
+        pillar_options => pillar_options(st),
+        participants => parts.iter().filter_map(|p| find(Some(*p))).collect::<Vec<_>>(),
+        feed => feed,
+        crumbs => crumbs.into_iter().map(|(id, name)| context!{ id => id, name => name })
+            .collect::<Vec<_>>(),
+        statuses => STATUSES.iter().copied().collect::<BTreeMap<_,_>>(),
+        priorities => PRIORITIES.iter().copied().collect::<BTreeMap<_,_>>(),
+        status_label => status_label,
+        priority_label => priority_label,
+        created => short_time(rec.created_at),
+        actions => actions,
+        action_status => crate::models::action::ACTION_STATUS.iter().copied()
+            .collect::<BTreeMap<_,_>>(),
+        open_action_count => 0,
+        cards => Vec::<u8>::new(),
+        card_types => BTreeMap::<String, u8>::new(),
+        can_edit => true,
+        // Son tarih AYRI bir kapsam ister (edit_deadline): kural hem kayit
+        // alanina hem eyleme ayni sekilde uygulaniyor.
+        can_edit_deadline => u.is_admin,
+        user_options => people.iter()
+            .map(|p| (p.id.to_string(), p.name.clone()))
+            .collect::<Vec<_>>(),
+        url => format!("/record/{id}/field"),
+        oob_feed => false,
+        oob => false,
+    })
+}
 pub async fn admin_page() -> Response { todo!("dashboard::admin_page") }
 pub async fn toggle_pin() -> Response { todo!("dashboard::toggle_pin") }
 

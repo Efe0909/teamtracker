@@ -63,3 +63,33 @@ pub fn short_time(t: DateTime<Utc>) -> String {
     else if h < 24 { format!("{h} sa") }
     else { format!("{g} gün") }
 }
+
+/// Tek kayit — kayit sayfasi ve yazma yollari icin.
+#[derive(Debug, Serialize, sqlx::FromRow)]
+pub struct Record {
+    pub id: Uuid,
+    pub unit_id: Uuid,
+    pub pillar_id: Option<Uuid>,
+    pub team_id: Option<Uuid>,
+    pub chat_id: Uuid,
+    pub kind: String,
+    pub title: String,
+    pub description: Option<String>,
+    pub status: String,
+    pub priority: String,
+    pub owner_id: Option<Uuid>,
+    pub created_by: Uuid,
+    pub due_date: Option<NaiveDate>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl Record {
+    pub async fn fetch(pool: &sqlx::PgPool, id: Uuid) -> Result<Option<Record>, sqlx::Error> {
+        sqlx::query_as(
+            "select id, unit_id, pillar_id, team_id, chat_id, kind, title, description,
+                    status, priority, owner_id, created_by, due_date, created_at, updated_at
+               from records where id = $1")
+            .bind(id).fetch_optional(pool).await
+    }
+}

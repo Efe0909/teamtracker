@@ -60,7 +60,19 @@ impl IntoResponse for AppError {
         // Ic hatanin AYRINTISI loga, kullaniciya DEGIL.
         match &self {
             AppError::Db(e) => tracing::error!("db error: {e}"),
-            AppError::Template(e) => tracing::error!("template error: {e}"),
+            AppError::Template(e) => {
+                // minijinja hatalari ZINCIR: en ustteki yalniz "include
+                // cizilemedi" der, asil sebep altta. Zinciri yazmazsak her
+                // sablon hatasinda elle kazmak gerekiyor.
+                let mut msg = format!("template error: {e}");
+                let mut src = std::error::Error::source(e);
+                while let Some(e) = src {
+                    msg.push_str(&format!("
+  caused by: {e}"));
+                    src = std::error::Error::source(e);
+                }
+                tracing::error!("{msg}");
+            }
             AppError::Forbidden(m) => tracing::warn!("permission denied: {m}"),
             _ => {}
         }

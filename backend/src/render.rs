@@ -42,15 +42,20 @@ pub struct UserChip {
     pub name: String,
     pub color: Option<String>,
     pub is_admin: bool,
+    /// Varlik damgasi. `online()` sablon fonksiyonu buna bakiyor — ayri bir
+    /// "kim cevrimici" sorgusu yok, kimlik cozulen her istek damgayi tazeliyor.
+    pub last_seen_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 /// Sahte kimlik modunda ray'deki kullanici degistirici icin.
 pub async fn all_users(st: &AppState) -> Result<Vec<UserChip>> {
-    Ok(sqlx::query_as::<_, (Uuid, String, Option<String>, bool)>(
-        "select id, name, color, is_admin from users where is_active order by name")
+    Ok(sqlx::query_as::<_, (Uuid, String, Option<String>, bool, Option<chrono::DateTime<chrono::Utc>>)>(
+        "select id, name, color, is_admin, last_seen_at from users
+          where is_active order by name")
         .fetch_all(&st.pool).await?
         .into_iter()
-        .map(|(id, name, color, is_admin)| UserChip { id, name, color, is_admin })
+        .map(|(id, name, color, is_admin, last_seen_at)| UserChip {
+            id, name, color, is_admin, last_seen_at })
         .collect())
 }
 

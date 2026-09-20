@@ -39,7 +39,7 @@
 
       <div class="dgrid">
         <label class="dfld"><span>Düğüm (zorunlu)</span>
-          <select name="node_id" required>
+          <select name="unit_id" required>
             {% for n in nodes %}
             <option value="{{ n.id }}">{{ '— ' * n.depth }}{{ n.name }}</option>
             {% endfor %}
@@ -65,7 +65,7 @@
           </select></label>
 
         <label class="dfld"><span>Sorumlu</span>
-          <select name="assignee_id">
+          <select name="owner_id">
             <option value="">— sorumlu yok —</option>
             {% for u in all_users %}
             <option value="{{ u.id }}" {% if u.id == user.id %}selected{% endif %}>{{ u.name }}</option>
@@ -76,7 +76,7 @@
       {% if pillars %}
       {# Pillar ORTOGONAL: agactaki yerinden bagimsiz (goc 012). #}
       <label class="dfld"><span>Pillar</span>
-        <select name="pillar_node_id">
+        <select name="pillar_id">
           <option value="">— pillar yok —</option>
           {% for p in pillars %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}
         </select></label>
