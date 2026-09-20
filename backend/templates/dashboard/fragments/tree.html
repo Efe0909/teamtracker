@@ -71,7 +71,7 @@
            ture dokunmaz. Gizli bir input ile yine gondermek kilidi delerdi. #}
         <select name="type" {% if d.can_retype %}title="tür"{% else %}disabled
                 title="türe bağlı veri var (takım kartı) — önce o bağ çözülmeli"{% endif %}>
-          {% for k, et in d.types.items() %}
+          {% for k, et in d.types|items %}
           <option value="{{ k }}" {% if d.type == k %}selected{% endif %}>{{ et }}</option>
           {% endfor %}
         </select>
@@ -101,7 +101,7 @@
         <input type="hidden" name="parent" value="{{ d.id }}">
         <input name="name" placeholder="alt düğüm adı" required>
         <select name="type" title="tür">
-          {% for k, et in child_types.items() %}
+          {% for k, et in child_types|items %}
           <option value="{{ k }}">{{ et }}</option>
           {% endfor %}
         </select>

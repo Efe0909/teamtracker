@@ -3,7 +3,13 @@
 use axum::{extract::{Path, State}, response::{Html, IntoResponse, Response}};
 use minijinja::context;
 
-use crate::{auth::CurrentUser, error::{AppError, Result}, models::module, state::AppState};
+use crate::{
+    auth::CurrentUser,
+    error::{AppError, Result},
+    models::{module, record::{short_time, Chip, RecordListRow, RecordRow, PRIORITIES, STATUSES}},
+    render,
+    state::AppState,
+};
 
 /// Ana sayfa rozetleri — TEK sorgu, sayfa basina yedi COUNT degil.
 #[derive(sqlx::FromRow)]
@@ -53,8 +59,84 @@ pub async fn home(
     Ok(Html(html).into_response())
 }
 
-pub async fn table() -> Response {
-    todo!("dashboard::table")
+/// Gorev tablosu. Suzme ve siralama SQL'de; ozet AYNI where ile tek sorgu.
+///
+/// Python'da tum kayitlari cekip Rust'ta elemek YASAK (KNOW-181) — burada da
+/// oyle: satir sayisi ekranda gorunen satir sayisidir.
+pub async fn table(
+    State(st): State<AppState>,
+    CurrentUser(u): CurrentUser,
+) -> Result<Response> {
+    let raw: Vec<RecordListRow> = sqlx::query_as(
+        "select r.id, r.unit_id, r.kind, r.title, r.status, r.priority,
+                r.owner_id, r.due_date, r.updated_at,
+                t.name as team_name, t.color as team_color,
+                (select count(*) from actions a
+                  where a.record_id = r.id and a.status in ('open','in_progress'))
+                  ::bigint as open_action_count
+           from records r
+           left join teams t on t.id = r.team_id
+          order by case r.priority when 'critical' then 0 when 'high' then 1
+                                   when 'medium' then 2 else 3 end,
+                   r.updated_at desc")
+        .fetch_all(&st.pool).await?;
+
+    let summary: (i64, i64, i64, i64, i64, i64, i64) = sqlx::query_as(
+        "select
+           coalesce(sum(case when status <> 'closed' then 1 else 0 end),0)::bigint,
+           coalesce(sum(case when status = 'closed' then 1 else 0 end),0)::bigint,
+           count(*)::bigint,
+           coalesce(sum(case when status <> 'closed' and priority='critical' then 1 else 0 end),0)::bigint,
+           coalesce(sum(case when status <> 'closed' and priority='high'     then 1 else 0 end),0)::bigint,
+           coalesce(sum(case when status <> 'closed' and priority='medium'   then 1 else 0 end),0)::bigint,
+           coalesce(sum(case when status <> 'closed' and priority='low'      then 1 else 0 end),0)::bigint
+         from records")
+        .fetch_one(&st.pool).await?;
+
+    let people = render::all_users(&st).await?;
+    let today = chrono::Utc::now().date_naive();
+    let rows: Vec<RecordRow> = {
+        let tree = st.tree.read().expect("agac kilidi");
+        raw.into_iter().map(|r| {
+            let anc = tree.ancestors(r.unit_id);
+            RecordRow {
+                path: anc.iter().rev().take(2).rev()
+                    .map(|&n| tree.name(n)).collect::<Vec<_>>().join(" › "),
+                team: r.team_name.map(|name| Chip { name, color: r.team_color }),
+                assignee: r.owner_id.and_then(|id| people.iter().find(|p| p.id == id))
+                    .map(|p| Chip { name: p.name.clone(), color: p.color.clone() }),
+                overdue: r.due_date.map(|d| d < today).unwrap_or(false)
+                    && r.status != "closed",
+                time: short_time(r.updated_at),
+                id: r.id, kind: r.kind, title: r.title,
+                status: r.status, priority: r.priority,
+                due: r.due_date, open_action_count: r.open_action_count,
+            }
+        }).collect()
+    };
+
+    let html = render::page(&st, &u, "dashboard/tasks.html", context! {
+        rows => rows,
+        summary => context! {
+            open => summary.0, closed => summary.1, all => summary.2,
+            critical => summary.3, high => summary.4,
+            medium => summary.5, low => summary.6,
+        },
+        statuses   => STATUSES.iter().copied().collect::<std::collections::BTreeMap<_,_>>(),
+        priorities => PRIORITIES.iter().copied().collect::<std::collections::BTreeMap<_,_>>(),
+        // TODO(filtre): shared/filters.py karsiligi yazilinca dolacak.
+        filters => Vec::<u8>::new(),
+        quick => Vec::<u8>::new(),
+        selected => context! { quick => "", sort => "activity" },
+        orderings => [("activity", "Son hareket"), ("date", "Son tarih"),
+                      ("priority", "Öncelik"), ("newest", "En yeni")]
+                     .into_iter().collect::<std::collections::BTreeMap<_,_>>(),
+        nodes => Vec::<u8>::new(),
+        pillars => Vec::<u8>::new(),
+        teams => Vec::<u8>::new(),
+        card_types => std::collections::BTreeMap::<String, u8>::new(),
+    }).await?;
+    Ok(Html(html).into_response())
 }
 
 pub async fn record_page() -> Response {

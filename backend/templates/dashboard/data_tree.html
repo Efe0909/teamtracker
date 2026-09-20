@@ -35,7 +35,7 @@
     <input name="name" placeholder="düğüm adı (ör. Maliye)" required>
     {# Kokte HER tur gecerli — liste sunucudan gelir (shared/nodes.NODE_TYPES). #}
     <select name="type" title="tür">
-      {% for k, et in root_types.items() %}
+      {% for k, et in root_types|items %}
       <option value="{{ k }}">{{ et }}</option>
       {% endfor %}
     </select>
