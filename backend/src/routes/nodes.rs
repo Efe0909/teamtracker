@@ -6,7 +6,7 @@
 //!
 //! Katlama ve arama ISTEMCIDE (KNOW-272) — satirlar zaten DOM'da, sunucuya
 //! gidis yok.
-use axum::{routing::{delete, get, patch, post}, Router};
+use axum::{routing::{get, patch, post}, Router};
 use crate::{handlers::nodes as h, state::AppState};
 
 pub fn router() -> Router<AppState> {

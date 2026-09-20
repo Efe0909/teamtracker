@@ -1,5 +1,5 @@
 //! Kart bloklari. Kart = onceden tanimli HTML sablonu + onu dolduran JSON blob.
-use axum::{routing::{delete, patch, post}, Router};
+use axum::{routing::{patch, post}, Router};
 use crate::{handlers::cards as h, state::AppState};
 
 pub fn router() -> Router<AppState> {

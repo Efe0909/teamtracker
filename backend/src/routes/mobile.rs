@@ -1,6 +1,6 @@
 //! Mobil yuzey. KOKTE — yol oneki YOK, `/m` diye bir sey yok.
 //! Host guard: `Surface::Mobile` ya da `Single`.
-use axum::{routing::{get, post}, Router};
+use axum::{routing::get, Router};
 use crate::{handlers::mobile as h, state::AppState};
 
 pub fn router() -> Router<AppState> {
