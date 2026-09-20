@@ -35,3 +35,6 @@ deploy/olusan/
 .rtk/
 plan.md
 spec/.zennotes/
+
+# Rust derleme ciktisi. 800 MB+ — veritabani gibi, ASLA commit etme.
+backend/target/
