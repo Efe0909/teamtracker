@@ -3,6 +3,7 @@
 //! TEK SUREC sart: agac indeksi surec bellekte (KNOW-85). Yatay olcekleme
 //! istenirse once TreeIndex tek yaziciya tasinmali.
 
+mod auth;
 mod config;
 mod db;
 mod error;
