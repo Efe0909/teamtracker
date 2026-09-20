@@ -1,0 +1,66 @@
+{# Veri Yonetimi — yapinin duzenlendigi ekran.
+   Yerlesim SADECE burada; parcalar nerede gosterildiklerini bilmez. #}
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Veri Yönetimi — EkipTakip</title>
+<link rel="icon" href="/static/icon-192.png">
+<link rel="stylesheet" href="{{ static('/static/base.css') }}">
+<link rel="stylesheet" href="{{ static('/static/d/dashboard.css') }}">
+<script src="{{ static('/static/htmx.min.js') }}"></script>
+</head>
+<body hx-headers='{"X-CSRF-Token": "{{ csrf_token }}"}'>
+{% include "dashboard/fragments/mobile_warning.html" %}
+{% with aktif = "outcome-tree" %}{% include "dashboard/fragments/rail.html" %}{% endwith %}
+
+<div class="tmain" id="main">
+  <div class="thead row">
+    <h1>Veri Yönetimi</h1>
+    {% if can_write %}
+    <button class="btn" data-toggle="#yeni-kok">＋ Kök düğüm</button>
+    {% endif %}
+  </div>
+
+  <p class="muted" style="margin:-4px 0 14px;font-size:13px">
+    Yapı burada düzenlenir: düğüm ekle, adlandır, açıklama yaz, taşı, sil.
+    Değişiklik anında uygulanır ve ağaç yeniden kurulur.
+  </p>
+
+  {% if can_write %}
+  {# Kok dugum ekleme — agac bosken tek giris noktasi. #}
+  <form id="yeni-kok" class="tform tkok" hx-post="/node"
+        hx-target="#agac" hx-swap="outerHTML">
+    <input name="name" placeholder="düğüm adı (ör. Maliye)" required>
+    {# Kokte HER tur gecerli — liste sunucudan gelir (shared/nodes.NODE_TYPES). #}
+    <select name="type" title="tür">
+      {% for k, et in root_types.items() %}
+      <option value="{{ k }}">{{ et }}</option>
+      {% endfor %}
+    </select>
+    <textarea name="description" rows="2"
+              placeholder="açıklama — bu düğüm ne kapsıyor?"></textarea>
+    <button class="tkaydet">Ekle</button>
+  </form>
+  {% else %}
+  <p class="muted" style="font-size:13px">
+    Yapıyı değiştirmek için editör yetkisi gerekiyor. Yöneticine söyle.
+  </p>
+  {% endif %}
+
+  {# Arama kutusu agacIN DISINDA: #agac her yazmadan sonra htmx ile bastan
+     ciziliyor, icinde olsaydi yazilan kelime her kaydetmede silinirdi. #}
+  <div class="tarabar">
+    <input type="search" id="agac-ara" autocomplete="off"
+           placeholder="Ağaçta ara — eşleşen dallar kendiliğinden açılır…">
+    <button type="button" class="tmini" data-tree-all="open" title="Hepsini aç">⤋ Hepsini aç</button>
+    <button type="button" class="tmini" data-tree-all="close" title="Hepsini kapat">⤊ Kapat</button>
+  </div>
+
+  {% include "dashboard/fragments/tree.html" %}
+</div>
+<script src="{{ static('/static/ortak.js') }}"></script>
+<script src="{{ static('/static/d/dashboard.js') }}"></script>
+</body>
+</html>

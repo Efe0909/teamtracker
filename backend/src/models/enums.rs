@@ -58,6 +58,30 @@ sql_enum!(
 );
 
 impl NodeType {
+    /// Ekranda gorunen TURKCE etiket. Anahtar Ingilizce, etiket Turkce
+    /// (CLAUDE.md "Kod dili").
+    pub fn label(self) -> &'static str {
+        match self {
+            NodeType::Cell => "Cell",               // IWS hucresi / operasyonel birim
+            NodeType::Machine => "Makine",          // atomik fonksiyonel birim
+            NodeType::Pillar => "Pillar",           // IWS pillar'i
+            NodeType::Team => "Takım",              // Takimlar sayfasinda kart uretir
+            NodeType::Task => "Görev",
+            NodeType::Step => "Adım",
+            NodeType::Operational => "Operational", // davranis YOK — IWS kabi
+            NodeType::Generic => "Genel",           // davranis YOK — notr yer tutucu
+        }
+    }
+
+    pub const ALL: &'static [NodeType] = &[
+        NodeType::Cell, NodeType::Machine, NodeType::Pillar, NodeType::Team,
+        NodeType::Task, NodeType::Step, NodeType::Operational, NodeType::Generic,
+    ];
+
+    pub fn is_root_only(self) -> bool {
+        Self::ROOT_ONLY.contains(&self)
+    }
+
     /// Yalniz KOKTE durabilen turler.
     pub const ROOT_ONLY: &'static [NodeType] = &[NodeType::Cell];
 

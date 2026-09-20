@@ -11,6 +11,7 @@ mod handlers;
 mod media;
 mod models;
 mod push;
+mod render;
 mod routes;
 mod state;
 

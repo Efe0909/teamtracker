@@ -33,6 +33,13 @@ impl AppState {
         // `static('/static/x.css')` — Python'daki static_url'in karsiligi.
         // Bugun kimlik damgasi yok; onbellek kirma gerekince TEK yer burasi.
         env.add_function("static", |path: String| path);
+        // Ray'deki kullanici degistirici yalniz sahte kimlikte cizilir.
+        let fake = cfg.fake_identity();
+        env.add_function("fake_identity", move || fake);
+        env.add_function("notify_levels", || {
+            crate::push::NOTIFY_LEVELS.iter().copied()
+                .collect::<std::collections::BTreeMap<_, _>>()
+        });
 
         // minijinja'nin varsayilan HTML kacisi `/` karakterini de kaciriyor
         // (`&#x2f;`); Jinja2 kacirmiyor. Tarayici icin fark yok ama cikti

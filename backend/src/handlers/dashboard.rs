@@ -1,6 +1,6 @@
 //! `routes/dashboard.rs` karsiligi — istek govdesi, yetki, YAZMA yolu.
 
-use axum::{extract::State, response::{Html, IntoResponse, Response}};
+use axum::{extract::{Path, State}, response::{Html, IntoResponse, Response}};
 use minijinja::context;
 
 use crate::{auth::CurrentUser, error::{AppError, Result}, models::module, state::AppState};
@@ -69,6 +69,22 @@ pub async fn toggle_pin() -> Response {
     todo!("dashboard::toggle_pin")
 }
 
-pub async fn module_page() -> Response {
-    todo!("dashboard::module_page")
+/// Iskele sayfa: HENUZ YAZILMAMIS modullerin "Yakında" ekrani.
+///
+/// HAZIR modul burada 404 verir — onun gercek rotasi zaten yukarida kayitli
+/// ve axum statik segmenti dinamik olana tercih ediyor, yani `/tasks` buraya
+/// hic gelmez. Yine de 404: `/{slug}` her seyi yutan bir kapi olmamali,
+/// kayitli olmayan slug ile hazir modul ayni cevabi vermeli.
+pub async fn module_page(
+    State(st): State<AppState>,
+    CurrentUser(u): CurrentUser,
+    Path(slug): Path<String>,
+) -> Result<Response> {
+    let Some(m) = module::by_slug(&slug).filter(|m| !m.ready) else {
+        return Err(AppError::NotFound("sayfa yok".into()));
+    };
+    let tpl = st.tpl.get_template("dashboard/module.html")?;
+    Ok(Html(tpl.render(context! {
+        m => m, user => &u, csrf_token => "",
+    })?).into_response())
 }
