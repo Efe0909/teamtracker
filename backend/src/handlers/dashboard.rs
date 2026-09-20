@@ -1,5 +1,6 @@
 //! `routes/dashboard.rs` karsiligi — istek govdesi, yetki, YAZMA yolu.
 
+use axum_extra::extract::cookie::SignedCookieJar;
 use axum::{extract::{Path, Query, State}, response::{Html, IntoResponse, Response}};
 use std::collections::{BTreeMap, HashMap};
 
@@ -28,6 +29,7 @@ struct HomeStats {
 pub async fn home(
     State(st): State<AppState>,
     CurrentUser(u): CurrentUser,
+    jar: SignedCookieJar,
 ) -> Result<Response> {
     let stats: HomeStats = sqlx::query_as(
         "select
@@ -47,9 +49,8 @@ pub async fn home(
 
     let node_count = st.tree.read().expect("agac kilidi").len();
 
-    let tpl = st.tpl.get_template("dashboard/home.html")?;
-    let html = tpl.render(context! {
-        user => &u,
+    let tok = crate::csrf::token(&jar);
+    let html = render::page_with_token(&st, &u, "dashboard/home.html", context! {
         modules => module::views(&pinned),
         stats => context! {
             open => stats.open, unassigned => stats.unassigned, mine => stats.mine,
@@ -60,11 +61,9 @@ pub async fn home(
         // artik user_node_scopes (cok satir) — admin icin "tum agac".
         scope_name => if u.is_admin { "tüm ağaç" } else { "—" },
         app_address => "app.localhost:8000",
-        csrf_token => "",
-        rail_pins => Vec::<String>::new(),
-        all_users => Vec::<String>::new(),
-    })?;
-    Ok(Html(html).into_response())
+    }, &tok).await?;
+    Ok((crate::csrf::attach(jar, &tok, st.cfg.in_production()),
+        Html(html)).into_response())
 }
 
 /// Gorev tablosu. Suzme ve siralama SQL'de; ozet AYNI where ile tek sorgu.
@@ -75,6 +74,7 @@ pub async fn table(
     State(st): State<AppState>,
     CurrentUser(u): CurrentUser,
     Query(params): Query<HashMap<String, String>>,
+    jar: SignedCookieJar,
 ) -> Result<Response> {
     let f = Filters::parse(&params);
 
@@ -134,7 +134,8 @@ pub async fn table(
         }).collect()
     };
 
-    let html = render::page(&st, &u, "dashboard/tasks.html", context! {
+    let tok = crate::csrf::token(&jar);
+    let html = render::page_with_token(&st, &u, "dashboard/tasks.html", context! {
         rows => rows,
         summary => context! {
             open => summary.0, closed => summary.1, all => summary.2,
@@ -153,8 +154,9 @@ pub async fn table(
         pillars => pillar_options(&st),
         teams   => team_options(&st).await?,
         card_types => BTreeMap::<String, u8>::new(),
-    }).await?;
-    Ok(Html(html).into_response())
+    }, &tok).await?;
+    Ok((crate::csrf::attach(jar, &tok, st.cfg.in_production()),
+        Html(html)).into_response())
 }
 
 /// Kayit sayfasi. MODAL DEGIL, tam sayfa: URL paylasilabilir, mobil geri
@@ -163,10 +165,13 @@ pub async fn record_page(
     State(st): State<AppState>,
     CurrentUser(u): CurrentUser,
     Path(id): Path<Uuid>,
+    jar: SignedCookieJar,
 ) -> Result<Response> {
-    let html = render::page(&st, &u, "dashboard/record.html",
-                            record_ctx(&st, &u, id).await?).await?;
-    Ok(Html(html).into_response())
+    let tok = crate::csrf::token(&jar);
+    let html = render::page_with_token(&st, &u, "dashboard/record.html",
+                            record_ctx(&st, &u, id).await?, &tok).await?;
+    Ok((crate::csrf::attach(jar, &tok, st.cfg.in_production()),
+        Html(html)).into_response())
 }
 
 /// Kayit sayfasinin baglami. Masaustu ve mobil AYNI parcalari ciziyor
@@ -384,12 +389,13 @@ pub async fn module_page(
     State(st): State<AppState>,
     CurrentUser(u): CurrentUser,
     Path(slug): Path<String>,
+    jar: SignedCookieJar,
 ) -> Result<Response> {
     let Some(m) = module::by_slug(&slug).filter(|m| !m.ready) else {
         return Err(AppError::NotFound("sayfa yok".into()));
     };
+    let tok = crate::csrf::token(&jar);
     let tpl = st.tpl.get_template("dashboard/module.html")?;
-    Ok(Html(tpl.render(context! {
-        m => m, user => &u, csrf_token => "",
-    })?).into_response())
+    let html = tpl.render(context! { m => m, user => &u, csrf_token => &tok })?;
+    Ok((crate::csrf::attach(jar, &tok, st.cfg.in_production()), Html(html)).into_response())
 }

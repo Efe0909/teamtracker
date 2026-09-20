@@ -20,9 +20,10 @@ use crate::{auth::CurrentUser, error::{AppError, Result}, models::user::User, st
 pub async fn home(
     state: State<AppState>,
     user: CurrentUser,
+    jar: SignedCookieJar,
 ) -> Result<Response> {
     // TODO(mobil): Host app.* ise mobile::todo_page.
-    crate::handlers::dashboard::home(state, user).await
+    crate::handlers::dashboard::home(state, user, jar).await
 }
 
 pub async fn favicon() -> Response {

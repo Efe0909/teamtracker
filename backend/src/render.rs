@@ -64,13 +64,19 @@ pub async fn all_users(st: &AppState) -> Result<Vec<UserChip>> {
 pub async fn page(
     st: &AppState, user: &User, template: &str, extra: Value,
 ) -> Result<String> {
+    page_with_token(st, user, template, extra, "").await
+}
+
+/// Token'i cagiran tasir: cerez yaniti da yazmasi gerekiyor, bu yuzden
+/// uretim burada DEGIL handler'da.
+pub async fn page_with_token(
+    st: &AppState, user: &User, template: &str, extra: Value, csrf_token: &str,
+) -> Result<String> {
     let base = context! {
         user => user,
         rail_pins => rail_pins(st, user).await?,
         all_users => all_users(st).await?,
-        // TODO(csrf): oturumda uretilecek. Bos birakmak YAZMA uclarini
-        // acmaz — CSRF kapisi ayri bir katman.
-        csrf_token => "",
+        csrf_token => csrf_token,
     };
     let tpl = st.tpl.get_template(template)?;
     Ok(tpl.render(context! { ..extra, ..base })?)

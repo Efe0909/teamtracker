@@ -5,6 +5,7 @@
 
 mod auth;
 mod config;
+mod csrf;
 mod db;
 mod error;
 mod handlers;
@@ -40,6 +41,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .nest_service("/static/d", ServeDir::new("static/dashboard"))
         .nest_service("/static/m", ServeDir::new("static/mobile"))
         .nest_service("/static", ServeDir::new("static/shared"))
+        // ARA KATMAN SIRASI KRITIK (KNOW-23). axum'da SON eklenen EN DISTA
+        // calisir, yani asagidan yukari okunur:
+        //   TraceLayer (en dista) -> CSRF kapisi -> rotalar
+        // Oturum cerezi ayri bir katman degil, extractor — her handler kendi
+        // jar'ini aliyor, yani sira sorunu ordan gelmiyor.
+        .layer(axum::middleware::from_fn_with_state(state.clone(), csrf::gate))
         .layer(TraceLayer::new_for_http())
         .with_state(state);
 

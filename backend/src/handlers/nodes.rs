@@ -1,5 +1,6 @@
 //! `routes/nodes.rs` karsiligi — istek govdesi, yetki, YAZMA yolu.
 
+use axum_extra::extract::cookie::SignedCookieJar;
 use axum::{extract::State, response::{Html, IntoResponse, Response}};
 use minijinja::context;
 use serde::Serialize;
@@ -39,6 +40,7 @@ struct TreeRow {
 pub async fn page(
     State(st): State<AppState>,
     CurrentUser(u): CurrentUser,
+    jar: SignedCookieJar,
 ) -> Result<Response> {
     let deps = db::nodes::deps_by_node(&st.pool).await?;
     let descriptions: Vec<(uuid::Uuid, Option<String>)> =
@@ -70,13 +72,15 @@ pub async fn page(
         }).collect()
     };
 
-    let html = render::page(&st, &u, "dashboard/data_tree.html", context! {
+    let tok = crate::csrf::token(&jar);
+    let html = render::page_with_token(&st, &u, "dashboard/data_tree.html", context! {
         nodes => rows,
         can_write => u.is_admin,
         root_types => root_types,
         child_types => child_types,
-    }).await?;
-    Ok(Html(html).into_response())
+    }, &tok).await?;
+    Ok((crate::csrf::attach(jar, &tok, st.cfg.in_production()),
+        Html(html)).into_response())
 }
 
 fn name_of(t: NodeType) -> &'static str {
