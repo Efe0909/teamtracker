@@ -5,6 +5,8 @@ use crate::{handlers::shared as h, state::AppState};
 
 pub fn router() -> Router<AppState> {
     Router::new()
+        // Iki yuzun cakistigi TEK yol: mobil de masaustu de kokte duruyor.
+        // Host'a gore dagitim handler'in icinde.
         .route("/", get(h::home))
         .route("/favicon.ico", get(h::favicon))
         .route("/whoami", get(h::whoami))

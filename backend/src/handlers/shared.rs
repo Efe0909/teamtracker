@@ -11,8 +11,15 @@ use uuid::Uuid;
 
 use crate::{auth::CurrentUser, error::Result, state::AppState};
 
-pub async fn home() -> Response {
-    todo!("shared::home")
+/// Iki yuzun cakistigi TEK yol. Mobil yuz de masaustu yuzu de KOKTE duruyor
+/// ("/m" yok), o yuzden "/" iki router'da birden tanimlanamaz — Host'a gore
+/// burada dagitiliyor.
+pub async fn home(
+    state: State<AppState>,
+    user: CurrentUser,
+) -> Result<Response> {
+    // TODO(mobil): Host app.* ise mobile::todo_page.
+    crate::handlers::dashboard::home(state, user).await
 }
 
 pub async fn favicon() -> Response {

@@ -41,6 +41,7 @@ pub mod card;
 pub mod enums;
 pub mod record;
 pub mod message;
+pub mod module;
 pub mod node;
 pub mod team;
 pub mod user;

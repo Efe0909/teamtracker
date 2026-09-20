@@ -30,6 +30,43 @@ impl AppState {
         let tree = load_tree(&pool).await?;
         let mut env = Environment::new();
         env.set_loader(minijinja::path_loader("templates"));
+        // `static('/static/x.css')` — Python'daki static_url'in karsiligi.
+        // Bugun kimlik damgasi yok; onbellek kirma gerekince TEK yer burasi.
+        env.add_function("static", |path: String| path);
+
+        // minijinja'nin varsayilan HTML kacisi `/` karakterini de kaciriyor
+        // (`&#x2f;`); Jinja2 kacirmiyor. Tarayici icin fark yok ama cikti
+        // Python'unkiyle AYNI olmali — aksi halde her href karsilastirmasi,
+        // testler dahil, ayrisir. Jinja2'nin kumesi: & < > " '
+        env.set_formatter(|out, state, value| {
+            use minijinja::{escape_formatter, AutoEscape};
+            if state.auto_escape() == AutoEscape::Html && !value.is_safe() {
+                if let Some(s) = value.as_str() {
+                    // Kacirilmayan dilimleri TOPLU yaz, karakter karakter degil.
+                    let mut last = 0usize;
+                    for (i, ch) in s.char_indices() {
+                        let ent = match ch {
+                            '&' => "&amp;",
+                            '<' => "&lt;",
+                            '>' => "&gt;",
+                            '"' => "&quot;",
+                            '\'' => "&#x27;",
+                            _ => continue,
+                        };
+                        out.write_str(&s[last..i])?;
+                        out.write_str(ent)?;
+                        last = i + ch.len_utf8();
+                    }
+                    out.write_str(&s[last..])?;
+                    return Ok(());
+                }
+            }
+            escape_formatter(out, state, value)
+        });
+        // NOT: minijinja sablonlari bir kez derleyip onbellekte tutuyor;
+        // sablon degisikligi RESTART istiyor. Otomatik yeniden yukleme ayri
+        // bir crate (minijinja-autoreload) — gelistirme kolayligi icin
+        // bagimlilik eklenmedi.
         Ok(AppState {
             pool,
             cfg: Arc::new(cfg),
