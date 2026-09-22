@@ -6,6 +6,7 @@
 
 mod auth;
 mod common;
+mod meta;
 
 use axum::{
     extract::State,
@@ -25,6 +26,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/auth/callback", get(auth::google_callback))
         .route("/api/auth/logout", post(auth::logout))
         .route("/api/auth/dev-login", get(auth::dev_login))
+        .route("/api/meta", get(meta::meta))
         // Bilinmeyen yol da JSON: istemci hic HTML gormez.
         .fallback(|| async { AppError::NotFound })
 }
