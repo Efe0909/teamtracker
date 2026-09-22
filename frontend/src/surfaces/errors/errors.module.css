@@ -1,0 +1,36 @@
+.wrap {
+  min-height: 60dvh;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: var(--s-2);
+  padding: var(--s-6) var(--s-4);
+  text-align: center;
+}
+.title {
+  margin: 0;
+  font-size: var(--fs-xl);
+}
+.dim {
+  margin: 0;
+  color: var(--dim);
+  max-width: 44ch;
+}
+.row {
+  display: flex;
+  gap: var(--s-2);
+  margin-top: var(--s-3);
+}
+.btn {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  padding: 0 var(--s-4);
+  border-radius: var(--r-md);
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--txt);
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}

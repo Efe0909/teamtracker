@@ -5,6 +5,8 @@
 | `README.md` | spec yazım kalıbı (rapor + iskelet kuralları) |
 | `10-kararlar.md` | mimari kararlar ve gerekçeleri — bağlayıcı |
 | `15-sinirlar.md` | Rust = yalnız JSON API (kimlik dahil), React ön yüz statik; kimlik dikişi, API kuralları — **karar** |
+| `16-on-yuz.md` | Python arayüzünün önceliklendirilmiş eleştirisi, React yapısı (rota, biçim, veri, klasör), ucuz yetenekler — **öneri** |
+| `17-kayit-kesif.md` | kayıt ekranı keşfi: admin / üye / ara sıra giren proto-personaları, empati + yolculuk, içgörüler — **keşif** |
 | `20-sema.md` | veri şeması; bugün ne kurulu, ne bekliyor |
 | `21-sema-v2.md` | Rust portunun hedef şeması: `events` bölünmesi, ek sahipliği, kart blobu — **tasarım** |
 | `30-mobil.md` | mobil site çözümlemesi (kaynak ekranlardan uyarlama) |

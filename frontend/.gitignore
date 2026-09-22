@@ -1,2 +1,4 @@
 node_modules/
 dist/
+# scripts/css-modules.mjs uretir
+*.module.d.css.ts

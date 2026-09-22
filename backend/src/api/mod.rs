@@ -5,10 +5,15 @@
 //! Host ayrimi (app./dashboard./apex) on yuzun isi, burada yok.
 
 mod auth;
+mod chats;
+mod common;
+mod home;
+mod meta;
+mod records;
 
 use axum::{
     extract::State,
-    routing::{get, post},
+    routing::{get, patch, post},
     Json, Router,
 };
 use axum_extra::extract::cookie::SignedCookieJar;
@@ -24,6 +29,19 @@ pub fn router() -> Router<AppState> {
         .route("/api/auth/callback", get(auth::google_callback))
         .route("/api/auth/logout", post(auth::logout))
         .route("/api/auth/dev-login", get(auth::dev_login))
+        .route("/api/meta", get(meta::meta))
+        .route("/api/home", get(home::home))
+        .route("/api/pins/{slug}", post(home::pin).delete(home::unpin))
+        .route("/api/records", get(records::list).post(records::create))
+        .route("/api/records/{id}", get(records::get).patch(records::patch))
+        .route("/api/records/{id}/actions", post(records::add_action))
+        .route("/api/actions/mine", get(records::my_actions))
+        .route("/api/actions/{id}", patch(records::patch_action))
+        .route("/api/chats/{id}/feed", get(chats::feed))
+        .route("/api/chats/{id}/messages", post(chats::post))
+        .route("/api/teams", get(home::teams))
+        .route("/api/teams/{id}", get(home::team))
+        .route("/api/notifications", get(home::notifications))
         // Bilinmeyen yol da JSON: istemci hic HTML gormez.
         .fallback(|| async { AppError::NotFound })
 }

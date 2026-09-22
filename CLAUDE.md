@@ -31,7 +31,13 @@ docker start ekiptakip-db && docker exec ekiptakip-db createdb -U ekiptakip ekip
   (`localhost` çerezi alt alan adlarına paylaşılamıyor).
 - Tohum: `docker exec -i ekiptakip-db psql -U ekiptakip -d ekiptakip_alpha02 < backend/seed.sql`.
 - Denetim: `cargo clippy --all-targets` (panik/`todo!` derlemeyi düşürür),
-  `npm run build` (tsc strict), `backend/tools/vm_test.sh` (VM'de JSON sözleşmesi).
+  `npm run build` (CSS Modules tipleri + ham renk denetimi + tsc strict),
+  `backend/tools/vm_test.sh` (VM'de JSON sözleşmesi).
+- Ön yüz yapısı `spec/16-on-yuz.md` §3: `api/` (istemci, tipler, kancalar), `ui/`
+  (alan bilmez), `features/` (kayıt, sohbet — iki yüz ortak), `surfaces/` (yerleşim +
+  rota). Renk yalnız `src/tokens.css`'te.
+- Ağaç indeksi açılışta kurulur: veritabanına elle düğüm yazdıysan (tohum, import)
+  Rust'ı yeniden başlat.
 - **Hedef makine derlemez.** Yayın: `backend/tools/release.sh` Mac'te derler, GitHub
   release'e yükler, `deploy/release.nix`'i pinler; `~/nix` `packages.aarch64-linux.default`'u
   çeker.

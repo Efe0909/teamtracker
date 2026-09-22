@@ -1,66 +1,4 @@
-/* Palet eski yuzle ayni (shared/static/base.css), karanlik tema eklendi. */
-:root {
-  color-scheme: light dark;
-  --bg: #f4f1fb;
-  --panel: #fff;
-  --tint: #efe9fd;
-  --line: #e4dcf7;
-  --txt: #2c2440;
-  --dim: #6f6792;
-  --acc: #7c5bff;
-  --acc-strong: #6743f5;
-  --acc-soft: #b79dff;
-  --err: #d13a51;
-  --err-bg: #fdecef;
-  --sh: 0 1px 2px rgba(60, 40, 120, 0.05), 0 12px 40px rgba(90, 60, 180, 0.12);
-  --radius: 18px;
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  color: var(--txt);
-  background: var(--bg);
-  -webkit-text-size-adjust: 100%;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #13101c;
-    --panel: #1c1828;
-    --tint: #262038;
-    --line: #2f2944;
-    --txt: #ece8f7;
-    --dim: #a59ec4;
-    --acc: #9d84ff;
-    --acc-strong: #b19dff;
-    --acc-soft: #6e55d8;
-    --err: #ff7a8c;
-    --err-bg: #3a1822;
-    --sh: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 40px rgba(0, 0, 0, 0.35);
-  }
-}
-
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-  min-height: 100dvh;
-  background:
-    radial-gradient(900px 600px at 110% -10%, color-mix(in srgb, var(--acc) 18%, transparent), transparent 60%),
-    radial-gradient(700px 500px at -10% 110%, color-mix(in srgb, var(--acc-soft) 16%, transparent), transparent 60%),
-    var(--bg);
-  background-attachment: fixed;
-}
-
-a {
-  color: var(--acc-strong);
-}
-
-:focus-visible {
-  outline: 3px solid color-mix(in srgb, var(--acc) 55%, transparent);
-  outline-offset: 2px;
-}
+/* Karsilama sayfasi. Token'lar src/tokens.css, taban src/base.css. */
 
 /* --- karsilama --------------------------------------------------------- */
 
@@ -95,13 +33,13 @@ a {
 }
 .brand-mark path {
   fill: none;
-  stroke: #fff;
+  stroke: var(--on-acc);
   stroke-width: 2.4;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 .brand-mark .tick {
-  stroke: #d9ccff;
+  stroke: color-mix(in srgb, var(--on-acc) 75%, var(--acc));
 }
 
 .welcome-grid {
@@ -289,7 +227,7 @@ a {
 
 .btn-primary {
   background: var(--acc);
-  color: #fff;
+  color: var(--on-acc);
 }
 .btn-primary:hover {
   background: var(--acc-strong);
@@ -396,21 +334,13 @@ a {
   }
 }
 
-/* --- yapim asamasinda -------------------------------------------------- */
-
+/* Yonlendirici ara ekrani (Entry). */
 .uc {
   min-height: 100dvh;
   display: grid;
   place-content: center;
-  justify-items: center;
-  gap: 8px;
   padding: 24px;
   text-align: center;
-}
-.uc h1 {
-  margin: 0;
-  font-size: clamp(1.6rem, 6vw, 2.4rem);
-  letter-spacing: -0.02em;
 }
 .uc-label {
   margin: 0;

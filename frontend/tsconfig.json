@@ -10,6 +10,8 @@
     "noEmit": true,
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
+    // scripts/css-modules.mjs'in urettigi `*.module.d.css.ts` bildirimleri.
+    "allowArbitraryExtensions": true,
     "skipLibCheck": true,
 
     "strict": true,

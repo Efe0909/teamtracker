@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { deviceDefault, fetchMe, loginErrorText, logout, surfaceUrl, type Dest, type Me } from "./api";
+import "./welcome.css";
+import { deviceDefault, fetchMe, loginErrorText, logout, surfaceUrl, type Dest, type Me } from "../../api/session";
 
 type Load = { kind: "loading" } | { kind: "ready"; me: Me } | { kind: "error" };
 

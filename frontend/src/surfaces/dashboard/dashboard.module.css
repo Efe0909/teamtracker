@@ -1,0 +1,545 @@
+/* dashboard. yerlesimi. */
+
+.shell {
+  display: flex;
+  min-height: 100dvh;
+}
+.main {
+  flex: 1;
+  min-width: 0;
+}
+
+/* --- ray ------------------------------------------------------------- */
+.rail {
+  position: sticky;
+  top: 0;
+  height: 100dvh;
+  width: 84px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-1);
+  padding: var(--s-3) 6px;
+  background: var(--panel);
+  border-right: 1px solid var(--line);
+  z-index: 20;
+}
+.skip {
+  position: absolute;
+  left: -9999px;
+}
+.skip:focus {
+  left: 8px;
+  top: 8px;
+  z-index: 50;
+  background: var(--panel);
+  padding: var(--s-2);
+}
+.logo {
+  margin-bottom: var(--s-3);
+}
+.logoBg {
+  fill: var(--acc-strong);
+}
+.logoLine {
+  fill: none;
+  stroke: var(--on-acc);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+}
+.rbtn {
+  width: 72px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: var(--s-2) 0;
+  border: 0;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--dim);
+  text-decoration: none;
+  cursor: pointer;
+}
+.rbtn:hover {
+  background: var(--tint);
+  color: var(--acc-strong);
+}
+.rbtnOn {
+  background: var(--tint);
+  color: var(--acc-strong);
+}
+.rlabel {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  max-width: 68px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.grow {
+  flex: 1;
+}
+.me {
+  position: relative;
+}
+.menu {
+  position: absolute;
+  left: calc(100% + 8px);
+  bottom: 0;
+  width: 220px;
+  padding: var(--s-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--panel);
+  box-shadow: var(--sh-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.menuHead {
+  padding: var(--s-2);
+  display: flex;
+  flex-direction: column;
+  font-size: var(--fs-sm);
+  color: var(--dim);
+}
+.menuHead b {
+  color: var(--txt);
+  font-size: var(--fs-md);
+}
+.menuItem {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: 40px;
+  padding: 0 var(--s-2);
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--txt);
+  text-decoration: none;
+  font-size: var(--fs-md);
+  cursor: pointer;
+  text-align: left;
+}
+.menuItem:hover {
+  background: var(--tint);
+}
+
+/* --- sayfa iskeleti ------------------------------------------------- */
+.page {
+  padding: var(--s-6) var(--s-6) 48px;
+  max-width: 1400px;
+}
+.pageHead {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--s-4);
+}
+.pageHead h1 {
+  margin: 0;
+  font-size: var(--fs-2xl);
+  letter-spacing: -0.02em;
+  flex: 1;
+}
+.lead {
+  margin: -8px 0 var(--s-5);
+  color: var(--dim);
+  max-width: 70ch;
+}
+
+/* --- ana sayfa ------------------------------------------------------ */
+.stats {
+  display: flex;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--s-6);
+}
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 150px;
+  padding: var(--s-3) var(--s-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--panel);
+  box-shadow: var(--sh);
+  text-decoration: none;
+  color: inherit;
+}
+a.stat:hover {
+  border-color: var(--acc-soft);
+}
+.stat b {
+  font-size: var(--fs-2xl);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+.stat span {
+  font-size: var(--fs-sm);
+  color: var(--dim);
+}
+.statAlert b {
+  color: var(--err-text);
+}
+.mods {
+  display: grid;
+  gap: var(--s-4);
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  margin-bottom: var(--s-6);
+}
+.mod {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  padding: var(--s-5);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--panel);
+  box-shadow: var(--sh);
+  color: inherit;
+  text-decoration: none;
+  transition: border-color 0.12s, transform 0.12s;
+}
+.mod:hover {
+  border-color: var(--acc-soft);
+  transform: translateY(-2px);
+}
+.modIcon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--r-md);
+  background: var(--tint);
+  color: var(--acc-strong);
+}
+.mod h2 {
+  margin: 0;
+  font-size: var(--fs-lg);
+}
+.mod p {
+  margin: 0;
+  color: var(--dim);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+}
+.soon h2 {
+  margin: 0 0 var(--s-2);
+  font-size: var(--fs-md);
+  color: var(--dim);
+}
+.soonList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.soonList li {
+  font-size: var(--fs-sm);
+  color: var(--dim);
+  padding: 4px var(--s-3);
+  border: 1px dashed var(--line-strong);
+  border-radius: 999px;
+}
+
+/* --- gorev tablosu -------------------------------------------------- */
+.bar {
+  display: flex;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+  align-items: flex-end;
+  margin-bottom: var(--s-3);
+}
+.bar > * {
+  flex: 0 1 190px;
+}
+.searchBox {
+  flex: 1 1 260px !important;
+}
+.more {
+  margin-bottom: var(--s-3);
+}
+.more > summary {
+  cursor: pointer;
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--acc-strong);
+  width: max-content;
+  padding: 4px 0;
+}
+.more[open] > summary {
+  margin-bottom: var(--s-2);
+}
+.chips {
+  display: flex;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: var(--s-3);
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 var(--s-3);
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+.chip:hover {
+  border-color: var(--acc-soft);
+}
+.summary {
+  margin-left: auto;
+  font-size: var(--fs-sm);
+  color: var(--dim);
+}
+.tableWrap {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--panel);
+  box-shadow: var(--sh);
+  overflow-x: auto;
+}
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-sm);
+}
+.table th {
+  text-align: left;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  color: var(--dim);
+  padding: var(--s-2) var(--s-3);
+  background: var(--panel2);
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+.table td {
+  padding: var(--s-2) var(--s-3);
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+  height: 48px;
+}
+.table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.table tbody tr {
+  cursor: pointer;
+}
+.table tbody tr:hover {
+  background: var(--tint);
+}
+.rowTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-width: 260px;
+}
+.rowTitle a {
+  color: var(--txt);
+  font-weight: 700;
+  text-decoration: none;
+  font-size: var(--fs-md);
+}
+.rowTitle a:hover {
+  color: var(--acc-strong);
+  text-decoration: underline;
+}
+.msgs {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--dim);
+  font-size: var(--fs-xs);
+}
+.unit {
+  color: var(--dim);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nowrap {
+  white-space: nowrap;
+  color: var(--dim);
+}
+
+/* --- kayit sayfasi -------------------------------------------------- */
+.crumb {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-3) var(--s-6);
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+  font-size: var(--fs-sm);
+  color: var(--dim);
+  flex-wrap: wrap;
+}
+.crumb a {
+  color: var(--dim);
+  text-decoration: none;
+}
+.crumb a:hover {
+  color: var(--acc-strong);
+  text-decoration: underline;
+}
+.crumb b {
+  color: var(--txt);
+}
+/* Kayit ve takim sayfasi ekran yuksekliginde: sol sutun ve sohbet KENDI
+   iclerinde kayar, mesaj kutusu hep gorunur. */
+.recordPage {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+.recordBody {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(340px, 1fr);
+}
+.recordMain {
+  padding: var(--s-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-5);
+  min-width: 0;
+  overflow: auto;
+}
+.recordSide {
+  border-left: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.sideHead {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-3) var(--s-4);
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+  font-weight: 700;
+}
+.sideBody {
+  flex: 1;
+  min-height: 0;
+}
+.fieldsBlock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+@media (max-width: 1000px) {
+  .recordPage {
+    height: auto;
+  }
+  .recordBody {
+    grid-template-columns: 1fr;
+  }
+  .recordMain {
+    overflow: visible;
+  }
+  .recordSide {
+    height: 75dvh;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+}
+
+/* --- takimlar ------------------------------------------------------- */
+.teamGrid {
+  display: grid;
+  gap: var(--s-4);
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+.teamCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  padding: var(--s-5);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--panel);
+  box-shadow: var(--sh);
+  color: inherit;
+  text-decoration: none;
+  min-height: 160px;
+}
+.teamCard:hover {
+  border-color: var(--acc-soft);
+}
+.teamCard h2 {
+  margin: 0;
+  font-size: var(--fs-lg);
+}
+.teamCard p {
+  margin: 0;
+  color: var(--dim);
+  font-size: var(--fs-sm);
+  flex: 1;
+}
+.teamFoot {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-size: var(--fs-sm);
+  color: var(--dim);
+}
+.avStack {
+  display: flex;
+}
+.avStack > span + span {
+  margin-left: -6px;
+}
+.mine {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  color: var(--ok-text);
+  background: var(--ok-bg);
+  border-radius: 6px;
+  padding: 0 7px;
+}
+.members {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+.members li {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 6px var(--s-3);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  font-size: var(--fs-sm);
+}
+.role {
+  color: var(--dim);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+}
+.sectionTitle {
+  margin: 0 0 var(--s-2);
+  font-size: var(--fs-md);
+}

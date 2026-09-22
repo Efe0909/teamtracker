@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { deviceDefault, fetchMe, surfaceUrl } from "./api";
+import "./welcome.css";
+import { deviceDefault, fetchMe, surfaceUrl } from "../../api/session";
 
 // Apex koku (`polonyum.com/`): giris duvari DEGIL, yonlendirici. Oturum varsa
 // cihaza gore app. ya da dashboard.'a, yoksa herkese acik /welcome'a.

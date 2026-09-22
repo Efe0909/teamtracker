@@ -1,0 +1,411 @@
+/* Yuzden bagimsiz yapi taslari. Ham renk YOK — yalniz token. */
+
+/* --- dugmeler --------------------------------------------------------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+  min-height: 36px;
+  padding: 0 var(--s-3);
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--txt);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: border-color 0.12s, background 0.12s;
+}
+.btn:hover:not(:disabled) {
+  border-color: var(--acc-soft);
+  background: var(--tint);
+}
+.btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.primary {
+  background: var(--acc-strong);
+  border-color: var(--acc-strong);
+  color: var(--on-acc);
+}
+.primary:hover:not(:disabled) {
+  background: var(--acc);
+  border-color: var(--acc);
+}
+.ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--dim);
+}
+.danger {
+  color: var(--err-text);
+}
+.big {
+  min-height: var(--tap);
+  font-size: var(--fs-md);
+  padding: 0 var(--s-4);
+  border-radius: var(--r-md);
+}
+.iconBtn {
+  display: inline-grid;
+  place-items: center;
+  width: var(--tap);
+  height: var(--tap);
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--dim);
+  cursor: pointer;
+}
+.iconBtn:hover {
+  background: var(--tint);
+  color: var(--acc-strong);
+}
+
+/* --- rozetler --------------------------------------------------------- */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  line-height: 1.6;
+  border-radius: 6px;
+  padding: 0 7px;
+  white-space: nowrap;
+}
+.t-issue,
+.t-critical {
+  background: var(--err-bg);
+  color: var(--err-text);
+}
+.t-task,
+.t-info {
+  background: var(--info-bg);
+  color: var(--info-text);
+}
+.t-high {
+  background: var(--warn-bg);
+  color: var(--warn-text);
+}
+.t-medium,
+.t-neutral {
+  background: var(--tint);
+  color: var(--dim);
+}
+.t-low,
+.t-ok {
+  background: var(--ok-bg);
+  color: var(--ok-text);
+}
+
+/* durum metni: renk + nokta, renk tek basina anlam tasimaz */
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.status::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+.s-open {
+  color: var(--err-text);
+}
+.s-in_progress {
+  color: var(--acc-strong);
+}
+.s-pending {
+  color: var(--warn-text);
+}
+.s-closed,
+.s-cancelled {
+  color: var(--ok-text);
+}
+
+.due {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+  color: var(--dim);
+}
+.late {
+  color: var(--err-text);
+  font-weight: 700;
+}
+
+/* --- avatar ----------------------------------------------------------- */
+.av {
+  display: inline-grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--on-acc);
+  font-weight: 700;
+  flex: none;
+  position: relative;
+  background: var(--dim);
+}
+.online::after {
+  content: "";
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 30%;
+  height: 30%;
+  border-radius: 50%;
+  background: var(--ok);
+  border: 2px solid var(--panel);
+}
+.who {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: var(--fs-sm);
+}
+.who > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--dim);
+}
+
+/* --- dialog ----------------------------------------------------------- */
+.dialog {
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: var(--s-4) var(--s-5) var(--s-5);
+  width: min(92vw, 420px);
+  background: var(--panel);
+  color: var(--txt);
+  box-shadow: var(--sh-lg);
+}
+.wide {
+  width: min(94vw, 580px);
+}
+.dialog::backdrop {
+  background: var(--backdrop);
+}
+.dhead {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin-bottom: var(--s-2);
+}
+.dhead h2 {
+  margin: 0;
+  font-size: var(--fs-lg);
+  flex: 1;
+}
+.dhint {
+  margin: 0 0 var(--s-3);
+  font-size: var(--fs-sm);
+  color: var(--dim);
+}
+.opts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 52vh;
+  overflow: auto;
+  margin: 0 0 var(--s-3);
+  padding: 2px;
+}
+.opt {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  width: 100%;
+  min-height: var(--tap);
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 0 var(--s-3);
+  background: var(--panel);
+  cursor: pointer;
+  font-size: var(--fs-md);
+}
+.opt:hover:not(:disabled) {
+  border-color: var(--acc-soft);
+  background: var(--tint);
+}
+.opt[aria-pressed="true"] {
+  border-color: var(--acc);
+  background: var(--tint);
+  font-weight: 700;
+}
+.opt:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.optNote {
+  margin-left: auto;
+  font-size: var(--fs-xs);
+  color: var(--dim);
+}
+.dact {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--s-2);
+  margin-top: var(--s-3);
+}
+
+/* --- formlar ---------------------------------------------------------- */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--dim);
+  min-width: 0;
+}
+.input {
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  background: var(--panel);
+  color: var(--txt);
+  font-size: var(--fs-md);
+  font-weight: 400;
+}
+.input:focus-visible {
+  border-color: var(--acc);
+}
+textarea.input {
+  resize: vertical;
+  min-height: 88px;
+}
+.grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s-3);
+}
+@media (max-width: 560px) {
+  .grid2 {
+    grid-template-columns: 1fr;
+  }
+}
+.formStack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+.error {
+  margin: 0;
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-sm);
+  background: var(--err-bg);
+  color: var(--err-text);
+  font-size: var(--fs-sm);
+}
+
+/* --- segment ---------------------------------------------------------- */
+.seg {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--r-md);
+  background: var(--tint);
+  overflow-x: auto;
+}
+.segBtn {
+  flex: 1 0 auto;
+  min-height: 34px;
+  padding: 0 var(--s-3);
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--dim);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.segBtn[aria-selected="true"] {
+  background: var(--panel);
+  color: var(--txt);
+  box-shadow: var(--sh);
+}
+
+/* --- durumlar --------------------------------------------------------- */
+.empty {
+  padding: 40px var(--s-5);
+  text-align: center;
+  color: var(--dim);
+  font-size: var(--fs-md);
+  line-height: 1.6;
+}
+.empty strong {
+  display: block;
+  color: var(--txt);
+  font-size: var(--fs-lg);
+  margin-bottom: var(--s-1);
+}
+.loading {
+  padding: 40px;
+  text-align: center;
+  color: var(--dim);
+}
+
+/* --- bildirim (toast) ------------------------------------------------- */
+.toasts {
+  position: fixed;
+  left: 50%;
+  bottom: calc(96px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  width: min(92vw, 420px);
+  pointer-events: none;
+}
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-3) var(--s-4);
+  border-radius: var(--r-md);
+  background: var(--txt);
+  color: var(--bg);
+  box-shadow: var(--sh-lg);
+  font-size: var(--fs-md);
+}
+.toast button {
+  margin-left: auto;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.toastErr {
+  background: var(--err-text);
+  color: var(--on-acc);
+}
