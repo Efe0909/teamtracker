@@ -9,7 +9,7 @@ dizini, tünel). Elle kurulum yok; macOS ve Debian şablonları kaldırıldı.
 | Ortam | Nerede | Ne |
 |---|---|---|
 | Yerel geliştirme | bu depo | `make up` — Docker'da Postgres + uvicorn, sahte kimlik |
-| VM testi | `~/nix` `.#vmtest` | gerçek NixOS: nginx + cloudflared + Google girişi |
+| VM testi | `~/nix` `.#teamtracker0.1` / `.#teamtracker0.2` | aynı VM (192.168.64.8), iki sürüm: 0.1 Python+Docker (e02d71d'ye pinli), 0.2 Rust+React (release) |
 | Üretim | `~/nix` `.#evsunucu` | Raspberry Pi, aynı `configuration.nix` |
 
 ### alpha-0.2: Rust API + React (bu dal)
@@ -67,11 +67,12 @@ Ajan notları:
 ### Yayına alma
 
 ```bash
-cd ~/nix
-nix flake update teamtracker                      # uygulamayı main'in ucuna pinle
-git commit -am "teamtracker: <sha>" && git push
-nixos-rebuild switch --flake .#vmtest             # VM
-nixos-rebuild switch --flake .#evsunucu --target-host efe@evsunucu --use-remote-sudo
+backend/tools/release.sh                          # Mac: derle + GitHub release + deploy/release.nix
+git commit -am "release: <tag>" && git push
+cd ~/nix && nix flake update teamtracker-alpha02  # 0.2'yi yeni pine çek
+git commit -am "teamtracker-alpha02: <tag>"
+# VM'de (yalnız yapılandırma dosyaları kurulur, uygulama release'ten iner):
+sudo nixos-rebuild switch --flake .#teamtracker0.2   # geri: .#teamtracker0.1
 ```
 
 Alan adları (zon `polonyum.com`): `app.` mobil kökte, `dashboard.` masaüstü,
