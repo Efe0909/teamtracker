@@ -105,7 +105,10 @@ export function Due({ date, done = false, actionLate = false }: { date: IsoDate 
 
 // --- kisi ------------------------------------------------------------------
 
-const ONLINE_MS = 5 * 60_000;
+// Cevrimici esigi. Sunucu `last_seen_at`'i kullanici basina dakikada en fazla
+// bir kez yaziyor (backend/src/auth.rs PRESENCE_INTERVAL); esik bu araligin
+// USTUNDE kalmali, yoksa sayfasi acik biri yanip soner. Python'da da 2 dk.
+const ONLINE_MS = 2 * 60_000;
 
 export function Avatar({ user, size = 24 }: { user: Pick<MetaUser, "name" | "color" | "last_seen_at"> | undefined; size?: number }) {
   const online = user?.last_seen_at != null && Date.now() - new Date(user.last_seen_at).getTime() < ONLINE_MS;

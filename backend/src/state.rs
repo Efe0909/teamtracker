@@ -4,11 +4,16 @@
 //! ve her yerden import edilebiliyordu. axum handler'lari duz fonksiyon —
 //! ortuk global yok, istekte gelmeyen her sey buradan tasinir.
 
-use std::sync::{Arc, RwLock};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex, RwLock},
+    time::Instant,
+};
 
 use axum::extract::FromRef;
 use axum_extra::extract::cookie::Key;
 use sqlx::PgPool;
+use uuid::Uuid;
 
 use crate::{config::Config, db::tree::{NodeRow, TreeIndex}, ratelimit::RateLimit};
 
@@ -31,6 +36,10 @@ pub struct AppState {
     pub http: reqwest::Client,
     /// Giris uclarinin hiz siniri (IP basina).
     pub login_limit: Arc<RateLimit>,
+    /// Kullanici basina son `last_seen_at` YAZMA ani (`auth::touch_presence`).
+    /// Surec bellegi yeter: tek surec zaten sart (KNOW-85). Anahtar sayisi
+    /// kullanici sayisiyla sinirli, temizlik gerekmiyor.
+    pub presence: Arc<Mutex<HashMap<Uuid, Instant>>>,
 }
 
 impl FromRef<AppState> for Key {
@@ -53,6 +62,7 @@ impl AppState {
             http,
             // spec/70-guvenlik.md: IP basina dakikada 10.
             login_limit: Arc::new(RateLimit::new(10, std::time::Duration::from_secs(60))),
+            presence: Arc::default(),
         })
     }
 
