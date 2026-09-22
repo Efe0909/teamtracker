@@ -5,6 +5,7 @@
 //! Host ayrimi (app./dashboard./apex) on yuzun isi, burada yok.
 
 mod auth;
+mod common;
 
 use axum::{
     extract::State,

@@ -9,11 +9,13 @@ use axum::{http::StatusCode, response::{IntoResponse, Response}, Json};
 pub enum AppError {
     Unauthorized,
     /// Yetki yok. 403 yalniz DEGISTIREN uclarda (KNOW-47).
-    #[allow(dead_code)] // ilk yazma ucuyla kullanilacak
     Forbidden,
     NotFound,
     /// Girdi gecersiz; kod makine icin (ornegin "invalid_user_id").
     BadRequest(&'static str),
+    /// Istek gecerli ama durum izin vermiyor (ornegin "open_actions": acik
+    /// eylemi olan kayit kapanmaz). Kod on yuzde Turkce iletiye cevrilir.
+    Conflict(&'static str),
     Db(sqlx::Error),
 }
 
@@ -34,6 +36,7 @@ impl IntoResponse for AppError {
             AppError::Forbidden => (StatusCode::FORBIDDEN, "forbidden"),
             AppError::NotFound => (StatusCode::NOT_FOUND, "not_found"),
             AppError::BadRequest(c) => (StatusCode::BAD_REQUEST, *c),
+            AppError::Conflict(c) => (StatusCode::CONFLICT, *c),
             AppError::Db(e) => {
                 tracing::error!("db error: {e}");
                 (StatusCode::INTERNAL_SERVER_ERROR, "internal")
