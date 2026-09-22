@@ -32,6 +32,7 @@
 //!   - `cards.card_type` — CHECK'i dustu (spec/21-sema-v2.md §3).
 //!     Taninmayan tur BROKEN olarak cizilmeli, derleme hatasi vermemeli.
 //!   - `activity.verb` — serbest anahtar, sablon cevirir.
+//!
 //! Ikisi de `String` kalir.
 
 pub mod action;

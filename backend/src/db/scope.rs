@@ -84,7 +84,7 @@ pub async fn can_edit_record(
     }
     // 5. dal izni: kaydin birimi izinli bir dalin ALTINDA mi (O(1), Euler).
     let nodes = permitted_nodes(pool, user).await?;
-    let tree = tree.read().expect("agac kilidi");
+    let tree = tree.read().unwrap_or_else(|e| e.into_inner());
     Ok(nodes.into_iter().any(|n| tree.is_descendant(rec.unit_id, n)))
 }
 
@@ -96,6 +96,6 @@ pub async fn can_create_in(
         return Ok(true);
     }
     let nodes = permitted_nodes(pool, user).await?;
-    let tree = tree.read().expect("agac kilidi");
+    let tree = tree.read().unwrap_or_else(|e| e.into_inner());
     Ok(nodes.into_iter().any(|n| tree.is_descendant(unit_id, n)))
 }

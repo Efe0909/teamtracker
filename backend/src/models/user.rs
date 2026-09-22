@@ -34,17 +34,15 @@ impl User {
             .fetch_optional(pool)
             .await
     }
+}
 
-    /// Sahte kimlik modunun dustugu yer: ilk aktif kullanici.
-    ///
-    /// Siralamada `email` IKINCI olcut: `created_at` esit olabilir ve o zaman
-    /// hangi satirin gelecegi Postgres'te GARANTI DEGIL (SQLite'ta insert
-    /// sirasi geliyordu, Postgres'te gelmiyor).
-    pub async fn first_active(pool: &sqlx::PgPool) -> Result<Option<User>, sqlx::Error> {
-        sqlx::query_as(
-            "select id, email, name, color, is_admin, is_active, notify_level \
-             from users where is_active order by created_at, email limit 1")
-            .fetch_optional(pool)
-            .await
-    }
+/// Kisi rozeti — akis ve eylem satirlarinin paylastigi tip.
+#[derive(Debug, Clone, Serialize)]
+pub struct UserChip {
+    pub id: Uuid,
+    pub name: String,
+    pub color: Option<String>,
+    pub is_admin: bool,
+    /// Varlik damgasi: kimlik cozulen her istek tazeliyor (auth.rs).
+    pub last_seen_at: Option<chrono::DateTime<chrono::Utc>>,
 }

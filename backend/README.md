@@ -1,64 +1,49 @@
-# backend — Rust portu (faz 0.2)
+# backend — Rust JSON API (alpha-0.2)
 
-Hedef sema: `spec/21-sema-v2.md`. Python uygulamasi (`app.py`, `shared/`,
-`sites/`) port bitene kadar yaninda calismaya devam eder.
-
-## Bagimliliklar
-
-```bash
-cd backend
-cargo add axum tokio --features tokio/full
-cargo add sqlx --features runtime-tokio,tls-rustls,postgres,uuid,chrono,json,macros
-cargo add tower-http --features fs,compression-br,trace
-cargo add axum-extra --features cookie-signed
-cargo add minijinja --features loader
-cargo add serde --features derive
-cargo add serde_json uuid chrono reqwest tracing tracing-subscriber image
-```
-
-| crate | ne icin |
-|---|---|
-| `axum` + `tokio` | HTTP |
-| `sqlx` | ham SQL, derleme zamani sorgu denetimi. ORM yok (KNOW-178) |
-| `axum-extra` `cookie-signed` | imzali oturum cerezi. Sunucu tarafi oturum tablosu YOK (KNOW-97) |
-| `minijinja` | sablonlar |
-| `reqwest` | Google OIDC — elle, `oauth2` crate'i uc HTTP cagrisi icin agir |
-| `image` | kucuk resim (`media.rs`) |
-
-**Sablon motoru: `minijinja`.** Calisma zamani, Jinja2 sozdizimi — mevcut 45
-sablon (2272 satir, 23'u `include`, 6'si `extends`) neredeyse oldugu gibi
-tasiniyor. `askama` derleme zamani denetimi verirdi ama her sablon icin bir
-struct ve dialekt cevrimi isterdi. Bedeli: derleme zamani denetim kaybi —
-telafisi tek test, sablon dizinini gezip hepsini ornek baglamla cizer.
+Yalniz `/api/*`, yalniz JSON (`spec/15-sinirlar.md`). HTML yok; on yuz
+`frontend/`. Hedef sema: `spec/21-sema-v2.md`. Python uygulamasi (`app.py`,
+`shared/`, `sites/`) yalniz BASVURU — davranisin kaynagi, calisan yigin degil.
 
 ## Yapi
 
 ```
 src/
-  main.rs config.rs state.rs error.rs media.rs push.rs
-  routes/    yol + Host yonlendirme (mod.rs)
-  handlers/  istek govdesi, yetki, YAZMA yollari
-  models/    satir tipleri
-  db/        pool · tree · scope · search
+  main.rs      acilis: config, goc, agac, ara katman sirasi
+  config.rs    ortam degiskenleri TEK yerde; yayinda eksik sir acilisi durdurur
+  auth.rs      oturum cerezi (uid.csrf) + CurrentUser — "kim" sorusunun tek cevabi
+  csrf.rs      degistiren isteklerde X-CSRF-Token kapisi
+  ratelimit.rs giris uclari, IP basina dakikada 10
+  api/         rotalar: mod.rs (/api/me), auth.rs (Google OAuth + PKCE, cikis, dev-login)
+  db/ models/  alan katmani (agac, kapsam, filtre, akis) — JSON uclari geldikce
 ```
 
-Her dosya bos degil: icinde ne durmasi gerektigini ve hangi karara bagli
-oldugunu soyleyen bir sozlesme yorumu var.
+| crate | ne icin |
+|---|---|
+| `axum` + `tokio` | HTTP |
+| `sqlx` | ham SQL, ORM yok (KNOW-178); gocler ikiliye gomulu |
+| `axum-extra` `cookie-signed` | imzali oturum cerezi. Sunucu tarafi oturum tablosu yok (KNOW-97) |
+| `reqwest` | Google OAuth — elle, uc HTTP cagrisi |
+| `sha2` + `base64` | PKCE S256 |
 
-Iki yer bolunmemeli:
+## Sikilik
 
-- **`routes/shared.rs` + `handlers/shared.rs`** — eylem seridi, akis ve kart
-  bloklari iki sitenin de kullandigi TEK uc (KNOW-265). Bolunurse mobil ikinci
-  kopya yazmaya baslar.
-- **`handlers/` icindeki yazma yollari** — bir yazma yolu tek yerde. Python`da
-  `service.py` 1034 satira cikmisti (KNOW-219); bolunme ozellige gore, siteye
-  gore degil.
+Kodu cogunlukla derleyici gozden geciriyor. `Cargo.toml` `[lints]`:
+`todo!`, `unimplemented!`, `unwrap`, `expect`, `panic!` ve `unsafe` DERLEMEYI
+DUSURUR (testlerde `unwrap` serbest, `clippy.toml`). Kontrol: `cargo clippy --all-targets`.
 
-## Henuz yok
+## Calistirma
 
-- `migrations/001_schema.sql` — `spec/21-sema-v2.md` sonundaki alti acik nokta
-  kapanmadan yazilmamali; yazilirsa yanlisi donar.
-- `templates/` — mevcut 45 sablon buraya tasinacak, dosya adlari Ingilizce'ye
-  cevrilerek (CLAUDE.md "dosya adi" kurali; Python gecisinde atlanmisti).
-- Testler — Python'daki HTTP seviyesindeki testler sozlesme olarak korunur,
-  Rust binary'sine karsi kosturulur.
+```bash
+docker start ekiptakip-db                       # ya da: make db-ac
+docker exec ekiptakip-db createdb -U ekiptakip ekiptakip_alpha02
+DATABASE_URL=postgresql://ekiptakip:ekiptakip@127.0.0.1:5432/ekiptakip_alpha02 \
+  EKIPTAKIP_AUTH=sahte cargo run                # 127.0.0.1:8000, goc acilista
+docker exec -i ekiptakip-db psql -U ekiptakip -d ekiptakip_alpha02 < seed.sql   # VERIYI SILER
+```
+
+## Sinama
+
+- `cargo test` — birim (agac, filtre, hiz siniri).
+- `tools/vm_test.sh` — Mac'te cross-derler, VM'de atilip-yikilan dizin + veritabani,
+  iki surec (sahte kimlik + Google kipi), `tools/check_api.sh` JSON sozlesmesi.
+- `tools/release.sh` — yayin tarball'i (ikili + on yuz), GitHub release, `deploy/release.nix`.

@@ -1,25 +1,29 @@
-//! Giris: yapilandirma, havuz, agac indeksi, ara katman sirasi, statik dosyalar.
+//! Giris: yapilandirma, havuz, agac indeksi, ara katman sirasi, JSON API.
 //!
 //! TEK SUREC sart: agac indeksi surec bellekte (KNOW-85). Yatay olcekleme
 //! istenirse once TreeIndex tek yaziciya tasinmali.
 
+mod api;
 mod auth;
 mod config;
 mod csrf;
+// Alan katmani: agac, kapsam, filtre, akis. Butunu Python'dan tasindi, JSON
+// uclari geldikce kullanilacak; o zamana kadar olu kod uyarisi susturuldu.
+#[allow(dead_code)]
 mod db;
 mod error;
-mod handlers;
+#[allow(dead_code)]
 mod media;
+#[allow(dead_code)]
 mod models;
+#[allow(dead_code)]
 mod push;
-mod render;
-mod routes;
+mod ratelimit;
 mod state;
 
 use std::net::SocketAddr;
 
-use axum::Router;
-use tower_http::{services::ServeDir, trace::TraceLayer};
+use tower_http::trace::TraceLayer;
 
 use state::AppState;
 
@@ -32,29 +36,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     db::migrate(&pool).await?;
 
     // Agac ACILISTA tek sorguyla kurulur, her istekte SQL'e gidilmez (KNOW-179).
-    let state = AppState::new(pool, cfg.clone()).await?;
+    let addr = SocketAddr::new(cfg.bind, cfg.port);
+    let state = AppState::new(pool, cfg).await?;
 
-    let app = Router::new()
-        .merge(routes::router())
-        // Statik: ortak kokte, site dosyalari kendi alt yolunda — nginx de
-        // boyle ayiriyor, ikisi ayni kalmali.
-        .nest_service("/static/d", ServeDir::new("static/dashboard"))
-        .nest_service("/static/m", ServeDir::new("static/mobile"))
-        .nest_service("/static", ServeDir::new("static/shared"))
-        // ARA KATMAN SIRASI KRITIK (KNOW-23). axum'da SON eklenen EN DISTA
-        // calisir, yani asagidan yukari okunur:
-        //   TraceLayer (en dista) -> CSRF kapisi -> rotalar
-        // Oturum cerezi ayri bir katman degil, extractor — her handler kendi
-        // jar'ini aliyor, yani sira sorunu ordan gelmiyor.
+    // axum'da SON eklenen katman EN DISTA calisir:
+    //   TraceLayer -> CSRF kapisi -> rotalar
+    let app = api::router()
         .layer(axum::middleware::from_fn_with_state(state.clone(), csrf::gate))
         .layer(TraceLayer::new_for_http())
         .with_state(state);
 
-    // ARA KATMAN SIRASI KRITIK (KNOW-23) — routes::router() icinde kuruluyor:
-    //   oturum cerezi -> giris kapisi -> guvenlik basliklari -> CSRF -> rotalar
-    // Sira degisirse CSRF ve giris kapisi SESSIZCE bozulur. Testle sabitle.
-
-    let addr = SocketAddr::from(([0, 0, 0, 0], cfg.port));
     let listener = tokio::net::TcpListener::bind(addr).await?;
     tracing::info!("dinleniyor: {addr}");
     axum::serve(listener, app).await?;

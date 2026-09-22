@@ -73,11 +73,9 @@ impl TreeIndex {
         // Ebeveyni AGACTA OLMAYAN dugum kok sayilir — silinmis bir ebeveyne
         // isaret eden satir agaci dusurmemeli.
         for (&id, node) in ix.nodes.iter() {
-            match node.parent_id {
-                Some(p) if ix.children.contains_key(&p) => {
-                    ix.children.get_mut(&p).expect("var").push(id)
-                }
-                _ => ix.roots.push(id),
+            match node.parent_id.and_then(|p| ix.children.get_mut(&p)) {
+                Some(kids) => kids.push(id),
+                None => ix.roots.push(id),
             }
         }
 
@@ -99,7 +97,9 @@ impl TreeIndex {
         }
         while let Some((id, closing)) = stack.pop() {
             if closing {
-                ix.nodes.get_mut(&id).expect("var").tout = counter;
+                if let Some(n) = ix.nodes.get_mut(&id) {
+                    n.tout = counter;
+                }
                 counter += 1;
                 continue;
             }
@@ -107,8 +107,7 @@ impl TreeIndex {
                 Some(p) if ix.nodes.contains_key(&p) => ix.nodes[&p].depth + 1,
                 _ => 0,
             };
-            {
-                let n = ix.nodes.get_mut(&id).expect("var");
+            if let Some(n) = ix.nodes.get_mut(&id) {
                 n.tin = counter;
                 n.depth = depth;
             }

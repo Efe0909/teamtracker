@@ -1,17 +1,20 @@
-//! Oturum cerezi ve istekten kullaniciya cozum.
+//! Oturum cerezi ve istekten kullaniciya cozum — "islemi yapan kim" sorusunun
+//! TEK cevaplandigi yer (spec/15-sinirlar.md "Kimlik dikisi").
 //!
 //! Yetki DORT KATMAN (spec/21-sema-v2.md §11): yetenek (`scopes`+`roles`),
 //! dal (`user_node_scopes`), iliski (sahip/acan/katilimci/takim uyesi),
 //! super (`users.is_admin`). Sorgulari `db/scope.rs`'te; burasi kimlik.
 //!
-//! ## Cerez YALNIZ `uid` tasir
+//! ## Cerez: `uid.csrf`, imzali
 //!
 //! Kapsam, rol, admin bayragi cereze GOMULMEZ. Sebep: iptal ANINDA islemeli.
-//! `is_active` ile kapatilan kullanici bir sonraki istekte disari duser;
-//! kapsami alinan kisi bir sonraki istekte kaybeder.
+//! `is_active` ile kapatilan kullanici bir sonraki istekte disari duser.
+//! JWT'ye claim gomme tuzagina dusme: iptal token suresi dolana kadar olmez.
+//! Her istekte DB'ye gitmek BILINCLI tercih (KNOW-97).
 //!
-//! JWT'ye claim gomme tuzagina dusme: hizli gorunur ama iptal token suresi
-//! dolana kadar olmez. Her istekte DB'ye gitmek BILINCLI tercih (KNOW-97).
+//! CSRF token'i AYNI cerezde: `Domain=<alan>` ile uc hostta da (apex, app.,
+//! dashboard.) gecerli ve HER GIRISTE yeniden uretilir. Giris oncesinden
+//! kalan bir token giris sonrasina tasinamaz (oturum sabitleme, KNOW-158).
 
 use axum::{
     extract::{FromRequestParts, OptionalFromRequestParts},
@@ -21,14 +24,6 @@ use axum_extra::extract::cookie::{Cookie, Key, SameSite, SignedCookieJar};
 use uuid::Uuid;
 
 use crate::{config::Config, error::AppError, models::user::User, state::AppState};
-
-const SESSION_KEY: &str = "uid";
-
-/// Imzasiz, duz `uid` cerezi — YALNIZCA sahte kimlik modunda okunur.
-/// Gelistirme/test kolayligi: tarayicidan ya da testten tek satirla kullanici
-/// degistirilebilsin. Yayinda `Config` sahte kimligi acilista REDDETTIGI icin
-/// bu dal hic calismaz.
-const DEV_COOKIE: &str = "uid";
 
 pub fn key_from(cfg: &Config) -> Key {
     // Yayinda Config >= 32 karakter dayatiyor; gelistirmede kisa anahtari
@@ -40,25 +35,51 @@ pub fn key_from(cfg: &Config) -> Key {
     Key::from(&bytes)
 }
 
-pub fn open_session(jar: SignedCookieJar, cfg: &Config, user_id: Uuid) -> SignedCookieJar {
-    let mut c = Cookie::new(SESSION_KEY, user_id.to_string());
+/// 256 bit. `uuid` v4 isletim sisteminin CSPRNG'sini kullaniyor; ayri bir
+/// rastgelelik crate'i eklenmedi.
+pub fn random_token() -> String {
+    format!("{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple())
+}
+
+pub struct Session {
+    pub user_id: Uuid,
+    pub csrf: String,
+}
+
+pub fn read_session(jar: &SignedCookieJar, cfg: &Config) -> Option<Session> {
+    let c = jar.get(cfg.cookie_name())?;
+    let (uid, csrf) = c.value().split_once('.')?;
+    Some(Session { user_id: uid.parse().ok()?, csrf: csrf.to_string() })
+}
+
+fn session_cookie(cfg: &Config, value: String) -> Cookie<'static> {
+    let mut c = Cookie::new(cfg.cookie_name(), value);
     c.set_path("/");
     c.set_http_only(true);
-    // Lax: siteler arasi POST/PATCH cerezi TASIMAZ — CSRF'in ilk katmani.
+    // Lax: siteler arasi POST cerezi TASIMAZ — CSRF'in ilk katmani. Strict
+    // olamaz: Google'dan donus bir siteler arasi yonlendirme.
     c.set_same_site(SameSite::Lax);
     c.set_secure(cfg.in_production());
     if let Some(d) = &cfg.cookie_domain {
-        c.set_domain(d.clone());   // bir giris, iki alt alan adi
+        c.set_domain(d.clone()); // bir giris, uc host (KNOW-31)
     }
+    c
+}
+
+pub fn open_session(jar: SignedCookieJar, cfg: &Config, user_id: Uuid) -> SignedCookieJar {
+    let mut c = session_cookie(cfg, format!("{user_id}.{}", random_token()));
     c.set_max_age(time::Duration::seconds(crate::config::SESSION_MAX_AGE_SECS));
     jar.add(c)
 }
 
-pub fn close_session(jar: SignedCookieJar) -> SignedCookieJar {
-    jar.remove(Cookie::from(SESSION_KEY))
+/// Silme cerezi AYNI Domain ve Path ile gitmeli — yoksa tarayici baska bir
+/// cerez sanar ve oturum yerinde kalir.
+pub fn close_session(jar: SignedCookieJar, cfg: &Config) -> SignedCookieJar {
+    jar.remove(session_cookie(cfg, String::new()))
 }
 
-/// Istekteki kullanici. Handler imzasina `user: CurrentUser` yazmak yeter.
+/// Istekteki kullanici. Handler imzasina `user: CurrentUser` yazmak yeter;
+/// `Option<CurrentUser>` giris gerektirmeyen uclar icin.
 pub struct CurrentUser(pub User);
 
 impl FromRequestParts<AppState> for CurrentUser {
@@ -68,8 +89,6 @@ impl FromRequestParts<AppState> for CurrentUser {
     }
 }
 
-/// `Option<CurrentUser>`: giris gerektirmeyen uclar icin. Oturum yoksa hata
-/// degil `None`.
 impl OptionalFromRequestParts<AppState> for CurrentUser {
     type Rejection = AppError;
     async fn from_request_parts(p: &mut Parts, st: &AppState) -> Result<Option<Self>, AppError> {
@@ -77,46 +96,23 @@ impl OptionalFromRequestParts<AppState> for CurrentUser {
     }
 }
 
-async fn resolve(p: &mut Parts, st: &AppState) -> Result<Option<User>, AppError> {
+async fn resolve(p: &Parts, st: &AppState) -> Result<Option<User>, AppError> {
     let jar = SignedCookieJar::from_headers(&p.headers, st.key.clone());
-
-    if let Some(id) = jar.get(SESSION_KEY).and_then(|c| c.value().parse::<Uuid>().ok()) {
-        // HER ISTEKTE DB: kapatilan kullanici bir sonraki istekte duser.
-        if let Some(u) = User::active(&st.pool, id).await? {
-            touch_presence(st, u.id).await;
-            return Ok(Some(u));
-        }
+    let Some(s) = read_session(&jar, &st.cfg) else { return Ok(None) };
+    // HER ISTEKTE DB: kapatilan kullanici bir sonraki istekte duser.
+    let user = User::active(&st.pool, s.user_id).await?;
+    if let Some(u) = &user {
+        touch_presence(st, u.id).await;
     }
-
-    // Sahte kimlik: giris ekrani yok. Once duz `uid` cerezi (test/gelistirme
-    // degistiricisi), sonra ilk kullanici. Config yayinda bu modu acilista
-    // REDDEDIYOR — burada ikinci bir kapi yok.
-    if st.cfg.fake_identity() {
-        let dev = p.headers.get_all(axum::http::header::COOKIE).iter()
-            .filter_map(|v| v.to_str().ok())
-            .flat_map(|v| v.split(';'))
-            .filter_map(|c| c.trim().split_once('='))
-            .find(|(k, _)| *k == DEV_COOKIE)
-            .and_then(|(_, v)| v.parse::<Uuid>().ok());
-
-        if let Some(id) = dev {
-            if let Some(u) = User::active(&st.pool, id).await? {
-                touch_presence(st, u.id).await;
-                return Ok(Some(u));
-            }
-        }
-        if let Some(u) = User::first_active(&st.pool).await? {
-            touch_presence(st, u.id).await;
-            return Ok(Some(u));
-        }
-    }
-    Ok(None)
+    Ok(user)
 }
 
-/// Varlik damgasi TAM BURADA: kimlik cozulen her istek bir hayat belirtisi.
-/// Ayri bir "ben buradayim" ucu yok — o hem fazladan istek hem de
-/// kapatilabilir bir yol olurdu.
+/// Varlik damgasi: kimlik cozulen her istek bir hayat belirtisi. Hata
+/// yutulur — damga yazilamadi diye istek dusmemeli.
 async fn touch_presence(st: &AppState, id: Uuid) {
-    let _ = sqlx::query("update users set last_seen_at = now() where id = $1")
-        .bind(id).execute(&st.pool).await;
+    if let Err(e) = sqlx::query("update users set last_seen_at = now() where id = $1")
+        .bind(id).execute(&st.pool).await
+    {
+        tracing::warn!("presence update failed: {e}");
+    }
 }

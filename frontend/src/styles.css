@@ -1,0 +1,418 @@
+/* Palet eski yuzle ayni (shared/static/base.css), karanlik tema eklendi. */
+:root {
+  color-scheme: light dark;
+  --bg: #f4f1fb;
+  --panel: #fff;
+  --tint: #efe9fd;
+  --line: #e4dcf7;
+  --txt: #2c2440;
+  --dim: #6f6792;
+  --acc: #7c5bff;
+  --acc-strong: #6743f5;
+  --acc-soft: #b79dff;
+  --err: #d13a51;
+  --err-bg: #fdecef;
+  --sh: 0 1px 2px rgba(60, 40, 120, 0.05), 0 12px 40px rgba(90, 60, 180, 0.12);
+  --radius: 18px;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  color: var(--txt);
+  background: var(--bg);
+  -webkit-text-size-adjust: 100%;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #13101c;
+    --panel: #1c1828;
+    --tint: #262038;
+    --line: #2f2944;
+    --txt: #ece8f7;
+    --dim: #a59ec4;
+    --acc: #9d84ff;
+    --acc-strong: #b19dff;
+    --acc-soft: #6e55d8;
+    --err: #ff7a8c;
+    --err-bg: #3a1822;
+    --sh: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 40px rgba(0, 0, 0, 0.35);
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background:
+    radial-gradient(900px 600px at 110% -10%, color-mix(in srgb, var(--acc) 18%, transparent), transparent 60%),
+    radial-gradient(700px 500px at -10% 110%, color-mix(in srgb, var(--acc-soft) 16%, transparent), transparent 60%),
+    var(--bg);
+  background-attachment: fixed;
+}
+
+a {
+  color: var(--acc-strong);
+}
+
+:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--acc) 55%, transparent);
+  outline-offset: 2px;
+}
+
+/* --- karsilama --------------------------------------------------------- */
+
+.welcome {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  padding: max(16px, env(safe-area-inset-top)) 20px max(16px, env(safe-area-inset-bottom));
+  max-width: 1120px;
+  margin: 0 auto;
+}
+
+.topbar {
+  padding: 8px 0 24px;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 1.1rem;
+  letter-spacing: -0.01em;
+}
+
+.brand-mark {
+  width: 32px;
+  height: 32px;
+}
+.brand-mark rect {
+  fill: var(--acc);
+}
+.brand-mark path {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.brand-mark .tick {
+  stroke: #d9ccff;
+}
+
+.welcome-grid {
+  flex: 1;
+  display: grid;
+  gap: 28px;
+  align-content: center;
+}
+
+.hero h1 {
+  font-size: clamp(2rem, 7vw, 3.4rem);
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  margin: 0 0 16px;
+}
+
+.accent {
+  color: var(--acc);
+}
+
+.eyebrow {
+  margin: 0 0 10px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+.lede {
+  font-size: 1.08rem;
+  line-height: 1.55;
+  color: var(--dim);
+  margin: 0 0 20px;
+  max-width: 36ch;
+}
+
+.points {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+.points li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.points li::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--acc);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--acc) 18%, transparent);
+  flex: none;
+}
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--sh);
+  padding: 24px;
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+.card h2 {
+  margin: 0;
+  font-size: 1.35rem;
+  letter-spacing: -0.01em;
+}
+
+.muted {
+  margin: 0;
+  color: var(--dim);
+}
+
+.fine {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--dim);
+}
+
+.alert {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--err-bg);
+  color: var(--err);
+  font-size: 0.95rem;
+}
+
+/* hedef secimi */
+.dest {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.dest legend {
+  padding: 0;
+  margin-bottom: 10px;
+  font-size: 0.9rem;
+  color: var(--dim);
+}
+
+.dest-option {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border: 1.5px solid var(--line);
+  border-radius: 14px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.dest-option:hover {
+  border-color: var(--acc-soft);
+}
+.dest-option:has(input:checked) {
+  border-color: var(--acc);
+  background: var(--tint);
+}
+.dest-option:has(input:focus-visible) {
+  outline: 3px solid color-mix(in srgb, var(--acc) 55%, transparent);
+  outline-offset: 2px;
+}
+.dest-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.dest-icon svg {
+  width: 26px;
+  height: 26px;
+  fill: none;
+  stroke: var(--acc);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.dest-text {
+  display: grid;
+  gap: 2px;
+}
+.dest-title {
+  font-weight: 600;
+}
+.dest-hint {
+  font-size: 0.82rem;
+  color: var(--dim);
+}
+
+/* dugmeler */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 0 18px;
+  border-radius: 12px;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  border: 1.5px solid transparent;
+  transition: background 0.15s, border-color 0.15s, transform 0.05s;
+}
+.btn:active {
+  transform: translateY(1px);
+}
+.btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.btn-primary {
+  background: var(--acc);
+  color: #fff;
+}
+.btn-primary:hover {
+  background: var(--acc-strong);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--txt);
+  border-color: var(--line);
+}
+.btn-ghost:hover {
+  border-color: var(--acc-soft);
+}
+
+.btn-google {
+  background: var(--panel);
+  color: var(--txt);
+  border-color: var(--line);
+}
+.btn-google:hover {
+  border-color: var(--acc-soft);
+  background: var(--tint);
+}
+.g {
+  width: 20px;
+  height: 20px;
+}
+
+.stack {
+  display: grid;
+  gap: 10px;
+}
+
+.link {
+  justify-self: start;
+  padding: 4px 0;
+  background: none;
+  border: 0;
+  font: inherit;
+  color: var(--dim);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.link:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.dev {
+  display: grid;
+  gap: 8px;
+}
+.dev label {
+  font-size: 0.9rem;
+  color: var(--dim);
+}
+.dev select {
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1.5px solid var(--line);
+  background: var(--panel);
+  color: var(--txt);
+  font: inherit;
+}
+
+.foot {
+  padding: 24px 0 4px;
+  font-size: 0.82rem;
+  color: var(--dim);
+}
+
+/* Telefonda giris karti once gelsin: gelen kisinin isi giris yapmak. */
+@media (max-width: 859px) {
+  .card {
+    order: -1;
+  }
+  .hero h1 {
+    font-size: clamp(1.7rem, 7vw, 2.4rem);
+  }
+  .points {
+    display: none;
+  }
+}
+
+@media (min-width: 860px) {
+  .welcome {
+    padding-left: 32px;
+    padding-right: 32px;
+  }
+  .welcome-grid {
+    grid-template-columns: 1.1fr 0.9fr;
+    gap: 64px;
+    align-items: center;
+  }
+  .card {
+    padding: 32px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
+}
+
+/* --- yapim asamasinda -------------------------------------------------- */
+
+.uc {
+  min-height: 100dvh;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 8px;
+  padding: 24px;
+  text-align: center;
+}
+.uc h1 {
+  margin: 0;
+  font-size: clamp(1.6rem, 6vw, 2.4rem);
+  letter-spacing: -0.02em;
+}
+.uc-label {
+  margin: 0;
+  color: var(--dim);
+}

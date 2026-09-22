@@ -12,7 +12,31 @@ dizini, tünel). Elle kurulum yok; macOS ve Debian şablonları kaldırıldı.
 | VM testi | `~/nix` `.#vmtest` | gerçek NixOS: nginx + cloudflared + Google girişi |
 | Üretim | `~/nix` `.#evsunucu` | Raspberry Pi, aynı `configuration.nix` |
 
-### Yerel: siteyi ayağa kaldırmak (ajan oturumları)
+### alpha-0.2: Rust API + React (bu dal)
+
+Yeni yığın: `backend/` (Rust, yalnız `/api` JSON) + `frontend/` (React + TS strict,
+statik). Python (`app.py`, `shared/`, `sites/`, `tests/`) **başvuru**: davranışın
+kaynağı, çalışan yığın değil. Sınır: `spec/15-sinirlar.md`.
+
+```bash
+docker start ekiptakip-db && docker exec ekiptakip-db createdb -U ekiptakip ekiptakip_alpha02
+(cd backend && DATABASE_URL=postgresql://ekiptakip:ekiptakip@127.0.0.1:5432/ekiptakip_alpha02 \
+   EKIPTAKIP_AUTH=sahte cargo run)                     # API 127.0.0.1:8000
+(cd frontend && npm install && npm run dev)            # http://localhost:5173
+```
+
+- Karşılama <http://localhost:5173>, yüzler <http://app.localhost:5173> ·
+  <http://dashboard.localhost:5173>. Vite `/api`'yi Rust'a vekiller.
+- Sahte kimlik: karşılamada kullanıcı seçilir, oturum **hedef host'ta** açılır
+  (`localhost` çerezi alt alan adlarına paylaşılamıyor).
+- Tohum: `docker exec -i ekiptakip-db psql -U ekiptakip -d ekiptakip_alpha02 < backend/seed.sql`.
+- Denetim: `cargo clippy --all-targets` (panik/`todo!` derlemeyi düşürür),
+  `npm run build` (tsc strict), `backend/tools/vm_test.sh` (VM'de JSON sözleşmesi).
+- **Hedef makine derlemez.** Yayın: `backend/tools/release.sh` Mac'te derler, GitHub
+  release'e yükler, `deploy/release.nix`'i pinler; `~/nix` `packages.aarch64-linux.default`'u
+  çeker.
+
+### Yerel: siteyi ayağa kaldırmak (Python, başvuru)
 
 ```bash
 make up          # bağımlılıklar + Postgres (Docker) + tohum + sunucu (--reload)

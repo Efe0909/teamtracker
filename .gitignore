@@ -38,3 +38,9 @@ spec/.zennotes/
 
 # Rust derleme ciktisi. 800 MB+ — veritabani gibi, ASLA commit etme.
 backend/target/
+
+# Nix: `nix build` sembolik baglari, direnv onbellegi
+result
+result-*
+.direnv/
+dist/

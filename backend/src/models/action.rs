@@ -6,7 +6,7 @@ use chrono::NaiveDate;
 use serde::Serialize;
 use uuid::Uuid;
 
-use crate::render::UserChip;
+use crate::models::user::UserChip;
 
 /// Ekranda gorunen eylem durumu. Kayit durumundan FARKLI: eylemde `pending`
 /// yok, `cancelled` var.

@@ -1,104 +1,112 @@
 #!/bin/bash
-# tests/test_api.py'nin iddialarini KOSAN Rust sunucusuna karsi dogrular.
+# JSON API sozlesmesi — KOSAN iki Rust surecine karsi (tools/vm_test.sh kaldirir):
+#   B  = sahte kimlik (EKIPTAKIP_AUTH=sahte), tohumlu veritabani
+#   BG = Google kipi (sahte istemci kimligiyle; Google'a gercekten gidilir)
+#   PSQL = ayni veritabanina psql komutu
 #
-# Python testleri TestClient ile app nesnesine baglaniyor; Rust tarafinda
-# karsiligi HTTP. Sozlesme AYNI: ayni yollar, ayni kodlar, ayni metinler.
-# Yollar v2 adlandirmasiyla (/record/... , /tasks/...).
-#
-# Kullanim:  sunucuyu kaldir, sonra  tools/check_api.sh
-B=http://localhost:8099
-DB(){ docker exec ekiptakip-db psql -U ekiptakip -d ekiptakip_rust -t -A -c "$1"; }
-P=0; F=0; CUR=""
+# Metin DEGIL alan karsilastirir: `{"error": "<kod>"}`, `user.name`, yonlendirme
+# hedefi. Bu testler sinirin (spec/15-sinirlar.md) yazili halidir.
+set -u
+: "${B:?}" "${BG:?}" "${PSQL:?}"
+P=0; F=0; CUR=""; J=$(mktemp -d); trap 'rm -rf "$J"' EXIT
 t(){ CUR="$1"; }
-ok(){ [ "$1" = "$2" ] && P=$((P+1)) || { F=$((F+1)); printf '  \033[31mHATA\033[0m %-42s %-22s bekle=%s gercek=%s\n' "$CUR" "$3" "$2" "$1"; }; }
-has(){ curl -s "$@" | grep -qF "$TXT" && echo VAR || echo YOK; }
-sess(){ rm -f /tmp/c; curl -s -c /tmp/c ${1:+-b "uid=$1"} -o /tmp/pg.html "$B/"; TOK=$(grep -oE 'X-CSRF-Token": "[^"]+' /tmp/pg.html|head -1|sed 's/.*: "//'); ASU="$1"; }
-w(){ curl -s -b /tmp/c ${ASU:+-b "uid=$ASU"} -H "X-CSRF-Token: $TOK" -o /dev/null -w '%{http_code}' "$@"; }
-g(){ curl -s ${ASU:+-b "uid=$ASU"} "$@"; }
+ok(){ if [ "$1" = "$2" ]; then P=$((P+1)); else F=$((F+1)); printf '  \033[31mHATA\033[0m %-34s %-24s bekle=%s gercek=%s\n' "$CUR" "$3" "$2" "$1"; fi; }
+DB(){ $PSQL -t -A -c "$1"; }
+code(){ curl -s -o /dev/null -w '%{http_code}' "$@"; }
+loc(){ curl -s -o /dev/null -w '%{redirect_url}' "$@"; }
 
-EFE=$(DB "select id from users where name='Efe'"); SELIN=$(DB "select id from users where name='Selin'"); DENIZ=$(DB "select id from users where name='Deniz'")
-BUTCE=$(DB "select id from records where title like 'Bütçe%'"); KAPAK=$(DB "select id from records where title like 'Kapak%'")
-VEK=$(DB "select id from records where title like 'Onay akışına%'"); TEKLIF=$(DB "select id from records where title like 'Tedarikçi tek%'")
-SEV=$(DB "select id from records where title like 'Sevkiyat%'"); MALZ=$(DB "select id from nodes where name='Malzeme Temini'")
-MALIYE=$(DB "select id from teams where name='Maliye'"); SN=$(DB "select id from nodes where node_type='pillar' limit 1")
-GEN=$(DB "select id from nodes where node_type='generic' limit 1"); BONAY=$(DB "select id from nodes where name='Bütçe Onayı'")
-sess ""
+SELIN=$(DB "select id from users where name='Selin'")
+DENIZ=$(DB "select id from users where name='Deniz'")
 
-t home_lists_modules
-H=$(g "$B/"); for x in "Görev Yöneticisi" "Veri Yönetimi" 'href="/tasks"' 'href="/outcome-tree"'; do ok "$(echo "$H"|grep -qF "$x" && echo V||echo Y)" V "$x"; done
-ok "$(echo "$H"|grep -qF 'Bütçe onayı' && echo V||echo Y)" Y "tablo degil"
-t module_stub_pages
-for u in /pivot:200 /tasks2:404 /outcome-tree:200 /tasks:200; do ok "$(curl -s -o /dev/null -w '%{http_code}' "$B${u%:*}")" "${u##*:}" "${u%:*}"; done
-ok "$(g "$B/tasks"|grep -qF 'Yakında' && echo V||echo Y)" Y "tasks iskele degil"
-t tasks_lists_my_items
-ok "$(g "$B/tasks"|grep -qF 'Bütçe onayı 6 gündür bekliyor' && echo V||echo Y)" V "kayit tabloda"
-t table_fragment_on_htmx
-FR=$(g -H "HX-Request: true" "$B/tasks"); ok "$(echo "$FR"|grep -qF '<html' && echo V||echo Y)" Y "tam sayfa degil"; ok "$(echo "$FR"|grep -qF 'data-fragment="table"' && echo V||echo Y)" V "parca"
-t node_filter_includes_subtree
-R=$(g "$B/tasks?node=$MALZ"); ok "$(echo "$R"|grep -qF 'Bütçe onayı' && echo V||echo Y)" V in; ok "$(echo "$R"|grep -qF 'Tedarikçi teklifleri' && echo V||echo Y)" V in2; ok "$(echo "$R"|grep -qF 'Kapak Ünitesi — tekrar eden kayıp' && echo V||echo Y)" Y out
-t team_filter
-R=$(g "$B/tasks?team=$MALIYE"); ok "$(echo "$R"|grep -qF 'Bütçe onayı' && echo V||echo Y)" V in; ok "$(echo "$R"|grep -qF 'Onay akışına' && echo V||echo Y)" V in2; ok "$(echo "$R"|grep -qF 'Sevkiyat tarihi' && echo V||echo Y)" Y out
-t quick_filter_overdue_via_action
-R=$(g "$B/tasks?quick=overdue"); ok "$(echo "$R"|grep -qF 'Bütçe onayı' && echo V||echo Y)" V in; ok "$(echo "$R"|grep -qF 'Kapak Ünitesi — tekrar eden kayıp' && echo V||echo Y)" Y out
-t quick_filter_my_open_actions
-R=$(curl -s -b "uid=$DENIZ" "$B/tasks?quick=my_actions"); ok "$(echo "$R"|grep -qF 'Bütçe onayı' && echo V||echo Y)" V in; ok "$(echo "$R"|grep -qF 'Tedarikçi teklifleri' && echo V||echo Y)" Y out
-t bad_filter_values_fall_back
-ok "$(g "$B/tasks?team=xx&sort=';drop--&quick=yok"|grep -qF 'Bütçe onayı' && echo V||echo Y)" V "suzmesiz doner"
-t pillar_ortogonal_sutun
-ok "$(g "$B/tasks"|grep -qF '>Pillar<' && echo V||echo Y)" V "pillar filtresi"
-t whoami_and_switch
-ok "$(g "$B/whoami"|python3 -c 'import sys,json;print(json.load(sys.stdin)["name"])')" Efe varsayilan
-sess ""; curl -s -b /tmp/c -c /tmp/c -H "X-CSRF-Token: $TOK" -o /dev/null -X POST "$B/switch/$SELIN"; ok "$(curl -s -b /tmp/c "$B/whoami"|python3 -c 'import sys,json;print(json.load(sys.stdin)["is_admin"])')" True "switch admin"
-t item_redirects_to_task_page
-PG=$(g "$B/tasks/$BUTCE"); ok "$(echo "$PG"|grep -qF 'data-fragment="card_feed"' && echo V||echo Y)" V feed; ok "$(echo "$PG"|grep -qF 'data-fragment="card_actions"' && echo V||echo Y)" V actions
-t kompozerde_ek_iptali_var
-ok "$(echo "$PG"|grep -qF 'data-role="attach-clear"' && echo V||echo Y)" V "ek iptali"
-t alanlar_dropdown_DEGIL_dialog
-S=$(echo "$PG"|sed -n '/id="fields"/,/data-fragment="card_actions"/p'); ok "$(echo "$S"|grep -qF '<select' && echo V||echo Y)" Y "select yok"; ok "$(echo "$S"|grep -qF 'data-dialog="dlg-f-who"' && echo V||echo Y)" V tetik; ok "$(echo "$S"|grep -qF 'id="dlg-f-who"' && echo V||echo Y)" V dialog
-t sohbette_hizli_eylem_simsegi
-ok "$(echo "$PG"|grep -qF 'class="simsek" data-dialog="dlg-hizli-eylem"' && echo V||echo Y)" V simsek
-t message_appends_single_event
-sess ""; B4=$(DB "select count(*) from messages m join records r on r.chat_id=m.chat_id where r.id='$BUTCE'")
-MR=$(curl -s -b /tmp/c -H "X-CSRF-Token: $TOK" -d "body=test mesajı" -X POST "$B/record/$BUTCE/message")
-AF=$(DB "select count(*) from messages m join records r on r.chat_id=m.chat_id where r.id='$BUTCE'"); ok "$((AF-B4))" 1 "+1 mesaj"
-ok "$(echo "$MR"|grep -qF 'test mesajı' && echo V||echo Y)" V govde
-t field_change_writes_system_event_and_oob
-FR2=$(curl -s -b /tmp/c -H "X-CSRF-Token: $TOK" -X PATCH -d "status=in_progress" "$B/record/$BUTCE/field")
-ok "$(echo "$FR2"|grep -qF 'hx-swap-oob="true"' && echo V||echo Y)" V oob
-ok "$(DB "select status from records where id='$BUTCE'")" in_progress durum
-ok "$(DB "select detail from activity where chat_id=(select chat_id from records where id='$BUTCE') order by created_at desc limit 1"|grep -qF 'Açık → Devam' && echo V||echo Y)" V "Açık → Devam"
-t out_of_scope_is_403_not_just_hidden
-sess "$EFE"; ok "$(w -X PATCH -d "status=closed" "$B/record/$KAPAK/field")" 403 patch; ok "$(w -X POST -d "body=x" "$B/record/$KAPAK/message")" 403 mesaj; ok "$(DB "select status from records where id='$KAPAK'")" pending degismedi
-t admin_can_edit_anything
-sess "$SELIN"; ok "$(w -X PATCH -d "priority=critical" "$B/record/$KAPAK/field")" 200 admin
-t participant_beats_scope
-sess "$DENIZ"; ok "$(w -X POST -d "body=dahilim" "$B/record/$BUTCE/message")" 200 katilimci; ok "$(w -X POST -d "body=x" "$B/record/$VEK/message")" 403 disarda
-t team_membership_beats_scope
-ok "$(w -X POST -d "body=takimdanim" "$B/record/$TEKLIF/message")" 200 "takim uyesi"
-t action_endpoints_respect_card_permission
-ok "$(w -X POST -d "title=x" "$B/record/$VEK/action")" 403 "eylem ekle 403"
-t actions_crud_and_close_guard
-sess ""; ok "$(w -X POST -d "title=Nakliye planını revize et&owner_id=$DENIZ" "$B/record/$SEV/action")" 200 ekle
-ok "$(w -X PATCH -d "status=closed" "$B/record/$SEV/field")" 400 "acik eylemle kapanmaz"
-for a in $(DB "select id from actions where record_id='$SEV' and status in ('open','in_progress')"); do ok "$(w -X PATCH -d "status=closed" "$B/action/$a")" 200 "eylem kapat"; done
-ok "$(w -X PATCH -d "status=closed" "$B/record/$SEV/field")" 200 "sonra kapanir"
-ok "$(DB "select count(*)>0 from activity where chat_id=(select chat_id from records where id='$SEV') and detail like '%eylem%'")" t "akista eylem"
-t alan_degisimi_zaman_damgali
-w -X PATCH -d "priority=low" "$B/record/$BUTCE/field" >/dev/null
-ok "$(DB "select detail from activity where chat_id=(select chat_id from records where id='$BUTCE') order by created_at desc limit 1"|grep -qF 'önceliği' && echo V||echo Y)" V "önceliği"
-t sorumlu_ve_takim_degisikligi
-ok "$(w -X PATCH -d "owner_id=$DENIZ" "$B/record/$BUTCE/field")" 200 sorumlu
-ok "$(DB "select owner_id from records where id='$BUTCE'")" "$DENIZ" yazildi
-ok "$(w -X PATCH -d "team_id=$MALIYE" "$B/record/$BUTCE/field")" 200 takim
-ok "$(w -X PATCH -d "owner_id=abc" "$B/record/$BUTCE/field")" 400 "bozuk 400"
-ok "$(DB "select owner_id from records where id='$BUTCE'")" "$DENIZ" "bosaltmadi"
-t pillar_karttan_secilir
-ok "$(w -X PATCH -d "pillar_id=$SN" "$B/record/$BUTCE/field")" 200 "pillar yaz"
-ok "$(DB "select pillar_id from records where id='$BUTCE'")" "$SN" yazildi
-ok "$(w -X PATCH -d "pillar_id=$GEN" "$B/record/$BUTCE/field")" 400 "pillar olmayan"
-t create_requires_node_and_scope
-ok "$(w -X POST -d "title=yeni&unit_id=$BONAY" "$B/record")" 303 "kapsam ici"
-ok "$(w -X POST -d "title=yeni&unit_id=$KAPAKN" "$B/record")" 400 "gecersiz"
-sess "$EFE"; KUN=$(DB "select id from nodes where name='Kapak Ünitesi'"); ok "$(w -X POST -d "title=yeni&unit_id=$KUN" "$B/record")" 403 "kapsam disi"
-ok "$(w -X POST -d "title=yeni&unit_id=yok" "$B/record")" 400 "gecersiz kimlik"
+t me_anonymous
+R=$(curl -s "$B/api/me")
+ok "$(jq -r .user <<<"$R")" null "user"
+ok "$(jq -r .auth <<<"$R")" fake "auth"
+ok "$(jq -r .csrf <<<"$R")" null "csrf"
+ok "$(jq -r '.dev_users|length' <<<"$R")" 3 "dev_users"
+
+t no_html_anywhere
+ok "$(code "$B/")" 404 "/"
+ok "$(curl -s "$B/tasks" | jq -r .error)" not_found "eski HTML yolu"
+
+t fake_mode_hides_google
+ok "$(code "$B/api/auth/google?next=app")" 404 "google start"
+ok "$(code "$B/api/auth/callback?code=x&state=y")" 404 "callback"
+
+t dev_login
+ok "$(code -c "$J/c" "$B/api/auth/dev-login?user_id=$SELIN")" 303 "status"
+ok "$(loc "$B/api/auth/dev-login?user_id=$SELIN")" "$B/" "yonlendirme /"
+R=$(curl -s -b "$J/c" "$B/api/me")
+ok "$(jq -r .user.name <<<"$R")" Selin "user.name"
+ok "$(jq -r .user.is_admin <<<"$R")" true "is_admin"
+TOK=$(jq -r .csrf <<<"$R"); ok "${#TOK}" 64 "csrf uzunlugu"
+ok "$(code "$B/api/auth/dev-login?user_id=nope")" 400 "gecersiz uuid"
+ok "$(code "$B/api/auth/dev-login?user_id=00000000-0000-0000-0000-000000000000")" 404 "olmayan kullanici"
+
+t csrf_gate
+ok "$(code -b "$J/c" -X POST "$B/api/auth/logout")" 403 "tokensiz"
+ok "$(curl -s -b "$J/c" -X POST -H "X-CSRF-Token: yanlis" "$B/api/auth/logout" | jq -r .error)" csrf "yanlis token"
+ok "$(code -X POST -H "X-CSRF-Token: $TOK" "$B/api/auth/logout")" 403 "cerezsiz"
+
+t tampered_cookie_is_anonymous
+awk 'BEGIN{FS=OFS="\t"} $6=="ekiptakip"{$7="X" substr($7,2)} 1' "$J/c" > "$J/bad"
+ok "$(curl -s -b "$J/bad" "$B/api/me" | jq -r .user)" null "imza bozuk"
+
+t deactivation_is_immediate
+DB "update users set is_active=false where id='$SELIN'" >/dev/null
+ok "$(curl -s -b "$J/c" "$B/api/me" | jq -r .user)" null "kapatilan dustu"
+ok "$(code "$B/api/auth/dev-login?user_id=$SELIN")" 404 "kapatilan giremez"
+DB "update users set is_active=true where id='$SELIN'" >/dev/null
+
+t logout
+ok "$(code -b "$J/c" -c "$J/c" -X POST -H "X-CSRF-Token: $TOK" "$B/api/auth/logout")" 204 "status"
+ok "$(curl -s -b "$J/c" "$B/api/me" | jq -r .user)" null "oturum kapandi"
+ok "$(DB "select count(*) from security_events where event_type='logout' and actor_id='$SELIN'")" 1 "denetim izi"
+
+t new_login_rotates_csrf
+curl -s -c "$J/d" -o /dev/null "$B/api/auth/dev-login?user_id=$DENIZ"
+T1=$(curl -s -b "$J/d" "$B/api/me" | jq -r .csrf)
+curl -s -b "$J/d" -c "$J/d" -o /dev/null "$B/api/auth/dev-login?user_id=$DENIZ"
+T2=$(curl -s -b "$J/d" "$B/api/me" | jq -r .csrf)
+ok "$([ "$T1" != "$T2" ] && [ ${#T2} = 64 ] && echo V || echo Y)" V "token yenilendi"
+
+# --- Google kipi -------------------------------------------------------------
+t google_me
+R=$(curl -s "$BG/api/me"); ok "$(jq -r .auth <<<"$R")" google "auth"
+ok "$(jq -r 'has("dev_users")' <<<"$R")" false "dev_users yok"
+ok "$(code "$BG/api/auth/dev-login?user_id=$DENIZ")" 404 "dev-login kapali"
+
+t google_start
+H=$(curl -s -D - -o /dev/null -c "$J/g" -H "X-Real-IP: 10.0.0.1" "$BG/api/auth/google?next=dashboard")
+L=$(grep -i '^location:' <<<"$H" | tr -d '\r' | cut -d' ' -f2)
+ok "${L%%\?*}" "https://accounts.google.com/o/oauth2/v2/auth" "Google'a"
+for p in "code_challenge_method=S256" "response_type=code" "prompt=select_account" "client_id=test-client"; do
+  ok "$(grep -qF "$p" <<<"$L" && echo V || echo Y)" V "$p"
+done
+ok "$(grep -qF "redirect_uri=http%3A%2F%2F$(sed 's/:/%3A/' <<<"${BG#http://}")%2Fapi%2Fauth%2Fcallback" <<<"$L" && echo V || echo Y)" V "redirect_uri"
+ok "$(grep -ci '^set-cookie: oauth=.*HttpOnly' <<<"$H")" 1 "oauth cerezi"
+ok "$(code -H "X-Real-IP: 10.0.0.1" "$BG/api/auth/google?next=evil.com")" 400 "serbest hedef yok"
+
+t google_callback_state
+STATE=$(sed -n 's/.*[?&]state=\([^&]*\).*/\1/p' <<<"$L")
+ok "$(loc -b "$J/g" -H "X-Real-IP: 10.0.0.1" "$BG/api/auth/callback?code=x&state=baska")" "$BG/?error=failed" "state uyusmaz"
+ok "$(loc -H "X-Real-IP: 10.0.0.1" "$BG/api/auth/callback?code=x&state=$STATE")" "$BG/?error=failed" "cerezsiz"
+ok "$(loc -b "$J/g" -H "X-Real-IP: 10.0.0.1" "$BG/api/auth/callback?error=access_denied&state=$STATE")" "$BG/?error=cancelled" "vazgecti"
+ok "$(DB "select count(*) from security_events where event_type='login_denied' and detail like 'oauth:%state%'")" 2 "denetim izi"
+
+t google_callback_reaches_google
+# Dogru state + uydurma kod: Google'in token ucu reddetmeli (TLS'in ve
+# ag cikisinin kaniti). Oturum ACILMAMALI.
+H2=$(curl -s -D - -o /dev/null -c "$J/g2" -H "X-Real-IP: 10.0.0.2" "$BG/api/auth/google?next=app")
+S2=$(grep -i '^location:' <<<"$H2" | tr -d '\r' | sed -n 's/.*[?&]state=\([^&]*\).*/\1/p')
+ok "$(loc -b "$J/g2" -c "$J/g2" -H "X-Real-IP: 10.0.0.2" "$BG/api/auth/callback?code=uydurma&state=$S2")" "$BG/?error=failed" "sahte kod"
+ok "$(DB "select count(*) from security_events where detail like 'oauth: token status%'")" 1 "Google reddetti (TLS calisiyor)"
+ok "$(curl -s -b "$J/g2" "$BG/api/me" | jq -r .user)" null "oturum yok"
+
+t login_rate_limit
+for _ in $(seq 10); do curl -s -o /dev/null -H "X-Real-IP: 10.9.9.9" "$BG/api/auth/google?next=app"; done
+ok "$(loc -H "X-Real-IP: 10.9.9.9" "$BG/api/auth/google?next=app")" "$BG/?error=rate_limited" "11. istek"
+ok "$(loc -H "X-Real-IP: 10.9.9.8" "$BG/api/auth/google?next=app" | cut -c1-35)" "https://accounts.google.com/o/oauth" "baska IP etkilenmez"
+
 printf '\n  \033[32mgecen=%s\033[0m  kalan=%s\n' "$P" "$F"
+[ "$F" = 0 ]

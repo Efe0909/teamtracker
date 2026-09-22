@@ -8,7 +8,7 @@ use serde::Serialize;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::{models::record::short_time, render::UserChip};
+use crate::models::{record::short_time, user::UserChip};
 
 #[derive(Debug, sqlx::FromRow)]
 pub struct FeedRow {

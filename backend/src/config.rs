@@ -8,6 +8,9 @@ use std::env;
 #[derive(Clone, Debug)]
 pub struct Config {
     pub database_url: String,
+    /// Varsayilan 127.0.0.1: disariya yalniz nginx bakar (KNOW-288). Hiz
+    /// siniri X-Real-IP'ye guveniyor — port disariya acilirsa baslik sahtelenir.
+    pub bind: std::net::IpAddr,
     pub port: u16,
     pub secret_key: String,
 
@@ -72,11 +75,23 @@ impl Config {
             return Err("EKIPTAKIP_SECRET_KEY yayinda zorunlu (>= 32 karakter)".into());
         }
 
+        if auth_mode == AuthMode::Google && env == Env::Production
+            && (var("GOOGLE_CLIENT_ID").is_empty() || var("GOOGLE_CLIENT_SECRET").is_empty())
+        {
+            return Err("GOOGLE_CLIENT_ID ve GOOGLE_CLIENT_SECRET yayinda zorunlu".into());
+        }
+
+        let bind = match var("EKIPTAKIP_BIND").as_str() {
+            "" => std::net::IpAddr::from([127, 0, 0, 1]),
+            v => v.parse().map_err(|_| format!("EKIPTAKIP_BIND gecersiz: {v}"))?,
+        };
+
         let database_url = env::var("DATABASE_URL")
             .map_err(|_| "DATABASE_URL tanimli degil".to_string())?;
 
         Ok(Config {
             database_url,
+            bind,
             port: var("PORT").parse().unwrap_or(8000),
             secret_key,
             host_app, host_dashboard,
