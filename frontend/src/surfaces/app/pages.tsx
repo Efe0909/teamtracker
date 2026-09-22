@@ -32,7 +32,9 @@ function RecordCard({ r }: { r: RecordSummary }) {
         <span className={s.cardPath}>{path.slice(-2).join(" › ")}</span>
         <span className={s.cardMeta}>
           <Status status={r.status} />
-          <Due date={r.due_date} done={isDone(r.status)} actionLate={r.action_overdue} />
+          {(r.due_date !== null || r.action_overdue) && (
+            <Due date={r.due_date} done={isDone(r.status)} actionLate={r.action_overdue} />
+          )}
           {r.messages > 0 && (
             <span>
               <Icon name="chat" size={14} /> {r.messages}
@@ -189,7 +191,7 @@ export function ActionsPage() {
                       <span className={s.cardPath}>{a.record_title}</span>
                       <span className={s.cardMeta}>
                         <Status status={a.status} action />
-                        <Due date={a.due_date} />
+                        {a.due_date !== null && <Due date={a.due_date} />}
                       </span>
                     </span>
                     <span className={s.chev}>

@@ -245,10 +245,11 @@
   flex-direction: column;
   gap: var(--s-4);
 }
+/* Alt sekme cubugunun USTUNDE: cubuk ~70px + bosluk. */
 .chatFab {
   position: fixed;
   right: var(--s-4);
-  bottom: calc(var(--s-4) + env(safe-area-inset-bottom));
+  bottom: calc(84px + env(safe-area-inset-bottom));
   z-index: 35;
   width: 60px;
   height: 60px;
