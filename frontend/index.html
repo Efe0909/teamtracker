@@ -7,6 +7,13 @@
     <meta name="description" content="EkipTakip — ekibin kayıtları, eylemleri ve sohbeti tek yerde." />
     <link rel="icon" type="image/png" href="/icon-192.png" />
     <link rel="apple-touch-icon" href="/icon-180.png" />
+    <!-- PWA: ayni manifest uc host'ta da verilir. start_url/scope "/" manifestin
+         istendigi host'un kokune cozulur: app.'tan eklenen uygulama app.'ta acilir.
+         Service worker yok (push ile gelecek). -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="EkipTakip" />
     <title>EkipTakip</title>
   </head>
   <body>
