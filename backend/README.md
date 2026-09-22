@@ -46,4 +46,6 @@ docker exec -i ekiptakip-db psql -U ekiptakip -d ekiptakip_alpha02 < seed.sql   
 - `cargo test` — birim (agac, filtre, hiz siniri).
 - `tools/vm_test.sh` — Mac'te cross-derler, VM'de atilip-yikilan dizin + veritabani,
   iki surec (sahte kimlik + Google kipi), `tools/check_api.sh` JSON sozlesmesi.
+- `tools/import_v1.sh` — TEK SEFERLIK: 0.1'in kullanici/agac/takim/rol verisini 0.2'ye
+  (is kayitlari, sohbet, ekler TASINMAZ). VM'de 2026-09-22'de yapildi; Pi'de bir kez daha.
 - `tools/release.sh` — yayin tarball'i (ikili + on yuz), GitHub release, `deploy/release.nix`.
