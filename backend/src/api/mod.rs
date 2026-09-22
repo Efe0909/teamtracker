@@ -7,10 +7,11 @@
 mod auth;
 mod common;
 mod meta;
+mod records;
 
 use axum::{
     extract::State,
-    routing::{get, post},
+    routing::{get, patch, post},
     Json, Router,
 };
 use axum_extra::extract::cookie::SignedCookieJar;
@@ -27,6 +28,11 @@ pub fn router() -> Router<AppState> {
         .route("/api/auth/logout", post(auth::logout))
         .route("/api/auth/dev-login", get(auth::dev_login))
         .route("/api/meta", get(meta::meta))
+        .route("/api/records", get(records::list).post(records::create))
+        .route("/api/records/{id}", get(records::get).patch(records::patch))
+        .route("/api/records/{id}/actions", post(records::add_action))
+        .route("/api/actions/mine", get(records::my_actions))
+        .route("/api/actions/{id}", patch(records::patch_action))
         // Bilinmeyen yol da JSON: istemci hic HTML gormez.
         .fallback(|| async { AppError::NotFound })
 }
