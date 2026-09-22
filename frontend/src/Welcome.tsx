@@ -1,15 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { fetchMe, loginErrorText, logout, surfaceUrl, type Dest, type Me } from "./api";
+import { deviceDefault, fetchMe, loginErrorText, logout, surfaceUrl, type Dest, type Me } from "./api";
 
 type Load = { kind: "loading" } | { kind: "ready"; me: Me } | { kind: "error" };
 
-// Telefon/tablet: mobil uygulama, digeri masaustu paneli. Yalniz varsayilan;
-// kullanici giristen once degistirebilir.
-function deviceDefault(): Dest {
-  return window.matchMedia("(max-width: 720px), (pointer: coarse)").matches ? "app" : "dashboard";
-}
-
-// Rust giris hatasinda `/?error=<kod>` ile doner. Bir kez okunur, adres
+// Rust giris hatasinda `/welcome?error=<kod>` ile doner. Bir kez okunur, adres
 // cubugundan silinir: yenileyince ayni hata tekrar gorunmesin.
 function takeLoginError(): string | null {
   const params = new URLSearchParams(location.search);

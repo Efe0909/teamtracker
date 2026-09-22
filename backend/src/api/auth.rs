@@ -6,7 +6,7 @@
 //! - PKCE (S256) eklendi — OAuth guvenlik BCP'si (RFC 9700) gizli istemci
 //!   icin de oneriyor.
 //!
-//! Hata metni YOK: yonlendirme `/?error=<kod>` ile biter, Turkce ileti on
+//! Hata metni YOK: yonlendirme `/welcome?error=<kod>` ile biter, Turkce ileti on
 //! yuzde (spec/15-sinirlar.md). Kodlar `LoginError`'da, on yuzde ayni birlik.
 //!
 //! Kimlik kanitini imza dogrulamadan aliyoruz: token Google'in token ucundan
@@ -94,7 +94,7 @@ impl LoginError {
 }
 
 fn to_welcome(e: LoginError) -> Redirect {
-    Redirect::to(&format!("/?error={}", e.as_str()))
+    Redirect::to(&format!("/welcome?error={}", e.as_str()))
 }
 
 // --- istek bilgisi ------------------------------------------------------

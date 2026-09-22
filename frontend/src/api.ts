@@ -55,11 +55,16 @@ export function surfaceUrl(dest: Dest, path = "/"): string {
 }
 
 export function welcomeUrl(): string {
-  return `${location.protocol}//${apexHost()}/`;
+  return `${location.protocol}//${apexHost()}/welcome`;
+}
+
+// Telefon/tablet: mobil uygulama, digeri masaustu paneli.
+export function deviceDefault(): Dest {
+  return window.matchMedia("(max-width: 720px), (pointer: coarse)").matches ? "app" : "dashboard";
 }
 
 // --- giris hatalari ------------------------------------------------------
-// Rust `/?error=<kod>` ile doner (backend/src/api/auth.rs `LoginError`);
+// Rust `/welcome?error=<kod>` ile doner (backend/src/api/auth.rs `LoginError`);
 // metin burada.
 
 const LOGIN_ERRORS = {

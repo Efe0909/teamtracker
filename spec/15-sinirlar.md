@@ -79,7 +79,7 @@ Veri olup arayüzü olanlar (ray pinleri, push abonelikleri) Rust'ta saklanır, 
   geldikçe kullanılacak.
 - API: `/api/me`, `/api/auth/google`, `/api/auth/callback`, `/api/auth/logout`,
   `/api/auth/dev-login` (yalnız sahte kimlik). Sözleşme: `backend/tools/check_api.sh`.
-- Ön yüz: apex'te karşılama + giriş; `app.` ve `dashboard.` "yapım aşamasında".
+- Ön yüz: apex kökü (`/`) yönlendirici — oturum varsa cihaza göre `app.`/`dashboard.`, yoksa herkese açık `/welcome` (giriş formu; giriş duvarı değil). `app.` ve `dashboard.` "yapım aşamasında".
 
 ## Açık
 
