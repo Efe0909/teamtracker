@@ -6,7 +6,8 @@
   flex-direction: column;
   gap: var(--s-2);
 }
-.path {
+.path,
+.byline {
   font-size: var(--fs-sm);
   color: var(--dim);
 }

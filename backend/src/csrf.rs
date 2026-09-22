@@ -24,6 +24,11 @@ use crate::{auth, state::AppState};
 
 pub const HEADER: &str = "x-csrf-token";
 
+/// Yanit uzantisi: bu 403 CSRF kapisindan. Denetim katmani (`audit.rs`) yetki
+/// reddinden ayirmak icin okur — govdeyi ayristirmadan.
+#[derive(Clone, Copy)]
+pub struct Rejected;
+
 pub async fn gate(State(st): State<AppState>, jar: SignedCookieJar, req: Request, next: Next) -> Response {
     if matches!(req.method(), &Method::GET | &Method::HEAD | &Method::OPTIONS) {
         return next.run(req).await;
@@ -33,7 +38,9 @@ pub async fn gate(State(st): State<AppState>, jar: SignedCookieJar, req: Request
         .is_some_and(|s| !s.csrf.is_empty() && s.csrf == sent);
     if !ok {
         tracing::warn!("csrf rejected: {} {}", req.method(), req.uri().path());
-        return (StatusCode::FORBIDDEN, Json(serde_json::json!({ "error": "csrf" }))).into_response();
+        let mut res = (StatusCode::FORBIDDEN, Json(serde_json::json!({ "error": "csrf" }))).into_response();
+        res.extensions_mut().insert(Rejected);
+        return res;
     }
     next.run(req).await
 }

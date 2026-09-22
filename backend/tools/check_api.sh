@@ -44,9 +44,15 @@ ok "$(code "$B/api/auth/dev-login?user_id=nope")" 400 "gecersiz uuid"
 ok "$(code "$B/api/auth/dev-login?user_id=00000000-0000-0000-0000-000000000000")" 404 "olmayan kullanici"
 
 t csrf_gate
+# R1-F02/G2: her CSRF reddi security_events'e mi yaziliyor — yalniz OTURUMLU
+# olani (Python _reject kurali, spec/90). $J/c oturumu Selin'e ait.
+SE0=$(DB "select count(*) from security_events where event_type='permission_denied'")
 ok "$(code -b "$J/c" -X POST "$B/api/auth/logout")" 403 "tokensiz"
 ok "$(curl -s -b "$J/c" -X POST -H "X-CSRF-Token: yanlis" "$B/api/auth/logout" | jq -r .error)" csrf "yanlis token"
+ok "$(DB "select count(*) from security_events where event_type='permission_denied'")" "$((SE0+2))" "oturumlu csrf reddi iki kez yazildi"
+ok "$(DB "select detail from security_events where event_type='permission_denied' order by created_at desc limit 1")" "csrf: /api/auth/logout" "detay csrf: on eki"
 ok "$(code -X POST -H "X-CSRF-Token: $TOK" "$B/api/auth/logout")" 403 "cerezsiz"
+ok "$(DB "select count(*) from security_events where event_type='permission_denied'")" "$((SE0+2))" "cerezsiz csrf reddi yazilmaz"
 
 t tampered_cookie_is_anonymous
 awk 'BEGIN{FS=OFS="\t"} $6=="ekiptakip"{$7="X" substr($7,2)} 1' "$J/c" > "$J/bad"
@@ -127,6 +133,14 @@ ok "$(w w PATCH "$WT" "/api/records/$BUTCE" "{\"field\":\"unit_id\",\"value\":\"
 t record_permissions
 ok "$(g n "/api/records/$VEKALET" | jq -r .access.can_edit)" false "uye kapsam disi"
 ok "$(wc_ n PATCH "$NT" "/api/records/$VEKALET" '{"field":"priority","value":"low"}')" 403 "alan 403"
+
+# R1-F02/G2: yetki 403'u da security_events'e tek satir, aktor + sorgusuz yol.
+SE1=$(DB "select count(*) from security_events where event_type='permission_denied'")
+ok "$(wc_ n PATCH "$NT" "/api/records/$VEKALET?ignored=1" '{"field":"priority","value":"low"}')" 403 "alan 403 (sorgulu url)"
+ok "$(DB "select count(*) from security_events where event_type='permission_denied'")" "$((SE1+1))" "tek satir"
+ok "$(DB "select detail from security_events where event_type='permission_denied' order by created_at desc limit 1")" "PATCH /api/records/$VEKALET" "detay: sorgu dizgisi yok"
+ok "$(DB "select actor_id from security_events where event_type='permission_denied' order by created_at desc limit 1")" "$DENIZ" "aktor cerezdeki kullanici"
+
 ok "$(wc_ n POST "$NT" "/api/chats/$VCHAT/messages" '{"body":"x"}')" 403 "mesaj 403"
 ok "$(g n "/api/records/$BUTCE" | jq -r .access.can_edit_deadline)" false "son tarih kapsami yok"
 ok "$(wc_ n PATCH "$NT" "/api/records/$BUTCE" '{"field":"due_date","value":"2026-12-01"}')" 403 "son tarih 403"
@@ -146,7 +160,9 @@ ok "$(g w "/api/chats/$BCHAT/feed" | jq -r '.items[-1].body')" "sozlesme testi" 
 ok "$(w w POST "$WT" "/api/chats/$VCHAT/messages" "{\"body\":\"y\",\"reply_to_id\":\"$M\"}" | jq -r .error)" invalid_reply "sohbet disina yanit yok"
 ok "$(w w POST "$WT" "/api/chats/$BCHAT/messages" '{"body":"   "}' | jq -r .error)" invalid_body "bos mesaj"
 
-t create_record
+t create_record_open_to_all
+# Kayit acmak herkese, her birimde acik (kullanici karari, spec/90 G1): UNIT
+# Deniz'in dali (Uretim Hatti A) DISINDA ve yine 200.
 R=$(w n POST "$NT" /api/records "{\"kind\":\"task\",\"title\":\"Sozlesme kaydi\",\"unit_id\":\"$UNIT\",\"owner_id\":null}")
 NEW=$(jq -r .id <<<"$R")
 ok "$(DB "select created_by from records where id='$NEW'")" "$DENIZ" "acan"

@@ -16,6 +16,7 @@ import s from "./record.module.css";
 export function RecordHead({ d, showPath = true }: { d: RecordDetail; showPath?: boolean }) {
   const L = useLookup();
   const r = d.record;
+  const creator = L.user(r.created_by);
   const [edit, setEdit] = useState<"title" | "description" | null>(null);
   return (
     <div className={s.head}>
@@ -24,6 +25,11 @@ export function RecordHead({ d, showPath = true }: { d: RecordDetail; showPath?:
         <h1 className={s.title}>{r.title}</h1>
         <KindTag kind={r.kind} />
       </div>
+      {creator !== undefined && (
+        <div className={s.byline}>
+          Açan: {creator.name} · <time dateTime={r.created_at}>{ago(r.created_at)}</time>
+        </div>
+      )}
       {r.description !== null ? (
         <p className={s.desc}>{r.description}</p>
       ) : (

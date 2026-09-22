@@ -4,6 +4,7 @@
 //! istenirse once TreeIndex tek yaziciya tasinmali.
 
 mod api;
+mod audit;
 mod auth;
 mod config;
 mod csrf;
@@ -40,9 +41,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let state = AppState::new(pool, cfg).await?;
 
     // axum'da SON eklenen katman EN DISTA calisir:
-    //   TraceLayer -> CSRF kapisi -> rotalar
+    //   TraceLayer -> denetim (403) -> CSRF kapisi -> rotalar
+    // Denetim CSRF'in disinda: kapinin reddi de bir 403.
     let app = api::router()
         .layer(axum::middleware::from_fn_with_state(state.clone(), csrf::gate))
+        .layer(axum::middleware::from_fn_with_state(state.clone(), audit::forbidden))
         .layer(TraceLayer::new_for_http())
         .with_state(state);
 

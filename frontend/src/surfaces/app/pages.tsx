@@ -66,6 +66,12 @@ function RecordList({ rows, empty }: { rows: RecordSummary[] | undefined; empty:
 const HINT_KEY = "hint:a2hs";
 
 function readHint(): boolean {
+  // Ana ekrandan aciksa ipucu anlamsiz. `navigator.standalone` yalniz iOS'ta;
+  // display-mode sorgusu digerleri (ve yeni iOS) icin.
+  const standalone =
+    matchMedia("(display-mode: standalone)").matches ||
+    ("standalone" in navigator && navigator.standalone === true);
+  if (standalone) return false;
   try {
     return localStorage.getItem(HINT_KEY) !== "off";
   } catch {

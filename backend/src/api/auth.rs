@@ -13,8 +13,6 @@
 //! DOGRUDAN TLS ile geliyor ve kullanici bilgisini userinfo ucundan o token'la
 //! okuyoruz. OIDC Core 3.1.3.7 bu durumda TLS dogrulamasini yeterli sayar.
 
-use std::net::IpAddr;
-
 use axum::{
     extract::{Query, State},
     http::{header, HeaderMap, StatusCode},
@@ -27,6 +25,7 @@ use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use crate::{
+    audit::{client_ip, log_event},
     auth::{self, random_token},
     error::{AppError, Result},
     models::user::User,
@@ -99,13 +98,6 @@ fn to_welcome(e: LoginError) -> Redirect {
 
 // --- istek bilgisi ------------------------------------------------------
 
-/// nginx'in yazdigi X-Real-IP (Cloudflare'in CF-Connecting-IP'sinden). Rust
-/// yalniz 127.0.0.1 dinledigi icin baslik ancak nginx'ten gelebilir.
-/// Gecersiz deger `None`: `inet` sutununa yazilamaz.
-fn client_ip(h: &HeaderMap) -> Option<IpAddr> {
-    h.get("x-real-ip")?.to_str().ok()?.trim().parse().ok()
-}
-
 fn rate_limited(st: &AppState, h: &HeaderMap) -> bool {
     let key = client_ip(h).map_or_else(|| "unknown".to_string(), |ip| ip.to_string());
     !st.login_limit.allow(&key)
@@ -140,23 +132,6 @@ fn dest_url(st: &AppState, dest: Dest) -> String {
     }
 }
 
-/// Kim girdi, kim reddedildi. Govde tutulmaz (spec/70 §8). Yazilamazsa
-/// istek DUSMEZ, loga yazilir.
-async fn log_event(
-    st: &AppState, h: &HeaderMap, event_type: &str,
-    actor: Option<Uuid>, email: Option<&str>, detail: Option<&str>,
-) {
-    let ip = client_ip(h).map(|ip| ip.to_string());
-    let res = sqlx::query(
-        "insert into security_events (event_type, actor_id, email, ip, detail) \
-         values ($1, $2, $3, $4::inet, $5)")
-        .bind(event_type).bind(actor).bind(email).bind(ip).bind(detail)
-        .execute(&st.pool).await;
-    if let Err(e) = res {
-        tracing::error!("security_events insert failed: {e}");
-    }
-}
-
 fn oauth_cookie(st: &AppState, value: String) -> Cookie<'static> {
     let mut c = Cookie::new(OAUTH_COOKIE, value);
     c.set_path(OAUTH_PATH);
@@ -186,7 +161,7 @@ pub async fn google_start(
         return Err(AppError::NotFound);
     }
     if rate_limited(&st, &h) {
-        log_event(&st, &h, "login_denied", None, None, Some("rate limit")).await;
+        log_event(&st, client_ip(&h), "login_denied", None, None, Some("rate limit")).await;
         return Ok(to_welcome(LoginError::RateLimited).into_response());
     }
     let redirect = redirect_uri(&st, &h).ok_or(AppError::BadRequest("invalid_host"))?;
@@ -242,7 +217,7 @@ pub async fn google_callback(
         return Err(AppError::NotFound);
     }
     if rate_limited(&st, &h) {
-        log_event(&st, &h, "login_denied", None, None, Some("rate limit")).await;
+        log_event(&st, client_ip(&h), "login_denied", None, None, Some("rate limit")).await;
         return Ok(to_welcome(LoginError::RateLimited).into_response());
     }
 
@@ -261,11 +236,11 @@ pub async fn google_callback(
     });
     let (Some((state, verifier, dest)), Some(code), Some(sent_state)) = (parts, q.code.as_deref(), q.state.as_deref())
     else {
-        log_event(&st, &h, "login_denied", None, None, Some("oauth: missing state")).await;
+        log_event(&st, client_ip(&h), "login_denied", None, None, Some("oauth: missing state")).await;
         return fail(jar, LoginError::Failed);
     };
     if state != sent_state {
-        log_event(&st, &h, "login_denied", None, None, Some("oauth: state mismatch")).await;
+        log_event(&st, client_ip(&h), "login_denied", None, None, Some("oauth: state mismatch")).await;
         return fail(jar, LoginError::Failed);
     }
     let Some(redirect) = redirect_uri(&st, &h) else {
@@ -276,14 +251,14 @@ pub async fn google_callback(
         Ok(i) => i,
         Err(what) => {
             tracing::warn!("google login failed: {what}");
-            log_event(&st, &h, "login_denied", None, None, Some(&format!("oauth: {what}"))).await;
+            log_event(&st, client_ip(&h), "login_denied", None, None, Some(&format!("oauth: {what}"))).await;
             return fail(jar, LoginError::Failed);
         }
     };
     let email = match (&info.email, info.email_verified) {
         (Some(e), true) => e.clone(),
         _ => {
-            log_event(&st, &h, "login_denied", None, info.email.as_deref(), Some("email not verified")).await;
+            log_event(&st, client_ip(&h), "login_denied", None, info.email.as_deref(), Some("email not verified")).await;
             return fail(jar, LoginError::Unverified);
         }
     };
@@ -291,7 +266,7 @@ pub async fn google_callback(
     let user_id = match can_enter(&st, &email, &info.sub).await? {
         Ok(id) => id,
         Err(e) => {
-            log_event(&st, &h, "login_denied", None, Some(&email), Some(e.as_str())).await;
+            log_event(&st, client_ip(&h), "login_denied", None, Some(&email), Some(e.as_str())).await;
             return fail(jar, e);
         }
     };
@@ -303,7 +278,7 @@ pub async fn google_callback(
         .execute(&st.pool).await?;
 
     let jar = auth::open_session(jar, &st.cfg, user_id);
-    log_event(&st, &h, "login", Some(user_id), Some(&email), None).await;
+    log_event(&st, client_ip(&h), "login", Some(user_id), Some(&email), None).await;
     Ok((jar, Redirect::to(&dest_url(&st, dest))).into_response())
 }
 
@@ -365,7 +340,7 @@ pub async fn logout(State(st): State<AppState>, jar: SignedCookieJar, h: HeaderM
     let uid = auth::read_session(&jar, &st.cfg).map(|s| s.user_id);
     let jar = auth::close_session(jar, &st.cfg);
     if let Some(id) = uid {
-        log_event(&st, &h, "logout", Some(id), None, None).await;
+        log_event(&st, client_ip(&h), "logout", Some(id), None, None).await;
     }
     (jar, StatusCode::NO_CONTENT).into_response()
 }
