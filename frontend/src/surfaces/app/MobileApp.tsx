@@ -1,9 +1,9 @@
 // app. yuzu: ust cubuk + alt sekmeler + ortada "yeni kayit". Kaynak UX:
 // sahadaki mobil kalip (buyuk baslik, yapiskan arama, kart listesi).
+// Masaustu yuze BAGLANTI YOK — bilincli ayrim (KNOW-153).
 
 import { useEffect, useState, type ReactNode } from "react";
 import { useMyActions, useNotifications } from "../../api/hooks";
-import { surfaceUrl } from "../../api/session";
 import { useLookup } from "../../lib/lookup";
 import { useLocation } from "../../lib/router";
 import { Icon, type IconName } from "../../ui/icons";
@@ -87,9 +87,6 @@ export function TopBar({ title, back, right }: { title: string; back?: boolean; 
       {menu && (
         <div className={s.menu} role="menu">
           <div className={s.menuHead}>{L.me.name}</div>
-          <a role="menuitem" className={s.menuItem} href={surfaceUrl("dashboard")}>
-            <Icon name="monitor" size={18} /> Masaüstü paneli
-          </a>
           <button role="menuitem" type="button" className={s.menuItem} onClick={() => void signOut()}>
             <Icon name="logout" size={18} /> Çıkış yap
           </button>

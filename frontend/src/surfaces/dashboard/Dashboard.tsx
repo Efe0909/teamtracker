@@ -1,8 +1,7 @@
 // dashboard. yuzu: sol ray + icerik. Ray etiketleri gorunur (yalniz hover
-// degil, spec/16 P2 #11).
+// degil, spec/16 P2 #11). Mobil yuze BAGLANTI YOK — bilincli ayrim (KNOW-153).
 
 import { useEffect, useState } from "react";
-import { surfaceUrl } from "../../api/session";
 import { useLookup } from "../../lib/lookup";
 import { useLocation } from "../../lib/router";
 import { Icon, type IconName } from "../../ui/icons";
@@ -100,9 +99,6 @@ function Rail({ route }: { route: Route }) {
               <b>{L.me.name}</b>
               {L.meta.me.is_admin && <span>Yönetici</span>}
             </div>
-            <a role="menuitem" className={s.menuItem} href={surfaceUrl("app")}>
-              <Icon name="phone" size={18} /> Mobil uygulama
-            </a>
             <button role="menuitem" type="button" className={s.menuItem} onClick={() => void signOut()}>
               <Icon name="logout" size={18} /> Çıkış yap
             </button>
