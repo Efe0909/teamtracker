@@ -70,6 +70,95 @@ curl -s -b "$J/d" -c "$J/d" -o /dev/null "$B/api/auth/dev-login?user_id=$DENIZ"
 T2=$(curl -s -b "$J/d" "$B/api/me" | jq -r .csrf)
 ok "$([ "$T1" != "$T2" ] && [ ${#T2} = 64 ] && echo V || echo Y)" V "token yenilendi"
 
+# --- is uclari (kayit, eylem, sohbet, takim) ---------------------------------
+# Selin admin; Deniz uye (Maliye, Satin Alim degil). Tohum: 5 kayit, 3 takim.
+curl -s -c "$J/w" -o /dev/null "$B/api/auth/dev-login?user_id=$SELIN"
+WT=$(curl -s -b "$J/w" "$B/api/me" | jq -r .csrf)
+curl -s -c "$J/n" -o /dev/null "$B/api/auth/dev-login?user_id=$DENIZ"
+NT=$(curl -s -b "$J/n" "$B/api/me" | jq -r .csrf)
+g(){ curl -s -b "$J/$1" "$B$2"; }
+w(){ curl -s -b "$J/$1" -X "$2" -H "X-CSRF-Token: $3" -H 'Content-Type: application/json' -d "$5" "$B$4"; }
+wc_(){ curl -s -o /dev/null -w '%{http_code}' -b "$J/$1" -X "$2" -H "X-CSRF-Token: $3" -H 'Content-Type: application/json' -d "$5" "$B$4"; }
+BUTCE=$(DB "select id from records where title like 'Bütçe onayı%'")
+BCHAT=$(DB "select chat_id from records where id='$BUTCE'")
+VEKALET=$(DB "select id from records where title like 'Onay akışına vekalet%'")
+VCHAT=$(DB "select chat_id from records where id='$VEKALET'")
+UNIT=$(DB "select unit_id from records where id='$BUTCE'")
+
+t anonymous_is_401
+ok "$(code "$B/api/meta")" 401 "meta"
+ok "$(curl -s "$B/api/records" | jq -r .error)" unauthorized "records"
+
+t meta
+R=$(g w /api/meta)
+ok "$(jq -r .me.id <<<"$R")" "$SELIN" "me.id"
+ok "$(jq '.users|length' <<<"$R")" 3 "users"
+ok "$(jq '.teams|length' <<<"$R")" 3 "teams"
+ok "$(jq '[.nodes[]|select(.depth==0)]|length > 0' <<<"$R")" true "agac koku"
+ok "$(jq '.users[0]|has("email")' <<<"$R")" false "e-posta sizmaz"
+
+t records_list
+ok "$(g w /api/records | jq length)" 5 "hepsi"
+ok "$(g w '/api/records?status=uydurma&sort=x' | jq length)" 5 "gecersiz filtre duser"
+ok "$(g w '/api/records?done=false' | jq length)" 5 "acik"
+ok "$(g w "/api/records?search=b%C3%BCt%C3%A7e" | jq -r '.[0].id')" "$BUTCE" "tam metin"
+ok "$(g w '/api/records?sort=priority' | jq -r '.[0].priority')" critical "oncelik sirasi"
+ok "$(g w /api/records | jq -r "map(select(.id==\"$BUTCE\"))[0].open_actions")" 2 "acik eylem sayisi"
+
+t record_detail
+R=$(g w "/api/records/$BUTCE")
+ok "$(jq -r .access.can_edit <<<"$R")" true "admin duzenler"
+ok "$(jq '.actions|length' <<<"$R")" 2 "eylemler"
+ok "$(jq -r .record.chat_id <<<"$R")" "$BCHAT" "chat_id"
+ok "$(g w /api/records/bozuk | jq -r .error)" not_found "bozuk kimlik"
+ok "$(code -b "$J/w" "$B/api/records/00000000-0000-0000-0000-000000000000")" 404 "olmayan"
+
+t record_patch
+ok "$(w w PATCH "$WT" "/api/records/$BUTCE" '{"field":"status","value":"closed"}' | jq -r .error)" open_actions "acik eylemle kapanmaz"
+ok "$(wc_ w PATCH "$WT" "/api/records/$BUTCE" '{"field":"status","value":"closed"}')" 409 "409"
+ok "$(w w PATCH "$WT" "/api/records/$BUTCE" '{"field":"status","value":"uydurma"}' | jq -r .error)" invalid_body "gecersiz deger"
+ok "$(w w PATCH "$WT" "/api/records/$BUTCE" '{"field":"sifre","value":"x"}' | jq -r .error)" invalid_body "bilinmeyen alan"
+ok "$(w w PATCH "$WT" "/api/records/$BUTCE" '{"field":"priority","value":"low"}' | jq -r .record.priority)" low "oncelik"
+ok "$(DB "select detail from activity where verb='field_changed' and target_label='priority'")" '{"from":"critical","to":"low"}' "olgu, cumle degil"
+w w PATCH "$WT" "/api/records/$BUTCE" '{"field":"priority","value":"low"}' >/dev/null
+ok "$(DB "select count(*) from activity where verb='field_changed'")" 1 "degismeyen deger iz birakmaz"
+ok "$(w w PATCH "$WT" "/api/records/$BUTCE" "{\"field\":\"unit_id\",\"value\":\"$SELIN\"}" | jq -r .error)" invalid_unit "birim dugum olmali"
+
+t record_permissions
+ok "$(g n "/api/records/$VEKALET" | jq -r .access.can_edit)" false "uye kapsam disi"
+ok "$(wc_ n PATCH "$NT" "/api/records/$VEKALET" '{"field":"priority","value":"low"}')" 403 "alan 403"
+ok "$(wc_ n POST "$NT" "/api/chats/$VCHAT/messages" '{"body":"x"}')" 403 "mesaj 403"
+ok "$(g n "/api/records/$BUTCE" | jq -r .access.can_edit_deadline)" false "son tarih kapsami yok"
+ok "$(wc_ n PATCH "$NT" "/api/records/$BUTCE" '{"field":"due_date","value":"2026-12-01"}')" 403 "son tarih 403"
+
+t actions
+R=$(w w POST "$WT" "/api/records/$BUTCE/actions" "{\"title\":\"Sozlesme taslagi\",\"owner_id\":\"$DENIZ\"}")
+ok "$(jq '.actions|length' <<<"$R")" 3 "eklendi"
+A=$(DB "select id from actions where title='Sozlesme taslagi'")
+ok "$(w w PATCH "$WT" "/api/actions/$A" '{"field":"status","value":"closed"}' | jq -r ".actions[]|select(.id==\"$A\").status")" closed "kapandi"
+ok "$(DB "select resolved_by from actions where id='$A'")" "$SELIN" "kapatan izde"
+ok "$(w w POST "$WT" "/api/records/$BUTCE/actions" '{"title":"  "}' | jq -r .error)" invalid_title "bos baslik"
+
+t messages
+ok "$(w w POST "$WT" "/api/chats/$BCHAT/messages" '{"body":"sozlesme testi"}' | jq -r 'has("id")')" true "gonderildi"
+M=$(DB "select id from messages where body='sozlesme testi'")
+ok "$(g w "/api/chats/$BCHAT/feed" | jq -r '.items[-1].body')" "sozlesme testi" "akista"
+ok "$(w w POST "$WT" "/api/chats/$VCHAT/messages" "{\"body\":\"y\",\"reply_to_id\":\"$M\"}" | jq -r .error)" invalid_reply "sohbet disina yanit yok"
+ok "$(w w POST "$WT" "/api/chats/$BCHAT/messages" '{"body":"   "}' | jq -r .error)" invalid_body "bos mesaj"
+
+t create_record
+R=$(w n POST "$NT" /api/records "{\"kind\":\"task\",\"title\":\"Sozlesme kaydi\",\"unit_id\":\"$UNIT\",\"owner_id\":null}")
+NEW=$(jq -r .id <<<"$R")
+ok "$(DB "select created_by from records where id='$NEW'")" "$DENIZ" "acan"
+ok "$(g n "/api/records/$NEW" | jq -r .access.can_edit)" true "acan duzenler"
+ok "$(w n POST "$NT" /api/records "{\"kind\":\"task\",\"title\":\"x\",\"unit_id\":\"$DENIZ\"}" | jq -r .error)" invalid_unit "gecersiz birim"
+
+t home_teams_notifications
+ok "$(g w /api/home | jq '.counts|has("overdue_records")')" true "sayaclar"
+ok "$(g w /api/teams | jq length)" 3 "takimlar"
+ok "$(g w /api/notifications | jq 'map(select(.actor_id=="'"$SELIN"'"))|length')" 0 "kendi hareketim yok"
+ok "$(w w POST "$WT" /api/pins/uydurma '' | jq -r .error)" not_found "bilinmeyen pin"
+
 # --- Google kipi -------------------------------------------------------------
 t google_me
 R=$(curl -s "$BG/api/me"); ok "$(jq -r .auth <<<"$R")" google "auth"
