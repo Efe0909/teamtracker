@@ -34,10 +34,6 @@ struct MeInfo {
     /// Etkin yetenekler (dogrudan + rollerden). Admin hepsine sahip.
     scopes: Vec<String>,
     team_ids: Vec<Uuid>,
-    /// Kayit acabilecegi birimler: izinli dallarin altindaki aktif birimler
-    /// (admin hepsi). Kural `db::scope::can_create_in` ile ayni; yeni kayit
-    /// formu yalniz bunlari gosterir.
-    creatable_unit_ids: Vec<Uuid>,
 }
 
 #[derive(Serialize, sqlx::FromRow)]
@@ -80,22 +76,16 @@ pub async fn meta(State(st): State<AppState>, CurrentUser(me): CurrentUser) -> R
         "select id, name, description, color, node_id, chat_id from teams order by name")
         .fetch_all(&st.pool).await?;
 
-    let permitted = db::scope::permitted_nodes(&st.pool, &me).await?;
-
-    let (nodes, creatable_unit_ids) = {
+    let nodes = {
         let tree = common::tree(&st);
-        let nodes = tree.order().iter().filter_map(|id| tree.get(*id)).map(|n| NodeOut {
+        tree.order().iter().filter_map(|id| tree.get(*id)).map(|n| NodeOut {
             id: n.id, parent_id: n.parent_id, name: n.name.clone(),
             node_type: n.node_type, is_active: n.is_active, depth: n.depth,
-        }).collect();
-        let creatable = tree.units(true).into_iter()
-            .filter(|u| me.is_admin || permitted.iter().any(|p| tree.is_descendant(*u, *p)))
-            .collect();
-        (nodes, creatable)
+        }).collect()
     };
 
     Ok(Json(Meta {
-        me: MeInfo { id: me.id, is_admin: me.is_admin, scopes, team_ids, creatable_unit_ids },
+        me: MeInfo { id: me.id, is_admin: me.is_admin, scopes, team_ids },
         users, teams, nodes,
     }))
 }

@@ -13,10 +13,8 @@ export interface Lookup {
   /** Kokten dugume adlar, dugum dahil. */
   path: (id: Uuid) => string[];
   can: (scope: string) => boolean;
-  /** Birim olabilecek dugumler: aktif, team/pillar olmayan (spec/21 §10). */
+  /** Kayit acilabilecek birimler: aktif, team/pillar olmayan (spec/21 §10). */
   units: MetaNode[];
-  /** Bu kullanicinin kayit ACABILECEGI birimler (dal izni) — yeni kayit formu. */
-  creatableUnits: MetaNode[];
   pillars: MetaNode[];
 }
 
@@ -27,7 +25,6 @@ export function LookupProvider({ meta, children }: { meta: Meta; children: React
     const users = new Map(meta.users.map((u) => [u.id, u]));
     const teams = new Map(meta.teams.map((t) => [t.id, t]));
     const nodes = new Map(meta.nodes.map((n) => [n.id, n]));
-    const creatable = new Set(meta.me.creatable_unit_ids);
     const me: MetaUser = users.get(meta.me.id) ?? {
       id: meta.me.id,
       name: "?",
@@ -54,7 +51,6 @@ export function LookupProvider({ meta, children }: { meta: Meta; children: React
       can: (scope) => meta.me.is_admin || meta.me.scopes.includes(scope),
       units: meta.nodes.filter((n) => n.is_active && n.node_type !== "team" && n.node_type !== "pillar"),
       pillars: meta.nodes.filter((n) => n.is_active && n.node_type === "pillar"),
-      creatableUnits: meta.nodes.filter((n) => creatable.has(n.id)),
     };
   }, [meta]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

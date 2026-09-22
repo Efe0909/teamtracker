@@ -227,11 +227,9 @@ pub struct Created {
     id: Uuid,
 }
 
-/// Kayit acmak DAL IZNI ister: birim, kullanicinin izinli bir dalinin altinda
-/// olmali (admin her yerde). Python'daki kural (`service.new_item` 403 "bu dalda
-/// kayit acma yetkin yok"); on yuz secenekleri `/api/meta` `creatable_unit_ids`
-/// ile suzer, yani formu doldurup reddedilmek yok. Duzenleme yetkisi ondan
-/// sonra iliski yollarindan gelir: acan kisi "acan" yolundan duzenler.
+/// Kayit acmak her aktif kullaniciya acik — Python surumundeki davranis
+/// (`sites/dashboard/routes.py` create_item). Duzenleme yetkisi ondan sonra
+/// iliski yollarindan gelir: acan kisi zaten "acan" yolundan duzenler.
 pub async fn create(
     State(st): State<AppState>, CurrentUser(me): CurrentUser, Body(b): Body<NewRecord>,
 ) -> Result<Json<Created>> {
@@ -239,9 +237,6 @@ pub async fn create(
         .ok_or(AppError::BadRequest("invalid_title"))?;
     let description = common::text(b.description, TEXT_MAX, "invalid_description")?;
     check_unit(&st, b.unit_id)?;
-    if !scope::can_create_in(&st.pool, &me, b.unit_id, &st.tree).await? {
-        return Err(AppError::Forbidden);
-    }
     check_pillar(&st, b.pillar_id)?;
     check_team(&st.pool, b.team_id).await?;
     check_user(&st.pool, b.owner_id).await?;
