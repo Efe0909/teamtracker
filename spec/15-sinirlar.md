@@ -83,6 +83,6 @@ Veri olup arayüzü olanlar (ray pinleri, push abonelikleri) Rust'ta saklanır, 
 
 ## Açık
 
-- Sayfalar: arayüz ayrıca konuşulacak. Yeni uç = önce `check_api.sh`'e iddia.
+- Sayfalar: iç yapı ve taşıma sırası `16-on-yuz.md`'de (öneri). Yeni uç = önce `check_api.sh`'e iddia.
 - Tipler şimdilik elle (`frontend/src/api.ts`); uç sayısı artınca OpenAPI'den üretilecek.
 - PWA ve web push ön yüzü yeni yığında yok.
