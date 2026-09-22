@@ -1,7 +1,7 @@
-import { currentSurface } from "./api";
-import { Entry } from "./Entry";
+import { currentSurface } from "./api/session";
+import { Entry } from "./surfaces/welcome/Entry";
 import { UnderConstruction } from "./UnderConstruction";
-import { Welcome } from "./Welcome";
+import { Welcome } from "./surfaces/welcome/Welcome";
 
 export function App() {
   const surface = currentSurface();

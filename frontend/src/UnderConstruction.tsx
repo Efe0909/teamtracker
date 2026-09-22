@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { welcomeUrl, type Dest } from "./api";
+import { welcomeUrl, type Dest } from "./api/session";
 
 const NAMES: Record<Dest, string> = { app: "Mobil uygulama", dashboard: "Masaüstü paneli" };
 

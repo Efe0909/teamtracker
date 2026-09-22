@@ -1,0 +1,110 @@
+/* Tasarim token'lari — iki yuzun (app., dashboard.) ve karsilamanin TEK kaynagi.
+   Ham renk YALNIZ burada yazilir; *.module.css hex iceremez (npm run build
+   denetliyor). Sozlesme: spec/16-on-yuz.md §3.4.
+
+   Kontrast: metin token'lari (--txt, --dim, --*-text) her iki temada da
+   zeminlerinde >= 4.5:1. Durumlarin acik tonlari (--err, --warn, --ok) yalniz
+   nokta/cizgi icin; metin icin --*-text. */
+
+:root {
+  color-scheme: light dark;
+
+  /* zemin ve yuzey */
+  --bg: #f4f1fb;
+  --panel: #fff;
+  --panel2: #f8f6fe;
+  --tint: #efe9fd;
+  --line: #e4dcf7;
+  --line-strong: #cfc3ee;
+
+  /* metin */
+  --txt: #2c2440;
+  --dim: #6f6792;
+  --on-acc: #fff;
+
+  /* vurgu */
+  --acc: #7c5bff;
+  --acc-strong: #6743f5;
+  --acc-soft: #b79dff;
+
+  /* durumlar: nokta/cizgi · metin · zemin */
+  --err: #e0455c;
+  --err-text: #b3243d;
+  --err-bg: #fdecef;
+  --warn: #e0a126;
+  --warn-text: #8a5d00;
+  --warn-bg: #fdf3dc;
+  --ok: #22a06b;
+  --ok-text: #177a50;
+  --ok-bg: #e2f5ec;
+  --info-text: #3b5bc9;
+  --info-bg: #e6ecff;
+
+  --sh: 0 1px 2px rgba(60, 40, 120, 0.05), 0 6px 20px rgba(90, 60, 180, 0.07);
+  --sh-lg: 0 2px 6px rgba(60, 40, 120, 0.07), 0 14px 40px rgba(90, 60, 180, 0.14);
+  --backdrop: rgba(38, 26, 80, 0.42);
+
+  /* tip olcegi — baska boyut yazilmaz */
+  --fs-xs: 11px;
+  --fs-sm: 12.5px;
+  --fs-md: 14px;
+  --fs-lg: 16px;
+  --fs-xl: 20px;
+  --fs-2xl: 28px;
+
+  /* yaricap */
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 18px;
+  --radius: var(--r-lg);
+
+  /* aralik: 4'un katlari */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 20px;
+  --s-6: 24px;
+
+  --rail: 64px;
+  --tap: 44px;
+
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  color: var(--txt);
+  background: var(--bg);
+  -webkit-text-size-adjust: 100%;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #13101c;
+    --panel: #1c1828;
+    --panel2: #221d31;
+    --tint: #2a2340;
+    --line: #2f2944;
+    --line-strong: #463d63;
+
+    --txt: #ece8f7;
+    --dim: #a59ec4;
+
+    --acc: #9d84ff;
+    --acc-strong: #7c5bff;
+    --acc-soft: #6e55d8;
+
+    --err: #ff7a8c;
+    --err-text: #ff9aa8;
+    --err-bg: #3a1822;
+    --warn: #f0b54a;
+    --warn-text: #f3c56e;
+    --warn-bg: #3a2c12;
+    --ok: #4cc28e;
+    --ok-text: #6fd3a6;
+    --ok-bg: #143126;
+    --info-text: #9fb3ff;
+    --info-bg: #1c2446;
+
+    --sh: 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 20px rgba(0, 0, 0, 0.3);
+    --sh-lg: 0 2px 6px rgba(0, 0, 0, 0.35), 0 14px 40px rgba(0, 0, 0, 0.45);
+    --backdrop: rgba(0, 0, 0, 0.6);
+  }
+}
