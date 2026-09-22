@@ -55,10 +55,13 @@ start() { # port, ek ortam...
   echo "sunucu acilmadi ($port):"; tail -20 "$D/app-$port.log"; exit 1
 }
 
-# Goc acilista kosar; tohum tablolar varken yuklenir.
+# Goc acilista kosar; tohum tablolar varken yuklenir. Agac indeksi ACILISTA
+# kurulur (KNOW-179): tohumdan once acilan surec bos agac tutar — yeniden baslat.
 start 18099 EKIPTAKIP_AUTH=sahte
 sudo -u ekiptakip env PGOPTIONS=--client-min-messages=warning \
   psql -v ON_ERROR_STOP=1 -q -d "$ID" -f "$D/seed.sql"
+sudo pkill -f "$D/ekiptakip" && sleep 0.5
+start 18099 EKIPTAKIP_AUTH=sahte
 start 18100 GOOGLE_CLIENT_ID=test-client GOOGLE_CLIENT_SECRET=test-secret
 
 B=http://127.0.0.1:18099 BG=http://127.0.0.1:18100 PSQL="sudo -u ekiptakip psql -d $ID" \
