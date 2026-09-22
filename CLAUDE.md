@@ -9,10 +9,34 @@ dizini, tünel). Elle kurulum yok; macOS ve Debian şablonları kaldırıldı.
 | Ortam | Nerede | Ne |
 |---|---|---|
 | Yerel geliştirme | bu depo | `make up` — Docker'da Postgres + uvicorn, sahte kimlik |
-| VM testi | `~/nix` `.#vmtest` | gerçek NixOS: nginx + cloudflared + Google girişi |
+| VM testi | `~/nix` `.#teamtracker0.1` / `.#teamtracker0.2` | aynı VM (192.168.64.8), iki sürüm: 0.1 Python+Docker (e02d71d'ye pinli), 0.2 Rust+React (release) |
 | Üretim | `~/nix` `.#evsunucu` | Raspberry Pi, aynı `configuration.nix` |
 
-### Yerel: siteyi ayağa kaldırmak (ajan oturumları)
+### alpha-0.2: Rust API + React (bu dal)
+
+Yeni yığın: `backend/` (Rust, yalnız `/api` JSON) + `frontend/` (React + TS strict,
+statik). Python (`app.py`, `shared/`, `sites/`, `tests/`) **başvuru**: davranışın
+kaynağı, çalışan yığın değil. Sınır: `spec/15-sinirlar.md`.
+
+```bash
+docker start ekiptakip-db && docker exec ekiptakip-db createdb -U ekiptakip ekiptakip_alpha02
+(cd backend && DATABASE_URL=postgresql://ekiptakip:ekiptakip@127.0.0.1:5432/ekiptakip_alpha02 \
+   EKIPTAKIP_AUTH=sahte cargo run)                     # API 127.0.0.1:8000
+(cd frontend && npm install && npm run dev)            # http://localhost:5173
+```
+
+- Karşılama <http://localhost:5173>, yüzler <http://app.localhost:5173> ·
+  <http://dashboard.localhost:5173>. Vite `/api`'yi Rust'a vekiller.
+- Sahte kimlik: karşılamada kullanıcı seçilir, oturum **hedef host'ta** açılır
+  (`localhost` çerezi alt alan adlarına paylaşılamıyor).
+- Tohum: `docker exec -i ekiptakip-db psql -U ekiptakip -d ekiptakip_alpha02 < backend/seed.sql`.
+- Denetim: `cargo clippy --all-targets` (panik/`todo!` derlemeyi düşürür),
+  `npm run build` (tsc strict), `backend/tools/vm_test.sh` (VM'de JSON sözleşmesi).
+- **Hedef makine derlemez.** Yayın: `backend/tools/release.sh` Mac'te derler, GitHub
+  release'e yükler, `deploy/release.nix`'i pinler; `~/nix` `packages.aarch64-linux.default`'u
+  çeker.
+
+### Yerel: siteyi ayağa kaldırmak (Python, başvuru)
 
 ```bash
 make up          # bağımlılıklar + Postgres (Docker) + tohum + sunucu (--reload)
@@ -43,11 +67,12 @@ Ajan notları:
 ### Yayına alma
 
 ```bash
-cd ~/nix
-nix flake update teamtracker                      # uygulamayı main'in ucuna pinle
-git commit -am "teamtracker: <sha>" && git push
-nixos-rebuild switch --flake .#vmtest             # VM
-nixos-rebuild switch --flake .#evsunucu --target-host efe@evsunucu --use-remote-sudo
+backend/tools/release.sh                          # Mac: derle + GitHub release + deploy/release.nix
+git commit -am "release: <tag>" && git push
+cd ~/nix && nix flake update teamtracker-alpha02  # 0.2'yi yeni pine çek
+git commit -am "teamtracker-alpha02: <tag>"
+# VM'de (yalnız yapılandırma dosyaları kurulur, uygulama release'ten iner):
+sudo nixos-rebuild switch --flake .#teamtracker0.2   # geri: .#teamtracker0.1
 ```
 
 Alan adları (zon `polonyum.com`): `app.` mobil kökte, `dashboard.` masaüstü,
