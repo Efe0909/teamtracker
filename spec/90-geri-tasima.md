@@ -55,7 +55,7 @@ Kurallar:
 | Aralık | Commit'ler | İçerik | Dal |
 |---|---|---|---|
 | R1 temel | `5813368..cd6e478` (13) | Faz 1, ana sayfa, mobil, iki alan adı, güvenlik 1–5, PostgreSQL, görev tablosu v2, kayıt 2 sütun | `claude/backport-r1` |
-| R2 ekip + yapı | `54be778..2fc1259` (12) | Ekipler, filtre düzeltmesi, push + varlık, veri yönetimi, kapsam, ağaç geçmişi | `claude/backport-r2` |
+| R2 ekip + yapı | `54be778..2fc1259` (14) | Ekipler, filtre düzeltmesi, push + varlık, veri yönetimi, kapsam, ağaç geçmişi | `claude/backport-r2` (R1 üstüne) |
 | R3 yönetim + ekler | `0af0ed7..b9fc03c` (10) | İngilizce, yönetim paneli, ekler, giriş döngüsü, node türleri | `claude/backport-r3` |
 | R4 kartlar + UI paketi | `3dcc4e5..fa55815` (5) | kart blokları, pillar, takım projeksiyonu, anma, pin, 20 maddelik UI paketi, alıntı | `claude/backport-r4` |
 
@@ -65,6 +65,8 @@ Kurallar:
 |---|---|---|---|
 | G1 | ~~Kayıt açmak dal izni istemiyordu~~ → **gerileme değil, bilinçli sapma.** Python dal izni istiyordu (`service.new_item` 403). Kullanıcı kararı: herkes her birime kayıt açar (KNOW-316). | orkestratör, R1 öncesi | `c717987` zorladı, `f35ed16` geri aldı, `b1c3324` gerekçeyi düzeltti |
 | G2 | ~~403'ler `security_events`'e yazılmıyor~~ → **kapandı.** `75cf938` tek ara katmandan (`backend/src/audit.rs`) yazıyor; sözleşme testi `check_api.sh` `csrf_gate` + `record_permissions` (98/98). | R1 çıkarımı | R1 uygulaması, test ajanı doğruladı |
+| G3 | "Son görülme" her istekte yazılıyor (Python: kullanıcı başına dakikada bir, `_mark_presence`). PR #35'ten kalma. | R2 çıkarımı | R2 uygulaması |
+| G4 | Çevrimiçi eşiği 5 dk (Python `ONLINE_THRESHOLD` 2 dk). PR #36'da kanıtsız seçilmiş. | R2 çıkarımı | R2 uygulaması |
 
 ## Özellik envanteri
 
@@ -80,6 +82,18 @@ Satırlar ara nokta 1'den sonra eklenir. Durum: `taşındı` (commit), `bırakı
 | R1-F07 | Toplu seçim kutuları | 5cb100b | bırakıldı — Python'da da hiçbir işleme bağlı değildi (ölü iskelet) | — | — |
 | R1-F09 | Mobil "Eylemler" = son tarihli kayıtlarım | 0599b89 | bırakıldı — eylem tablosundan önce yazılmış, hiç güncellenmemiş; 0.2 "açık eylemlerim" gösterir (kullanıcı kararı) | — | — |
 | R1-F04 | Alan adı ayrımı sunucuda 404 | 8fceb4d | bırakıldı — Python'da da "yetki sınırı değil, arayüz ayrımı" diye geri çekilmişti (02c9eef I8); 0.2'de istemcide | — | — |
+| R2-F03 | Varlık: damga kullanıcı başına dakikada en fazla bir kez, çevrimiçi eşiği 2 dk tek yerde (G3, G4) | 32f58b9 | bekliyor | | |
+| R2-F05 | Veri Yönetimi: ağaç düzenleme (ekle/adlandır/açıkla/taşı/pasifleştir/kalıcı sil) + arama + katlama — **son hal** (e02d71d); R3 node türleri ve R4 arama/katlama da bunun içinde | b436cbc, 9ce17ad (+1b91828, e74ca50) | bekliyor | | |
+| R2-F07 | Ağaç değişiklik geçmişi | 4fe7a9b | bekliyor | | |
+| R2-F04 | Web push sunucu tarafı + service worker | 32f58b9 | ertelendi — kullanıcı seçmedi; ayrı PR (KNOW-89, TASK-197) | — | — |
+| R2-F08 | `/test/bildirim` curl ucu | 3533299 | ertelendi — push'a bağlı | — | — |
+| R2-F01, F02, F06 (denetim), F09 | Ekipler; filtre davranışı (KNOW-234 uygulanmış); kapsam denetimi; `/m` kaldırıldı | — | 0.2'de var | PR #36 | check_api |
+
+Açık iş (sonraki aralık):
+
+- **İlk yönetici nasıl eklenir?** 0.2'de yolu yok (Python'da `tools/user.py`). Kullanıcı kararı: yönetim
+  panelini bekle (R3). Panelin kendisi de ilk yöneticiye ihtiyaç duyar; R3 bu tavuk-yumurta sorununu
+  çözmek zorunda.
 
 Öneriler (taşıma değil, yeni):
 
