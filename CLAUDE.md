@@ -32,6 +32,7 @@ docker start ekiptakip-db && docker exec ekiptakip-db createdb -U ekiptakip ekip
 - Tohum: `docker exec -i ekiptakip-db psql -U ekiptakip -d ekiptakip_alpha02 < backend/seed.sql`.
 - Denetim: `cargo clippy --all-targets` (panik/`todo!` derlemeyi düşürür),
   `npm run build` (CSS Modules tipleri + ham renk denetimi + tsc strict),
+  `npm test` (vitest + testing-library, `frontend/src/**/*.test.tsx`),
   `backend/tools/vm_test.sh` (VM'de JSON sözleşmesi).
 - Ön yüz yapısı `spec/16-on-yuz.md` §3: `api/` (istemci, tipler, kancalar), `ui/`
   (alan bilmez), `features/` (kayıt, sohbet — iki yüz ortak), `surfaces/` (yerleşim +

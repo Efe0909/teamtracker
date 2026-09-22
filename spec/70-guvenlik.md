@@ -250,6 +250,12 @@ Yazılacak türler: `login`, `login_denied` (listede olmayan e-posta), `logout`,
 Kişisel veri: IP ve e-posta tutulur, gövde tutulmaz. Kayıtlar 90 gün sonra silinebilir
 (temizlik işi ayrı, şimdilik elle).
 
+**alpha-0.2 (R1-F02, `75cf938`):** `backend/src/audit.rs` — `forbidden` ara katmanı, dönen
+her `403`'ü tek yerden yazar (Python'daki tek exception handler'ın karşılığı). CSRF kapısının
+(`csrf.rs`) DIŞINDA durur ki onun reddini de görsün; `csrf::Rejected` uzantısıyla ayrılır
+(`csrf: /yol` vs `METOD /yol`, sorgu dizgisi yazılmaz). Yalnız oturumlu red yazılır. Sözleşme
+testi: `backend/tools/check_api.sh` `csrf_gate` ve `record_permissions` bölümleri.
+
 ---
 
 ## 9. Yayın katmanının payı
