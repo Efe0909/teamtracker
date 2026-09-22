@@ -108,14 +108,16 @@ export function BallLine({ d }: { d: RecordDetail }) {
 export function ReadOnlyNote({ d }: { d: RecordDetail }) {
   const L = useLookup();
   if (d.access.can_edit) return null;
-  const owner = L.user(d.record.owner_id)?.name;
   const team = L.team(d.record.team_id)?.name;
+  // Kime yazilacak: sorumlu, yoksa kaydi acan.
+  const contact = L.user(d.record.owner_id) ?? L.user(d.record.created_by);
+  const role = d.record.owner_id !== null ? "Sorumlu" : "Kaydı açan";
   return (
     <div className={s.readonly} role="note">
       <Icon name="lock" size={16} />
       <span>
         Bu kayıtta yazma yetkin yok{team !== undefined ? ` — ${team} takımında değilsin` : ""}.
-        {owner !== undefined ? ` Sorumlu: ${owner}; dahil olmak için ona yaz.` : ""}
+        {contact !== undefined ? ` ${role}: ${contact.name}; dahil olmak için ona yaz.` : ""}
       </span>
     </div>
   );
@@ -175,7 +177,9 @@ export function ActionList({ d }: { d: RecordDetail }) {
         <h2 id="acts-h">Eylemler</h2>
         <span className={s.count}>{open.length} açık</span>
       </div>
-      {d.actions.length === 0 && <span className={s.hint}>Henüz eylem yok. Kim ne yapacaksa buraya ekle.</span>}
+      {d.actions.length === 0 && (
+        <span className={s.hint}>{d.access.can_edit ? "Henüz eylem yok. Kim ne yapacaksa buraya ekle." : "Henüz eylem yok."}</span>
+      )}
       <ul className={s.actions}>{open.map(row)}</ul>
       {done.length > 0 && (
         <>

@@ -59,7 +59,7 @@ export function FieldStrip({ d, compact = false }: { d: RecordDetail; compact?: 
           {node?.name ?? <Empty text="?" />}
         </Pill>
         <Pill k="Pillar" disabled={ro} onOpen={() => setOpen("pillar_id")}>
-          {pillar?.name ?? <Empty text="+ Pillar" />}
+          {pillar?.name ?? <Empty text={ro ? "Yok" : "+ Pillar"} />}
         </Pill>
       </div>
       {open !== null && <FieldDialog d={d} field={open} onClose={() => setOpen(null)} />}
