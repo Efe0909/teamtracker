@@ -8,11 +8,11 @@ dizini, tünel). Elle kurulum yok; macOS ve Debian şablonları kaldırıldı.
 
 | Ortam | Nerede | Ne |
 |---|---|---|
-| Yerel geliştirme | bu depo | `make up` — Docker'da Postgres + uvicorn, sahte kimlik |
+| Yerel geliştirme | bu depo | 0.2: `cargo run` + `npm run dev` (aşağıda); 0.1: `make up` |
 | VM testi | `~/nix` `.#teamtracker0.1` / `.#teamtracker0.2` | aynı VM (192.168.64.8), iki sürüm: 0.1 Python+Docker (e02d71d'ye pinli), 0.2 Rust+React (release) |
 | Üretim | `~/nix` `.#evsunucu` | Raspberry Pi, aynı `configuration.nix` |
 
-### alpha-0.2: Rust API + React (bu dal)
+### alpha-0.2: Rust API + React
 
 Yeni yığın: `backend/` (Rust, yalnız `/api` JSON) + `frontend/` (React + TS strict,
 statik). Python (`app.py`, `shared/`, `sites/`, `tests/`) **başvuru**: davranışın
@@ -32,6 +32,13 @@ docker start ekiptakip-db && docker exec ekiptakip-db createdb -U ekiptakip ekip
 - Tohum: `docker exec -i ekiptakip-db psql -U ekiptakip -d ekiptakip_alpha02 < backend/seed.sql`.
 - Denetim: `cargo clippy --all-targets` (panik/`todo!` derlemeyi düşürür),
   `npm run build` (tsc strict), `backend/tools/vm_test.sh` (VM'de JSON sözleşmesi).
+- Yerel Postgres konteyneri (`ekiptakip-db`) ana checkout'un compose projesine ait;
+  worktree'de `docker compose up` ad çakışması verir → `docker start ekiptakip-db`.
+  Yerel `ekiptakip` veritabanı eski v1 şemasında (`notify_level` yok); güncel v1 için
+  `ekiptakip_manual`.
+- Tarayıcı önizlemesi (`preview_start`) ana checkout'un `.claude/launch.json`'unu
+  okur (worktree'dekini değil): `alpha02-api`, `alpha02-web` orada, mutlak yollu.
+- VM: `ssh efe@192.168.64.8`, parolasız sudo. Sürüm geçişi ve tuzaklar: `deploy/README.md` §2.
 - **Hedef makine derlemez.** Yayın: `backend/tools/release.sh` Mac'te derler, GitHub
   release'e yükler, `deploy/release.nix`'i pinler; `~/nix` `packages.aarch64-linux.default`'u
   çeker.
@@ -92,6 +99,12 @@ origin'e ulaşması. Gerekçe ve açma adımları: `deploy/README.md`,
 `deploy/cloudflare-dashboard.md`.
 
 ## Faz durumu
+
+**alpha-0.2 (2026-09-22, PR #35):** Rust JSON API + React ön yüz. `polonyum.com/`
+yönlendirici (oturum → cihaza göre `app.`/`dashboard.`, yok → `/welcome` giriş formu);
+`app.` ve `dashboard.` "yapım aşamasında". Kullanıcı/ağaç/takım/rol 0.1'den taşındı,
+iş kayıtları taşınmadı. Sıradaki: TASK-297 (giriş yalnız apex'te + karşılama).
+Aşağısı 0.1 dönemi.
 
 alpha-0.1 = Faz 1 (hiyerarşi, kayıtlar, kart içi sohbet, alan değişiklikleri) + mobil yüz.
 Faz 2 (Google OAuth) **geldi**: kimlik gerçek, `shared/identity.py`. Yerelde hâlâ

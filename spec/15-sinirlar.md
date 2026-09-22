@@ -83,6 +83,11 @@ Veri olup arayüzü olanlar (ray pinleri, push abonelikleri) Rust'ta saklanır, 
 
 ## Açık
 
+- **Giriş yalnız apex'te olmalı (TASK-297).** `/api/auth/google` bugün her host'ta açık ve
+  `redirect_uri`'yi istek Host'undan kuruyor; `app.`/`dashboard.` üzerinde Google'a kayıtsız adres
+  gider (`redirect_uri_mismatch`). Düzeltme: apex dışı host → `https://<apex>/welcome`. Alt alan
+  adı adresleri Google'a EKLENMEZ.
+
 - Sayfalar: arayüz ayrıca konuşulacak. Yeni uç = önce `check_api.sh`'e iddia.
 - Tipler şimdilik elle (`frontend/src/api.ts`); uç sayısı artınca OpenAPI'den üretilecek.
 - PWA ve web push ön yüzü yeni yığında yok.

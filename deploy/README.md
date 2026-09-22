@@ -9,7 +9,7 @@ ayarları) tarif eder.
 | Ortam | Nerede | Ne çalıştırır |
 |---|---|---|
 | **Yerel geliştirme** | bu depo | `make up` — Docker'da Postgres + uvicorn (sahte kimlik) |
-| **VM testi** | `~/nix` → `.#vmtest` | gerçek NixOS, gerçek nginx/cloudflared/Google girişi |
+| **VM testi** | `~/nix` → `.#teamtracker0.1` / `.#teamtracker0.2` | aynı VM (192.168.64.8), iki sürüm; gerçek nginx/cloudflared/Google girişi |
 | **Üretim** | `~/nix` → `.#evsunucu` | Raspberry Pi, aynı yapılandırma |
 
 VM testi ile üretim **aynı** `configuration.nix`'i paylaşır; fark yalnızca
@@ -64,33 +64,83 @@ Veritabanını komple silmek: `docker compose down -v`.
 
 ---
 
-## 2. VM testi (NixOS)
+## 2. VM testi (NixOS) — iki sürüm, bir VM
 
-Yapılandırma `~/nix`'te. Uygulamanın sürümü **flake input** olarak pinli, yani
-VM'de shell açıp `git pull` yapılmaz:
+`~/nix` aynı VM için **iki** yapılandırma tanımlar; ortak taban (`vmSystem`:
+configuration, cli, vm-test, cloudflared, cloudflare-dns) aynı, fark yalnız
+EkipTakip sürümü:
+
+| hedef | ne | girdi | pin |
+|---|---|---|---|
+| `.#teamtracker0.1` | Python + Docker compose | `teamtracker-alpha01` (`flake = false`) | commit URL'de: `e02d71d` (PR #32, Rust'tan önceki son main). `nix flake update` oynatmaz |
+| `.#teamtracker0.2` | Rust API + React (statik) | `teamtracker-alpha02` (flake, `main`) | `flake.lock` + depodaki `deploy/release.nix` (GitHub release) |
+
+VM'de (`~/nix` GitHub'dan https ile klonlu, giriş yok, yalnız pull):
 
 ```bash
-cd ~/nix
-nix flake update teamtracker          # teamtracker'ı main'in ucuna al
-git commit -am "teamtracker: <sha>"   # kilit dosyası commit edilir
-nixos-rebuild switch --flake .#vmtest # VM'de (ya da --target-host ile uzaktan)
+cd ~/nix && git pull
+sudo nixos-rebuild switch --flake .#teamtracker0.2   # ya da .#teamtracker0.1
+systemctl show ekiptakip -p Description              # hangisi çalışıyor
+sudo nixos-rebuild switch --rollback                 # son geçişi geri al
 ```
 
-`~/nix`'te bu iş için duran modüller:
+Geçiş saniyeler sürer: **VM derleme yapmaz.** 0.2'nin ikilisi + ön yüzü Mac'te
+derlenip GitHub release'e yüklenir (`backend/tools/release.sh`); VM yalnız
+yapılandırma dosyalarını kurar, paketi release'ten indirir. 0.1'in Docker imajı
+önbellekte; ilk açılışta sağlık yoklaması ~30 sn.
 
-| modül | ne yapar |
-|---|---|
-| `modules/ekiptakip-app.nix` | agenix sırrı + `docker compose` yığınını koşan systemd birimi |
-| `modules/ekiptakip-media.nix` | medya dizini (uid 10001), `EKIPTAKIP_MEDIA_DIR`, `RequiresMountsFor` |
-| `modules/nginx/ekiptakip.nix` | iki vhost, `127.0.0.1:8000`'e proxy, `real_ip` |
-| `modules/cloudflared.nix` | tünel |
+Yeni 0.2 sürümü:
 
-`modules/ekiptakip-media.nix`'in **kaynağı bu depodadır**:
-[`nix-ekiptakip-media.nix`](nix-ekiptakip-media.nix). Depolar ayrı olduğu için
-kopyalanarak taşınıyor — burada değiştirirsen `~/nix`'e de taşımayı unutma
-(iki kopya sessizce ayrışırsa belirti üretimde çıkar).
+```bash
+backend/tools/release.sh                           # Mac, temiz ağaç: derle + yükle + deploy/release.nix
+git commit -am "release: <tag>" && git push        # PR → main
+cd ~/nix && nix flake update teamtracker-alpha02 && git commit -am "alpha02: <tag>" && git push
+# VM: git pull + switch
+```
 
----
+### Veri: iki ayrı veritabanı
+
+- 0.1: Docker volume'deki Postgres (compose). 0.2: makinenin kendi Postgres'i
+  (`services.postgresql`, `/var/lib/postgresql`, unix soketi + peer, parola yok).
+- Geçiş hiçbirini silmez; eşitlenmezler. 0.2'ye kullanıcı/ağaç/takım/rol **bir kez**
+  `backend/tools/import_v1.sh` ile taşındı (2026-09-22; iş kayıtları, sohbet, ek
+  taşınmadı). Sonraki 0.1 değişiklikleri 0.2'ye geçmez.
+- Oturumlar sürümler arası geçmez (çerez adı aynı, biçim farklı): geçişten sonra
+  yeniden giriş.
+
+### Sırlar ve DNS
+
+- agenix alıcıları (`~/nix/secrets/secrets.nix`): `admin` (native age,
+  `~/.config/age/keys.txt`), `adminSsh` (Mac `~/.ssh/id_ed25519`, `agenix -e` `-i`'siz
+  çalışsın diye), `vmtest`. Alıcı eklenince: `agenix -r -i ~/.config/age/keys.txt`.
+- `ekiptakip-env.age`: `GOOGLE_CLIENT_ID/SECRET`, `EKIPTAKIP_SECRET_KEY`, host adları,
+  `EKIPTAKIP_COOKIE_DOMAIN=.polonyum.com`. İki sürüm aynı dosyayı okur; 0.2 fazlalığı
+  (`POSTGRES_PASSWORD`, `APP_PORT`) yok sayar. **`DATABASE_URL` koyma**: systemd
+  `EnvironmentFile` modülün değerini ezer.
+- DNS **deklaratif**: `modules/cloudflare-dns.nix` tünel ingress listesindeki her
+  host için kaydı `<tünel>.cfargotunnel.com` CNAME'ine getirir (her switch'te).
+  Token: `secrets/cloudflare-dns-token.age` (Zone:DNS:Edit, yalnız `polonyum.com`).
+  Yeni host = `modules/cloudflared.nix` ingress'ine bir satır; panelde tıklama yok.
+- Google OAuth istemcisi (konsol, elle): yönlendirme adresleri
+  `https://app.polonyum.com/login/callback`, `https://dashboard.polonyum.com/login/callback`
+  (0.1) ve `https://polonyum.com/api/auth/callback` (0.2). Alt alan adı `/api/auth/callback`
+  adresleri **eklenmez** — 0.2'de giriş yalnız apex'ten (TASK-297).
+
+### Tuzaklar (hepsi yaşandı)
+
+- `redirect_uri_mismatch` (Google 400): konsolda adres kayıtlı değil, **Kaydet'e
+  basılmamış** ya da başka OAuth istemcisi düzenlenmiş. Uygulamanın gönderdiğini gör:
+  `curl -s -o /dev/null -w '%{redirect_url}' 'https://polonyum.com/api/auth/google?next=app'`.
+  Google'ın kabul ettiğini girişsiz sına: o adresi `curl -L` ile aç, `redirect_uri_mismatch` ara.
+- `Configuration(EmptyHost)` (açılışta, 0.2): `postgresql://ekiptakip@/…` biçimi sqlx'te
+  patlar; `postgresql:///ekiptakip?host=/run/postgresql&user=ekiptakip` kullan.
+- Konsolda iki CSP hatası (`static.cloudflareinsights.com`, satır içi betik): Cloudflare
+  Web Analytics sayfaya betik enjekte ediyor, CSP (`script-src 'self'`) engelliyor.
+  İşlev etkilenmez; istenirse Cloudflare panelinden kapatılır.
+- nginx `add_header` kalıtımı: bir location'da tek `add_header` sunucu seviyesindekileri
+  siler. Bu yüzden CSP her location'da ayrı (`modules/nginx/ekiptakip-alpha02.nix`).
+- `evsunucu` (Pi) bugün değerlendirilemiyor: `attribute 'buildDTBs' missing`
+  (raspberry-pi-nix ↔ nixpkgs pini). Pi dağıtımı ayrı iş.
 
 ## 3. Üretim (Raspberry Pi)
 
@@ -106,12 +156,13 @@ var demektir.
 Zincir her iki hedefte de aynı:
 
 ```
-telefon ──https──> Cloudflare ──tünel──> cloudflared ──> nginx :80 ──> uvicorn 127.0.0.1:8000
-                    (TLS burada biter)                   (server_name)   (--workers 1)
+telefon ──https──> Cloudflare ──tünel──> cloudflared ──> nginx :80 ─┬─> statik ön yüz (0.2: React, webRoot)
+                    (TLS burada biter)                   (server_name) └─> /api → Rust 127.0.0.1:8000 (0.2)
+                                                                          (0.1: her şey uvicorn 127.0.0.1:8000)
 ```
 
-`--workers 1` **şart**: ağaç indeksi (`TreeIndex`) süreç belleğinde tutuluyor.
-İkinci bir işçi kendi bayat ağacıyla kalır.
+Tek süreç **şart**: ağaç indeksi (`TreeIndex`) süreç belleğinde tutuluyor.
+İkinci bir süreç/işçi kendi bayat ağacıyla kalır.
 
 ---
 
