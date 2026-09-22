@@ -18,12 +18,33 @@ export function NewRecordForm(props: {
   const [err, setErr] = useState<string | null>(null);
   const [kind, setKind] = useState<RecordKind>("issue");
   const [title, setTitle] = useState("");
-  const [unit, setUnit] = useState<string>(props.defaults?.unit_id ?? L.units[0]?.id ?? "");
+  // Yalniz dal izni olan birimler (Python node_options ile ayni kural): kapsam
+  // disi birim secilip form doldurulduktan sonra 403 yemek yok.
+  const units = L.creatableUnits;
+  const wanted = props.defaults?.unit_id;
+  const [unit, setUnit] = useState<string>(
+    wanted !== undefined && units.some((u) => u.id === wanted) ? wanted : (units[0]?.id ?? ""),
+  );
   const [team, setTeam] = useState<string>(props.defaults?.team_id ?? "");
   // Sorumlu varsayilani ACAN kisi; bos secim "sorumlusuz ac" demek.
   const [owner, setOwner] = useState<string>(L.me.id);
   const [priority, setPriority] = useState<Priority>("medium");
   const [desc, setDesc] = useState("");
+
+  if (units.length === 0) {
+    return (
+      <div className={ui.formStack}>
+        <p className={ui.error} role="alert">
+          Kayıt açabileceğin bir birim yok: hiçbir dalda iznin tanımlı değil. Yöneticine yaz.
+        </p>
+        {props.onCancel !== undefined && (
+          <div className={ui.dact}>
+            <Button onClick={props.onCancel}>Kapat</Button>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <form
@@ -72,7 +93,7 @@ export function NewRecordForm(props: {
       <label className={ui.field}>
         Birim
         <select className={ui.input} value={unit} onChange={(e) => setUnit(e.target.value)} required>
-          {L.units.map((n) => (
+          {units.map((n) => (
             <option key={n.id} value={n.id}>
               {"  ".repeat(n.depth)}{n.name}
             </option>

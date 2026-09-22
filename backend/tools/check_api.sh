@@ -146,12 +146,20 @@ ok "$(g w "/api/chats/$BCHAT/feed" | jq -r '.items[-1].body')" "sozlesme testi" 
 ok "$(w w POST "$WT" "/api/chats/$VCHAT/messages" "{\"body\":\"y\",\"reply_to_id\":\"$M\"}" | jq -r .error)" invalid_reply "sohbet disina yanit yok"
 ok "$(w w POST "$WT" "/api/chats/$BCHAT/messages" '{"body":"   "}' | jq -r .error)" invalid_body "bos mesaj"
 
-t create_record
-R=$(w n POST "$NT" /api/records "{\"kind\":\"task\",\"title\":\"Sozlesme kaydi\",\"unit_id\":\"$UNIT\",\"owner_id\":null}")
+t create_record_needs_branch
+# Kayit acmak dal izni ister (Python service.new_item 403). Deniz'in dali
+# "Uretim Hatti A"; Kapak Unitesi icinde, Butce Onayi disinda.
+KAPAK=$(DB "select id from nodes where name='Kapak Ünitesi'")
+R=$(g n /api/meta)
+ok "$(jq --arg k "$KAPAK" '.me.creatable_unit_ids|index($k) != null' <<<"$R")" true "dal ici acilabilir"
+ok "$(jq --arg u "$UNIT" '.me.creatable_unit_ids|index($u) != null' <<<"$R")" false "dal disi listede yok"
+ok "$(wc_ n POST "$NT" /api/records "{\"kind\":\"task\",\"title\":\"x\",\"unit_id\":\"$UNIT\"}")" 403 "dal disi 403"
+R=$(w n POST "$NT" /api/records "{\"kind\":\"task\",\"title\":\"Sozlesme kaydi\",\"unit_id\":\"$KAPAK\",\"owner_id\":null}")
 NEW=$(jq -r .id <<<"$R")
 ok "$(DB "select created_by from records where id='$NEW'")" "$DENIZ" "acan"
 ok "$(g n "/api/records/$NEW" | jq -r .access.can_edit)" true "acan duzenler"
 ok "$(w n POST "$NT" /api/records "{\"kind\":\"task\",\"title\":\"x\",\"unit_id\":\"$DENIZ\"}" | jq -r .error)" invalid_unit "gecersiz birim"
+ok "$(w w POST "$WT" /api/records "{\"kind\":\"issue\",\"title\":\"Admin her yerde\",\"unit_id\":\"$UNIT\"}" | jq -r 'has("id")')" true "admin her dalda"
 
 t home_teams_notifications
 ok "$(g w /api/home | jq '.counts|has("overdue_records")')" true "sayaclar"

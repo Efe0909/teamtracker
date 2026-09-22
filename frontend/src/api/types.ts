@@ -44,7 +44,14 @@ export interface MetaNode {
 }
 
 export interface Meta {
-  me: { id: Uuid; is_admin: boolean; scopes: string[]; team_ids: Uuid[] };
+  me: {
+    id: Uuid;
+    is_admin: boolean;
+    scopes: string[];
+    team_ids: Uuid[];
+    /** Kayit acabilecegi birimler (dal izni). Sunucu ayni kurali POST'ta zorlar. */
+    creatable_unit_ids: Uuid[];
+  };
   users: MetaUser[];
   teams: MetaTeam[];
   nodes: MetaNode[];
