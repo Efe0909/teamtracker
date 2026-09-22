@@ -5,6 +5,7 @@
 //! Host ayrimi (app./dashboard./apex) on yuzun isi, burada yok.
 
 mod auth;
+mod chats;
 mod common;
 mod meta;
 mod records;
@@ -33,6 +34,8 @@ pub fn router() -> Router<AppState> {
         .route("/api/records/{id}/actions", post(records::add_action))
         .route("/api/actions/mine", get(records::my_actions))
         .route("/api/actions/{id}", patch(records::patch_action))
+        .route("/api/chats/{id}/feed", get(chats::feed))
+        .route("/api/chats/{id}/messages", post(chats::post))
         // Bilinmeyen yol da JSON: istemci hic HTML gormez.
         .fallback(|| async { AppError::NotFound })
 }
