@@ -31,6 +31,9 @@ const DEFAULT_ORDER: &str = "activity";
 pub const QUICK_FILTERS: &[(&str, &str)] = &[
     ("all", "Hepsi"), ("week", "Bu hafta"), ("my_actions", "Açık eylemim"),
     ("overdue", "Geciken"), ("unassigned", "Atanmamış"),
+    // Mobil "Yapilacaklar": benimle ilgili her kayit — sahibi, acani,
+    // katilimcisi ya da acik bir eyleminin sahibi oldugum.
+    ("mine", "Benim"),
 ];
 
 const KINDS: &[&str] = &["issue", "task"];
@@ -53,6 +56,9 @@ pub struct Filters {
     pub node: Option<Uuid>,
     pub pillar: Option<Pillar>,
     pub search: Option<String>,
+    /// `true` = kapali/iptal, `false` = acik olanlar. Tekil `status`'tan ayri:
+    /// mobil sekmeler "acik olan her sey" diyor, tek bir durum degil.
+    pub done: Option<bool>,
     pub quick: String,
     pub sort: String,
 }
@@ -87,6 +93,11 @@ impl Filters {
                 other => other.parse().ok().map(Pillar::Id),
             }),
             search: p.get("search").map(|s| s.trim().to_string()).filter(|s| !s.is_empty()),
+            done: match p.get("done").map(|s| s.trim()) {
+                Some("true") => Some(true),
+                Some("false") => Some(false),
+                _ => None,
+            },
             quick: p.get("quick").map(|s| s.trim()).filter(|q| {
                 QUICK_FILTERS.iter().any(|(k, _)| k == q)
             }).unwrap_or("all").to_string(),
@@ -104,6 +115,11 @@ impl Filters {
         if let Some(v) = &self.status { qb.push(" and r.status = ").push_bind(v.clone()); }
         if let Some(v) = &self.priority { qb.push(" and r.priority = ").push_bind(v.clone()); }
         if let Some(v) = self.team { qb.push(" and r.team_id = ").push_bind(v); }
+        match self.done {
+            Some(true) => { qb.push(" and r.status in ('closed','cancelled')"); }
+            Some(false) => { qb.push(" and r.status not in ('closed','cancelled')"); }
+            None => {}
+        }
 
         match &self.person {
             Some(Person::Me) => { qb.push(" and r.owner_id = ").push_bind(user.id); }
@@ -173,6 +189,15 @@ impl Filters {
                   .push(" and status in ('open','in_progress')))");
             }
             "unassigned" => { qb.push(" and r.owner_id is null and r.status <> 'closed'"); }
+            "mine" => {
+                qb.push(" and (r.owner_id = ").push_bind(user.id)
+                  .push(" or r.created_by = ").push_bind(user.id)
+                  .push(" or r.id in (select record_id from record_participants where user_id = ")
+                  .push_bind(user.id)
+                  .push(") or r.id in (select record_id from actions where owner_id = ")
+                  .push_bind(user.id)
+                  .push(" and status in ('open','in_progress')))");
+            }
             _ => {}
         }
     }
@@ -226,6 +251,9 @@ mod tests {
         assert_eq!(f.person, Some(Person::Me));
         assert_eq!(f.pillar, Some(Pillar::None_));
         assert_eq!(f.quick, "overdue");
+        assert_eq!(Filters::parse(&params(&[("done", "false")])).done, Some(false));
+        assert_eq!(Filters::parse(&params(&[("done", "evet")])).done, None, "gecersiz done duser");
+        assert_eq!(Filters::parse(&params(&[("quick", "mine")])).quick, "mine");
         assert!(f.order_by().contains("created_at desc"));
     }
 }
