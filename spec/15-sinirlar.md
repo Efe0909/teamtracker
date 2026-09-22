@@ -79,10 +79,26 @@ Veri olup arayüzü olanlar (ray pinleri, push abonelikleri) Rust'ta saklanır, 
   geldikçe kullanılacak.
 - API: `/api/me`, `/api/auth/google`, `/api/auth/callback`, `/api/auth/logout`,
   `/api/auth/dev-login` (yalnız sahte kimlik). Sözleşme: `backend/tools/check_api.sh`.
-- Ön yüz: apex kökü (`/`) yönlendirici — oturum varsa cihaza göre `app.`/`dashboard.`, yoksa herkese açık `/welcome` (giriş formu; giriş duvarı değil). `app.` ve `dashboard.` "yapım aşamasında".
+- Ön yüz: apex kökü (`/`) yönlendirici — oturum varsa cihaza göre `app.`/`dashboard.`, yoksa herkese açık `/welcome` (giriş formu; giriş duvarı değil).
+
+## Çekirdek ekranlar (alpha-0.2, 2026-09-23)
+
+- İş uçları: `GET /api/meta` (kişiler, takımlar, ağaç, yetenekler — diğer yanıtlar yalnız
+  kimlik taşır, ad/renk/yol buradan çözülür), `GET|POST /api/records` (filtre sözleşmesi
+  `db/filters.rs`, `done`, `quick=mine`), `GET|PATCH /api/records/{id}` (tek alan, tipli
+  `{field, value}`), `POST /api/records/{id}/actions`, `PATCH /api/actions/{id}`,
+  `GET /api/actions/mine`, `GET /api/chats/{id}/feed`, `POST /api/chats/{id}/messages`
+  (kayıt kartı ve takım duvarı aynı uç), `GET /api/home`, `POST|DELETE /api/pins/{slug}`,
+  `GET /api/teams(/{id})`, `GET /api/notifications`.
+- Alan değişimi `activity`'ye olgu yazar: `verb=field_changed`, `target_label=<alan>`,
+  `detail={"from","to"}`. Cümleyi ön yüz kurar (`frontend/src/lib/activity.ts`).
+- Ön yüz: `dashboard.` panolar, görev tablosu, kayıt, takımlar; `app.` yapılacaklar, ara,
+  eylemlerim, bildirimler, kayıt, yeni kayıt. Yapı `16-on-yuz.md` §3.
+- Sonraya: yönetim paneli, veri yönetimi (ağaç düzenleme), kartlar, ekler, etiketler,
+  push, @anma, "beni dahil et" (`17-kayit-kesif.md` §5).
 
 ## Açık
 
-- Sayfalar: iç yapı ve taşıma sırası `16-on-yuz.md`'de (öneri). Yeni uç = önce `check_api.sh`'e iddia.
+- Yeni uç = önce `check_api.sh`'e iddia.
 - Tipler şimdilik elle (`frontend/src/api.ts`); uç sayısı artınca OpenAPI'den üretilecek.
 - PWA ve web push ön yüzü yeni yığında yok.

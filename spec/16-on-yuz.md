@@ -1,6 +1,9 @@
 # 16 — Ön yüz: Python arayüzünün eleştirisi, React yapısı, ucuz yetenekler
 
-Durum: **öneri** (2026-09-23). Bölüm 3'teki "Öneri" satırları onaylanınca **karar** olur.
+Durum: bölüm 3 **uygulandı** (2026-09-23, `frontend/src/`): tek paket + lazy yüzler,
+tipli rota birliği, `tokens.css` + CSS Modules (sınıf adları `scripts/css-modules.mjs` ile
+tipli üretilir, modül CSS'te ham renk derlemeyi düşürür), TanStack Query, `ERRORS`
+sözlüğü. Bölüm 4'ten Y3, Y4 (geri al ile), Y6, Y8, Y15 geldi.
 Sınır `15-sinirlar.md`'de: Rust yalnız JSON, ön yüz ince. Bu belge ön yüzün *içini* anlatır.
 
 Kanıt: Python başvurusu (`app.py`, `sites/`, `shared/static/`) tohum verisiyle yerelde
