@@ -87,15 +87,3 @@ pub async fn can_edit_record(
     let tree = tree.read().unwrap_or_else(|e| e.into_inner());
     Ok(nodes.into_iter().any(|n| tree.is_descendant(rec.unit_id, n)))
 }
-
-/// Yeni kayit acma: hedef dugum izinli bir dalin altinda olmali.
-pub async fn can_create_in(
-    pool: &PgPool, user: &User, unit_id: Uuid, tree: &std::sync::RwLock<TreeIndex>,
-) -> Result<bool, sqlx::Error> {
-    if user.is_admin {
-        return Ok(true);
-    }
-    let nodes = permitted_nodes(pool, user).await?;
-    let tree = tree.read().unwrap_or_else(|e| e.into_inner());
-    Ok(nodes.into_iter().any(|n| tree.is_descendant(unit_id, n)))
-}

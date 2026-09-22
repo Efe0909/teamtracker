@@ -146,7 +146,9 @@ ok "$(g w "/api/chats/$BCHAT/feed" | jq -r '.items[-1].body')" "sozlesme testi" 
 ok "$(w w POST "$WT" "/api/chats/$VCHAT/messages" "{\"body\":\"y\",\"reply_to_id\":\"$M\"}" | jq -r .error)" invalid_reply "sohbet disina yanit yok"
 ok "$(w w POST "$WT" "/api/chats/$BCHAT/messages" '{"body":"   "}' | jq -r .error)" invalid_body "bos mesaj"
 
-t create_record
+t create_record_open_to_all
+# Kayit acmak herkese, her birimde acik (kullanici karari, spec/90 G1): UNIT
+# Deniz'in dali (Uretim Hatti A) DISINDA ve yine 200.
 R=$(w n POST "$NT" /api/records "{\"kind\":\"task\",\"title\":\"Sozlesme kaydi\",\"unit_id\":\"$UNIT\",\"owner_id\":null}")
 NEW=$(jq -r .id <<<"$R")
 ok "$(DB "select created_by from records where id='$NEW'")" "$DENIZ" "acan"

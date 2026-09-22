@@ -227,9 +227,11 @@ pub struct Created {
     id: Uuid,
 }
 
-/// Kayit acmak her aktif kullaniciya acik — Python surumundeki davranis
-/// (`sites/dashboard/routes.py` create_item). Duzenleme yetkisi ondan sonra
-/// iliski yollarindan gelir: acan kisi zaten "acan" yolundan duzenler.
+/// Kayit acmak her aktif kullaniciya, HER birimde acik — kullanici karari
+/// (2026-09-23): kulup islevsel bolumlere ayrilmis ama aralarinda kopru kurar,
+/// herkes her takima is acabilir; takim uyeleri ustlenir ya da kapatir.
+/// Python dal izni istiyordu (`service.new_item` 403) — BILEREK birakildi
+/// (spec/90 G1). Duzenleme yetkisi ondan sonra iliski yollarindan gelir.
 pub async fn create(
     State(st): State<AppState>, CurrentUser(me): CurrentUser, Body(b): Body<NewRecord>,
 ) -> Result<Json<Created>> {
