@@ -7,6 +7,7 @@
 mod auth;
 mod chats;
 mod common;
+mod home;
 mod meta;
 mod records;
 
@@ -29,6 +30,8 @@ pub fn router() -> Router<AppState> {
         .route("/api/auth/logout", post(auth::logout))
         .route("/api/auth/dev-login", get(auth::dev_login))
         .route("/api/meta", get(meta::meta))
+        .route("/api/home", get(home::home))
+        .route("/api/pins/{slug}", post(home::pin).delete(home::unpin))
         .route("/api/records", get(records::list).post(records::create))
         .route("/api/records/{id}", get(records::get).patch(records::patch))
         .route("/api/records/{id}/actions", post(records::add_action))
@@ -36,6 +39,9 @@ pub fn router() -> Router<AppState> {
         .route("/api/actions/{id}", patch(records::patch_action))
         .route("/api/chats/{id}/feed", get(chats::feed))
         .route("/api/chats/{id}/messages", post(chats::post))
+        .route("/api/teams", get(home::teams))
+        .route("/api/teams/{id}", get(home::team))
+        .route("/api/notifications", get(home::notifications))
         // Bilinmeyen yol da JSON: istemci hic HTML gormez.
         .fallback(|| async { AppError::NotFound })
 }
