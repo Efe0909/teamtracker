@@ -44,7 +44,9 @@ export function FieldStrip({ d, compact = false }: { d: RecordDetail; compact?: 
         <Pill k="Sorumlu" disabled={ro} onOpen={() => setOpen("owner_id")}>
           <Who user={L.user(r.owner_id)} empty="Sorumlusuz" />
         </Pill>
-        <Pill k="Son tarih" disabled={!d.access.can_edit_deadline} onOpen={() => setOpen("due_date")}>
+        {/* Kaydi duzenleyebilen acar; kapsami yoksa pencere NEDENINI soyler
+            (Python alan.html) — kilitli dugme sessiz kaliyordu. */}
+        <Pill k="Son tarih" disabled={ro} onOpen={() => setOpen("due_date")}>
           {r.due_date === null ? <Empty text="Yok" /> : <Due date={r.due_date} done={isDone(r.status)} />}
         </Pill>
         <Pill k="Öncelik" disabled={ro} onOpen={() => setOpen("priority")}>
@@ -195,8 +197,12 @@ function FieldDialog({ d, field, onClose }: { d: RecordDetail; field: FieldKey; 
       );
       break;
     case "due_date":
-      body = <DueForm current={r.due_date} busy={m.isPending}
-        onSave={(v) => save({ field: "due_date", value: v }, { field: "due_date", value: r.due_date })} />;
+      body = d.access.can_edit_deadline ? (
+        <DueForm current={r.due_date} busy={m.isPending}
+          onSave={(v) => save({ field: "due_date", value: v }, { field: "due_date", value: r.due_date })} />
+      ) : (
+        <p>Son tarihi değiştirmek <b>edit_deadline</b> kapsamı ister. Yöneticinden iste.</p>
+      );
       break;
   }
 
