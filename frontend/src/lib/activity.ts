@@ -2,7 +2,7 @@
 // (`verb`, `target_label`=alan, `body`={"from","to"}); metin burada.
 
 import type { FeedItem, Notice } from "../api/types";
-import { ACTION_STATUS, formatDay, PRIORITY, STATUS } from "./labels";
+import { ACTION_STATUS, formatDay, PRIORITY, STATUS, TEAM_ROLE } from "./labels";
 import type { Lookup } from "./lookup";
 
 const FIELD: Record<string, string> = {
@@ -50,6 +50,10 @@ function valueText(field: string, v: unknown, L: Lookup, action: boolean): strin
   }
 }
 
+function roleText(v: unknown): string {
+  return TEAM_ROLE[String(v) as keyof typeof TEAM_ROLE] ?? "—";
+}
+
 /** Aktor adi haric cumle: "Durum: Açık → Devam". */
 export function describe(item: FeedItem | Notice, L: Lookup): string {
   const field = item.target_label ?? "";
@@ -69,6 +73,12 @@ export function describe(item: FeedItem | Notice, L: Lookup): string {
       return ch === null
         ? `“${item.subject_label ?? ""}” eylemini değiştirdi`
         : `“${item.subject_label ?? ""}” · ${FIELD[field] ?? field}: ${valueText(field, ch.from, L, true)} → ${valueText(field, ch.to, L, true)}`;
+    case "member_added":
+      return `${item.subject_label ?? ""} kişisini takıma ekledi (${roleText(ch?.to)})`;
+    case "member_role":
+      return `${item.subject_label ?? ""} rolünü ${roleText(ch?.from)} → ${roleText(ch?.to)} yaptı`;
+    case "member_removed":
+      return `${item.subject_label ?? ""} kişisini takımdan çıkardı`;
     default:
       // "note" ve bilinmeyen fiiller: detay duz metin.
       return item.body ?? item.verb ?? "";

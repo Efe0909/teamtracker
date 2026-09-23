@@ -7,9 +7,10 @@ import { NewRecordForm } from "../../features/record/NewRecordForm";
 import { describe } from "../../lib/activity";
 import { ago, daysFromToday, isDone } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
+import { mentionsMe } from "../../lib/mentions";
 import { navigate } from "../../lib/router";
 import { Icon } from "../../ui/icons";
-import { Avatar, Due, Empty, KindTag, Link, Loading, PriorityTag, Segmented, Status, ui } from "../../ui/ui";
+import { Avatar, Due, Empty, KindTag, Link, Loading, PriorityTag, Segmented, Status, Tag, ui } from "../../ui/ui";
 import s from "./app.module.css";
 import { TopBar } from "./MobileApp";
 import { href } from "./routes";
@@ -238,6 +239,7 @@ export function NotificationsPage() {
                   <span>
                     <b>{actor?.name ?? "Sistem"}</b>{" "}
                     {n.kind === "message" ? `: ${n.body ?? ""}` : describe(n, L)}
+                    {n.kind === "message" && mentionsMe(n.body, L.me.name) && <> <Tag tone="info">seni andı</Tag></>}
                   </span>
                   <span className={s.cardPath}>
                     {n.team_id !== null ? "Takım duvarı · " : ""}{n.title} · {ago(n.created_at)}

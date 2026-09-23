@@ -1,13 +1,13 @@
 // Mobil kayit: masaustuyle AYNI bolumler (alanlar + eylemler), sohbet sag
 // alttaki baloncuktan acilan tam ekran sayfa. Takim duvari da ayni kalip.
 
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { ApiError } from "../../api/client";
 import { useFeed, useRecord, useTeam } from "../../api/hooks";
 import type { Uuid } from "../../api/types";
 import { Chat } from "../../features/chat/Chat";
 import { FieldStrip } from "../../features/record/fields";
-import { ActionList, BallLine, ReadOnlyNote, RecordHead } from "../../features/record/parts";
+import { ActionList, BallLine, QuickAction, ReadOnlyNote, RecordHead } from "../../features/record/parts";
 import { TEAM_ROLE } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
 import { Icon } from "../../ui/icons";
@@ -16,7 +16,14 @@ import { ErrorScreen } from "../errors/ErrorScreen";
 import s from "./app.module.css";
 import { TopBar } from "./MobileApp";
 
-function ChatSheet(props: { chatId: Uuid; title: string; canPost: boolean; lockedText: string; empty: string }) {
+function ChatSheet(props: {
+  chatId: Uuid;
+  title: string;
+  canPost: boolean;
+  lockedText: string;
+  empty: string;
+  tools?: ReactNode;
+}) {
   const [open, setOpen] = useState(() => location.hash === "#chat");
   const feed = useFeed(props.chatId);
   const messages = feed.data?.items.filter((i) => i.kind === "message").length ?? 0;
@@ -47,7 +54,8 @@ function ChatSheet(props: { chatId: Uuid; title: string; canPost: boolean; locke
             </button>
           </div>
           <div className={s.sheetBody}>
-            <Chat chatId={props.chatId} canPost={props.canPost} lockedText={props.lockedText} empty={props.empty} />
+            <Chat chatId={props.chatId} canPost={props.canPost} lockedText={props.lockedText} empty={props.empty}
+              tools={props.tools} />
           </div>
         </div>
       )}
@@ -90,6 +98,7 @@ export function RecordPage({ id }: { id: Uuid }) {
         canPost={d.access.can_edit}
         lockedText="Bu kayıtta yazma yetkin yok."
         empty="Henüz mesaj yok."
+        tools={<QuickAction d={d} />}
       />
     </>
   );

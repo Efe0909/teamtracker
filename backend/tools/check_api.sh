@@ -362,6 +362,31 @@ ok "$(g n /api/nodes | jq -r ".nodes[]|select(.id==\"$TEDARIK\").can_edit")" tru
 w w PATCH "$WT" "/api/admin/users/$DENIZ" "$(U revoke_node "\"$MALZEME\"")" >/dev/null
 ok "$(g n /api/nodes | jq -r ".nodes[]|select(.id==\"$TEDARIK\").can_edit")" false "geri alinca duzenleyemez"
 
+# --- takim uyeligi (R4-F09) ---------------------------------------------------
+t team_members
+TM=$(DB "select team_id from team_members where user_id='$SELIN' and role='lead'")
+TMC=$(DB "select chat_id from teams where id='$TM'")
+M(){ printf '{"user_id":"%s","role":"%s"}' "$1" "$2"; }
+ok "$(wc_ n POST "$NT" "/api/teams/$TM/members" "$(M "$DENIZ" member)")" 403 "manage_teams yoksa 403"
+ok "$(w w POST "$WT" "/api/teams/$TM/members" "$(M "$DENIZ" member)" | jq -r ".members[]|select(.user_id==\"$DENIZ\").role")" member "admin ekler"
+w w POST "$WT" "/api/teams/$TM/members" "$(M "$DENIZ" mentor)" >/dev/null
+w w POST "$WT" "/api/teams/$TM/members" "$(M "$DENIZ" mentor)" >/dev/null   # ayni rol: olgu yok
+ok "$(w w DELETE "$WT" "/api/teams/$TM/members/$DENIZ" '' | jq -r "[.members[]|select(.user_id==\"$DENIZ\")]|length")" 0 "cikar"
+ok "$(wc_ w DELETE "$WT" "/api/teams/$TM/members/$DENIZ" '')" 404 "uye degilse 404"
+ok "$(DB "select string_agg(verb, ',' order by created_at) from activity where chat_id='$TMC' and verb like 'member_%'")" "member_added,member_role,member_removed" "duvara olgu, ayni rol yazilmaz"
+ok "$(DB "select detail from activity where chat_id='$TMC' and verb='member_role'")" '{"from":"member","to":"mentor"}' "rol degisimi once/sonra"
+
+# --- anma (R4-F03) -----------------------------------------------------------
+t mention_invites
+ok "$(g n "/api/records/$VEKALET" | jq -r .access.can_edit)" false "anilmadan once duzenleyemez"
+w w POST "$WT" "/api/chats/$VCHAT/messages" '{"body":"@Deniz bakar misin? @all","reply_to_id":null}' >/dev/null
+ok "$(DB "select count(*) from record_participants where record_id='$VEKALET' and user_id='$DENIZ'")" 1 "@kisi karta katilimci olur"
+ok "$(g n "/api/records/$VEKALET" | jq -r .access.can_edit)" true "katilimci duzenler (mail forward)"
+w w POST "$WT" "/api/teams/$TM/members" "$(M "$DENIZ" member)" >/dev/null
+TMSG=$(DB "select count(*) from record_participants")
+w w POST "$WT" "/api/chats/$TMC/messages" '{"body":"@Efe duvarda","reply_to_id":null}' >/dev/null
+ok "$(DB "select count(*) from record_participants")" "$TMSG" "takim duvarinda davet yok"
+
 # --- Google kipi -------------------------------------------------------------
 t google_me
 R=$(curl -s "$BG/api/me"); ok "$(jq -r .auth <<<"$R")" google "auth"
