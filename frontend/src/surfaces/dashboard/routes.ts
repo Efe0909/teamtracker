@@ -12,6 +12,7 @@ export type Route =
   | { name: "teams" }
   | { name: "team"; id: Uuid }
   | { name: "tree" }
+  | { name: "admin" }
   | { name: "notFound" };
 
 export const QUERY_KEYS = [
@@ -34,6 +35,7 @@ export function parse(url: URL): Route {
   if (a === "teams" && seg.length === 1) return { name: "teams" };
   if (a === "teams" && b !== undefined && seg.length === 2) return { name: "team", id: b };
   if (a === "outcome-tree" && seg.length === 1) return { name: "tree" };
+  if (a === "admin" && seg.length === 1) return { name: "admin" };
   return { name: "notFound" };
 }
 
@@ -60,5 +62,7 @@ export function href(r: Route): string {
     case "tree":
       // Python'daki adres ve modul/pin kimligi (`models/module.rs`) ayni.
       return "/outcome-tree";
+    case "admin":
+      return "/admin";
   }
 }

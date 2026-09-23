@@ -8,6 +8,7 @@ import { Icon, type IconName } from "../../ui/icons";
 import { Avatar, cx, Link } from "../../ui/ui";
 import { ErrorScreen } from "../errors/ErrorScreen";
 import { signOut } from "../Session";
+import { Admin } from "./Admin";
 import s from "./dashboard.module.css";
 import { DataTree } from "./DataTree";
 import { Home } from "./Home";
@@ -42,6 +43,8 @@ function Page({ route }: { route: Route }) {
       return <TeamPage id={route.id} />;
     case "tree":
       return <DataTree />;
+    case "admin":
+      return <Admin />;
     case "notFound":
       return <ErrorScreen code="not_found" />;
     default: {
@@ -51,7 +54,12 @@ function Page({ route }: { route: Route }) {
   }
 }
 
-const NAV: { route: Route; icon: IconName; label: string; match: Route["name"][] }[] = [
+type NavItem = { route: Route; icon: IconName; label: string; match: Route["name"][] };
+
+/** Yalniz admin ya da manage_users gorur; uc yine kendisi kontrol eder. */
+const ADMIN_NAV: NavItem = { route: { name: "admin" }, icon: "lock", label: "Yönetim", match: ["admin"] };
+
+const NAV: NavItem[] = [
   { route: { name: "home" }, icon: "home", label: "Panolar", match: ["home"] },
   { route: { name: "tasks", query: {} }, icon: "tasks", label: "Görevler", match: ["tasks", "record"] },
   { route: { name: "teams" }, icon: "teams", label: "Takımlar", match: ["teams", "team"] },
@@ -60,6 +68,7 @@ const NAV: { route: Route; icon: IconName; label: string; match: Route["name"][]
 
 function Rail({ route }: { route: Route }) {
   const L = useLookup();
+  const nav = L.meta.me.is_admin || L.can("manage_users") ? [...NAV, ADMIN_NAV] : NAV;
   const [menu, setMenu] = useState(false);
   useEffect(() => {
     if (!menu) return;
@@ -76,7 +85,7 @@ function Rail({ route }: { route: Route }) {
           <path d="M9 11h9M9 16h14M9 21h6" className={s.logoLine} />
         </svg>
       </span>
-      {NAV.map((n) => {
+      {nav.map((n) => {
         const on = n.match.includes(route.name);
         return (
           <Link key={n.label} href={href(n.route)} className={cx(s.rbtn, on && s.rbtnOn)}>

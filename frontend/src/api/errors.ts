@@ -24,6 +24,13 @@ export type ApiErrorCode =
   | "root_only"
   | "move_cycle"
   | "type_locked"
+  | "invalid_email"
+  | "user_exists"
+  | "self_admin"
+  | "last_admin"
+  | "invalid_scope"
+  | "unknown_role"
+  | "role_exists"
   | "network";
 
 export const ERRORS = {
@@ -47,6 +54,13 @@ export const ERRORS = {
   root_only: "Bu tür yalnız kökte durabilir.",
   move_cycle: "Düğüm kendi altına taşınamaz.",
   type_locked: "Bu düğüme bağlı bir takım kartı var; türü değiştirilemez.",
+  invalid_email: "E-posta adresi geçersiz.",
+  user_exists: "Bu e-postayla bir kullanıcı zaten var.",
+  self_admin: "Kendi yönetici yetkini kapatamazsın.",
+  last_admin: "Son aktif yönetici kapatılamaz. Önce başka birini yönetici yap.",
+  invalid_scope: "Böyle bir kapsam yok.",
+  unknown_role: "Seçilen rol bulunamadı.",
+  role_exists: "Bu adla bir rol zaten var.",
   network: "Sunucuya ulaşılamadı. Bağlantını kontrol et.",
 } satisfies Record<ApiErrorCode, string>;
 

@@ -8,6 +8,7 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tansta
 import { qs, request } from "./client";
 import type {
   ActionPatch,
+  AdminView,
   Feed,
   Home,
   Meta,
@@ -22,6 +23,7 @@ import type {
   RecordSummary,
   TeamView,
   TreeView,
+  UserOp,
   Uuid,
 } from "./types";
 
@@ -37,6 +39,7 @@ export const keys = {
   notifications: ["notifications"] as const,
   myActions: ["my-actions"] as const,
   nodes: ["nodes"] as const,
+  admin: ["admin"] as const,
 };
 
 /** Rust `db/filters.rs` sozlesmesi. Gecersiz deger sunucuda sessizce duser. */
@@ -197,6 +200,35 @@ export function usePatchNode() {
     onSuccess: (t) => afterTreeWrite(qc, t),
   });
 }
+
+// --- yonetim paneli ----------------------------------------------------------
+
+export function useAdmin() {
+  return useQuery({ queryKey: keys.admin, queryFn: () => request<AdminView>("GET", "/api/admin") });
+}
+
+/** Her yazma guncel paneli dondurur. Kisi/yetki degisimi sozlugu (`/api/meta`:
+ *  kisiler, benim kapsamlarim) de degistirir. */
+export function useAdminWrite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (w: { method: "POST" | "PATCH" | "DELETE"; path: string; body?: unknown }) =>
+      request<AdminView>(w.method, `/api/admin${w.path}`, w.body),
+    onSuccess: (v) => {
+      qc.setQueryData(keys.admin, v);
+      void qc.invalidateQueries({ queryKey: keys.meta });
+    },
+  });
+}
+
+export const adminOps = {
+  addUser: (email: string, name: string) => ({ method: "POST" as const, path: "/users", body: { email, name } }),
+  user: (id: Uuid, op: UserOp) => ({ method: "PATCH" as const, path: `/users/${id}`, body: op }),
+  createRole: (name: string, scopes: string[]) => ({ method: "POST" as const, path: "/roles", body: { name, scopes } }),
+  patchRole: (id: Uuid, name: string, scopes: string[]) =>
+    ({ method: "PATCH" as const, path: `/roles/${id}`, body: { name, scopes } }),
+  deleteRole: (id: Uuid) => ({ method: "DELETE" as const, path: `/roles/${id}` }),
+};
 
 export function useDeleteNode() {
   const qc = useQueryClient();
