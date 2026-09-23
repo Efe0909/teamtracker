@@ -9,6 +9,7 @@ mod chats;
 mod common;
 mod home;
 mod meta;
+mod nodes;
 mod records;
 
 use axum::{
@@ -42,6 +43,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/teams", get(home::teams))
         .route("/api/teams/{id}", get(home::team))
         .route("/api/notifications", get(home::notifications))
+        .route("/api/nodes", get(nodes::tree).post(nodes::create))
         // Bilinmeyen yol da JSON: istemci hic HTML gormez.
         .fallback(|| async { AppError::NotFound })
 }

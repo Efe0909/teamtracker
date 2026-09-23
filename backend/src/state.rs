@@ -40,6 +40,13 @@ pub struct AppState {
     /// Surec bellegi yeter: tek surec zaten sart (KNOW-85). Anahtar sayisi
     /// kullanici sayisiyla sinirli, temizlik gerekmiyor.
     pub presence: Arc<Mutex<HashMap<Uuid, Instant>>>,
+    /// Yapi yazmalari (dugum ekle/tasi/sil...) SIRAYLA: dogrulama agacin
+    /// bellekteki kopyasina bakiyor, yazma ve yeniden kurulum ondan sonra.
+    /// Iki es zamanli tasima ayni eski agaca bakip birlikte bir halka
+    /// kurabilirdi (A'yi B'nin, B'yi A'nin altina). tokio Mutex: kilit
+    /// await boyunca tutulur. ponytail: tek surec (KNOW-85); yatayda
+    /// veritabani kilidi gerekir.
+    pub structure: Arc<tokio::sync::Mutex<()>>,
 }
 
 impl FromRef<AppState> for Key {
@@ -63,13 +70,13 @@ impl AppState {
             // spec/70-guvenlik.md: IP basina dakikada 10.
             login_limit: Arc::new(RateLimit::new(10, std::time::Duration::from_secs(60))),
             presence: Arc::default(),
+            structure: Arc::default(),
         })
     }
 
     /// Yapi her degistiginde cagrilir. KISMI GUNCELLEME YOK (KNOW-179):
     /// birkac bin dugumde tam kurulum mikrosaniyeler surer, kismi guncelleme
     /// hata kaynagidir.
-    #[allow(dead_code)] // ilk yapi yazma ucuyla kullanilacak
     pub async fn rebuild_tree(&self) -> Result<(), sqlx::Error> {
         let fresh = load_tree(&self.pool).await?;
         // Zehirli kilit: yazan bir panik yasadi. Agac yine de tamamen
