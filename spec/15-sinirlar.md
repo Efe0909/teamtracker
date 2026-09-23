@@ -89,13 +89,15 @@ Veri olup arayüzü olanlar (ray pinleri, push abonelikleri) Rust'ta saklanır, 
   `{field, value}`), `POST /api/records/{id}/actions`, `PATCH /api/actions/{id}`,
   `GET /api/actions/mine`, `GET /api/chats/{id}/feed`, `POST /api/chats/{id}/messages`
   (kayıt kartı ve takım duvarı aynı uç), `GET /api/home`, `POST|DELETE /api/pins/{slug}`,
-  `GET /api/teams(/{id})`, `GET /api/notifications`.
+  `GET /api/teams(/{id})`, `GET /api/notifications`, `GET|POST /api/nodes`,
+  `PATCH|DELETE /api/nodes/{id}` (veri yönetimi — ağaç; okuma herkese açık, yazma
+  `edit_nodes` + dal, kök işlemleri yalnız admin; `spec/90-geri-tasima.md` G5).
 - Alan değişimi `activity`'ye olgu yazar: `verb=field_changed`, `target_label=<alan>`,
   `detail={"from","to"}`. Cümleyi ön yüz kurar (`frontend/src/lib/activity.ts`).
-- Ön yüz: `dashboard.` panolar, görev tablosu, kayıt, takımlar; `app.` yapılacaklar, ara,
-  eylemlerim, bildirimler, kayıt, yeni kayıt. Yapı `16-on-yuz.md` §3.
-- Sonraya: yönetim paneli, veri yönetimi (ağaç düzenleme), kartlar, ekler, etiketler,
-  push, @anma, "beni dahil et" (`17-kayit-kesif.md` §5).
+- Ön yüz: `dashboard.` panolar, görev tablosu, kayıt, takımlar, veri yönetimi (ağaç);
+  `app.` yapılacaklar, ara, eylemlerim, bildirimler, kayıt, yeni kayıt. Yapı `16-on-yuz.md` §3.
+- Sonraya: yönetim paneli, kartlar, ekler, etiketler, push, @anma, "beni dahil et"
+  (`17-kayit-kesif.md` §5).
 
 ## Açık
 
