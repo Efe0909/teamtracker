@@ -376,6 +376,17 @@ ok "$(wc_ w DELETE "$WT" "/api/teams/$TM/members/$DENIZ" '')" 404 "uye degilse 4
 ok "$(DB "select string_agg(verb, ',' order by created_at) from activity where chat_id='$TMC' and verb like 'member_%'")" "member_added,member_role,member_removed" "duvara olgu, ayni rol yazilmaz"
 ok "$(DB "select detail from activity where chat_id='$TMC' and verb='member_role'")" '{"from":"member","to":"mentor"}' "rol degisimi once/sonra"
 
+# --- anma (R4-F03) -----------------------------------------------------------
+t mention_invites
+ok "$(g n "/api/records/$VEKALET" | jq -r .access.can_edit)" false "anilmadan once duzenleyemez"
+w w POST "$WT" "/api/chats/$VCHAT/messages" '{"body":"@Deniz bakar misin? @all","reply_to_id":null}' >/dev/null
+ok "$(DB "select count(*) from record_participants where record_id='$VEKALET' and user_id='$DENIZ'")" 1 "@kisi karta katilimci olur"
+ok "$(g n "/api/records/$VEKALET" | jq -r .access.can_edit)" true "katilimci duzenler (mail forward)"
+w w POST "$WT" "/api/teams/$TM/members" "$(M "$DENIZ" member)" >/dev/null
+TMSG=$(DB "select count(*) from record_participants")
+w w POST "$WT" "/api/chats/$TMC/messages" '{"body":"@Efe duvarda","reply_to_id":null}' >/dev/null
+ok "$(DB "select count(*) from record_participants")" "$TMSG" "takim duvarinda davet yok"
+
 # --- Google kipi -------------------------------------------------------------
 t google_me
 R=$(curl -s "$BG/api/me"); ok "$(jq -r .auth <<<"$R")" google "auth"

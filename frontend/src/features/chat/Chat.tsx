@@ -7,6 +7,7 @@ import { useFeed, usePostMessage } from "../../api/hooks";
 import type { FeedItem, Uuid } from "../../api/types";
 import { describe } from "../../lib/activity";
 import { clock, formatDay, toIsoDay } from "../../lib/labels";
+import { GROUP_LABEL, GROUPS, handle, MENTION } from "../../lib/mentions";
 import { useLookup } from "../../lib/lookup";
 import { Icon } from "../../ui/icons";
 import { Avatar, Button, cx, Loading, useToast } from "../../ui/ui";
@@ -101,7 +102,7 @@ export function Chat(props: {
                       <b>{L.user(q.author_id)?.name ?? "?"}:</b> {q.body}
                     </a>
                   )}
-                  <div className={s.text}>{it.body}</div>
+                  <div className={s.text}><MentionText text={it.body ?? ""} /></div>
                   <div className={s.meta}>
                     {props.canPost && (
                       <button type="button" className={s.replyBtn} onClick={() => setReply(it)} aria-label="Yanıtla">
@@ -133,12 +134,54 @@ export function Chat(props: {
   );
 }
 
+/** Govdedeki @anmalar vurgulu; adi bilinen kisi baslikta tam adiyla. */
+function MentionText({ text }: { text: string }) {
+  const L = useLookup();
+  const parts: ReactNode[] = [];
+  let at = 0;
+  for (const m of text.matchAll(MENTION)) {
+    const i = m.index;
+    parts.push(text.slice(at, i));
+    const key = handle(m[0].slice(1));
+    const who = L.meta.users.find((u) => handle(u.name) === key);
+    parts.push(<b key={i} className={s.mention} title={who?.name}>{m[0]}</b>);
+    at = i + m[0].length;
+  }
+  parts.push(text.slice(at));
+  return <>{parts}</>;
+}
+
+/** Imlecten onceki yarim anma: "@ay" -> "ay". Yoksa null. */
+function partialMention(text: string, caret: number): string | null {
+  const m = /(?:^|\s)@([\p{L}\p{N}_.-]*)$/u.exec(text.slice(0, caret));
+  return m === null ? null : (m[1] ?? "");
+}
+
 function Composer(props: { chatId: Uuid; reply: FeedItem | null; onClearReply: () => void }) {
   const L = useLookup();
   const toast = useToast();
   const m = usePostMessage(props.chatId);
   const [text, setText] = useState(() => readDraft(props.chatId));
+  const [caret, setCaret] = useState(0);
   const box = useRef<HTMLTextAreaElement>(null);
+
+  // @ otomatik tamamlama: sozluk /api/meta'da zaten var, ek uc yok.
+  const partial = partialMention(text, caret);
+  const want = partial === null ? "" : handle(partial);
+  const suggestions: { key: string; label: string }[] = partial === null ? [] : [
+    ...GROUPS.filter((g) => g.startsWith(partial.toLowerCase())).map((g) => ({ key: g, label: GROUP_LABEL[g] })),
+    ...L.meta.users.filter((u) => u.id !== L.me.id && handle(u.name).startsWith(want))
+      .map((u) => ({ key: handle(u.name), label: u.name })),
+  ].slice(0, 6);
+  const pick = (key: string) => {
+    const before = text.slice(0, caret).replace(/@[\p{L}\p{N}_.-]*$/u, `@${key} `);
+    setText(before + text.slice(caret));
+    setCaret(before.length);
+    requestAnimationFrame(() => {
+      box.current?.focus();
+      box.current?.setSelectionRange(before.length, before.length);
+    });
+  };
 
   useEffect(() => writeDraft(props.chatId, text), [props.chatId, text]);
   useEffect(() => {
@@ -186,13 +229,34 @@ function Composer(props: { chatId: Uuid; reply: FeedItem | null; onClearReply: (
           </button>
         </div>
       )}
+      {suggestions.length > 0 && (
+        <div className={s.mentionList} role="listbox" aria-label="Anma önerileri">
+          {suggestions.map((x) => (
+            <button key={x.key} type="button" role="option" aria-selected={false} className={s.mentionOpt}
+              onMouseDown={(e) => e.preventDefault()} onClick={() => pick(x.key)}>
+              <b>@{x.key}</b> <span>{x.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
       <div className={s.compRow}>
         <textarea
           ref={box}
           rows={1}
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => {
+            setText(e.target.value);
+            setCaret(e.target.selectionStart);
+          }}
+          onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
           onKeyDown={(e) => {
+            // Oneri acikken Enter/Tab ilkini secer, gondermez.
+            const first = suggestions[0];
+            if (first !== undefined && (e.key === "Enter" || e.key === "Tab") && !e.shiftKey) {
+              e.preventDefault();
+              pick(first.key);
+              return;
+            }
             // Enter gonderir, Shift+Enter satir. Dokunmatikte Enter satir kalir.
             if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && matchMedia("(pointer: fine)").matches) {
               e.preventDefault();
