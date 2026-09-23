@@ -44,6 +44,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/teams/{id}", get(home::team))
         .route("/api/notifications", get(home::notifications))
         .route("/api/nodes", get(nodes::tree).post(nodes::create))
+        .route("/api/nodes/{id}", patch(nodes::patch).delete(nodes::delete))
         // Bilinmeyen yol da JSON: istemci hic HTML gormez.
         .fallback(|| async { AppError::NotFound })
 }

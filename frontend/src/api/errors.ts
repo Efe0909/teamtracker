@@ -22,6 +22,8 @@ export type ApiErrorCode =
   | "invalid_parent"
   | "inactive_parent"
   | "root_only"
+  | "move_cycle"
+  | "type_locked"
   | "network";
 
 export const ERRORS = {
@@ -43,6 +45,8 @@ export const ERRORS = {
   invalid_parent: "Seçilen üst düğüm bulunamadı.",
   inactive_parent: "Pasif bir düğümün altına düğüm eklenemez ya da taşınamaz.",
   root_only: "Bu tür yalnız kökte durabilir.",
+  move_cycle: "Düğüm kendi altına taşınamaz.",
+  type_locked: "Bu düğüme bağlı bir takım kartı var; türü değiştirilemez.",
   network: "Sunucuya ulaşılamadı. Bağlantını kontrol et.",
 } satisfies Record<ApiErrorCode, string>;
 

@@ -13,7 +13,10 @@
 
 use std::collections::HashMap;
 
-use axum::{extract::State, Json};
+use axum::{
+    extract::{Path, State},
+    Json,
+};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -193,6 +196,151 @@ pub async fn create(
                             where parent_id is not distinct from $1), -1) + 1)")
         .bind(b.parent_id).bind(&name).bind(b.node_type).bind(&description).bind(me.id)
         .execute(&mut *tx).await?;
+    tx.commit().await?;
+    st.rebuild_tree().await?;
+    Ok(Json(view(&st, &access).await?))
+}
+
+// --- duzenleme -------------------------------------------------------------
+
+/// Verilmeyen alan DEGISMEZ. `description` ve `parent_id` icin "yok" ile
+/// "null" AYRI: null aciklamayi siler / dugumu koke cikarir (Python
+/// `update_node`: None=dokunma, bos metin=sil).
+#[derive(Deserialize)]
+pub struct NodePatch {
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    node_type: Option<NodeType>,
+    #[serde(default, deserialize_with = "present")]
+    description: Option<Option<String>>,
+    #[serde(default, deserialize_with = "present")]
+    parent_id: Option<Option<Uuid>>,
+    /// Pasiflestir / geri ac. Yikici degil, ek yetenek istemez (spec/72 §6).
+    #[serde(default)]
+    is_active: Option<bool>,
+}
+
+/// Alan GELDIYSE (null dahil) `Some`; gelmediyse `#[serde(default)]` None.
+fn present<'de, D, T>(d: D) -> std::result::Result<Option<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    T::deserialize(d).map(Some)
+}
+
+/// Degisiklik sonrasi satirin tamami — tek UPDATE, tek islem. Python once
+/// guncelleyip SONRA tasiyordu ve tasima reddi sessizce yutuluyordu.
+struct Next {
+    name: String,
+    node_type: NodeType,
+    description: Option<String>,
+    parent_id: Option<Uuid>,
+    is_active: bool,
+}
+
+pub async fn patch(
+    State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>,
+    Body(p): Body<NodePatch>,
+) -> Result<Json<TreeView>> {
+    let id = common::id(&raw)?;
+    let name = p.name.map(name_of).transpose()?;
+    let description = p.description
+        .map(|d| common::text(d, TEXT_MAX, "invalid_description")).transpose()?;
+    let access = NodeAccess::load(&st.pool, &me).await?;
+    let _write = st.structure.lock().await;
+    let deps = deps::deps_by_node(&st.pool).await?;
+    let current_description: Option<String> =
+        sqlx::query_scalar("select description from nodes where id = $1")
+            .bind(id).fetch_optional(&st.pool).await?.flatten();
+
+    let next = {
+        let tree = common::tree(&st);
+        let node = tree.get(id).ok_or(AppError::NotFound)?;
+        if !access.on(&tree, id, NodeScope::Edit) {
+            return Err(AppError::Forbidden);
+        }
+        let next = Next {
+            name: name.unwrap_or_else(|| node.name.clone()),
+            node_type: p.node_type.unwrap_or(node.node_type),
+            description: description.unwrap_or(current_description),
+            parent_id: p.parent_id.unwrap_or(node.parent_id),
+            is_active: p.is_active.unwrap_or(node.is_active),
+        };
+        // TUR KILIDI (spec/72 §6.3): projeksiyon satiri olan dugumun turu
+        // degisirse o satir sessizce sahipsiz kalir. is_virgin DEGIL — cocugu
+        // olmak turu degistirmeye engel degil.
+        if next.node_type != node.node_type && deps::has_projection(&deps, id) {
+            return Err(AppError::Conflict("type_locked"));
+        }
+        if next.parent_id != node.parent_id {
+            match next.parent_id {
+                // Koke cikarmak da kok islemi: yalniz admin.
+                None if !access.root() => return Err(AppError::Forbidden),
+                None => {}
+                Some(target) => {
+                    let t = tree.get(target).ok_or(AppError::BadRequest("invalid_parent"))?;
+                    // Hedef dalda da yetki: yoksa yetkili oldugu dugumu
+                    // yetkisiz oldugu bir dala tasiyabilirdi.
+                    if !access.on(&tree, target, NodeScope::Edit) {
+                        return Err(AppError::Forbidden);
+                    }
+                    if !t.is_active {
+                        return Err(AppError::BadRequest("inactive_parent"));
+                    }
+                    // DONGU KORUMASI: hedef tasinanin alt agacinda (kendisi
+                    // dahil) olamaz; olsaydi agac halkaya donerdi.
+                    if tree.is_descendant(target, id) {
+                        return Err(AppError::BadRequest("move_cycle"));
+                    }
+                }
+            }
+        }
+        // Yerlesim YENI tur ve YENI yere gore (spec/72 §7).
+        if next.node_type.is_root_only() && next.parent_id.is_some() {
+            return Err(AppError::BadRequest("root_only"));
+        }
+        next
+    };
+
+    let mut tx = st.pool.begin().await?;
+    sqlx::query(
+        "update nodes set name = $2, node_type = $3, description = $4, parent_id = $5,
+                          is_active = $6
+          where id = $1")
+        .bind(id).bind(&next.name).bind(next.node_type).bind(&next.description)
+        .bind(next.parent_id).bind(next.is_active)
+        .execute(&mut *tx).await?;
+    tx.commit().await?;
+    st.rebuild_tree().await?;
+    Ok(Json(view(&st, &access).await?))
+}
+
+// --- kalici silme ----------------------------------------------------------
+
+/// KALICI silme — gundelik is bu degil, pasiflestirme. Dugum ALT AGACIYLA
+/// gider; kayitlar (`records.unit_id`) ve dal izinleri cascade ile birlikte.
+/// Iki kademe (spec/72 §6.2): bos dugumu o dalda duzenleyebilen siler,
+/// bagimlisi olan icin ayrica `hard_delete_nodes` (yine dal bagimli).
+pub async fn delete(
+    State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>,
+) -> Result<Json<TreeView>> {
+    let id = common::id(&raw)?;
+    let access = NodeAccess::load(&st.pool, &me).await?;
+    let _write = st.structure.lock().await;
+    let deps = deps::deps_by_node(&st.pool).await?;
+    {
+        let tree = common::tree(&st);
+        tree.get(id).ok_or(AppError::NotFound)?;
+        if !access.on(&tree, id, NodeScope::Edit)
+            || !(deps::is_virgin(&deps, id) || access.on(&tree, id, NodeScope::HardDelete))
+        {
+            return Err(AppError::Forbidden);
+        }
+    }
+    let mut tx = st.pool.begin().await?;
+    sqlx::query("delete from nodes where id = $1").bind(id).execute(&mut *tx).await?;
     tx.commit().await?;
     st.rebuild_tree().await?;
     Ok(Json(view(&st, &access).await?))
