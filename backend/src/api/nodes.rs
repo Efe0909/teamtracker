@@ -189,13 +189,17 @@ pub async fn create(
 
     let mut tx = st.pool.begin().await?;
     // Kardeslerin SONUNA: sira elle verilmiyor, ekleme sirasi korunuyor.
-    sqlx::query(
+    let id: Uuid = sqlx::query_scalar(
         "insert into nodes (parent_id, name, node_type, description, created_by, sort_order)
          values ($1, $2, $3, $4, $5,
                  coalesce((select max(sort_order) from nodes
-                            where parent_id is not distinct from $1), -1) + 1)")
+                            where parent_id is not distinct from $1), -1) + 1)
+         returning id")
         .bind(b.parent_id).bind(&name).bind(b.node_type).bind(&description).bind(me.id)
-        .execute(&mut *tx).await?;
+        .fetch_one(&mut *tx).await?;
+    if b.node_type == NodeType::Team {
+        sync_team(&mut tx, id, &name, description.as_deref()).await?;
+    }
     tx.commit().await?;
     st.rebuild_tree().await?;
     Ok(Json(view(&st, &access).await?))
@@ -312,9 +316,77 @@ pub async fn patch(
         .bind(id).bind(&next.name).bind(next.node_type).bind(&next.description)
         .bind(next.parent_id).bind(next.is_active)
         .execute(&mut *tx).await?;
+    // Ad/aciklama node'da degisti -> takim karti da degisir; tur 'team'e
+    // donduyse takim dogar. Senkron BURADA, cagiran ekranda degil (KNOW-262).
+    if next.node_type == NodeType::Team {
+        sync_team(&mut tx, id, &next.name, next.description.as_deref()).await?;
+    }
     tx.commit().await?;
     st.rebuild_tree().await?;
     Ok(Json(view(&st, &access).await?))
+}
+
+// --- takim projeksiyonu (spec/72 §5, KNOW-262) -----------------------------
+//
+// `team` turundeki dugum bir `teams` satiri TASIR. Ad ve aciklama node'dan
+// TURER — iki yerde ad tutmak ikisinin ayrismasi demek. Kimlik ve renk
+// kullanicidan istenmez; sohbet (takim duvari) satiri da burada dogar.
+//
+// Tek yon: node -> teams. Tur kilidi (has_projection) projeksiyonu olan
+// dugumun turunu degistirmedigi icin "tur team'den cikti" durumu yok.
+// Kalici silmede `teams.node_id` null'a duser, takim karti kalir (sema).
+
+const TEAM_COLORS: [&str; 10] = [
+    "#8e6bff", "#1c8a5b", "#b4501a", "#2c74ad", "#d13350",
+    "#b47a09", "#5a5280", "#0f766e", "#9333ea", "#be185d",
+];
+
+type Tx<'a> = sqlx::Transaction<'a, sqlx::Postgres>;
+
+/// IDEMPOTENT: satir yoksa dogar, varsa ad/aciklama tazelenir.
+async fn sync_team(tx: &mut Tx<'_>, node_id: Uuid, name: &str, description: Option<&str>) -> Result<()> {
+    let row: Option<(Uuid, String, Option<String>)> =
+        sqlx::query_as("select id, name, description from teams where node_id = $1")
+            .bind(node_id).fetch_optional(&mut **tx).await?;
+    match row {
+        None => {
+            let id = Uuid::new_v4();
+            let color = TEAM_COLORS[(id.as_u128() % TEAM_COLORS.len() as u128) as usize];
+            let team_name = free_team_name(tx, name, None).await?;
+            let chat_id: Uuid = sqlx::query_scalar("insert into chats default values returning id")
+                .fetch_one(&mut **tx).await?;
+            sqlx::query(
+                "insert into teams (id, name, description, node_id, chat_id, color)
+                 values ($1, $2, $3, $4, $5, $6)")
+                .bind(id).bind(&team_name).bind(description).bind(node_id).bind(chat_id).bind(color)
+                .execute(&mut **tx).await?;
+        }
+        Some((id, team_name, team_description))
+            if team_name != name || team_description.as_deref() != description =>
+        {
+            let team_name = free_team_name(tx, name, Some(id)).await?;
+            sqlx::query("update teams set name = $2, description = $3 where id = $1")
+                .bind(id).bind(&team_name).bind(description).execute(&mut **tx).await?;
+        }
+        Some(_) => {}
+    }
+    Ok(())
+}
+
+/// `teams.name` TEKIL ama agacta ayni ad iki dalda serbest: ikinci takim
+/// "Dolum (2)" olur, insert patlamaz.
+async fn free_team_name(tx: &mut Tx<'_>, name: &str, except: Option<Uuid>) -> Result<String> {
+    let mut candidate = name.to_string();
+    for n in 2.. {
+        let taken: Option<i32> = sqlx::query_scalar(
+            "select 1 from teams where name = $1 and ($2::uuid is null or id <> $2)")
+            .bind(&candidate).bind(except).fetch_optional(&mut **tx).await?;
+        if taken.is_none() {
+            break;
+        }
+        candidate = format!("{name} ({n})");
+    }
+    Ok(candidate)
 }
 
 // --- kalici silme ----------------------------------------------------------
