@@ -59,6 +59,17 @@ in
       default = "/var/lib/ekiptakip/media";
       description = "Yuklenen ekler. Ayri diske koyuyorsan yolu ver; servis o mount olmadan baslamaz.";
     };
+
+    bootstrapAdminsFile = lib.mkOption {
+      type = lib.types.nullOr lib.types.path;
+      default = null;
+      description = ''
+        Ilk yonetici listesi (KNOW-320): satir basina bir e-posta. Her acilista
+        bu adresler aktif admin yapilir; listeden cikarmak yetkiyi geri almaz.
+        Tipik deger bir agenix sirrinin yolu (root, 0400) — servis kullanicisi
+        okuyamaz, o yuzden systemd LoadCredential ile verilir.
+      '';
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -99,6 +110,9 @@ in
         # sqlx'te `Configuration(EmptyHost)` ile acilista patliyor. Kullanici
         # sorgu parametresi olarak verilir.
         DATABASE_URL = "postgresql:///ekiptakip?host=/run/postgresql&user=ekiptakip";
+      } // lib.optionalAttrs (cfg.bootstrapAdminsFile != null) {
+        # %d = systemd kimlik dizini ($CREDENTIALS_DIRECTORY), yalniz bu servis okur.
+        EKIPTAKIP_BOOTSTRAP_ADMINS_FILE = "%d/bootstrap-admins";
       };
 
       serviceConfig = {
@@ -106,6 +120,8 @@ in
         Group = "ekiptakip";
         EnvironmentFile = cfg.environmentFile;
         ExecStart = lib.getExe cfg.package;
+        LoadCredential = lib.optional (cfg.bootstrapAdminsFile != null)
+          "bootstrap-admins:${toString cfg.bootstrapAdminsFile}";
 
         # "+" = root olarak, User'dan bagimsiz. Mount RequiresMountsFor ile
         # zaten hazir; sahiplik her acilista kendini onarir. Yalniz kok:
