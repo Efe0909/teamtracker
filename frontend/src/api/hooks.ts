@@ -21,6 +21,7 @@ import type {
   RecordDetail,
   RecordPatch,
   RecordSummary,
+  TeamRole,
   TeamView,
   TreeView,
   UserOp,
@@ -168,6 +169,25 @@ export function usePostMessage(chat: Uuid) {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: keys.feed(chat) });
       void qc.invalidateQueries({ queryKey: keys.recordsAll });
+    },
+  });
+}
+
+// --- takim uyeligi -----------------------------------------------------------
+
+/** Yazma guncel takimi dondurur; duvar (olgu) ve benim takimlarim (meta) tazelenir. */
+export function useTeamMember(team: Uuid, chat: Uuid) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (w: { user_id: Uuid; role: TeamRole | null }) =>
+      w.role === null
+        ? request<TeamView>("DELETE", `/api/teams/${team}/members/${w.user_id}`)
+        : request<TeamView>("POST", `/api/teams/${team}/members`, w),
+    onSuccess: (v) => {
+      qc.setQueryData(keys.team(team), v);
+      void qc.invalidateQueries({ queryKey: keys.teams });
+      void qc.invalidateQueries({ queryKey: keys.feed(chat) });
+      void qc.invalidateQueries({ queryKey: keys.meta });
     },
   });
 }

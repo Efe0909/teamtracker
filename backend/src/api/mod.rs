@@ -15,7 +15,7 @@ mod records;
 
 use axum::{
     extract::State,
-    routing::{get, patch, post},
+    routing::{delete, get, patch, post},
     Json, Router,
 };
 use axum_extra::extract::cookie::SignedCookieJar;
@@ -43,6 +43,8 @@ pub fn router() -> Router<AppState> {
         .route("/api/chats/{id}/messages", post(chats::post))
         .route("/api/teams", get(home::teams))
         .route("/api/teams/{id}", get(home::team))
+        .route("/api/teams/{id}/members", post(home::set_member))
+        .route("/api/teams/{id}/members/{user}", delete(home::drop_member))
         .route("/api/notifications", get(home::notifications))
         .route("/api/nodes", get(nodes::tree).post(nodes::create))
         .route("/api/nodes/{id}", patch(nodes::patch).delete(nodes::delete))

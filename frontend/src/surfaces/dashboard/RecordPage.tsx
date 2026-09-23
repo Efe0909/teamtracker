@@ -8,7 +8,7 @@ import { useRecord } from "../../api/hooks";
 import type { Uuid } from "../../api/types";
 import { Chat } from "../../features/chat/Chat";
 import { FieldStrip } from "../../features/record/fields";
-import { ActionList, BallLine, ReadOnlyNote, RecordHead } from "../../features/record/parts";
+import { ActionList, BallLine, QuickAction, ReadOnlyNote, RecordHead } from "../../features/record/parts";
 import { useLookup } from "../../lib/lookup";
 import { Icon } from "../../ui/icons";
 import { Link, Loading } from "../../ui/ui";
@@ -65,6 +65,7 @@ export function RecordPage({ id }: { id: Uuid }) {
               canPost={d.access.can_edit}
               lockedText="Bu kayıtta yazma yetkin yok."
               empty="Henüz mesaj yok. İlk mesajı sen yaz."
+              tools={<QuickAction d={d} />}
             />
           </div>
         </aside>

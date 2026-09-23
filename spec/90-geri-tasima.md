@@ -104,9 +104,12 @@ Satırlar ara nokta 1'den sonra eklenir. Durum: `taşındı` (commit), `bırakı
 | R3-F14 | X-Accel-Redirect | — | bırakıldı — kullanıcı kararı; Pi ölçeğinde doğrudan yanıt yeter | — | — |
 | R3-F15 | Bayat oturum döngüsü | c37807b | gerek yok — 0.2'de oturum mimarisi farklı, sorun doğmuyor | — | — |
 | R4-F01, F02, F12 | Kart blokları (medya / toplantı / havuz), kartta katılım (jsonb_set, KNOW-281), kayıt açarken kart seçici | b2069ef, e74ca50 | bekliyor — kullanıcı R4'te istedi | | |
-| R4-F03 | Anma @kişi/@all/@here/@takım → uygulama içi bildirim (KNOW-263) | b2069ef | bekliyor — kullanıcı R4'te istedi | | |
-| R4-F09 | Takım üyeliği yönetimi (ekle / rol / çıkar); bugün üye yalnız tohumdan gelir | e74ca50 | bekliyor | | |
-| R4-F06, F07, F08, F14 | Pin ön yüzü (uç hazır), yeni kayıtta pillar, takım sayfasından ad/açıklama (düğüme yazar — KNOW-262, iki yönlü senkron DEĞİL), ⚡ hızlı eylem | b2069ef, e74ca50 | bekliyor | | |
+| R4-F03 | Anma: kart sohbetinde `@kişi` karta davet (katılımcı), vurgu, @ otomatik tamamlama, mobil bildirimde "seni andı". Grup anmalarının ve kişinin push ayağı push'la (R2-F04) gelir | b2069ef, e74ca50 | taşındı (push'suz) | `1970b15` | `check_api.sh` (`mention_invites`), `backend/src/mentions.rs`, `frontend/src/lib/mentions.test.ts` |
+| R4-F09 | Takım üyeliği yönetimi (ekle / rol / çıkar), duvara olgu | e74ca50 | taşındı | `a316638` | `check_api.sh` (`team_members`) |
+| R4-F08 | Takım sayfasından ad/açıklama — düğüme yazar (KNOW-262). **Sapma:** yetki düğümün (`edit_nodes` + dal); Python `manage_teams` istiyordu, ağacı arka kapıdan değiştiriyordu | b2069ef | taşındı | `d263d38` | — |
+| R4-F07 | Yeni kayıt formunda pillar | b2069ef | taşındı | `78fe41b` | — |
+| R4-F14 | ⚡ Hızlı eylem, sohbet kompozerinin üstünde (iki yüz) | b2069ef | taşındı | `a6a9d84` | — |
+| R4-F06 | Pin (ray özelleştirme) | b2069ef | bırakıldı — ray bütün hazır modülleri zaten gösteriyor (4–5); Python gerekçesi "modül sayısı arttıkça ray taşar". Taşınca gelir; uç hazır | — | — |
 | R4-F13 | Bildirim tercihi | e74ca50 | ertelendi — gönderim altyapısı yok, push'la birlikte (R2-F04) | — | — |
 | R4-F15 | Toplu seçim kutuları | e74ca50 | bırakıldı — R1-F07 ile aynı ölü iskelet | — | — |
 | R4-F04, F05, F10, F11 | Yanıt alıntısı; ek altında gövde (R3b'ye bağlı); alan diyaloğu + edit_deadline; ağaç katlama/arama | — | 0.2'de var | | |

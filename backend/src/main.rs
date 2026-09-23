@@ -16,6 +16,7 @@ mod db;
 mod error;
 #[allow(dead_code)]
 mod media;
+mod mentions;
 #[allow(dead_code)]
 mod models;
 #[allow(dead_code)]

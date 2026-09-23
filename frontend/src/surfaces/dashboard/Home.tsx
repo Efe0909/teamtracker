@@ -36,7 +36,16 @@ const READY: { slug: string; icon: IconName; name: string; desc: string; route: 
   },
 ];
 
-const SOON = ["Pivot & Analiz", "WDS Panosu", "Takvim", "Görev Tanımları", "Ekip Arşivi", "Dosyalar", "Yönetim Paneli"];
+const SOON = ["Pivot & Analiz", "WDS Panosu", "Takvim", "Görev Tanımları", "Ekip Arşivi", "Dosyalar"];
+
+/** Yalniz acabilene gorunur (ray ile ayni kural); uc yine kendisi kontrol eder. */
+const ADMIN_MOD = {
+  slug: "admin",
+  icon: "lock" as const,
+  name: "Yönetim Paneli",
+  desc: "Kullanıcılar, kapsamlar, roller ve dal izinleri.",
+  route: { name: "admin" } as const,
+};
 
 export function Home() {
   const L = useLookup();
@@ -45,6 +54,7 @@ export function Home() {
     document.title = "Panolar — EkipTakip";
   }, []);
   const c = home.data?.counts;
+  const mods = L.meta.me.is_admin || L.can("manage_users") ? [...READY, ADMIN_MOD] : READY;
 
   return (
     <div className={s.page}>
@@ -75,7 +85,7 @@ export function Home() {
       )}
 
       <div className={s.mods}>
-        {READY.map((m) => (
+        {mods.map((m) => (
           <Link key={m.slug} href={href(m.route)} className={s.mod}>
             <span className={s.modIcon}>
               <Icon name={m.icon} size={24} />

@@ -89,7 +89,9 @@ Veri olup arayüzü olanlar (ray pinleri, push abonelikleri) Rust'ta saklanır, 
   `{field, value}`), `POST /api/records/{id}/actions`, `PATCH /api/actions/{id}`,
   `GET /api/actions/mine`, `GET /api/chats/{id}/feed`, `POST /api/chats/{id}/messages`
   (kayıt kartı ve takım duvarı aynı uç), `GET /api/home`, `POST|DELETE /api/pins/{slug}`,
-  `GET /api/teams(/{id})`, `GET /api/notifications`, `GET|POST /api/nodes`,
+  `GET /api/teams(/{id})`, `POST /api/teams/{id}/members` (üye ekle ya da rol değiştir, upsert),
+  `DELETE /api/teams/{id}/members/{user}` (`manage_teams` ya da admin; duvara olgu),
+  `GET /api/notifications`, `GET|POST /api/nodes`,
   `PATCH|DELETE /api/nodes/{id}` (veri yönetimi — ağaç; okuma herkese açık, yazma
   `edit_nodes` + dal, kök işlemleri yalnız admin; `spec/90-geri-tasima.md` G5),
   `GET /api/admin`, `POST /api/admin/users`, `PATCH /api/admin/users/{id}` (tek işlem,

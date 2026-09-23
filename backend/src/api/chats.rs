@@ -17,6 +17,7 @@ use crate::{
     auth::CurrentUser,
     db::scope,
     error::{AppError, Result},
+    mentions,
     models::record::Record,
     state::AppState,
 };
@@ -139,7 +140,35 @@ pub async fn post(
         .fetch_one(&mut *tx).await?;
     if let Some(rid) = record_id {
         records::touch(&mut tx, rid).await?;
+        invite(&mut tx, rid, me.id, &body).await?;
     }
     tx.commit().await?;
     Ok(Json(Posted { id }))
+}
+
+/// Kart sohbetinde `@kisi` DAVETTIR (mentions.rs): anilan aktif kullanici
+/// karta katilimci olur, zaten ise dokunulmaz. Yazanin kendisi elenir.
+/// Takim duvarinda davet yok: uyelik takim sayfasindan yonetilir.
+async fn invite(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>, record: Uuid, by: Uuid, body: &str,
+) -> Result<()> {
+    let keys: Vec<String> = mentions::tokens(body).into_iter()
+        .filter(|k| !mentions::GROUPS.contains(&k.as_str())).collect();
+    if keys.is_empty() {
+        return Ok(());
+    }
+    // Katlama Rust'ta, SQL'de degil: Turkce I/i katlamasi SQL'de ayni sonucu
+    // vermeyebilir. Aktif kullanici sayisi kulup olceginde.
+    let users: Vec<(Uuid, String)> = sqlx::query_as("select id, name from users where is_active")
+        .fetch_all(&mut **tx).await?;
+    let ids: Vec<Uuid> = users.into_iter()
+        .filter(|(id, name)| *id != by && keys.contains(&mentions::handle(name)))
+        .map(|(id, _)| id).collect();
+    if !ids.is_empty() {
+        sqlx::query(
+            "insert into record_participants (record_id, user_id, added_by)
+             select $1, unnest($2::uuid[]), $3 on conflict do nothing")
+            .bind(record).bind(ids).bind(by).execute(&mut **tx).await?;
+    }
+    Ok(())
 }
