@@ -13,12 +13,15 @@ import type {
   Meta,
   MyAction,
   NewAction,
+  NewNode,
   NewRecord,
+  NodePatch,
   Notice,
   RecordDetail,
   RecordPatch,
   RecordSummary,
   TeamView,
+  TreeView,
   Uuid,
 } from "./types";
 
@@ -33,6 +36,7 @@ export const keys = {
   team: (id: Uuid) => ["team", id] as const,
   notifications: ["notifications"] as const,
   myActions: ["my-actions"] as const,
+  nodes: ["nodes"] as const,
 };
 
 /** Rust `db/filters.rs` sozlesmesi. Gecersiz deger sunucuda sessizce duser. */
@@ -103,6 +107,10 @@ export function useMyActions() {
   return useQuery({ queryKey: keys.myActions, queryFn: () => request<MyAction[]>("GET", "/api/actions/mine") });
 }
 
+export function useNodeTree() {
+  return useQuery({ queryKey: keys.nodes, queryFn: () => request<TreeView>("GET", "/api/nodes") });
+}
+
 // --- yazmalar --------------------------------------------------------------
 
 function afterRecordWrite(qc: QueryClient, d: RecordDetail) {
@@ -158,5 +166,42 @@ export function usePostMessage(chat: Uuid) {
       void qc.invalidateQueries({ queryKey: keys.feed(chat) });
       void qc.invalidateQueries({ queryKey: keys.recordsAll });
     },
+  });
+}
+
+// --- yapi (veri yonetimi) ---------------------------------------------------
+
+/** Yazma guncel agaci dondurur. Dugumler HER ekrani besliyor (`/api/meta`:
+ *  birim listesi, yollar, takimlar); kalici silme kayitlari da goturur. */
+function afterTreeWrite(qc: QueryClient, t: TreeView) {
+  qc.setQueryData(keys.nodes, t);
+  void qc.invalidateQueries({ queryKey: keys.meta });
+  void qc.invalidateQueries({ queryKey: keys.teams });
+  void qc.invalidateQueries({ queryKey: keys.recordsAll });
+  void qc.invalidateQueries({ queryKey: keys.home });
+}
+
+export function useCreateNode() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (n: NewNode) => request<TreeView>("POST", "/api/nodes", n),
+    onSuccess: (t) => afterTreeWrite(qc, t),
+  });
+}
+
+export function usePatchNode() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, patch }: { id: Uuid; patch: NodePatch }) =>
+      request<TreeView>("PATCH", `/api/nodes/${id}`, patch),
+    onSuccess: (t) => afterTreeWrite(qc, t),
+  });
+}
+
+export function useDeleteNode() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: Uuid) => request<TreeView>("DELETE", `/api/nodes/${id}`),
+    onSuccess: (t) => afterTreeWrite(qc, t),
   });
 }

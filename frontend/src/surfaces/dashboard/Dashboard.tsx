@@ -9,6 +9,7 @@ import { Avatar, cx, Link } from "../../ui/ui";
 import { ErrorScreen } from "../errors/ErrorScreen";
 import { signOut } from "../Session";
 import s from "./dashboard.module.css";
+import { DataTree } from "./DataTree";
 import { Home } from "./Home";
 import { RecordPage } from "./RecordPage";
 import { href, parse, type Route } from "./routes";
@@ -39,6 +40,8 @@ function Page({ route }: { route: Route }) {
       return <Teams />;
     case "team":
       return <TeamPage id={route.id} />;
+    case "tree":
+      return <DataTree />;
     case "notFound":
       return <ErrorScreen code="not_found" />;
     default: {
@@ -52,6 +55,7 @@ const NAV: { route: Route; icon: IconName; label: string; match: Route["name"][]
   { route: { name: "home" }, icon: "home", label: "Panolar", match: ["home"] },
   { route: { name: "tasks", query: {} }, icon: "tasks", label: "Görevler", match: ["tasks", "record"] },
   { route: { name: "teams" }, icon: "teams", label: "Takımlar", match: ["teams", "team"] },
+  { route: { name: "tree" }, icon: "tree", label: "Veri", match: ["tree"] },
 ];
 
 function Rail({ route }: { route: Route }) {

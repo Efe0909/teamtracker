@@ -32,7 +32,10 @@ export function Teams() {
       </div>
       <p className={s.lead}>Her takımın üyeleri, açık kayıtları ve kendi duvarı var. Üyesi olduğun takımlar önce.</p>
       {q.data.length === 0 ? (
-        <Empty title="Henüz takım yok">Takımlar yönetim tarafında kurulur.</Empty>
+        <Empty title="Henüz takım yok">
+          <Link href={href({ name: "tree" })}>Veri Yönetimi</Link>'nde <b>takım</b> türünde bir düğüm aç, kartı burada
+          kendiliğinden belirir.
+        </Empty>
       ) : (
         <div className={s.teamGrid}>
           {[...q.data]

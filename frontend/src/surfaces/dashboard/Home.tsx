@@ -10,7 +10,7 @@ import s from "./dashboard.module.css";
 import { href, type Route } from "./routes";
 
 // Modul katalogu ON YUZDE: ekran metni ve rotasi burada (spec/15 kural 3).
-// Ray bugun sabit (iki hazir modul); pinleme modul sayisi artinca anlam
+// Ray bugun sabit (uc hazir modul); pinleme modul sayisi artinca anlam
 // kazanir — uc Rust'ta hazir (`/api/pins/{slug}`).
 const READY: { slug: string; icon: IconName; name: string; desc: string; route: Route }[] = [
   {
@@ -27,9 +27,16 @@ const READY: { slug: string; icon: IconName; name: string; desc: string; route: 
     desc: "Takımlar, roller, açık kayıtlar ve takım duvarı.",
     route: { name: "teams" },
   },
+  {
+    slug: "outcome-tree",
+    icon: "tree",
+    name: "Veri Yönetimi",
+    desc: "Yapının düzenlendiği ekran: düğüm ekle, adlandır, açıklama yaz, taşı, pasifleştir.",
+    route: { name: "tree" },
+  },
 ];
 
-const SOON = ["Veri Yönetimi", "Pivot & Analiz", "WDS Panosu", "Takvim", "Görev Tanımları", "Ekip Arşivi", "Dosyalar", "Yönetim Paneli"];
+const SOON = ["Pivot & Analiz", "WDS Panosu", "Takvim", "Görev Tanımları", "Ekip Arşivi", "Dosyalar", "Yönetim Paneli"];
 
 export function Home() {
   const L = useLookup();

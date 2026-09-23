@@ -195,3 +195,44 @@ export interface Notice {
   team_id: Uuid | null;
   title: string;
 }
+
+// --- veri yonetimi (/api/nodes) ---------------------------------------------
+
+export interface TreeNode {
+  id: Uuid;
+  parent_id: Uuid | null;
+  name: string;
+  node_type: NodeType;
+  description: string | null;
+  is_active: boolean;
+  depth: number;
+  child_count: number;
+  can_edit: boolean;
+  can_retype: boolean;
+  can_hard_delete: boolean;
+  delete_counts: { children: number; records: number; permissions: number };
+}
+
+export interface TreeView {
+  can_add_root: boolean;
+  /** Yerlesim kurali sunucuda (KNOW-241): form tur listesini buradan alir. */
+  root_types: NodeType[];
+  child_types: NodeType[];
+  nodes: TreeNode[];
+}
+
+export interface NewNode {
+  name: string;
+  node_type: NodeType;
+  parent_id: Uuid | null;
+  description: string | null;
+}
+
+/** Verilmeyen alan degismez; `description`/`parent_id` null = sil / koke. */
+export interface NodePatch {
+  name?: string;
+  node_type?: NodeType;
+  description?: string | null;
+  parent_id?: Uuid | null;
+  is_active?: boolean;
+}
