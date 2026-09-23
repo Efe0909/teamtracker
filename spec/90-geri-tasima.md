@@ -18,16 +18,23 @@ Bu belge iki şeyi tutuyor:
 
 ```
 her aralık için:
-  1. ÇIKARIM   (sonnet, salt okur)  commit mesajı > Stele > kod (e02d71d) + Python testleri
-                                    → ledger: davranış, gerekçe, 0.2'deki durumu, boyut, şüpheler
+  0. METİN     (betik, model yok)   Python şablon metinlerini React'te arar; aralığa düşen adaylar
+                                    çıkarıma kontrol listesi olarak gider
+  1a. ETİKET   (haiku, salt okur)   commit başına: kullanıcıya görünür mü, hangi alan/dosyalar.
+                                    Altyapı (güvenlik altyapısı, göç, deploy) derin incelemeye gitmez
+  1b. ÇIKARIM  (sonnet, salt okur)  YALNIZ görünür commit'ler: commit mesajı > Stele > kod (e02d71d)
+                                    + Python testleri → ledger: davranış, gerekçe, 0.2'deki durumu,
+                                    boyut, şüpheler
   ── ara nokta 1 (orkestratör → kullanıcı): hangileri taşınsın, bilinmeyen gerekçeler,
                                               bayat ya da saçma kurallar, gerilemeler
   2. UYGULAMA  (opus)               onaylı özellik başına bir küçük commit (Rust + React birlikte);
                                     commit öncesi clippy + npm run build
-  3. TEST      (sonnet)             özellik commit'lerine karşı test (check_api.sh iddiası, Rust birim
-                                    testi); yakaladığını düzeltir (ayrı fix commit'i);
+  3. TEST      (sonnet)             özellik commit'lerine karşı test (check_api.sh iddiası, vitest);
+                                    davranış başına BİR iddia, tekrar yok (ponytail ultra);
+                                    yakaladığını DÜZELTMEZ, orkestratöre raporlar;
                                     doğruluk kaynaklarını günceller (bu belge, spec/15, Stele)
-  ── ara nokta 2 (orkestratör → kullanıcı): testin yakaladıkları, kaynak ile uygulama farkları
+  ── ara nokta 2 (orkestratör → kullanıcı): testin yakaladıkları, kaynak ile uygulama farkları;
+                                              düzeltmeyi orkestratör uygulama ajanına verir
   4. PR        aralık başına bir dal (claude/backport-rN), bir PR
 ```
 
