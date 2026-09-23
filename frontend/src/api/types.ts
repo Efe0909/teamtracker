@@ -213,6 +213,47 @@ export interface TreeNode {
   delete_counts: { children: number; records: number; permissions: number };
 }
 
+// --- /api/admin (yonetim paneli) -------------------------------------------
+
+export interface AdminScopeRow {
+  name: string;
+  /** Dogrudan verildiyse panelden alinir; rolden geleni rol duzenlemesi goturur. */
+  direct: boolean;
+  via_roles: Uuid[];
+}
+
+export interface AdminPerson {
+  id: Uuid;
+  email: string;
+  name: string;
+  color: string | null;
+  is_admin: boolean;
+  is_active: boolean;
+  last_seen_at: IsoTime | null;
+  scopes: AdminScopeRow[];
+  role_ids: Uuid[];
+  node_ids: Uuid[];
+}
+
+export interface AdminRole {
+  id: Uuid;
+  name: string;
+  scopes: string[];
+}
+
+export interface AdminView {
+  is_admin: boolean;
+  scopes: string[];
+  roles: AdminRole[];
+  people: AdminPerson[];
+}
+
+/** Rust `admin::UserOp`: kisi uzerinde tek islem. */
+export type UserOp =
+  | { op: "active" | "admin"; value: boolean }
+  | { op: "grant_scope" | "revoke_scope"; value: string }
+  | { op: "grant_role" | "revoke_role" | "grant_node" | "revoke_node"; value: Uuid };
+
 export interface TreeView {
   can_add_root: boolean;
   /** Yerlesim kurali sunucuda (KNOW-241): form tur listesini buradan alir. */

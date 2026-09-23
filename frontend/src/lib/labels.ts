@@ -41,6 +41,18 @@ export const NODE_TYPE: Record<NodeType, string> = {
   generic: "Genel",
 };
 
+/** Kapsam anahtari -> ne yapmaya izin verdigi (Python `SCOPES` degerleri).
+ *  Anahtar listesi sunucudan gelir; burada olmayan yeni kapsam anahtariyla gorunur. */
+export const SCOPE: Readonly<Partial<Record<string, string>>> = {
+  edit_nodes: "Yapıyı düzenle — düğüm ekle, adlandır, taşı, pasifleştir",
+  hard_delete_nodes: "Bağımlısı olan düğümü kalıcı sil (kayıtlar ve alt ağaç dahil)",
+  manage_users: "Kullanıcı ekle, kapat, yetki ver",
+  manage_teams: "Takım kur, üye ekle ve çıkar",
+  create_tags: "Etiket sözlüğünü genişlet — yeni etiket adı tanımla",
+  edit_deadline: "Son tarih değiştir — kayıtların ve eylemlerin teslim tarihi",
+  tag_media: "Ekleri etiketle — katıldığın sohbetlerdeki görsellere etiket ekle/çıkar",
+};
+
 /** Secim listelerinin sirasi (Record anahtar sirasi garanti degil). */
 export const STATUS_ORDER: RecordStatus[] = ["open", "in_progress", "pending", "closed"];
 export const ACTION_STATUS_ORDER: ActionStatus[] = ["open", "in_progress", "closed", "cancelled"];

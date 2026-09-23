@@ -32,6 +32,10 @@ pub struct Config {
     pub vapid_public: String,
     pub vapid_sub: String,
 
+    /// Ilk yonetici listesinin DOSYA yolu (KNOW-320): satir basina bir
+    /// e-posta. Icerik degil yol: liste agenix sirri, ortamda gorunmesin.
+    pub bootstrap_admins_file: Option<String>,
+
     pub env: Env,
 }
 
@@ -106,6 +110,7 @@ impl Config {
             vapid_public: var("VAPID_PUBLIC"),
             vapid_sub: Some(var("VAPID_SUB")).filter(|s| !s.is_empty())
                 .unwrap_or_else(|| "mailto:yonetici@polonyum.com".into()),
+            bootstrap_admins_file: Some(var("EKIPTAKIP_BOOTSTRAP_ADMINS_FILE")).filter(|s| !s.is_empty()),
             env,
         })
     }

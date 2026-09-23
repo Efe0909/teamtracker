@@ -6,6 +6,7 @@
 mod api;
 mod audit;
 mod auth;
+mod bootstrap;
 mod config;
 mod csrf;
 // Alan katmani: agac, kapsam, filtre, akis. Butunu Python'dan tasindi, JSON
@@ -35,6 +36,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cfg = config::Config::from_env()?;
     let pool = db::pool::connect(&cfg.database_url).await?;
     db::migrate(&pool).await?;
+    if let Some(path) = &cfg.bootstrap_admins_file {
+        bootstrap::admins(&pool, path).await;
+    }
 
     // Agac ACILISTA tek sorguyla kurulur, her istekte SQL'e gidilmez (KNOW-179).
     let addr = SocketAddr::new(cfg.bind, cfg.port);

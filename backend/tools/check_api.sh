@@ -312,6 +312,56 @@ PT2=$(DB "select last_seen_at from users where id='$EFE'")
 ok "$([ -n "$PT1" ] && echo V || echo Y)" V "damga yazildi"
 ok "$([ "$PT1" = "$PT2" ] && echo V || echo Y)" V "bir dakika icinde ikinci istek yeniden yazmaz"
 
+# --- yonetim paneli (R3-F01..F05, spec/71) -----------------------------------
+# Selin admin; Efe'ye manage_users panelden verilir; Deniz yetkisiz baslar.
+U(){ printf '{"op":"%s","value":%s}' "$1" "$2"; }
+
+t admin_gate
+ok "$(code -b "$J/n" "$B/api/admin")" 403 "yetkisiz okuyamaz"
+ok "$(wc_ w PATCH "$WT" "/api/admin/users/$EFE" "$(U grant_scope '"manage_users"')")" 200 "admin kapsam verir"
+ok "$(DB "select detail from security_events where event_type='scope_granted' order by created_at desc limit 1")" manage_users "denetim izi"
+ok "$(g e /api/admin | jq -r .is_admin)" false "manage_users okur"
+ok "$(wc_ e POST "$ET" /api/admin/roles '{"name":"x","scopes":[]}')" 403 "manage_users rol tanimlayamaz"
+ok "$(wc_ e PATCH "$ET" "/api/admin/users/$DENIZ" "$(U admin true)")" 403 "manage_users admin yapamaz"
+ok "$(wc_ e PATCH "$ET" "/api/admin/users/$SELIN" "$(U active false)")" 403 "manage_users admini kapatamaz"
+ok "$(w w PATCH "$WT" "/api/admin/users/$EFE" "$(U grant_scope '"yok_boyle"')" | jq -r .error)" invalid_scope "gecersiz kapsam"
+
+t admin_users
+ok "$(w e POST "$ET" /api/admin/users '{"email":" Yeni@X.org ","name":"Yeni"}' | jq -r '.people[]|select(.email=="yeni@x.org").name')" Yeni "davet, e-posta kucuk harf"
+ok "$(w e POST "$ET" /api/admin/users '{"email":"YENI@x.org","name":"Iki"}' | jq -r .error)" user_exists "ayni e-posta"
+ok "$(w e POST "$ET" /api/admin/users '{"email":"bozuk","name":"x"}' | jq -r .error)" invalid_email "bozuk e-posta"
+YENI=$(DB "select id from users where email='yeni@x.org'")
+w e PATCH "$ET" "/api/admin/users/$YENI" "$(U active false)" >/dev/null
+ok "$(DB "select detail from security_events where event_type='deactivation' and email='yeni@x.org'")" kapatildi "kapatma denetim izi"
+
+t admin_lockout
+ok "$(w w PATCH "$WT" "/api/admin/users/$SELIN" "$(U admin false)" | jq -r .error)" self_admin "kendi adminligini kapatamaz"
+ok "$(w w PATCH "$WT" "/api/admin/users/$SELIN" "$(U active false)" | jq -r .error)" last_admin "son admin kapatilamaz"
+w w PATCH "$WT" "/api/admin/users/$DENIZ" "$(U admin true)" >/dev/null
+ok "$(wc_ n PATCH "$NT" "/api/admin/users/$SELIN" "$(U admin false)")" 200 "ikinci admin varken dusurulur"
+w n PATCH "$NT" "/api/admin/users/$SELIN" "$(U admin true)" >/dev/null
+w w PATCH "$WT" "/api/admin/users/$DENIZ" "$(U admin false)" >/dev/null
+ok "$(DB "select count(*) from security_events where event_type in ('admin_granted','admin_revoked')")" 4 "her degisim denetimde"
+
+t admin_roles
+ROL=$(w w POST "$WT" /api/admin/roles '{"name":"Yapici","scopes":["edit_deadline"]}' | jq -r '.roles[]|select(.name=="Yapici").id')
+ok "$(w w POST "$WT" /api/admin/roles '{"name":"Yapici","scopes":[]}' | jq -r .error)" role_exists "ayni ad"
+ok "$(w w POST "$WT" /api/admin/roles '{"name":"Z","scopes":["yok"]}' | jq -r .error)" invalid_scope "gecersiz kapsam"
+w e PATCH "$ET" "/api/admin/users/$DENIZ" "$(U grant_role "\"$ROL\"")" >/dev/null   # manage_users ATAYABILIR
+w w PATCH "$WT" "/api/admin/users/$DENIZ" "$(U grant_scope '"create_tags"')" >/dev/null
+w w PATCH "$WT" "/api/admin/roles/$ROL" '{"scopes":["edit_deadline","create_tags"]}' >/dev/null
+ok "$(g w /api/admin | jq -c ".people[]|select(.id==\"$DENIZ\").scopes[]|select(.name==\"create_tags\")|[.direct,(.via_roles|length)]")" "[true,1]" "kaynak: dogrudan + rol"
+ok "$(g n /api/meta | jq -r '.me.scopes|index("edit_deadline")!=null')" true "rol duzenlemesi aninda yansir"
+w w DELETE "$WT" "/api/admin/roles/$ROL" '' >/dev/null
+ok "$(g n /api/meta | jq -c '[.me.scopes|index("edit_deadline"), (index("create_tags")!=null)]')" "[null,true]" "rol gitti, dogrudan verilen kaldi"
+
+t admin_branch_scope
+# Python'da dal izninin arayuzu yoktu; edit_nodes dalsiz ise yaramaz.
+w w PATCH "$WT" "/api/admin/users/$DENIZ" "$(U grant_node "\"$MALZEME\"")" >/dev/null
+ok "$(g n /api/nodes | jq -r ".nodes[]|select(.id==\"$TEDARIK\").can_edit")" true "verilen dalda duzenler"
+w w PATCH "$WT" "/api/admin/users/$DENIZ" "$(U revoke_node "\"$MALZEME\"")" >/dev/null
+ok "$(g n /api/nodes | jq -r ".nodes[]|select(.id==\"$TEDARIK\").can_edit")" false "geri alinca duzenleyemez"
+
 # --- Google kipi -------------------------------------------------------------
 t google_me
 R=$(curl -s "$BG/api/me"); ok "$(jq -r .auth <<<"$R")" google "auth"

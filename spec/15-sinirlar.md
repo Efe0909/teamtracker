@@ -91,7 +91,11 @@ Veri olup arayüzü olanlar (ray pinleri, push abonelikleri) Rust'ta saklanır, 
   (kayıt kartı ve takım duvarı aynı uç), `GET /api/home`, `POST|DELETE /api/pins/{slug}`,
   `GET /api/teams(/{id})`, `GET /api/notifications`, `GET|POST /api/nodes`,
   `PATCH|DELETE /api/nodes/{id}` (veri yönetimi — ağaç; okuma herkese açık, yazma
-  `edit_nodes` + dal, kök işlemleri yalnız admin; `spec/90-geri-tasima.md` G5).
+  `edit_nodes` + dal, kök işlemleri yalnız admin; `spec/90-geri-tasima.md` G5),
+  `GET /api/admin`, `POST /api/admin/users`, `PATCH /api/admin/users/{id}` (tek işlem,
+  tipli `{op, value}`: aç/kapat, admin, kapsam, rol, dal izni), `POST /api/admin/roles`,
+  `PATCH|DELETE /api/admin/roles/{id}` (yönetim paneli — `manage_users` ya da admin; admin
+  bayrağı ve rol tanımı yalnız admin; `spec/71`).
 - Alan değişimi `activity`'ye olgu yazar: `verb=field_changed`, `target_label=<alan>`,
   `detail={"from","to"}`. Cümleyi ön yüz kurar (`frontend/src/lib/activity.ts`).
 - Ön yüz: `dashboard.` panolar, görev tablosu, kayıt, takımlar, veri yönetimi (ağaç);
