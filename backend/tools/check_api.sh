@@ -175,6 +175,143 @@ ok "$(g w /api/teams | jq length)" 3 "takimlar"
 ok "$(g w /api/notifications | jq 'map(select(.actor_id=="'"$SELIN"'"))|length')" 0 "kendi hareketim yok"
 ok "$(w w POST "$WT" /api/pins/uydurma '' | jq -r .error)" not_found "bilinmeyen pin"
 
+# --- veri yonetimi: agac uclari (R2-F05, spec/72) ---------------------------
+# Efe: edit_nodes + Malzeme Temini dali. Deniz: edit_nodes + Uretim Hatti A
+# dali (tohumda tanimli, yukarida). Selin admin.
+EFE=$(DB "select id from users where name='Efe'")
+curl -s -c "$J/e" -o /dev/null "$B/api/auth/dev-login?user_id=$EFE"
+ET=$(curl -s -b "$J/e" "$B/api/me" | jq -r .csrf)
+
+ROOT1=$(DB "select id from nodes where name='Yıllık Bayi Toplantısı 2026'")
+MALZEME=$(DB "select id from nodes where name='Malzeme Temini'")
+BUTCEN=$(DB "select id from nodes where name='Bütçe Onayı'")
+TEDARIK=$(DB "select id from nodes where name='Tedarikçi Seçimi'")
+MEKAN=$(DB "select id from nodes where name='Mekan & Lojistik'")
+SALON=$(DB "select id from nodes where name='Salon Sözleşmesi'")
+ULASIM=$(DB "select id from nodes where name='Ulaşım & Konaklama'")
+ILETISIM=$(DB "select id from nodes where name='İletişim & Tanıtım'")
+URETIM=$(DB "select id from nodes where name='Üretim Hattı A'")
+DOLUM=$(DB "select id from nodes where name='Dolum Makinesi'")
+KAPAK=$(DB "select id from nodes where name='Kapak Ünitesi'")
+ETIKET=$(DB "select id from nodes where name='Etiketleme Ünitesi'")
+
+t node_read_open_to_all
+# Yetkisiz kullanici bile agaci OKUR (spec/21 §11'den bilincli sapma, spec/90
+# yeni G maddesi): butun can_* false ama 200 doner, 403 degil.
+BOS=$(DB "insert into users (email,name) values ('bos@ekiptakip.local','Yetkisiz') returning id" | head -1)
+curl -s -c "$J/bos" -o /dev/null "$B/api/auth/dev-login?user_id=$BOS"
+R=$(g bos /api/nodes)
+ok "$(jq -r .can_add_root <<<"$R")" false "kok ekleyemez"
+ok "$(jq -c '[.nodes[].can_edit]|unique' <<<"$R")" '[false]' "hicbir dugumde duzenleyemez"
+ok "$(jq -c '[.nodes[].can_hard_delete]|unique' <<<"$R")" '[false]' "kalici silemez"
+
+t node_root_only_admin
+SE2=$(DB "select count(*) from security_events where event_type='permission_denied'")
+ok "$(wc_ e POST "$ET" /api/nodes '{"name":"Efe kok denemesi","node_type":"generic","parent_id":null}')" 403 "editor ama admin degil: kok ekleyemez"
+ok "$(DB "select count(*) from security_events where event_type='permission_denied'")" "$((SE2+1))" "403 denetime yazildi"
+ok "$(DB "select detail from security_events where event_type='permission_denied' order by created_at desc limit 1")" "POST /api/nodes" "detay"
+ok "$(wc_ e PATCH "$ET" "/api/nodes/$BUTCEN" '{"parent_id":null}')" 403 "kendi dalindaki dugumu bile koke tasiyamaz"
+R=$(w w POST "$WT" /api/nodes '{"name":"Selin kok denemesi","node_type":"generic","parent_id":null}')
+ok "$(jq -r ".nodes[]|select(.name==\"Selin kok denemesi\").depth" <<<"$R")" 0 "admin kok ekler"
+R=$(w w PATCH "$WT" "/api/nodes/$ILETISIM" '{"parent_id":null}')
+ok "$(jq -r ".nodes[]|select(.id==\"$ILETISIM\").parent_id" <<<"$R")" null "admin koke tasir"
+w w PATCH "$WT" "/api/nodes/$ILETISIM" "{\"parent_id\":\"$ROOT1\"}" >/dev/null   # eski yerine geri
+
+t node_branch_scope_iki_yonlu
+# Efe'nin Malzeme Temini'nde yetkisi var; Uretim Hatti A'da yok. Kaynakta
+# yetkili olmak hedefte yetkisiz olmayi telafi etmez.
+ok "$(wc_ e PATCH "$ET" "/api/nodes/$TEDARIK" "{\"parent_id\":\"$URETIM\"}")" 403 "hedef dalda izin yok"
+ok "$(DB "select parent_id from nodes where id='$TEDARIK'")" "$MALZEME" "tasinmadi"
+
+t node_move_cycle
+ok "$(w w PATCH "$WT" "/api/nodes/$MALZEME" "{\"parent_id\":\"$BUTCEN\"}" | jq -r .error)" move_cycle "kendi cocugunun altina"
+
+t node_root_only_type
+ok "$(w w POST "$WT" /api/nodes "{\"name\":\"Yeni Hücre\",\"node_type\":\"cell\",\"parent_id\":\"$MALZEME\"}" | jq -r .error)" root_only "cell yalniz kokte (ekleme)"
+ok "$(w w PATCH "$WT" "/api/nodes/$ILETISIM" '{"node_type":"cell"}' | jq -r .error)" root_only "cell yalniz kokte (tur degisimi)"
+
+t node_inactive_parent
+w w PATCH "$WT" "/api/nodes/$SALON" '{"is_active":false}' >/dev/null
+ok "$(w w POST "$WT" /api/nodes "{\"name\":\"X\",\"node_type\":\"generic\",\"parent_id\":\"$SALON\"}" | jq -r .error)" inactive_parent "pasifin altina eklenemez"
+ok "$(w w PATCH "$WT" "/api/nodes/$ULASIM" "{\"parent_id\":\"$SALON\"}" | jq -r .error)" inactive_parent "pasifin altina tasinamaz"
+w w PATCH "$WT" "/api/nodes/$SALON" '{"is_active":true}' >/dev/null
+
+t node_invalid_name
+ok "$(w w POST "$WT" /api/nodes '{"name":"","node_type":"generic","parent_id":null}' | jq -r .error)" invalid_name "bos ad"
+LONG=$(printf 'a%.0s' $(seq 1 201))
+ok "$(w w POST "$WT" /api/nodes "{\"name\":\"$LONG\",\"node_type\":\"generic\",\"parent_id\":null}" | jq -r .error)" invalid_name "201 karakter"
+
+t node_invalid_parent
+ok "$(w w POST "$WT" /api/nodes '{"name":"X","node_type":"generic","parent_id":"00000000-0000-0000-0000-000000000000"}' | jq -r .error)" invalid_parent "olmayan ust"
+
+t node_team_projection
+# Tur 'team' -> teams satiri + sohbet dogar (KNOW-262). Ayni ad ikinci kez
+# kullanilinca "(2)" olur (teams.name TEKIL, dugum adi degil).
+w w POST "$WT" /api/nodes "{\"name\":\"Kalite Takımı\",\"node_type\":\"team\",\"parent_id\":\"$MALZEME\"}" >/dev/null
+TNA=$(DB "select id from nodes where name='Kalite Takımı' and parent_id='$MALZEME'")
+ok "$(DB "select count(*) from nodes where id='$TNA'")" 1 "dugum olustu"
+ok "$(DB "select name from teams where node_id='$TNA'")" "Kalite Takımı" "takim satiri dogdu"
+ok "$(DB "select count(*) from chats where id=(select chat_id from teams where node_id='$TNA')")" 1 "sohbeti var"
+ok "$(DB "select count(*) from activity where verb='team_created' and subject_label='Kalite Takımı'")" 1 "gecmise yazildi"
+ok "$(DB "select count(*) from activity where verb='node_created' and subject_label='Kalite Takımı'")" 1 "node_created de ayrica yazilir"
+ok "$(DB "select chat_id is null from activity where verb='node_created' and subject_label='Kalite Takımı'")" t "dugum olaylari chat_id NULL (akista cizilmez)"
+
+w w POST "$WT" /api/nodes "{\"name\":\"Kalite Takımı\",\"node_type\":\"team\",\"parent_id\":\"$URETIM\"}" >/dev/null
+TNB=$(DB "select id from nodes where name='Kalite Takımı' and parent_id='$URETIM'")
+ok "$(DB "select name from teams where node_id='$TNB'")" "Kalite Takımı (2)" "ikinci ayni ad (2) olur"
+
+w w PATCH "$WT" "/api/nodes/$TNA" '{"name":"Kalite Ekibi"}' >/dev/null
+ok "$(DB "select name from teams where node_id='$TNA'")" "Kalite Ekibi" "yeniden adlandirma takima da isliyor"
+
+ok "$(w w PATCH "$WT" "/api/nodes/$TNA" '{"node_type":"generic"}' | jq -r .error)" type_locked "projeksiyonu olan dugumun turu kilitli"
+ok "$(wc_ w PATCH "$WT" "/api/nodes/$TNA" '{"node_type":"generic"}')" 409 "type_locked 409 doner"
+
+t node_hard_delete
+ok "$(wc_ n DELETE "$NT" "/api/nodes/$ETIKET" '')" 200 "bos (virgin) dugumu yalniz edit ile siler"
+ok "$(DB "select count(*) from nodes where id='$ETIKET'")" 0 "gitti"
+
+ok "$(wc_ n DELETE "$NT" "/api/nodes/$DOLUM" '')" 403 "bagimlisi (cocuk + kayit) olani edit tek basina silemez"
+DB "insert into user_scopes (user_id,scope) values ('$DENIZ','hard_delete_nodes')" >/dev/null
+KREC=$(DB "select id from records where unit_id='$KAPAK'")
+ok "$(wc_ n DELETE "$NT" "/api/nodes/$DOLUM" '')" 200 "hard_delete_nodes ile siler"
+ok "$(DB "select count(*) from nodes where id='$DOLUM'")" 0 "dugum gitti"
+ok "$(DB "select count(*) from nodes where id='$KAPAK'")" 0 "alt agac da gitti"
+ok "$(DB "select count(*) from records where id='$KREC'")" 0 "bagimli kayit da gitti"
+ok "$(DB "select chat_id is null from activity where verb='node_deleted' and subject_label='Dolum Makinesi'")" t "silme de NULL chat_id ile denetime yazilir"
+ok "$(DB "select detail from activity where verb='node_deleted' and subject_label='Dolum Makinesi'")" '{"descendants":1}' "goturulen alt dugum sayisi (Kapak Ünitesi)"
+DB "delete from user_scopes where user_id='$DENIZ' and scope='hard_delete_nodes'" >/dev/null
+
+ok "$(wc_ w DELETE "$WT" "/api/nodes/$TNB" '')" 200 "admin kalici silmede yetenegi atlar"
+ok "$(DB "select count(*) from nodes where id='$TNB'")" 0 "dugum gitti"
+ok "$(DB "select node_id from teams where name='Kalite Takımı (2)'")" "" "takimin node_id'si null oldu"
+ok "$(DB "select count(*) from teams where name='Kalite Takımı (2)'")" 1 "takim satiri hayatta"
+
+t node_activity_olgu
+AC0=$(DB "select count(*) from activity where verb='node_changed'")
+w w PATCH "$WT" "/api/nodes/$ULASIM" '{"name":"Ulaşım Planı","description":"detaylar"}' >/dev/null
+ok "$(DB "select count(*) from activity where verb='node_changed'")" "$((AC0+2))" "iki alan degisti, iki satir"
+ok "$(DB "select detail from activity where verb='node_changed' and target_label='name' order by created_at desc limit 1")" '{"from":"Ulaşım & Konaklama","to":"Ulaşım Planı"}' "ad olgu, cumle degil"
+ok "$(DB "select detail from activity where verb='node_changed' and target_label='description' order by created_at desc limit 1")" '{"from":null,"to":"detaylar"}' "aciklama olgu"
+w w PATCH "$WT" "/api/nodes/$ULASIM" '{"name":"Ulaşım Planı","description":"detaylar"}' >/dev/null
+ok "$(DB "select count(*) from activity where verb='node_changed'")" "$((AC0+2))" "degismeyince iz yok"
+
+# null ACIKLAMAYI SILER, VERILMEYEN alan (name) degismez.
+w w PATCH "$WT" "/api/nodes/$ULASIM" '{"description":null}' >/dev/null
+ok "$(DB "select description from nodes where id='$ULASIM'")" "" "description null ile silinir"
+ok "$(DB "select name from nodes where id='$ULASIM'")" "Ulaşım Planı" "verilmeyen alan (name) degismez"
+
+w w PATCH "$WT" "/api/nodes/$TEDARIK" "{\"parent_id\":\"$MEKAN\"}" >/dev/null
+ok "$(DB "select detail from activity where verb='node_changed' and target_label='parent' order by created_at desc limit 1")" '{"from":"Malzeme Temini","to":"Mekan & Lojistik"}' "ust degisimi ADLA yazilir"
+w w PATCH "$WT" "/api/nodes/$TEDARIK" "{\"parent_id\":\"$MALZEME\"}" >/dev/null   # eski yerine geri
+
+t node_presence
+curl -s -b "$J/e" -o /dev/null "$B/api/me"
+PT1=$(DB "select last_seen_at from users where id='$EFE'")
+curl -s -b "$J/e" -o /dev/null "$B/api/me"
+PT2=$(DB "select last_seen_at from users where id='$EFE'")
+ok "$([ -n "$PT1" ] && echo V || echo Y)" V "damga yazildi"
+ok "$([ "$PT1" = "$PT2" ] && echo V || echo Y)" V "bir dakika icinde ikinci istek yeniden yazmaz"
+
 # --- Google kipi -------------------------------------------------------------
 t google_me
 R=$(curl -s "$BG/api/me"); ok "$(jq -r .auth <<<"$R")" google "auth"

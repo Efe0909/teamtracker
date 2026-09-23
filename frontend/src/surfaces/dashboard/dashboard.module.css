@@ -543,3 +543,124 @@ a.stat:hover {
   margin: 0 0 var(--s-2);
   font-size: var(--fs-md);
 }
+
+/* --- veri yonetimi (DataTree) ------------------------------------------ */
+.treeBar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  align-items: center;
+  margin-bottom: var(--s-3);
+}
+.treeSearch {
+  flex: 1 1 280px;
+  width: auto;
+}
+.tree {
+  list-style: none;
+  margin: 0;
+  padding: var(--s-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  box-shadow: var(--sh);
+}
+.tnode {
+  border-radius: var(--r-sm);
+}
+.tnode + .tnode {
+  border-top: 1px solid var(--line);
+}
+.trow {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: var(--tap);
+  padding-right: var(--s-1);
+}
+.fold,
+.leaf {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+}
+.fold {
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: var(--panel2);
+  color: var(--txt);
+  cursor: pointer;
+}
+.fold:hover {
+  border-color: var(--acc-soft);
+  color: var(--acc-strong);
+}
+.fold svg {
+  transition: transform 0.12s;
+}
+.fold[aria-expanded="true"] svg {
+  transform: rotate(90deg);
+}
+.leaf::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--line-strong);
+}
+.tname {
+  font-weight: 600;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.tcount {
+  min-width: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--tint);
+  color: var(--dim);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  text-align: center;
+}
+.tacts {
+  margin-left: auto;
+  display: flex;
+  flex: none;
+}
+.tdesc {
+  margin: -4px 0 var(--s-2) 40px;
+  color: var(--dim);
+  font-size: var(--fs-sm);
+  white-space: pre-line;
+}
+/* Pasiflik MIRAS KALMAZ (spec/72 §6): soluk cizim tek telafisi — kapali bir
+   dalin altindaki acik dugum ayirt edilebilsin. */
+.tInactive > .trow .tname,
+.tInactive > .tdesc {
+  opacity: 0.55;
+}
+.tInactive > .trow .tname {
+  text-decoration: line-through;
+}
+.tInactiveLabel {
+  padding: 0 6px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 999px;
+  color: var(--dim);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+}
+.tform {
+  margin: var(--s-1) 0 var(--s-3) 40px;
+  padding: var(--s-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--panel2);
+}
+.tdelete {
+  margin-right: auto;
+}

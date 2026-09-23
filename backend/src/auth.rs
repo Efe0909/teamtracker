@@ -16,6 +16,8 @@
 //! dashboard.) gecerli ve HER GIRISTE yeniden uretilir. Giris oncesinden
 //! kalan bir token giris sonrasina tasinamaz (oturum sabitleme, KNOW-158).
 
+use std::{collections::HashMap, sync::Mutex, time::{Duration, Instant}};
+
 use axum::{
     extract::{FromRequestParts, OptionalFromRequestParts},
     http::request::Parts,
@@ -107,12 +109,50 @@ async fn resolve(p: &Parts, st: &AppState) -> Result<Option<User>, AppError> {
     Ok(user)
 }
 
-/// Varlik damgasi: kimlik cozulen her istek bir hayat belirtisi. Hata
-/// yutulur — damga yazilamadi diye istek dusmemeli.
+/// Varlik damgasi: kimlik cozulen her istek bir hayat belirtisi — ama her
+/// istekte YAZILMAZ. SPA tek sayfa acilisinda birkac paralel istek atiyor;
+/// her biri ayni satira UPDATE demekti. Kullanici basina dakikada bir yeter:
+/// cevrimici esigi (on yuz `ONLINE_MS`, 2 dk) bu araligin ustunde kaldikca
+/// gecikme goruntuyu bozmaz (Python `_mark_presence`, G3).
+///
+/// Hata yutulur — damga yazilamadi diye istek dusmemeli.
 async fn touch_presence(st: &AppState, id: Uuid) {
+    if !presence_due(&st.presence, id, Instant::now()) {
+        return;
+    }
     if let Err(e) = sqlx::query("update users set last_seen_at = now() where id = $1")
         .bind(id).execute(&st.pool).await
     {
         tracing::warn!("presence update failed: {e}");
+    }
+}
+
+const PRESENCE_INTERVAL: Duration = Duration::from_secs(60);
+
+/// Yazma sirasi geldiyse ani kaydeder ve `true` doner. Kilit await'ten ONCE
+/// birakilir (std Mutex, guard await'e tasinamaz).
+fn presence_due(marks: &Mutex<HashMap<Uuid, Instant>>, id: Uuid, now: Instant) -> bool {
+    // Zehirli kilit yalniz bir damga kaybettirir; kurtarmak guvenli.
+    let mut m = marks.lock().unwrap_or_else(|e| e.into_inner());
+    if m.get(&id).is_some_and(|prev| now.duration_since(*prev) < PRESENCE_INTERVAL) {
+        return false;
+    }
+    m.insert(id, now);
+    true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn presence_written_at_most_once_per_interval_per_user() {
+        let marks = Mutex::default();
+        let (a, b) = (Uuid::new_v4(), Uuid::new_v4());
+        let t0 = Instant::now();
+        assert!(presence_due(&marks, a, t0));
+        assert!(!presence_due(&marks, a, t0 + Duration::from_secs(59)));
+        assert!(presence_due(&marks, b, t0), "kullanici basina");
+        assert!(presence_due(&marks, a, t0 + PRESENCE_INTERVAL), "aralik dolunca yeniden");
     }
 }

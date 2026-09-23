@@ -603,6 +603,10 @@ kod tarafında yapılacak bir şey yok. Grant arayüzü ihtiyaç netleşince gel
 > edildi: veri ağacı sayfası scope ister. `KNOW-47` bundan sonra kartlar için
 > geçerli, ağaç sayfası için değil.
 
+> **Not (2026-09-23, R2 taşıma).** alpha-0.2'nin `/api/nodes` uygulaması bu karardan
+> **okuma için** saptı — okuma yine herkese açık kaldı, yalnız yazma `edit_nodes` +
+> dal ister. Gerekçe ve kabul: `spec/90-geri-tasima.md` gerilemeler tablosu G5.
+
 ---
 
 ## 12. Kalan tablolar — düz, iki ölü sütun daha

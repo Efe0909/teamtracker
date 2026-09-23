@@ -18,6 +18,12 @@ export type ApiErrorCode =
   | "unknown_user"
   | "unknown_team"
   | "open_actions"
+  | "invalid_name"
+  | "invalid_parent"
+  | "inactive_parent"
+  | "root_only"
+  | "move_cycle"
+  | "type_locked"
   | "network";
 
 export const ERRORS = {
@@ -35,6 +41,12 @@ export const ERRORS = {
   unknown_user: "Seçilen kişi bulunamadı ya da hesabı kapalı.",
   unknown_team: "Seçilen takım bulunamadı.",
   open_actions: "Kayıt, açık eylemleri varken kapanmaz. Önce eylemleri kapat.",
+  invalid_name: "Ad boş olamaz ve 200 karakteri aşamaz.",
+  invalid_parent: "Seçilen üst düğüm bulunamadı.",
+  inactive_parent: "Pasif bir düğümün altına düğüm eklenemez ya da taşınamaz.",
+  root_only: "Bu tür yalnız kökte durabilir.",
+  move_cycle: "Düğüm kendi altına taşınamaz.",
+  type_locked: "Bu düğüme bağlı bir takım kartı var; türü değiştirilemez.",
   network: "Sunucuya ulaşılamadı. Bağlantını kontrol et.",
 } satisfies Record<ApiErrorCode, string>;
 

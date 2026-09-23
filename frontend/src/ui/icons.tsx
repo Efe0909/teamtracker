@@ -25,6 +25,9 @@ const PATHS = {
   user: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8M5 20a7 7 0 0 1 14 0",
   tree: "M6 4.5v15M6 9h6M6 16.5h6M14.5 7h5v4h-5zM14.5 14.5h5v4h-5z",
   filter: "M4 6h16M7 12h10M10 18h4",
+  edit: "M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4",
+  off: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18M5.6 5.6l12.8 12.8",
+  restore: "M4 12a8 8 0 1 0 2.5-5.8M4 4v5h5",
 } as const;
 
 export type IconName = keyof typeof PATHS;
