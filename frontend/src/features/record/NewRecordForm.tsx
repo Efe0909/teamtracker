@@ -20,6 +20,7 @@ export function NewRecordForm(props: {
   const [title, setTitle] = useState("");
   const [unit, setUnit] = useState<string>(props.defaults?.unit_id ?? L.units[0]?.id ?? "");
   const [team, setTeam] = useState<string>(props.defaults?.team_id ?? "");
+  const [pillar, setPillar] = useState("");
   // Sorumlu varsayilani ACAN kisi; bos secim "sorumlusuz ac" demek.
   const [owner, setOwner] = useState<string>(L.me.id);
   const [priority, setPriority] = useState<Priority>("medium");
@@ -38,7 +39,7 @@ export function NewRecordForm(props: {
             description: desc.trim() === "" ? null : desc,
             unit_id: unit,
             team_id: team === "" ? null : team,
-            pillar_id: null,
+            pillar_id: pillar === "" ? null : pillar,
             owner_id: owner === "" ? null : owner,
             priority,
           },
@@ -79,6 +80,18 @@ export function NewRecordForm(props: {
           ))}
         </select>
       </label>
+      {/* Pillar ORTOGONAL (KNOW-261): kaydin atasi olmak zorunda degil, ayri secilir. */}
+      {L.pillars.length > 0 && (
+        <label className={ui.field}>
+          Pillar
+          <select className={ui.input} value={pillar} onChange={(e) => setPillar(e.target.value)}>
+            <option value="">Pillar yok</option>
+            {L.pillars.map((n) => (
+              <option key={n.id} value={n.id}>{n.name}</option>
+            ))}
+          </select>
+        </label>
+      )}
       <div className={ui.grid2}>
         <label className={ui.field}>
           Takım
