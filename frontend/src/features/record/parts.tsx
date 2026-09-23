@@ -199,7 +199,24 @@ export function ActionList({ d }: { d: RecordDetail }) {
   );
 }
 
-function AddAction({ d }: { d: RecordDetail }) {
+/** ⚡ Hizli eylem (R4-F14): sohbetten cikmadan "kim ne yapacak" — eylem
+ *  seridindeki AYNI form, pencerede. Yeni uc yok. */
+export function QuickAction({ d }: { d: RecordDetail }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Button variant="ghost" onClick={() => setOpen(true)}>
+        <Icon name="bolt" size={16} /> Hızlı eylem
+      </Button>
+      <Dialog open={open} onClose={() => setOpen(false)} title="Hızlı eylem"
+        hint="Sohbetten çıkmadan: kim ne yapacak? Eylemler listesine eklenir.">
+        <AddAction d={d} onDone={() => setOpen(false)} />
+      </Dialog>
+    </>
+  );
+}
+
+function AddAction({ d, onDone }: { d: RecordDetail; onDone?: () => void }) {
   const L = useLookup();
   const m = useAddAction(d.record.id);
   const toast = useToast();
@@ -217,6 +234,7 @@ function AddAction({ d }: { d: RecordDetail }) {
             onSuccess: () => {
               setTitle("");
               setDue("");
+              onDone?.();
             },
             onError: (x) => toast({ text: errorText(x), error: true }),
           },

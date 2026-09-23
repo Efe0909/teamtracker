@@ -1,7 +1,7 @@
 // Sohbet kutusu: mesaj + sistem olayi tek kronoloji (chat_feed). Kayit karti
 // ve takim duvari ayni bileseni cizer; yalniz `chatId` ve yazma izni degisir.
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { errorText } from "../../api/client";
 import { useFeed, usePostMessage } from "../../api/hooks";
 import type { FeedItem, Uuid } from "../../api/types";
@@ -34,7 +34,14 @@ function writeDraft(chat: Uuid, v: string) {
   }
 }
 
-export function Chat(props: { chatId: Uuid; canPost: boolean; lockedText: string; empty: string }) {
+export function Chat(props: {
+  chatId: Uuid;
+  canPost: boolean;
+  lockedText: string;
+  empty: string;
+  /** Kompozerin ustunde kucuk araclar (kayitta ⚡ hizli eylem). Sohbet alani bilmez. */
+  tools?: ReactNode;
+}) {
   const L = useLookup();
   const feed = useFeed(props.chatId);
   const [reply, setReply] = useState<FeedItem | null>(null);
@@ -110,7 +117,11 @@ export function Chat(props: { chatId: Uuid; canPost: boolean; lockedText: string
         })}
       </div>
       {props.canPost ? (
-        <Composer chatId={props.chatId} reply={reply} onClearReply={() => setReply(null)} />
+        <>
+          {/* Kompozerin FORMU DISINDA: arac kendi formunu (dialog) acabilir. */}
+          {props.tools !== undefined && <div className={s.tools}>{props.tools}</div>}
+          <Composer chatId={props.chatId} reply={reply} onClearReply={() => setReply(null)} />
+        </>
       ) : (
         <div className={s.comp}>
           <div className={s.locked}>

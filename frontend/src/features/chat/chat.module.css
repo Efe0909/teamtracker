@@ -126,6 +126,16 @@
   }
 }
 
+.tools {
+  display: flex;
+  gap: var(--s-2);
+  padding: var(--s-2) var(--s-3) 0;
+  border-top: 1px solid var(--line);
+  background: var(--panel);
+}
+.tools + .comp {
+  border-top: 0;
+}
 .comp {
   border-top: 1px solid var(--line);
   background: var(--panel);
