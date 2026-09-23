@@ -4,6 +4,7 @@
 //! verir. Butun uclar `/api` altinda; nginx yalniz bu oneki buraya vekiller.
 //! Host ayrimi (app./dashboard./apex) on yuzun isi, burada yok.
 
+mod admin;
 mod auth;
 mod chats;
 mod common;
@@ -45,6 +46,11 @@ pub fn router() -> Router<AppState> {
         .route("/api/notifications", get(home::notifications))
         .route("/api/nodes", get(nodes::tree).post(nodes::create))
         .route("/api/nodes/{id}", patch(nodes::patch).delete(nodes::delete))
+        .route("/api/admin", get(admin::get))
+        .route("/api/admin/users", post(admin::add_user))
+        .route("/api/admin/users/{id}", patch(admin::patch_user))
+        .route("/api/admin/roles", post(admin::create_role))
+        .route("/api/admin/roles/{id}", patch(admin::patch_role).delete(admin::delete_role))
         // Bilinmeyen yol da JSON: istemci hic HTML gormez.
         .fallback(|| async { AppError::NotFound })
 }
