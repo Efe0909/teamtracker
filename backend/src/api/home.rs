@@ -6,11 +6,11 @@ use axum::{
     Json,
 };
 use chrono::{DateTime, Utc};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
-    api::common,
+    api::common::{self, Body},
     auth::CurrentUser,
     error::{AppError, Result},
     models::{enums::TeamRole, module},
@@ -122,8 +122,94 @@ pub async fn teams(State(st): State<AppState>, CurrentUser(_): CurrentUser) -> R
 pub async fn team(
     State(st): State<AppState>, CurrentUser(_): CurrentUser, Path(raw): Path<String>,
 ) -> Result<Json<TeamView>> {
-    let id = common::id(&raw)?;
-    team_views(&st, Some(id)).await?.into_iter().next().map(Json).ok_or(AppError::NotFound)
+    one_team(&st, common::id(&raw)?).await
+}
+
+// --- uyelik (R4-F09) ---------------------------------------------------------
+//
+// Python e74ca50: "uyelik bugune kadar yalniz tohumdan geliyordu". Kapi
+// `manage_teams` ya da admin. Her degisim takim duvarina OLGU birakir —
+// "beni kim ekledi/cikardi" sorusunun cevabi akista dursun. Cumleyi on yuz
+// kurar (`lib/activity.ts`).
+
+#[derive(Deserialize)]
+pub struct MemberIn {
+    user_id: Uuid,
+    role: TeamRole,
+}
+
+async fn manage_teams(st: &AppState, me: &crate::models::user::User) -> Result<()> {
+    if me.is_admin || common::has_scope(st, me, "manage_teams").await? {
+        Ok(())
+    } else {
+        Err(AppError::Forbidden)
+    }
+}
+
+async fn team_chat(st: &AppState, team: Uuid) -> Result<Uuid> {
+    sqlx::query_scalar("select chat_id from teams where id = $1")
+        .bind(team).fetch_optional(&st.pool).await?.ok_or(AppError::NotFound)
+}
+
+async fn wall(
+    st: &AppState, chat: Uuid, actor: Uuid, verb: &str, person: &str, detail: Option<String>,
+) -> Result<()> {
+    sqlx::query(
+        "insert into activity (chat_id, actor_id, verb, subject_label, detail)
+         values ($1, $2, $3, $4, $5)")
+        .bind(chat).bind(actor).bind(verb).bind(person).bind(detail)
+        .execute(&st.pool).await?;
+    Ok(())
+}
+
+/// Uye ekle ya da rolunu degistir — UPSERT: ikisi ayni hareket, ayri uc
+/// olsaydi arayuz once "uye mi" diye sormak zorunda kalirdi.
+pub async fn set_member(
+    State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>,
+    Body(b): Body<MemberIn>,
+) -> Result<Json<TeamView>> {
+    manage_teams(&st, &me).await?;
+    let team = common::id(&raw)?;
+    let chat = team_chat(&st, team).await?;
+    let person: String = sqlx::query_scalar("select name from users where id = $1 and is_active")
+        .bind(b.user_id).fetch_optional(&st.pool).await?
+        .ok_or(AppError::BadRequest("unknown_user"))?;
+    let before: Option<TeamRole> = sqlx::query_scalar(
+        "select role from team_members where team_id = $1 and user_id = $2")
+        .bind(team).bind(b.user_id).fetch_optional(&st.pool).await?;
+    // Ayni rol: yazma da gecmis de yok.
+    if before != Some(b.role) {
+        sqlx::query(
+            "insert into team_members (team_id, user_id, role) values ($1, $2, $3)
+             on conflict (team_id, user_id) do update set role = excluded.role")
+            .bind(team).bind(b.user_id).bind(b.role).execute(&st.pool).await?;
+        let verb = if before.is_none() { "member_added" } else { "member_role" };
+        let detail = serde_json::json!({ "from": before, "to": b.role }).to_string();
+        wall(&st, chat, me.id, verb, &person, Some(detail)).await?;
+    }
+    one_team(&st, team).await
+}
+
+/// Cikar. Kayitlari ve eylemleri DURUR: uyelik bir yetki bagi, gecmisin
+/// sahipligi degil.
+pub async fn drop_member(
+    State(st): State<AppState>, CurrentUser(me): CurrentUser,
+    Path((raw, user)): Path<(String, String)>,
+) -> Result<Json<TeamView>> {
+    manage_teams(&st, &me).await?;
+    let team = common::id(&raw)?;
+    let user = common::id(&user)?;
+    let chat = team_chat(&st, team).await?;
+    let person: String = sqlx::query_scalar(
+        "delete from team_members m using users u
+          where m.team_id = $1 and m.user_id = $2 and u.id = m.user_id returning u.name")
+        .bind(team).bind(user).fetch_optional(&st.pool).await?.ok_or(AppError::NotFound)?;
+    wall(&st, chat, me.id, "member_removed", &person, None).await?;
+    one_team(&st, team).await
+}
+
+async fn one_team(st: &AppState, id: Uuid) -> Result<Json<TeamView>> {
+    team_views(st, Some(id)).await?.into_iter().next().map(Json).ok_or(AppError::NotFound)
 }
 
 // --- bildirimler -----------------------------------------------------------

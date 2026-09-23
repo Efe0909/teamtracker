@@ -539,6 +539,14 @@ a.stat:hover {
   font-size: var(--fs-xs);
   font-weight: 700;
 }
+.roleSelect {
+  border: 0;
+  background: none;
+  color: var(--dim);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  cursor: pointer;
+}
 .sectionTitle {
   margin: 0 0 var(--s-2);
   font-size: var(--fs-md);

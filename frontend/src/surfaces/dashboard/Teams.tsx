@@ -1,16 +1,16 @@
 // Takimlar: liste + takim sayfasi (uyeler, acik kayitlar, takim duvari).
 
 import { useEffect, useState } from "react";
-import { ApiError } from "../../api/client";
-import { useRecords, useTeam, useTeams } from "../../api/hooks";
-import type { Uuid } from "../../api/types";
+import { ApiError, errorText } from "../../api/client";
+import { useRecords, useTeam, useTeamMember, useTeams } from "../../api/hooks";
+import type { TeamRole, TeamView, Uuid } from "../../api/types";
 import { Chat } from "../../features/chat/Chat";
 import { NewRecordForm } from "../../features/record/NewRecordForm";
 import { TEAM_ROLE } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
 import { navigate } from "../../lib/router";
 import { Icon } from "../../ui/icons";
-import { Avatar, Button, Dialog, Empty, Link, Loading, Segmented } from "../../ui/ui";
+import { Avatar, Button, Dialog, Empty, Link, Loading, Segmented, ui, useToast } from "../../ui/ui";
 import { ErrorScreen } from "../errors/ErrorScreen";
 import s from "./dashboard.module.css";
 import { href } from "./routes";
@@ -68,6 +68,61 @@ export function Teams() {
   );
 }
 
+const ROLES: TeamRole[] = ["lead", "mentor", "member"];
+
+/** Uyeler (R4-F09): `manage_teams` ya da admin ekler, rol degistirir, cikarir.
+ *  Uc ayrica kontrol ediyor; bu bayrak yalniz kontrolleri gostermek icin. */
+function Members({ team, chat }: { team: TeamView; chat: Uuid }) {
+  const L = useLookup();
+  const toast = useToast();
+  const m = useTeamMember(team.id, chat);
+  const [pick, setPick] = useState("");
+  const [role, setRole] = useState<TeamRole>("member");
+  const can = L.meta.me.is_admin || L.can("manage_teams");
+  const write = (user_id: Uuid, r: TeamRole | null) =>
+    m.mutate({ user_id, role: r }, { onError: (e) => toast({ text: errorText(e), error: true }) });
+  const outside = L.meta.users.filter((u) => !team.members.some((x) => x.user_id === u.id));
+
+  return (
+    <section aria-labelledby="members-h">
+      <h2 id="members-h" className={s.sectionTitle}>Üyeler · {team.members.length}</h2>
+      {team.members.length === 0 && <p className={s.dim}>Henüz üye yok.{can && " Aşağıdan ekle."}</p>}
+      <ul className={s.members}>
+        {team.members.map((x) => (
+          <li key={x.user_id}>
+            <Avatar user={L.user(x.user_id)} size={24} />
+            {L.user(x.user_id)?.name ?? "?"}
+            {can ? (
+              <>
+                <select className={s.roleSelect} aria-label="Rol" value={x.role}
+                  onChange={(e) => write(x.user_id, e.target.value as TeamRole)}>
+                  {ROLES.map((r) => <option key={r} value={r}>{TEAM_ROLE[r]}</option>)}
+                </select>
+                <button type="button" className={s.chipX} aria-label="Takımdan çıkar"
+                  onClick={() => write(x.user_id, null)}>✕</button>
+              </>
+            ) : (
+              <span className={s.role}>{TEAM_ROLE[x.role]}</span>
+            )}
+          </li>
+        ))}
+      </ul>
+      {can && outside.length > 0 && (
+        <div className={s.pickRow}>
+          <select className={ui.input} aria-label="Eklenecek kişi" value={pick} onChange={(e) => setPick(e.target.value)}>
+            <option value="">— kişi seç —</option>
+            {outside.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+          </select>
+          <select className={ui.input} aria-label="Rol" value={role} onChange={(e) => setRole(e.target.value as TeamRole)}>
+            {ROLES.map((r) => <option key={r} value={r}>{TEAM_ROLE[r]}</option>)}
+          </select>
+          <Button disabled={pick === "" || m.isPending} onClick={() => { write(pick, role); setPick(""); }}>Ekle</Button>
+        </div>
+      )}
+    </section>
+  );
+}
+
 export function TeamPage({ id }: { id: Uuid }) {
   const L = useLookup();
   const q = useTeam(id);
@@ -100,18 +155,7 @@ export function TeamPage({ id }: { id: Uuid }) {
           </div>
           {team.description !== null && <p className={s.lead} style={{ margin: 0 }}>{team.description}</p>}
 
-          <section aria-labelledby="members-h">
-            <h2 id="members-h" className={s.sectionTitle}>Üyeler · {q.data.members.length}</h2>
-            <ul className={s.members}>
-              {q.data.members.map((m) => (
-                <li key={m.user_id}>
-                  <Avatar user={L.user(m.user_id)} size={24} />
-                  {L.user(m.user_id)?.name ?? "?"}
-                  <span className={s.role}>{TEAM_ROLE[m.role]}</span>
-                </li>
-              ))}
-            </ul>
-          </section>
+          <Members team={q.data} chat={team.chat_id} />
 
           <section aria-labelledby="recs-h">
             <div className={s.pageHead} style={{ marginBottom: 8 }}>
