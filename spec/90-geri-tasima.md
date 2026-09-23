@@ -107,7 +107,7 @@ Satırlar ara nokta 1'den sonra eklenir. Durum: `taşındı` (commit), `bırakı
 | R4-F03 | Anma: kart sohbetinde `@kişi` karta davet (katılımcı), vurgu, @ otomatik tamamlama, mobil bildirimde "seni andı". Grup anmalarının ve kişinin push ayağı push'la (R2-F04) gelir | b2069ef, e74ca50 | taşındı (push'suz) | `1970b15` | `check_api.sh` (`mention_invites`), `backend/src/mentions.rs`, `frontend/src/lib/mentions.test.ts` |
 | R4-F09 | Takım üyeliği yönetimi (ekle / rol / çıkar), duvara olgu | e74ca50 | taşındı | `a316638` | `check_api.sh` (`team_members`) |
 | R4-F08 | Takım sayfasından ad/açıklama — düğüme yazar (KNOW-262). **Sapma:** yetki düğümün (`edit_nodes` + dal); Python `manage_teams` istiyordu, ağacı arka kapıdan değiştiriyordu | b2069ef | taşındı | `d263d38` | — |
-| R4-F07 | Yeni kayıt formunda pillar | b2069ef | taşındı | `7582812` | — |
+| R4-F07 | Yeni kayıt formunda pillar | b2069ef | taşındı | `78fe41b` | — |
 | R4-F14 | ⚡ Hızlı eylem, sohbet kompozerinin üstünde (iki yüz) | b2069ef | taşındı | `a6a9d84` | — |
 | R4-F06 | Pin (ray özelleştirme) | b2069ef | bırakıldı — ray bütün hazır modülleri zaten gösteriyor (4–5); Python gerekçesi "modül sayısı arttıkça ray taşar". Taşınca gelir; uç hazır | — | — |
 | R4-F13 | Bildirim tercihi | e74ca50 | ertelendi — gönderim altyapısı yok, push'la birlikte (R2-F04) | — | — |
