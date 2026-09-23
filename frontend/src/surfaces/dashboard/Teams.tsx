@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ApiError, errorText } from "../../api/client";
-import { useRecords, useTeam, useTeamMember, useTeams } from "../../api/hooks";
+import { useNodeTree, usePatchNode, useRecords, useTeam, useTeamMember, useTeams } from "../../api/hooks";
 import type { TeamRole, TeamView, Uuid } from "../../api/types";
 import { Chat } from "../../features/chat/Chat";
 import { NewRecordForm } from "../../features/record/NewRecordForm";
@@ -65,6 +65,48 @@ export function Teams() {
         </div>
       )}
     </div>
+  );
+}
+
+/** Ad/aciklama DUGUME yazilir, takim karti oradan tazelenir (KNOW-262: tek
+ *  gercek, iki gorunum). Yetki de dugumun: `edit_nodes` + dal — Python burada
+ *  `manage_teams` istiyordu, ama degisen sey agac. */
+function EditTeam({ nodeId, name, description }: { nodeId: Uuid; name: string; description: string | null }) {
+  const tree = useNodeTree();
+  const m = usePatchNode();
+  const [open, setOpen] = useState(false);
+  const [n, setN] = useState(name);
+  const [d, setD] = useState(description ?? "");
+  const [err, setErr] = useState<string | null>(null);
+  if (tree.data?.nodes.find((x) => x.id === nodeId)?.can_edit !== true) return null;
+  return (
+    <>
+      <Button onClick={() => { setN(name); setD(description ?? ""); setErr(null); setOpen(true); }}>
+        <Icon name="edit" size={16} /> Düzenle
+      </Button>
+      <Dialog open={open} onClose={() => setOpen(false)} title="Takımı düzenle">
+        <form onSubmit={(e) => {
+          e.preventDefault();
+          m.mutate({ id: nodeId, patch: { name: n, description: d.trim() === "" ? null : d } },
+            { onSuccess: () => setOpen(false), onError: (x) => setErr(errorText(x)) });
+        }}>
+          {err !== null && <p className={ui.error} role="alert">{err}</p>}
+          <label className={ui.field}>
+            Ad
+            <input className={ui.input} value={n} onChange={(e) => setN(e.target.value)} required maxLength={200} />
+          </label>
+          <label className={ui.field}>
+            Açıklama
+            <textarea className={ui.input} rows={3} value={d} onChange={(e) => setD(e.target.value)} />
+          </label>
+          <p className={s.dim}>Ağaçtaki düğümle aynı ad: burada değiştirmek ağacı da değiştirir.</p>
+          <div className={ui.dact}>
+            <Button onClick={() => setOpen(false)}>Vazgeç</Button>
+            <Button type="submit" variant="primary" disabled={m.isPending || n.trim() === ""}>Kaydet</Button>
+          </div>
+        </form>
+      </Dialog>
+    </>
   );
 }
 
@@ -149,6 +191,7 @@ export function TeamPage({ id }: { id: Uuid }) {
         <div className={s.recordMain}>
           <div className={s.pageHead} style={{ marginBottom: 0 }}>
             <h1>{team.name}</h1>
+            {team.node_id !== null && <EditTeam nodeId={team.node_id} name={team.name} description={team.description} />}
             <Button variant="primary" onClick={() => setCreating(true)}>
               <Icon name="plus" size={16} /> Bu takıma kayıt aç
             </Button>
