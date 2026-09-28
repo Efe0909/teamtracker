@@ -387,6 +387,63 @@ TMSG=$(DB "select count(*) from record_participants")
 w w POST "$WT" "/api/chats/$TMC/messages" '{"body":"@Efe duvarda","reply_to_id":null}' >/dev/null
 ok "$(DB "select count(*) from record_participants")" "$TMSG" "takim duvarinda davet yok"
 
+# --- ekler (R3-F08..F13) -------------------------------------------------------
+# Deniz VEKALET'e anmayla katilimci oldu (yukarida): o sohbete yazabilir.
+t attachments
+base64 -d <<<'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==' >"$J/px.png"
+up(){ curl -s -b "$J/$1" -X POST -H "X-CSRF-Token: $2" --data-binary "@$3" "$B/api/attachments?name=${4:-a.png}"; }
+A1=$(up n "$NT" "$J/px.png" "../../etc/foto.png" | jq -r .id)
+ok "$(DB "select mime||' '||original_name from attachments where id='$A1'")" "image/png foto.png" "tur baytlardan, ad yolsuz"
+printf 'photo.jpg ama PDF' >"$J/bad.jpg"
+ok "$(up n "$NT" "$J/bad.jpg" | jq -r .error)" bad_file_type "uzantiya guvenilmez"
+head -c 11000000 /dev/zero >"$J/big"
+ok "$(up n "$NT" "$J/big" | jq -r .error)" file_too_big "10 MB siniri"
+ok "$(curl -s -o /dev/null -w '%{http_code} %{content_type}' -b "$J/n" "$B/api/attachments/$A1/thumb")" "200 image/jpeg" "kucuk resim"
+ok "$(w w POST "$WT" "/api/chats/$VCHAT/messages" "{\"body\":\"\",\"attachment_ids\":[\"$A1\"]}" | jq -r .error)" invalid_attachment "baskasinin eki asilamaz"
+MID=$(w n POST "$NT" "/api/chats/$VCHAT/messages" "{\"body\":\"\",\"attachment_ids\":[\"$A1\"]}" | jq -r .id)
+ok "$(g n "/api/chats/$VCHAT/feed" | jq -r ".attachments[\"$MID\"][0].id")" "$A1" "akista mesajin eki"
+ok "$(w w POST "$WT" "/api/chats/$VCHAT/messages" "{\"body\":\"x\",\"attachment_ids\":[\"$A1\"]}" | jq -r .error)" invalid_attachment "ek iki kez baglanmaz"
+
+t attachment_tags
+ok "$(wc_ n POST "$NT" "/api/attachments/$A1/tags" '{"name":"İstanbul"}')" 403 "tag_media yoksa 403"
+w w POST "$WT" "/api/attachments/$A1/tags" '{"name":"İstanbul"}' >/dev/null
+ok "$(w w POST "$WT" "/api/attachments/$A1/tags" '{"name":"istanbul"}' | jq -r '.tags|length')" 1 "slug tekil: ayni etiket"
+TAG=$(DB "select id from tags where slug='istanbul'")
+ok "$(w w DELETE "$WT" "/api/attachments/$A1/tags/$TAG" '' | jq -r '.tags|length')" 0 "etiket cikar"
+
+t attachment_delete
+ok "$(wc_ e DELETE "$ET" "/api/attachments/$A1" '')" 403 "yukleyen degilse silemez"
+ok "$(wc_ n DELETE "$NT" "/api/attachments/$A1" '')" 204 "yukleyen siler"
+ok "$(code -b "$J/n" "$B/api/attachments/$A1")" 404 "dosya gitti"
+ok "$(g n "/api/chats/$VCHAT/feed" | jq -r ".attachments[\"$MID\"][0].deleted")" true "mesaj kalir, mezar tasi"
+
+# --- kart bloklari (R4-F01, F02, F12) -------------------------------------------
+# Iletisim dalinda kayit: Efe (Malzeme) ve Deniz (Uretim) duzenleyemez.
+t cards
+KR=$(w w POST "$WT" /api/records "{\"kind\":\"task\",\"title\":\"Kart denemesi\",\"unit_id\":\"$ILETISIM\",\"owner_id\":null,\"card_types\":[\"meeting\",\"pool\",\"media\"]}" | jq -r .id)
+ok "$(g n "/api/records/$KR" | jq -r '[.access.can_edit, (.cards|map(.card_type)|join(","))]|join(" ")')" "false meeting,pool,media" "acilista kart secici"
+KM=$(g w "/api/records/$KR" | jq -r '.cards[]|select(.card_type=="meeting").id')
+KP=$(g w "/api/records/$KR" | jq -r '.cards[]|select(.card_type=="pool").id')
+KMD=$(g w "/api/records/$KR" | jq -r '.cards[]|select(.card_type=="media").id')
+ok "$(w w PATCH "$WT" "/api/cards/$KM" '{"title":"Planlama","data":{"when":"2026-10-01T18:30","link":"https://meet.x/a","evil":"x"}}' | jq -c ".cards[]|select(.id==\"$KM\").data")" '{"link":"https://meet.x/a","title":"Planlama","when":"2026-10-01T18:30"}' "beyaz liste"
+ok "$(w w PATCH "$WT" "/api/cards/$KM" '{"data":{"link":"javascript:alert(1)"}}' | jq -r .error)" invalid_link "yalniz http(s) baglanti"
+ok "$(w w POST "$WT" "/api/records/$KR/cards" '{"card_type":"survey"}' | jq -r .error)" invalid_card_type "bilinmeyen tur eklenemez"
+ok "$(wc_ n POST "$NT" "/api/records/$KR/cards" '{"card_type":"pool"}')" 403 "duzenleyemeyen kart ekleyemez"
+
+t card_signups
+ok "$(w n PUT "$NT" "/api/cards/$KP/signup" '{"answer":"yes"}' | jq -r ".cards[]|select(.id==\"$KP\").signups[0].user_id")" "$DENIZ" "katilim duzenleme istemez"
+ok "$(w n PUT "$NT" "/api/cards/$KP/signup" '{"answer":"maybe"}' | jq -r .error)" invalid_answer "havuzda belki yok"
+w e PUT "$ET" "/api/cards/$KM/signup" '{"answer":"maybe","note":"gec kalirim"}' >/dev/null
+ok "$(w w PATCH "$WT" "/api/cards/$KM" '{"title":"Planlama 2"}' | jq -r ".cards[]|select(.id==\"$KM\").signups[0].note")" "gec kalirim" "duzenleme katilimi silmez"
+ok "$(w n PUT "$NT" "/api/cards/$KP/signup" '{"answer":null}' | jq -r ".cards[]|select(.id==\"$KP\").signups|length")" 0 "geri cekil"
+
+t card_media
+KA=$(up w "$WT" "$J/px.png" | jq -r .id)
+ok "$(w w POST "$WT" "/api/cards/$KMD/attachments" "{\"attachment_ids\":[\"$KA\"]}" | jq -r ".cards[]|select(.id==\"$KMD\").attachments[0].id")" "$KA" "medya kartina gorsel"
+ok "$(w w POST "$WT" "/api/cards/$KM/attachments" "{\"attachment_ids\":[\"$KA\"]}" | jq -r .error)" invalid_card_type "yalniz medya kartina"
+ok "$(w w DELETE "$WT" "/api/cards/$KMD" '' | jq -r '.cards|length')" 2 "kart silinir"
+ok "$(DB "select count(*) from card_attachments where attachment_id='$KA'")" 0 "ek bagsiz kalir (supurmeye)"
+
 # --- Google kipi -------------------------------------------------------------
 t google_me
 R=$(curl -s "$BG/api/me"); ok "$(jq -r .auth <<<"$R")" google "auth"

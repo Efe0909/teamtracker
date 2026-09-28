@@ -8,6 +8,7 @@ import { useRecord } from "../../api/hooks";
 import type { Uuid } from "../../api/types";
 import { Chat } from "../../features/chat/Chat";
 import { FieldStrip } from "../../features/record/fields";
+import { Cards } from "../../features/record/Cards";
 import { ActionList, BallLine, QuickAction, ReadOnlyNote, RecordHead } from "../../features/record/parts";
 import { useLookup } from "../../lib/lookup";
 import { Icon } from "../../ui/icons";
@@ -54,6 +55,7 @@ export function RecordPage({ id }: { id: Uuid }) {
             <FieldStrip d={d} />
           </div>
           <ActionList d={d} />
+          <Cards d={d} />
         </div>
         <aside className={s.recordSide} aria-label="Sohbet">
           <div className={s.sideHead}>

@@ -4,6 +4,8 @@
 //! (`records.chat_id`, `teams.chat_id`). Okuma herkese acik; yazma sahibin
 //! kuralina gore: kayitta `can_edit_record`, takimda uyelik (ya da admin).
 
+use std::collections::HashMap;
+
 use axum::{
     extract::{Path, State},
     Json,
@@ -13,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
-    api::{common::{self, Body}, records},
+    api::{attachments::{self as att, AttachView}, common::{self, Body}, records},
     auth::CurrentUser,
     db::scope,
     error::{AppError, Result},
@@ -53,6 +55,8 @@ pub struct Feed {
     items: Vec<FeedItem>,
     /// Yanit alintilari: akistaki `reply_to_id`'lerin hedefleri.
     quotes: Vec<Quote>,
+    /// mesaj kimligi -> ekleri (silinenler mezar tasi olarak dahil).
+    attachments: HashMap<Uuid, Vec<AttachView>>,
 }
 
 async fn chat_exists(st: &AppState, chat: Uuid) -> Result<()> {
@@ -62,7 +66,7 @@ async fn chat_exists(st: &AppState, chat: Uuid) -> Result<()> {
 }
 
 pub async fn feed(
-    State(st): State<AppState>, CurrentUser(_): CurrentUser, Path(raw): Path<String>,
+    State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>,
 ) -> Result<Json<Feed>> {
     let chat = common::id(&raw)?;
     chat_exists(&st, chat).await?;
@@ -78,14 +82,51 @@ pub async fn feed(
         sqlx::query_as("select id, author_id, body from messages where id = any($1)")
             .bind(&ids).fetch_all(&st.pool).await?
     };
-    Ok(Json(Feed { items, quotes }))
+
+    // Mesaj ekleri: TEK sorgu. Etiket hakki sohbetin sahibinden, hepsinde ayni.
+    let links: Vec<(Uuid, Uuid)> = sqlx::query_as(
+        "select ma.message_id, ma.attachment_id from message_attachments ma
+           join messages m on m.id = ma.message_id where m.chat_id = $1")
+        .bind(chat).fetch_all(&st.pool).await?;
+    let mut attachments: HashMap<Uuid, Vec<AttachView>> = HashMap::new();
+    if !links.is_empty() {
+        let (rec, team) = owner(&st, chat).await?;
+        let tag = att::can_tag(&st, &me, rec.as_ref(), team).await?;
+        let aids: Vec<Uuid> = links.iter().map(|(_, a)| *a).collect();
+        let mut views = att::views(&st.pool, &me, &aids, tag).await?;
+        for (m, a) in links {
+            if let Some(v) = views.remove(&a) {
+                attachments.entry(m).or_default().push(v);
+            }
+        }
+    }
+    Ok(Json(Feed { items, quotes, attachments }))
 }
+
+/// Sohbetin sahibi: kayit mi, takim mi (ters yonde bagli).
+async fn owner(st: &AppState, chat: Uuid) -> Result<(Option<Record>, Option<Uuid>)> {
+    let record_id: Option<Uuid> = sqlx::query_scalar("select id from records where chat_id = $1")
+        .bind(chat).fetch_optional(&st.pool).await?;
+    if let Some(rid) = record_id {
+        return Ok((Record::fetch(&st.pool, rid).await?, None));
+    }
+    let team: Option<Uuid> = sqlx::query_scalar("select id from teams where chat_id = $1")
+        .bind(chat).fetch_optional(&st.pool).await?;
+    Ok((None, team))
+}
+
+/// Mesaj basina en fazla bu kadar gorsel.
+const ATTACH_MAX: usize = 4;
 
 #[derive(Deserialize)]
 pub struct NewMessage {
+    #[serde(default)]
     body: String,
     #[serde(default)]
     reply_to_id: Option<Uuid>,
+    /// Once `POST /api/attachments` ile yuklenmis, BENIM, bagsiz ekler.
+    #[serde(default)]
+    attachment_ids: Vec<Uuid>,
 }
 
 #[derive(Serialize)]
@@ -99,8 +140,12 @@ pub async fn post(
 ) -> Result<Json<Posted>> {
     let chat = common::id(&raw)?;
     chat_exists(&st, chat).await?;
-    let body = common::text(Some(b.body), BODY_MAX, "invalid_body")?
-        .ok_or(AppError::BadRequest("invalid_body"))?;
+    // Yalniz gorsel de mesajdir: govde bos olabilir, ikisi birden bos olamaz.
+    let body = common::text(Some(b.body), BODY_MAX, "invalid_body")?.unwrap_or_default();
+    let mut attach_ids = b.attachment_ids;
+    if (body.is_empty() && attach_ids.is_empty()) || attach_ids.len() > ATTACH_MAX {
+        return Err(AppError::BadRequest("invalid_body"));
+    }
 
     // Sahip: kayit mi, takim mi?
     let record_id: Option<Uuid> = sqlx::query_scalar("select id from records where chat_id = $1")
@@ -131,6 +176,7 @@ pub async fn post(
             return Err(AppError::BadRequest("invalid_reply"));
         }
     }
+    att::claimable(&st.pool, me.id, &mut attach_ids).await?;
 
     let mut tx = st.pool.begin().await?;
     let id: Uuid = sqlx::query_scalar(
@@ -138,6 +184,11 @@ pub async fn post(
          values ($1, $2, $3, $4) returning id")
         .bind(chat).bind(me.id).bind(&body).bind(b.reply_to_id)
         .fetch_one(&mut *tx).await?;
+    if !attach_ids.is_empty() {
+        sqlx::query("insert into message_attachments (message_id, attachment_id)
+                     select $1, unnest($2::uuid[])")
+            .bind(id).bind(&attach_ids).execute(&mut *tx).await?;
+    }
     if let Some(rid) = record_id {
         records::touch(&mut tx, rid).await?;
         invite(&mut tx, rid, me.id, &body).await?;

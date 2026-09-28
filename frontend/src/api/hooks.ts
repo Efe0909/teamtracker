@@ -9,6 +9,7 @@ import { qs, request } from "./client";
 import type {
   ActionPatch,
   AdminView,
+  Attachment,
   Feed,
   Home,
   Meta,
@@ -41,6 +42,7 @@ export const keys = {
   myActions: ["my-actions"] as const,
   nodes: ["nodes"] as const,
   admin: ["admin"] as const,
+  tags: ["tags"] as const,
 };
 
 /** Rust `db/filters.rs` sozlesmesi. Gecersiz deger sunucuda sessizce duser. */
@@ -161,10 +163,57 @@ export function useCreateRecord() {
   });
 }
 
+// --- ekler ve kartlar ---------------------------------------------------------
+
+export const attachmentUrl = (id: Uuid, thumb = false) => `/api/attachments/${id}${thumb ? "/thumb" : ""}`;
+
+/** Ek her iki yerde durabilir (sohbet, medya karti): ikisi de tazelenir. */
+function afterAttachmentWrite(qc: QueryClient) {
+  void qc.invalidateQueries({ queryKey: ["feed"] });
+  void qc.invalidateQueries({ queryKey: ["record"] });
+}
+
+export function useDeleteAttachment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: Uuid) => request<undefined>("DELETE", `/api/attachments/${id}`),
+    onSuccess: () => afterAttachmentWrite(qc),
+  });
+}
+
+export function useTags(enabled: boolean) {
+  return useQuery({ queryKey: keys.tags, queryFn: () => request<{ id: Uuid; name: string }[]>("GET", "/api/tags"), enabled });
+}
+
+/** Etiket ekle (`name`) ya da cikar (`tagId`). */
+export function useTagAttachment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (w: { id: Uuid; name?: string; tagId?: Uuid }) =>
+      w.tagId !== undefined
+        ? request<Attachment>("DELETE", `/api/attachments/${w.id}/tags/${w.tagId}`)
+        : request<Attachment>("POST", `/api/attachments/${w.id}/tags`, { name: w.name }),
+    onSuccess: () => {
+      afterAttachmentWrite(qc);
+      void qc.invalidateQueries({ queryKey: keys.tags });
+    },
+  });
+}
+
+/** Kart yazmalari guncel kayit ayrintisini doner. */
+export function useCardWrite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (w: { method: "POST" | "PATCH" | "PUT" | "DELETE"; path: string; body?: unknown }) =>
+      request<RecordDetail>(w.method, w.path, w.body),
+    onSuccess: (d) => afterRecordWrite(qc, d),
+  });
+}
+
 export function usePostMessage(chat: Uuid) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (m: { body: string; reply_to_id: Uuid | null }) =>
+    mutationFn: (m: { body: string; reply_to_id: Uuid | null; attachment_ids: Uuid[] }) =>
       request<{ id: Uuid }>("POST", `/api/chats/${chat}/messages`, m),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: keys.feed(chat) });

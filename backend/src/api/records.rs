@@ -20,7 +20,7 @@ use sqlx::{PgPool, Postgres, QueryBuilder};
 use uuid::Uuid;
 
 use crate::{
-    api::common::{self, Body},
+    api::{cards::{self, CardView}, common::{self, Body}},
     auth::CurrentUser,
     db::{filters::Filters, scope},
     error::{AppError, Result},
@@ -94,6 +94,7 @@ pub struct Detail {
     record: Record,
     actions: Vec<ActionOut>,
     participants: Vec<Uuid>,
+    cards: Vec<CardView>,
     access: Access,
 }
 
@@ -115,11 +116,11 @@ struct ActionOut {
     resolved_at: Option<DateTime<Utc>>,
 }
 
-async fn load(pool: &PgPool, id: Uuid) -> Result<Record> {
+pub(crate) async fn load(pool: &PgPool, id: Uuid) -> Result<Record> {
     Record::fetch(pool, id).await?.ok_or(AppError::NotFound)
 }
 
-async fn detail_of(st: &AppState, me: &User, rec: Record) -> Result<Detail> {
+pub(crate) async fn detail_of(st: &AppState, me: &User, rec: Record) -> Result<Detail> {
     let actions = sqlx::query_as(
         "select id, title, status, owner_id, due_date, created_at, resolved_at
            from actions where record_id = $1
@@ -130,7 +131,8 @@ async fn detail_of(st: &AppState, me: &User, rec: Record) -> Result<Detail> {
         .bind(rec.id).fetch_all(&st.pool).await?;
     let can_edit = scope::can_edit_record(&st.pool, me, &rec, &st.tree).await?;
     let can_edit_deadline = can_edit && common::has_scope(st, me, "edit_deadline").await?;
-    Ok(Detail { record: rec, actions, participants, access: Access { can_edit, can_edit_deadline } })
+    let cards = cards::of_record(st, me, &rec).await?;
+    Ok(Detail { record: rec, actions, participants, cards, access: Access { can_edit, can_edit_deadline } })
 }
 
 /// Okuma herkese acik (giris yapmis her aktif kullanici): yetki DEGISTIRMEYI
@@ -142,7 +144,7 @@ pub async fn get(
     Ok(Json(detail_of(&st, &me, rec).await?))
 }
 
-async fn require_edit(st: &AppState, me: &User, rec: &Record) -> Result<()> {
+pub(crate) async fn require_edit(st: &AppState, me: &User, rec: &Record) -> Result<()> {
     if scope::can_edit_record(&st.pool, me, rec, &st.tree).await? {
         Ok(())
     } else {
@@ -220,6 +222,9 @@ pub struct NewRecord {
     owner_id: Option<Uuid>,
     #[serde(default)]
     priority: Option<Priority>,
+    /// Acilista bos kart bloklari (R4-F12); doldurmasi kayit sayfasinda.
+    #[serde(default)]
+    card_types: Vec<String>,
 }
 
 #[derive(Serialize)]
@@ -256,6 +261,9 @@ pub async fn create(
         .fetch_one(&mut *tx).await?;
     log(&mut tx, chat_id, me.id, "created", &title, None,
         change(serde_json::Value::Null, b.owner_id)).await?;
+    for t in &b.card_types {
+        cards::insert(&mut tx, id, me.id, t, None, &serde_json::Map::new()).await?;
+    }
     tx.commit().await?;
     Ok(Json(Created { id }))
 }

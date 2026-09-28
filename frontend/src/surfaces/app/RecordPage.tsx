@@ -7,6 +7,7 @@ import { useFeed, useRecord, useTeam } from "../../api/hooks";
 import type { Uuid } from "../../api/types";
 import { Chat } from "../../features/chat/Chat";
 import { FieldStrip } from "../../features/record/fields";
+import { Cards } from "../../features/record/Cards";
 import { ActionList, BallLine, QuickAction, ReadOnlyNote, RecordHead } from "../../features/record/parts";
 import { TEAM_ROLE } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
@@ -91,6 +92,7 @@ export function RecordPage({ id }: { id: Uuid }) {
         <ReadOnlyNote d={d} />
         <FieldStrip d={d} compact />
         <ActionList d={d} />
+        <Cards d={d} />
       </div>
       <ChatSheet
         chatId={d.record.chat_id}

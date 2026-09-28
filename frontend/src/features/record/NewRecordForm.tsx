@@ -4,6 +4,7 @@ import { useState } from "react";
 import { errorText } from "../../api/client";
 import { useCreateRecord } from "../../api/hooks";
 import type { Priority, RecordKind, Uuid } from "../../api/types";
+import { CARD, CARD_TYPES, type CardType } from "../../lib/cards";
 import { PRIORITY, PRIORITY_ORDER } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
 import { Button, ui } from "../../ui/ui";
@@ -21,6 +22,7 @@ export function NewRecordForm(props: {
   const [unit, setUnit] = useState<string>(props.defaults?.unit_id ?? L.units[0]?.id ?? "");
   const [team, setTeam] = useState<string>(props.defaults?.team_id ?? "");
   const [pillar, setPillar] = useState("");
+  const [cards, setCards] = useState<CardType[]>([]);
   // Sorumlu varsayilani ACAN kisi; bos secim "sorumlusuz ac" demek.
   const [owner, setOwner] = useState<string>(L.me.id);
   const [priority, setPriority] = useState<Priority>("medium");
@@ -42,6 +44,7 @@ export function NewRecordForm(props: {
             pillar_id: pillar === "" ? null : pillar,
             owner_id: owner === "" ? null : owner,
             priority,
+            card_types: cards,
           },
           { onSuccess: (r) => props.onCreated(r.id), onError: (x) => setErr(errorText(x)) },
         );
@@ -117,6 +120,17 @@ export function NewRecordForm(props: {
         <textarea className={ui.input} value={desc} onChange={(e) => setDesc(e.target.value)}
           placeholder="Ne oldu, nerede, ne zaman?" rows={4} />
       </label>
+      {/* Kart bloklari (R4-F12): bos acilir, kayit sayfasinda doldurulur. */}
+      <fieldset className={ui.field}>
+        <legend>Kart blokları (isteğe bağlı)</legend>
+        {CARD_TYPES.map((t) => (
+          <label key={t} title={CARD[t].hint}>
+            <input type="checkbox" checked={cards.includes(t)}
+              onChange={() => setCards((xs) => (xs.includes(t) ? xs.filter((x) => x !== t) : [...xs, t]))} />{" "}
+            {CARD[t].label}
+          </label>
+        ))}
+      </fieldset>
       <div className={ui.dact}>
         {props.onCancel !== undefined && <Button onClick={props.onCancel}>Vazgeç</Button>}
         <Button type="submit" variant="primary" big disabled={m.isPending || title.trim() === "" || unit === ""}>

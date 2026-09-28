@@ -102,7 +102,36 @@ export interface RecordDetail {
   record: RecordFull;
   actions: Action[];
   participants: Uuid[];
+  cards: CardView[];
   access: { can_edit: boolean; can_edit_deadline: boolean };
+}
+
+// --- ekler ve kartlar (Rust api/attachments.rs, api/cards.rs) ---------------
+
+export interface Attachment {
+  id: Uuid;
+  mime: string;
+  width: number | null;
+  height: number | null;
+  original_name: string | null;
+  /** Silinmis: mesajda mezar tasi. */
+  deleted: boolean;
+  can_delete: boolean;
+  can_tag: boolean;
+  tags: { id: Uuid; name: string }[];
+}
+
+export type SignupAnswer = "yes" | "maybe" | "no";
+
+export interface CardView {
+  id: Uuid;
+  card_type: string;
+  /** Kodda tanimli tur mu; degilse BOZUK cizilir (KNOW-280). */
+  known: boolean;
+  /** `title` + turun alanlari, hepsi metin. */
+  data: Record<string, string | undefined>;
+  signups: { user_id: Uuid; answer: SignupAnswer; note: string | null; at: IsoTime | null }[];
+  attachments: Attachment[];
 }
 
 /** PATCH /api/records/{id} — Rust `RecordPatch`, alan basina deger tipi. */
@@ -132,6 +161,8 @@ export interface NewRecord {
   pillar_id: Uuid | null;
   owner_id: Uuid | null;
   priority: Priority;
+  /** Acilista bos kart bloklari (kart secici). */
+  card_types: string[];
 }
 
 export interface NewAction {
@@ -167,6 +198,8 @@ export interface FeedItem {
 export interface Feed {
   items: FeedItem[];
   quotes: { id: Uuid; author_id: Uuid | null; body: string }[];
+  /** mesaj kimligi -> ekleri */
+  attachments: Partial<Record<Uuid, Attachment[]>>;
 }
 
 // --- ana sayfa, takimlar, bildirimler ---------------------------------------

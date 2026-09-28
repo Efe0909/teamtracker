@@ -25,7 +25,7 @@ export function setCsrf(token: string | null): void {
   csrf = token;
 }
 
-type Method = "GET" | "POST" | "PATCH" | "DELETE";
+type Method = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
 
 export async function request<T>(method: Method, path: string, body?: unknown): Promise<T> {
   const headers: Record<string, string> = { Accept: "application/json" };
@@ -50,6 +50,27 @@ export async function request<T>(method: Method, path: string, body?: unknown): 
       typeof data === "object" && data !== null && "error" in data && typeof data.error === "string"
         ? data.error
         : "internal";
+    throw new ApiError(isErrorCode(code) ? code : "internal", r.status);
+  }
+  return data as T;
+}
+
+/** Ham dosya yukleme (JSON degil): ek sahipsiz dogar, mesaj/kart sonra baglar. */
+export async function upload<T>(file: File): Promise<T> {
+  const headers: Record<string, string> = { Accept: "application/json" };
+  if (csrf !== null) headers["X-CSRF-Token"] = csrf;
+  let r: Response;
+  try {
+    r = await fetch(`/api/attachments${qs({ name: file.name })}`, { method: "POST", headers, body: file });
+  } catch {
+    throw new ApiError("network", 0);
+  }
+  const data: unknown = await r.json().catch(() => null);
+  if (!r.ok) {
+    const code =
+      typeof data === "object" && data !== null && "error" in data && typeof data.error === "string"
+        ? data.error
+        : r.status === 413 ? "file_too_big" : "internal";
     throw new ApiError(isErrorCode(code) ? code : "internal", r.status);
   }
   return data as T;

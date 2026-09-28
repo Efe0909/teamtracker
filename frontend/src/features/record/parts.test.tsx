@@ -36,6 +36,7 @@ function detail(createdBy: string): RecordDetail {
     },
     actions: [],
     participants: [],
+    cards: [],
     access: { can_edit: false, can_edit_deadline: false },
   };
 }

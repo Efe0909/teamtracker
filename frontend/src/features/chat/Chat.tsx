@@ -2,9 +2,10 @@
 // ve takim duvari ayni bileseni cizer; yalniz `chatId` ve yazma izni degisir.
 
 import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { errorText } from "../../api/client";
+import { errorText, upload } from "../../api/client";
 import { useFeed, usePostMessage } from "../../api/hooks";
-import type { FeedItem, Uuid } from "../../api/types";
+import type { Attachment, FeedItem, Uuid } from "../../api/types";
+import { Attachments, ImagePicker } from "../media/Media";
 import { describe } from "../../lib/activity";
 import { clock, formatDay, toIsoDay } from "../../lib/labels";
 import { GROUP_LABEL, GROUPS, handle, MENTION } from "../../lib/mentions";
@@ -102,7 +103,9 @@ export function Chat(props: {
                       <b>{L.user(q.author_id)?.name ?? "?"}:</b> {q.body}
                     </a>
                   )}
-                  <div className={s.text}><MentionText text={it.body ?? ""} /></div>
+                  {/* Gorsel USTTE, metin altinda (Python 2f725f0): once ne gosterildigi. */}
+                  <Attachments items={feed.data.attachments[it.id] ?? []} />
+                  {(it.body ?? "") !== "" && <div className={s.text}><MentionText text={it.body ?? ""} /></div>}
                   <div className={s.meta}>
                     {props.canPost && (
                       <button type="button" className={s.replyBtn} onClick={() => setReply(it)} aria-label="Yanıtla">
@@ -157,6 +160,9 @@ function partialMention(text: string, caret: number): string | null {
   return m === null ? null : (m[1] ?? "");
 }
 
+/** Mesaj basina en fazla bu kadar gorsel (Rust chats.rs ATTACH_MAX). */
+const ATTACH_MAX = 4;
+
 function Composer(props: { chatId: Uuid; reply: FeedItem | null; onClearReply: () => void }) {
   const L = useLookup();
   const toast = useToast();
@@ -195,14 +201,29 @@ function Composer(props: { chatId: Uuid; reply: FeedItem | null; onClearReply: (
     el.style.height = `${el.scrollHeight}px`;
   }, [text]);
 
+  // Gorseller secilir secilmez yuklenir (ek sahipsiz dogar); gonderirken
+  // mesaja baglanir. Vazgecilen ek bir gun sonra supurulur, ayrica silinmez.
+  const [pending, setPending] = useState<{ id: Uuid; name: string }[]>([]);
+  const [uploading, setUploading] = useState(0);
+  const addFiles = (files: File[]) => {
+    for (const f of files.slice(0, ATTACH_MAX - pending.length)) {
+      setUploading((n) => n + 1);
+      upload<Attachment>(f)
+        .then((a) => setPending((p) => [...p, { id: a.id, name: f.name }]))
+        .catch((e: unknown) => toast({ text: `${f.name}: ${errorText(e)}`, error: true }))
+        .finally(() => setUploading((n) => n - 1));
+    }
+  };
+
   const send = () => {
     const body = text.trim();
-    if (body === "" || m.isPending) return;
+    if ((body === "" && pending.length === 0) || m.isPending || uploading > 0) return;
     m.mutate(
-      { body, reply_to_id: props.reply?.id ?? null },
+      { body, reply_to_id: props.reply?.id ?? null, attachment_ids: pending.map((p) => p.id) },
       {
         onSuccess: () => {
           setText("");
+          setPending([]);
           props.onClearReply();
         },
         onError: (e) => toast({ text: errorText(e), error: true }),
@@ -239,7 +260,22 @@ function Composer(props: { chatId: Uuid; reply: FeedItem | null; onClearReply: (
           ))}
         </div>
       )}
+      {(pending.length > 0 || uploading > 0) && (
+        <div className={s.pending}>
+          {pending.map((p) => (
+            <span key={p.id} className={s.pendingItem}>
+              <Icon name="image" size={14} /> {p.name}
+              <button type="button" className={s.replyBtn} aria-label={`${p.name} çıkar`}
+                onClick={() => setPending((xs) => xs.filter((x) => x.id !== p.id))}>
+                <Icon name="x" size={12} />
+              </button>
+            </span>
+          ))}
+          {uploading > 0 && <span className={s.pendingItem}>yükleniyor…</span>}
+        </div>
+      )}
       <div className={s.compRow}>
+        <ImagePicker onFiles={addFiles} busy={pending.length + uploading >= ATTACH_MAX} />
         <textarea
           ref={box}
           rows={1}
@@ -267,7 +303,8 @@ function Composer(props: { chatId: Uuid; reply: FeedItem | null; onClearReply: (
           aria-label="Mesaj"
           maxLength={4000}
         />
-        <Button type="submit" variant="primary" big disabled={m.isPending || text.trim() === ""}>
+        <Button type="submit" variant="primary" big
+          disabled={m.isPending || uploading > 0 || (text.trim() === "" && pending.length === 0)}>
           Gönder
         </Button>
       </div>
