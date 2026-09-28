@@ -33,7 +33,8 @@ docker start ekiptakip-db && docker exec ekiptakip-db createdb -U ekiptakip ekip
 - Denetim: `cargo clippy --all-targets` (panik/`todo!` derlemeyi düşürür),
   `npm run build` (CSS Modules tipleri + ham renk denetimi + tsc strict),
   `npm test` (vitest + testing-library, `frontend/src/**/*.test.tsx`),
-  `backend/tools/vm_test.sh` (VM'de JSON sözleşmesi).
+  `backend/tools/local_test.sh` (JSON sözleşmesi yerelde: atılıp yıkılan DB + iki süreç),
+  `backend/tools/vm_test.sh` (aynısı VM'de).
 - Ön yüz yapısı `spec/16-on-yuz.md` §3: `api/` (istemci, tipler, kancalar), `ui/`
   (alan bilmez), `features/` (kayıt, sohbet — iki yüz ortak), `surfaces/` (yerleşim +
   rota). Renk yalnız `src/tokens.css`'te.

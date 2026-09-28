@@ -94,6 +94,11 @@ Veri olup arayüzü olanlar (ray pinleri, push abonelikleri) Rust'ta saklanır, 
   `GET /api/notifications`, `GET|POST /api/nodes`,
   `PATCH|DELETE /api/nodes/{id}` (veri yönetimi — ağaç; okuma herkese açık, yazma
   `edit_nodes` + dal, kök işlemleri yalnız admin; `spec/90-geri-tasima.md` G5),
+  `POST /api/records/{id}/cards`, `PATCH|DELETE /api/cards/{id}`, `PUT /api/cards/{id}/signup`,
+  `POST /api/cards/{id}/attachments` (kart blokları; katılım düzenleme yetkisi istemez),
+  `POST /api/attachments?name=` (ham gövde, 10 MB; ek sahipsiz doğar, mesaj `attachment_ids`
+  ya da medya kartı bağlar), `GET /api/attachments/{id}(/thumb)`, `DELETE /api/attachments/{id}`
+  (yükleyen ya da admin; mezar taşı), `GET /api/tags`, `POST|DELETE /api/attachments/{id}/tags(/{tag})`,
   `GET /api/admin`, `POST /api/admin/users`, `PATCH /api/admin/users/{id}` (tek işlem,
   tipli `{op, value}`: aç/kapat, admin, kapsam, rol, dal izni), `POST /api/admin/roles`,
   `PATCH|DELETE /api/admin/roles/{id}` (yönetim paneli — `manage_users` ya da admin; admin
