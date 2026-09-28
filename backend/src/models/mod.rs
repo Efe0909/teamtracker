@@ -12,7 +12,8 @@
 //! **Durur** — birden fazla yerin paylastigi tipler:
 //!   - tablo satirlari (`Item`, `Node`, `User`, ...)
 //!   - alan adi enum'lari (`enums.rs`)
-//!   - kart blob tipleri (`card.rs`) — bunlar serde, sqlx degil
+//!
+//! Kart turu katalogu `api/cards.rs`'te: onu yalniz kart uclari okuyor.
 //!
 //! **Durmaz** — TEK sorgunun kullandigi tipler. Tablo listesinin sayac'li
 //! satiri ya da `chat_feed` view'inin satiri hicbir tablonun karsiligi degil;
@@ -37,8 +38,6 @@
 
 pub mod action;
 pub mod activity;
-pub mod attachment;
-pub mod card;
 pub mod enums;
 pub mod record;
 pub mod message;

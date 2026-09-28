@@ -52,7 +52,7 @@ pub struct AttachView {
     width: Option<i32>,
     height: Option<i32>,
     original_name: Option<String>,
-    deleted: bool,
+    pub deleted: bool,
     can_delete: bool,
     can_tag: bool,
     tags: Vec<TagOut>,

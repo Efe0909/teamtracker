@@ -417,6 +417,33 @@ ok "$(wc_ n DELETE "$NT" "/api/attachments/$A1" '')" 204 "yukleyen siler"
 ok "$(code -b "$J/n" "$B/api/attachments/$A1")" 404 "dosya gitti"
 ok "$(g n "/api/chats/$VCHAT/feed" | jq -r ".attachments[\"$MID\"][0].deleted")" true "mesaj kalir, mezar tasi"
 
+# --- kart bloklari (R4-F01, F02, F12) -------------------------------------------
+# Iletisim dalinda kayit: Efe (Malzeme) ve Deniz (Uretim) duzenleyemez.
+t cards
+KR=$(w w POST "$WT" /api/records "{\"kind\":\"task\",\"title\":\"Kart denemesi\",\"unit_id\":\"$ILETISIM\",\"owner_id\":null,\"card_types\":[\"meeting\",\"pool\",\"media\"]}" | jq -r .id)
+ok "$(g n "/api/records/$KR" | jq -r '[.access.can_edit, (.cards|map(.card_type)|join(","))]|join(" ")')" "false meeting,pool,media" "acilista kart secici"
+KM=$(g w "/api/records/$KR" | jq -r '.cards[]|select(.card_type=="meeting").id')
+KP=$(g w "/api/records/$KR" | jq -r '.cards[]|select(.card_type=="pool").id')
+KMD=$(g w "/api/records/$KR" | jq -r '.cards[]|select(.card_type=="media").id')
+ok "$(w w PATCH "$WT" "/api/cards/$KM" '{"title":"Planlama","data":{"when":"2026-10-01T18:30","link":"https://meet.x/a","evil":"x"}}' | jq -c ".cards[]|select(.id==\"$KM\").data")" '{"link":"https://meet.x/a","title":"Planlama","when":"2026-10-01T18:30"}' "beyaz liste"
+ok "$(w w PATCH "$WT" "/api/cards/$KM" '{"data":{"link":"javascript:alert(1)"}}' | jq -r .error)" invalid_link "yalniz http(s) baglanti"
+ok "$(w w POST "$WT" "/api/records/$KR/cards" '{"card_type":"survey"}' | jq -r .error)" invalid_card_type "bilinmeyen tur eklenemez"
+ok "$(wc_ n POST "$NT" "/api/records/$KR/cards" '{"card_type":"pool"}')" 403 "duzenleyemeyen kart ekleyemez"
+
+t card_signups
+ok "$(w n PUT "$NT" "/api/cards/$KP/signup" '{"answer":"yes"}' | jq -r ".cards[]|select(.id==\"$KP\").signups[0].user_id")" "$DENIZ" "katilim duzenleme istemez"
+ok "$(w n PUT "$NT" "/api/cards/$KP/signup" '{"answer":"maybe"}' | jq -r .error)" invalid_answer "havuzda belki yok"
+w e PUT "$ET" "/api/cards/$KM/signup" '{"answer":"maybe","note":"gec kalirim"}' >/dev/null
+ok "$(w w PATCH "$WT" "/api/cards/$KM" '{"title":"Planlama 2"}' | jq -r ".cards[]|select(.id==\"$KM\").signups[0].note")" "gec kalirim" "duzenleme katilimi silmez"
+ok "$(w n PUT "$NT" "/api/cards/$KP/signup" '{"answer":null}' | jq -r ".cards[]|select(.id==\"$KP\").signups|length")" 0 "geri cekil"
+
+t card_media
+KA=$(up w "$WT" "$J/px.png" | jq -r .id)
+ok "$(w w POST "$WT" "/api/cards/$KMD/attachments" "{\"attachment_ids\":[\"$KA\"]}" | jq -r ".cards[]|select(.id==\"$KMD\").attachments[0].id")" "$KA" "medya kartina gorsel"
+ok "$(w w POST "$WT" "/api/cards/$KM/attachments" "{\"attachment_ids\":[\"$KA\"]}" | jq -r .error)" invalid_card_type "yalniz medya kartina"
+ok "$(w w DELETE "$WT" "/api/cards/$KMD" '' | jq -r '.cards|length')" 2 "kart silinir"
+ok "$(DB "select count(*) from card_attachments where attachment_id='$KA'")" 0 "ek bagsiz kalir (supurmeye)"
+
 # --- Google kipi -------------------------------------------------------------
 t google_me
 R=$(curl -s "$BG/api/me"); ok "$(jq -r .auth <<<"$R")" google "auth"

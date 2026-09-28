@@ -7,6 +7,7 @@
 mod admin;
 mod attachments;
 mod auth;
+mod cards;
 mod chats;
 mod common;
 mod home;
@@ -16,7 +17,7 @@ mod records;
 
 use axum::{
     extract::{DefaultBodyLimit, State},
-    routing::{delete, get, patch, post},
+    routing::{delete, get, patch, post, put},
     Json, Router,
 };
 use axum_extra::extract::cookie::SignedCookieJar;
@@ -38,6 +39,10 @@ pub fn router() -> Router<AppState> {
         .route("/api/records", get(records::list).post(records::create))
         .route("/api/records/{id}", get(records::get).patch(records::patch))
         .route("/api/records/{id}/actions", post(records::add_action))
+        .route("/api/records/{id}/cards", post(cards::create))
+        .route("/api/cards/{id}", patch(cards::patch).delete(cards::delete))
+        .route("/api/cards/{id}/signup", put(cards::signup))
+        .route("/api/cards/{id}/attachments", post(cards::attach))
         .route("/api/actions/mine", get(records::my_actions))
         .route("/api/actions/{id}", patch(records::patch_action))
         .route("/api/chats/{id}/feed", get(chats::feed))
