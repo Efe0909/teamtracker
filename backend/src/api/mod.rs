@@ -5,6 +5,7 @@
 //! Host ayrimi (app./dashboard./apex) on yuzun isi, burada yok.
 
 mod admin;
+mod attachments;
 mod auth;
 mod chats;
 mod common;
@@ -14,7 +15,7 @@ mod nodes;
 mod records;
 
 use axum::{
-    extract::State,
+    extract::{DefaultBodyLimit, State},
     routing::{delete, get, patch, post},
     Json, Router,
 };
@@ -22,7 +23,7 @@ use axum_extra::extract::cookie::SignedCookieJar;
 use serde::Serialize;
 use uuid::Uuid;
 
-use crate::{auth::CurrentUser, error::{AppError, Result}, state::AppState};
+use crate::{auth::CurrentUser, error::{AppError, Result}, media, state::AppState};
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -48,6 +49,16 @@ pub fn router() -> Router<AppState> {
         .route("/api/notifications", get(home::notifications))
         .route("/api/nodes", get(nodes::tree).post(nodes::create))
         .route("/api/nodes/{id}", patch(nodes::patch).delete(nodes::delete))
+        // Govde siniri yalniz yuklemede genis (axum varsayilani 2 MB); nginx
+        // 12m, uygulama 10 MB — sinir asan istek nginx'ten degil buradan
+        // anlasilir kodla doner.
+        .route("/api/attachments", post(attachments::upload)
+            .layer(DefaultBodyLimit::max(media::MAX_BYTES + 1)))
+        .route("/api/attachments/{id}", get(attachments::get).delete(attachments::delete))
+        .route("/api/attachments/{id}/thumb", get(attachments::thumb))
+        .route("/api/attachments/{id}/tags", post(attachments::add_tag))
+        .route("/api/attachments/{id}/tags/{tag}", delete(attachments::remove_tag))
+        .route("/api/tags", get(attachments::tags))
         .route("/api/admin", get(admin::get))
         .route("/api/admin/users", post(admin::add_user))
         .route("/api/admin/users/{id}", patch(admin::patch_user))

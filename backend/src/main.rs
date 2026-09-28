@@ -14,7 +14,6 @@ mod csrf;
 #[allow(dead_code)]
 mod db;
 mod error;
-#[allow(dead_code)]
 mod media;
 mod mentions;
 #[allow(dead_code)]
@@ -40,6 +39,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Some(path) = &cfg.bootstrap_admins_file {
         bootstrap::admins(&pool, path).await;
     }
+    media::sync_volume(&pool, &cfg.media_root).await;
+    // Supurme gunde bir, ilki acilistan hemen sonra (KNOW-278).
+    let sweep_pool = pool.clone();
+    tokio::spawn(async move {
+        let mut every = tokio::time::interval(std::time::Duration::from_secs(24 * 3600));
+        loop {
+            every.tick().await;
+            match media::sweep(&sweep_pool).await {
+                Ok((0, 0)) => {}
+                Ok((chats, files)) => tracing::info!("supurme: {chats} sohbet, {files} ek"),
+                Err(e) => tracing::error!("supurme: {e}"),
+            }
+        }
+    });
 
     // Agac ACILISTA tek sorguyla kurulur, her istekte SQL'e gidilmez (KNOW-179).
     let addr = SocketAddr::new(cfg.bind, cfg.port);
