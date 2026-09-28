@@ -31,6 +31,16 @@ export type ApiErrorCode =
   | "invalid_scope"
   | "unknown_role"
   | "role_exists"
+  | "empty_file"
+  | "file_too_big"
+  | "bad_file_type"
+  | "corrupt_image"
+  | "storage_offline"
+  | "invalid_attachment"
+  | "invalid_card_type"
+  | "invalid_when"
+  | "invalid_link"
+  | "invalid_answer"
   | "network";
 
 export const ERRORS = {
@@ -61,6 +71,16 @@ export const ERRORS = {
   invalid_scope: "Böyle bir kapsam yok.",
   unknown_role: "Seçilen rol bulunamadı.",
   role_exists: "Bu adla bir rol zaten var.",
+  empty_file: "Dosya boş.",
+  file_too_big: "Dosya çok büyük. En fazla 10 MB.",
+  bad_file_type: "Yalnız JPEG, PNG, WebP ve GIF yüklenebilir.",
+  corrupt_image: "Görsel bozuk ya da okunamıyor.",
+  storage_offline: "Depolama diski şu an erişilemiyor. Metin mesajları çalışıyor; görseli sonra dene.",
+  invalid_attachment: "Bu görsel iliştirilemez (başkasının ya da zaten kullanılmış).",
+  invalid_card_type: "Bu kart türü bu işlemi desteklemiyor.",
+  invalid_when: "Tarih ve saat geçersiz.",
+  invalid_link: "Bağlantı http:// ya da https:// ile başlamalı.",
+  invalid_answer: "Bu kartta böyle bir cevap yok.",
   network: "Sunucuya ulaşılamadı. Bağlantını kontrol et.",
 } satisfies Record<ApiErrorCode, string>;
 
