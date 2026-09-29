@@ -8,7 +8,7 @@ ayarları) tarif eder.
 
 | Ortam | Nerede | Ne çalıştırır |
 |---|---|---|
-| **Yerel geliştirme** | bu depo | `make up` — Docker'da Postgres + uvicorn (sahte kimlik) |
+| **Yerel geliştirme** | bu depo | Docker'da Postgres + `cargo run` + `npm run dev` (sahte kimlik) |
 | **VM testi** | `~/nix` → `.#vmtest` | gerçek NixOS, gerçek nginx/cloudflared/Google girişi |
 | **Üretim** | `~/nix` → `.#evsunucu` | Raspberry Pi, aynı yapılandırma |
 
@@ -20,51 +20,15 @@ edildiği. Yani VM'de geçen bir şey Pi'de de büyük ölçüde geçer — kas�
 
 ## 1. Yerel geliştirme (ajan oturumları dahil)
 
-Tek komut yeter; Postgres Docker'da kalkar, şema göçleri açılışta kendiliğinden
-koşar, tohum verisi yazılır ve sunucu `--reload` ile başlar:
-
-```bash
-make up
-```
-
-Sonra: <http://localhost:8000> (masaüstü) ve <http://app.localhost:8000> (mobil).
-Ayrım **Host başlığının ilk etiketine** bakar — yol öneki yoktur, `/m` diye bir
-şey yoktur.
-
-Kimlik **sahte**: `EKIPTAKIP_AUTH=sahte`, giriş ekranı yok, ilk kullanıcı olarak
-çalışırsın. Ray'deki avatardan kullanıcı değiştirebilirsin (yalnız geliştirmede).
-
-Parça parça çalıştırmak istersen:
-
-```bash
-make setup      # .venv + bağımlılıklar (idempotent)
-make db-ac      # yalnız Postgres (veri kalır)
-make seed       # tohum — VAROLAN VERİYİ SİLER
-make dev        # sunucu, --reload
-make test       # pytest (gerçek Postgres'e karşı, kendi test veritabanları)
-make db-kapat   # Postgres'i durdur (veri kalır)
-```
-
-Veritabanını komple silmek: `docker compose down -v`.
-
-**Ajan oturumları için notlar**
-
-- `make test` gerçek Postgres ister — `make db-ac` çalışmıyorsa testler toplanma
-  aşamasında patlar. Docker açık mı, önce ona bak.
-- Testler `ekiptakip_test_<modul>` adında **kendi** veritabanlarını kurar; ana
-  `ekiptakip` veritabanına dokunmazlar. Yani `make seed` testleri etkilemez.
-- Gerçek Google girişini yerelde denemek genelde **gereksiz**: `EKIPTAKIP_AUTH=sahte`
-  ile bütün yetki yolları (admin, scope, rol) zaten sınanabiliyor. Gerçekten
-  gerekiyorsa `tests/test_real_identity.py` kalıbına bak — imzalı oturum çerezini
-  taklit ediyor, OAuth'a hiç çıkmıyor.
-- Yeni bağımlılık `requirements.txt`'e girer (tek kaynak; Makefile ve Dockerfile
-  ikisi de onu okur). Kurmak: `uv pip install --python .venv/bin/python -r requirements-dev.txt`.
-- Yeni göç `shared/migrations/` altına numaralı dosya olarak; açılışta kendiliğinden
-  koşar, elle `alter table` yok.
+Kökteki `README.md` → "Çalıştır" (Rust API + Vite). Arşivdeki Python (alpha-0.1)
+`references/python/` içinden `make up` ile kalkar.
 
 ---
 
 ## 2. VM testi (NixOS)
+
+> Bu bölüm ve §3 alpha-0.1'in Docker yığınını anlatır (`~/nix` `.#teamtracker0.1`,
+> `e02d71d`'ye pinli). 0.2 yayın akışı: kökteki `README.md` → "Yayına alma".
 
 Yapılandırma `~/nix`'te. Uygulamanın sürümü **flake input** olarak pinli, yani
 VM'de shell açıp `git pull` yapılmaz:
@@ -86,7 +50,7 @@ nixos-rebuild switch --flake .#vmtest # VM'de (ya da --target-host ile uzaktan)
 | `modules/cloudflared.nix` | tünel |
 
 `modules/ekiptakip-media.nix`'in **kaynağı bu depodadır**:
-[`nix-ekiptakip-media.nix`](nix-ekiptakip-media.nix). Depolar ayrı olduğu için
+[`nix-ekiptakip-media.nix`](../references/python/deploy/nix-ekiptakip-media.nix). Depolar ayrı olduğu için
 kopyalanarak taşınıyor — burada değiştirirsen `~/nix`'e de taşımayı unutma
 (iki kopya sessizce ayrışırsa belirti üretimde çıkar).
 
@@ -117,7 +81,7 @@ telefon ──https──> Cloudflare ──tünel──> cloudflared ──> ng
 
 ## Devamı
 
-- [`DOCKER.md`](DOCKER.md) — konteyner yığını, agenix sırları, medya dizini,
+- [`DOCKER.md`](../references/python/deploy/DOCKER.md) — (0.1) konteyner yığını, agenix sırları, medya dizini,
   günlük işler (`docker compose` komutları).
 - [`cloudflare-dashboard.md`](cloudflare-dashboard.md) — tünel panelden
   yönetiliyorsa public hostname + Access politikası.

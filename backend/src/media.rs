@@ -1,7 +1,7 @@
 //! Gorsel isleme + depolama birimi (R3-F08, F12). HTTP ve kullanici bilmez.
 //!
 //! Bloblar DOSYA SISTEMINDE (KNOW-230), `attachments` yalniz meta. Hat
-//! Python `shared/media.py` ile ayni sirada; nedenleri orada uzun uzun:
+//! Python `references/python/shared/media.py` ile ayni sirada; nedenleri orada uzun uzun:
 //!
 //!  1. Tur SIHIRLI BAYTLARDAN cikarilir — dosya adina ya da istemcinin
 //!     content-type'ina guvenilmez.

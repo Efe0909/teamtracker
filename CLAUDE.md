@@ -8,18 +8,18 @@ dizini, tünel). Elle kurulum yok; macOS ve Debian şablonları kaldırıldı.
 
 | Ortam | Nerede | Ne |
 |---|---|---|
-| Yerel geliştirme | bu depo | `make up` — Docker'da Postgres + uvicorn, sahte kimlik |
+| Yerel geliştirme | bu depo | Docker'da Postgres + `cargo run` + `npm run dev`, sahte kimlik |
 | VM testi | `~/nix` `.#teamtracker0.1` / `.#teamtracker0.2` | aynı VM (192.168.64.8), iki sürüm: 0.1 Python+Docker (e02d71d'ye pinli), 0.2 Rust+React (release) |
 | Üretim | `~/nix` `.#evsunucu` | Raspberry Pi, aynı `configuration.nix` |
 
-### alpha-0.2: Rust API + React (bu dal)
+### alpha-0.2: Rust API + React
 
-Yeni yığın: `backend/` (Rust, yalnız `/api` JSON) + `frontend/` (React + TS strict,
-statik). Python (`app.py`, `shared/`, `sites/`, `tests/`) **başvuru**: davranışın
-kaynağı, çalışan yığın değil. Sınır: `spec/15-sinirlar.md`.
+Yığın: `backend/` (Rust, yalnız `/api` JSON) + `frontend/` (React + TS strict,
+statik). Python (alpha-0.1) `references/python/` altında **arşiv**: davranışın
+kaynağı, çalışan yığın değil; yeni özellik oraya yazılmaz. Sınır: `spec/15-sinirlar.md`.
 
 ```bash
-docker start ekiptakip-db && docker exec ekiptakip-db createdb -U ekiptakip ekiptakip_alpha02
+docker compose up -d && docker exec ekiptakip-db createdb -U ekiptakip ekiptakip_alpha02
 (cd backend && DATABASE_URL=postgresql://ekiptakip:ekiptakip@127.0.0.1:5432/ekiptakip_alpha02 \
    EKIPTAKIP_AUTH=sahte cargo run)                     # API 127.0.0.1:8000
 (cd frontend && npm install && npm run dev)            # http://localhost:5173
@@ -44,10 +44,13 @@ docker start ekiptakip-db && docker exec ekiptakip-db createdb -U ekiptakip ekip
   release'e yükler, `deploy/release.nix`'i pinler; `~/nix` `packages.aarch64-linux.default`'u
   çeker.
 
-### Yerel: siteyi ayağa kaldırmak (Python, başvuru)
+### Arşiv: Python'u ayağa kaldırmak (`references/python/`)
+
+Aşağıdaki her komut `references/python/` içinden koşar; Postgres kökteki
+`docker-compose.yml`'den gelir (Rust'la aynı `ekiptakip-db`).
 
 ```bash
-make up          # bağımlılıklar + Postgres (Docker) + tohum + sunucu (--reload)
+cd references/python && make up   # bağımlılıklar + Postgres + tohum + sunucu (--reload)
 ```
 
 - Masaüstü: <http://localhost:8000> · Mobil: <http://app.localhost:8000>
@@ -102,10 +105,11 @@ origin'e ulaşması. Gerekçe ve açma adımları: `deploy/README.md`,
 ## Faz durumu
 
 alpha-0.1 = Faz 1 (hiyerarşi, kayıtlar, kart içi sohbet, alan değişiklikleri) + mobil yüz.
-Faz 2 (Google OAuth) **geldi**: kimlik gerçek, `shared/identity.py`. Yerelde hâlâ
+Faz 2 (Google OAuth) **geldi**: kimlik gerçek, Rust'ta `backend/src/api/auth.rs`
+(Python karşılığı `references/python/shared/identity.py`). Yerelde hâlâ
 sahte kimlikle çalışılır (`EKIPTAKIP_AUTH=sahte`), yayında reddedilir.
-Sonrası: yönetim paneli (`/admin`) ve medya ekleri de yazıldı; sıradaki iş
-`TODO.md`'de (madde 2 → 1).
+Sonrası: yönetim paneli ve medya ekleri de yazıldı. Python'dan taşıma envanteri
+`spec/90-geri-tasima.md`; 0.1 dönemi yapılacaklar listesi `references/python/TODO.md`.
 
 ## Kod dili: İngilizce. İstisna yok.
 
@@ -132,6 +136,8 @@ SCOPES = {
 okunmuyor. Terimi çevirme — `scope` scope'tur, `kapsam` değil.
 
 ### Depo bu kurala uyuyor (2026-09-09'da tamamlandı)
+
+(Bu bölümdeki `shared/…` yolları artık `references/python/shared/…` altında.)
 
 Kod tabanı baştan sona İngilizceye çevrildi: `shared/kapsam.py` → `shared/scope.py`,
 `shared/kimlik.py` → `shared/identity.py`, `shared/sertlestirme.py` → `shared/hardening.py`,

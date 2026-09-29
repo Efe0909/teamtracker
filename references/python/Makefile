@@ -1,4 +1,5 @@
 # EkipTakip — yerel kaldirma. `make` yazinca ne var ne yok gorunur.
+# ARSIV (alpha-0.1, Python): bu dizinden (references/python/) calistir.
 #
 # Hizli yol:  make up      (kurulum + tohum + sunucu, tek komut)
 # Gunluk yol: make dev     (sadece sunucu, --reload)
@@ -9,6 +10,8 @@ BIN     := $(VENV)/bin
 HOST    ?= 127.0.0.1
 PORT    ?= 8000
 COMPOSE := docker compose
+# Gelistirme Postgres'i depo kokunde: Rust yigini da ayni konteyneri kullaniyor.
+DEVDB   := $(COMPOSE) -f ../../docker-compose.yml
 STAMP   := $(VENV)/.deps-ok
 # Bagimlilik listesi burada DEGIL: requirements.txt (imaj da onu okuyor).
 # requirements-dev.txt onu -r ile icerir ve ustune pytest ekler.
@@ -43,14 +46,14 @@ $(STAMP): $(REQ)
 	@touch $@
 
 db-ac: ## Postgres'i Docker'da kaldir (veri kalir)
-	$(COMPOSE) up -d
+	$(DEVDB) up -d
 	@printf "Postgres bekleniyor"; \
 	 for i in $$(seq 1 30); do \
-	   $(COMPOSE) exec -T db pg_isready -U ekiptakip -d ekiptakip >/dev/null 2>&1 && { echo " hazir"; exit 0; }; \
+	   $(DEVDB) exec -T db pg_isready -U ekiptakip -d ekiptakip >/dev/null 2>&1 && { echo " hazir"; exit 0; }; \
 	   printf "."; sleep 1; done; echo; echo "Postgres acilmadi: docker compose logs db"; exit 1
 
 db-kapat: ## Postgres'i durdur (veri kalir; silmek icin: docker compose down -v)
-	$(COMPOSE) down
+	$(DEVDB) down
 
 seed: $(STAMP)  ## veritabanini tohumla (VAROLAN VERI SILINIR)
 	$(BIN)/python -m shared.seed

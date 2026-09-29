@@ -1,146 +1,131 @@
-# EkipTakip — alpha-0.1
+# EkipTakip — alpha-0.2
 
 Ekip için hata/görev takibi: hiyerarşi + kayıtlar + kart içi sohbet + alan değişiklikleri.
-**İki site, tek süreç, ortak veritabanı:**
+**Tek API, iki yüz, ortak veritabanı:**
 
-| Site | Ne | Yayında |
+| Yüz | Ne | Yayında |
 |---|---|---|
-| **Masaüstü** | ana sayfa (modül seçimi), görev yöneticisi (tablo + kart + sohbet), ekipler (takım sayfası + duvar) | `dashboard.<alan>` |
-| **Mobil** | yapılacaklar, arama, eylemler, bildirimler — ana ekrana eklenebilir (PWA) | `app.<alan>` |
+| **Masaüstü** | ana sayfa (modül seçimi), görev yöneticisi (tablo + kart + sohbet), ekipler, yönetim paneli | `dashboard.<alan>` |
+| **Mobil** | yapılacaklar, arama, eylemler, bildirimler | `app.<alan>` |
+| **Karşılama** | Google ile giriş, yüz seçimi | apex (`<alan>`) |
 
-Yığın: Python 3.12 + FastAPI + Jinja2 + HTMX + **PostgreSQL**, ham SQL. ORM yok, JS framework yok.
+Yığın: **Rust** (axum + sqlx, ham SQL, ORM yok) yalnız `/api/*` JSON verir;
+**React + TypeScript** (strict, Vite) statik derlenir, nginx sunar. PostgreSQL.
+Sınır ve gerekçe: `spec/15-sinirlar.md`.
+
+## Faz durumu
+
+- **Faz 1** — hiyerarşi, kayıtlar, kart içi sohbet, alan değişiklikleri, mobil yüz. Tamam.
+- **Faz 2** — gerçek kimlik: Google OAuth (PKCE), davetli listesi, imzalı oturum, CSRF,
+  giriş hız sınırı. **Geldi.** Sahte kimlik yalnız yerelde; yayında açılışı reddettirir.
+- Üstüne: yönetim paneli, medya ekleri, kart blokları (medya/toplantı/havuz).
+- Python'daki özelliklerin 0.2'ye taşınma envanteri: `spec/90-geri-tasima.md`.
+
+alpha-0.1 (Python + FastAPI + HTMX) **arşivlendi**: `references/python/`. Çalışan
+yığın değil, davranışın başvurusu — bkz. [Arşiv](#arşiv-alpha-01-python).
 
 ## Çalıştır
 
 ```bash
-make up          # bağımlılıklar + Docker'da Postgres + tohum + sunucu → http://127.0.0.1:8000
+docker compose up -d                                    # Postgres (ekiptakip-db)
+docker exec ekiptakip-db createdb -U ekiptakip ekiptakip_alpha02
+(cd backend && DATABASE_URL=postgresql://ekiptakip:ekiptakip@127.0.0.1:5432/ekiptakip_alpha02 \
+   EKIPTAKIP_AUTH=sahte cargo run)                      # API 127.0.0.1:8000, göçler açılışta
+(cd frontend && npm install && npm run dev)             # http://localhost:5173
 ```
 
-Postgres Docker'da çalışır (`docker-compose.yml`); `psql`/TablePlus/DBeaver ile
-`postgresql://ekiptakip:ekiptakip@127.0.0.1:5432/ekiptakip` adresinden bağlanabilirsin.
+- Karşılama <http://localhost:5173>, yüzler <http://app.localhost:5173> ·
+  <http://dashboard.localhost:5173>. Vite `/api`'yi Rust'a vekiller.
+- Ayrım **Host'un ilk etiketine** bakar; yol öneki yok.
+- Sahte kimlik: karşılamada kullanıcı seçilir, oturum hedef host'ta açılır
+  (`localhost` çerezi alt alan adlarına paylaşılamıyor).
+- Tohum (**varolan veriyi siler**):
+  `docker exec -i ekiptakip-db psql -U ekiptakip -d ekiptakip_alpha02 < backend/seed.sql`.
+  Ağaç indeksi açılışta kurulur — elle veri yazdıysan Rust'ı yeniden başlat.
+- `nix develop` derleme araçlarını (cargo, zig, node) verir.
 
-Sonraki günler `make dev` yeter. `make` yazınca komut listesi çıkar:
+## Denetim
 
-| Komut | Ne yapar |
+| Komut | Ne |
 |---|---|
-| `make up` | sıfırdan kaldırır: kurulum + tohum (veritabanı yoksa) + sunucu |
-| `make dev` / `make run` | sunucu, `--reload` açık / kapalı (`make dev PORT=9000`) |
-| `make db-ac` / `make db-kapat` | Docker'daki Postgres'i kaldır / durdur |
-| `make seed` / `make reseed` | tohumlar — **varolan veri silinir** |
-| `make test` | `pytest tests -q` |
-| `make check` | sunucu ayaktayken uçların durum kodlarını basar |
-| `make clean` / `make distclean` | veritabanı + önbellek / üstüne sanal ortam |
+| `cargo clippy --all-targets` | `unwrap`/`expect`/`panic!`/`todo!`/`unsafe` derlemeyi düşürür |
+| `cargo test` | birim: ağaç, filtre, hız sınırı |
+| `npm run build` | CSS Modules tipleri + ham renk denetimi + `tsc` strict + Vite |
+| `npm test` | vitest + testing-library |
+| `backend/tools/local_test.sh` | JSON sözleşmesi yerelde: atılıp yıkılan DB + iki süreç |
+| `backend/tools/vm_test.sh` | aynısı VM'de |
 
-Masaüstü ve mobil AYRI alan adlarında, ikisi de kökte — `/m` gibi bir yol yoktur.
-Yerelde `localhost` masaüstü, `app.localhost` mobil. İki alan adına ayırmak ve
-yayına almak: `deploy/README.md`.
+## Yayına alma
 
-`--workers 1` şart: ağaç indeksi süreç belleğinde (`spec/10-kararlar.md`).
+Hedef makine **derlemez**. `backend/tools/release.sh` Mac'te derler (statik musl ikili +
+`frontend/dist`), GitHub release'e yükler, `deploy/release.nix`'i pinler; makine
+yapılandırması `~/nix`'te (NixOS, `flake.nix` → `nixosModules.default`). Ayrıntı:
+`deploy/README.md`.
 
 ## Yapı
 
 ```
-app.py       giriş noktası
-shared/      ortak çekirdek: db (psycopg), göçler, tohum, ağaç, kimlik, yetki,
-             CSRF, sertleştirme, iş mantığı, arama, palet
-sites/       dashboard/ ve mobil/ — her biri kendi rotaları, şablonları, CSS'i
-spec/        kararlar, şema, ekran çözümlemeleri
-deploy/      cloudflared + nginx + systemd
-tools/       yardımcı betikler: PWA ikonları, davetli listesi yönetimi
-tests/       110 test: kimlik, oturum, CSRF, yetki (403), FTS, iki alan adı, PWA, ekipler
+backend/     Rust JSON API — src/, migrations/, seed.sql, tools/ (test, release, import)
+frontend/    React + TS — api/ (istemci, tipler), ui/, features/, surfaces/; renk yalnız tokens.css
+deploy/      NixOS modülü, release pini, Cloudflare notları
+spec/        kararlar, şema (v2: 21-sema-v2.md), ön yüz (16-on-yuz.md), güvenlik
+reference/   kaynak ekranların uydurma verili HTML yeniden çizimleri
+references/  python/ — arşivlenmiş alpha-0.1
 ```
-
-Ayrıntı ve gerekçeler: **`spec/50-yapi.md`**.
 
 ## Nereye bakmalı
 
 | Soru | Dosya |
 |---|---|
+| Rust ne yapar, ön yüz ne yapar? | `spec/15-sinirlar.md` |
+| Ön yüz yapısı | `spec/16-on-yuz.md` |
+| Veri modeli (v2) | `spec/21-sema-v2.md` |
 | Neden böyle yazıldı? | `spec/10-kararlar.md` |
-| Veri modeli ne, ne eksik? | `spec/20-sema.md` |
-| Mobil ekranlar nereden uyarlandı? | `spec/30-mobil.md` |
-| Push ne durumda? | `spec/40-push.md` |
-| Klasör yapısı | `spec/50-yapi.md` |
-| Veritabanı, göçler, arama | `spec/80-veritabani.md` |
 | Kimlik, yetki, tehdit modeli | `spec/70-guvenlik.md` |
-| Yayına alma, Google OAuth kurulumu | `deploy/README.md` |
-| Yeni ekran çözümlemesi nasıl yazılır | `spec/README.md` |
-
-## Sahte kullanıcılar (Faz 1)
-
-| Kişi | Yetki | Kapsam |
-|---|---|---|
-| Efe (varsayılan) | editor | Malzeme Temini |
-| Selin | admin | tüm ağaç |
-| Deniz | — | Üretim Hattı A |
-
-Masaüstünde rayın altındaki avatardan değiştirilir (`POST /switch/{user_id}`, çerez `uid`).
+| Python'dan ne taşındı, ne bırakıldı | `spec/90-geri-tasima.md` |
+| Yayına alma, Cloudflare | `deploy/README.md` |
 
 ## Bilgi güvenliği
 
-Bu depo **public**. alpha-0.1 bir prototip; aşağıdaki durum bilerek böyledir.
+Bu depo **public**.
 
-- Depoda sır **yok**: parola, API anahtarı, token, VAPID anahtarı tutulmuyor.
-- `.gitignore` veritabanını, `.env`'i, sanal ortamı ve ham ekran görüntülerini dışarıda
-  tutar. `ekiptakip.db` içinde gerçek kart içeriği birikir — **commit etme**.
+- Depoda sır **yok**: parola, API anahtarı, token, VAPID anahtarı tutulmuyor. Sırlar
+  `~/nix`'te agenix ile.
 - Tohum verisine **gerçek müşteri/ekip verisi koyma**.
 
-### Kimlik ve yetki
+### Kimlik ve yetki (Faz 2)
 
-Google ile giriş, imzalı oturum, davetli listesi. Tasarım ve tehdit modeli:
-**`spec/70-guvenlik.md`**. Kurulum: `deploy/README.md`.
-
-- Giriş yalnızca `users` tablosunda kayıtlı e-postalara açık; bilinmeyen adres
-  giremez ve **kullanıcı oluşmaz**. Listeyi `tools/kullanici.py` yönetir.
-- `is_active = 0` yapılan kişi **bir sonraki istekte** düşer (kullanıcı satırı her
-  istekte okunuyor; ayrı oturum tablosu yok).
-- Yanlış yapılandırma çalışma anında değil **açılışta** yakalanır: yayında sahte
-  kimlik, eksik/kısa `SECRET_KEY`, eksik Google anahtarı → süreç açılmaz.
-- Geliştirmede `make dev` sahte kimlikle çalışır (`EKIPTAKIP_AUTH=sahte`); bu
-  değişken yayın kurulumunda açılışı **reddettirir**.
-
-| Konu | Durum |
-|---|---|
-| TLS | `uvicorn` düz HTTP; dağıtımda cloudflared + nginx (`deploy/`) |
-| Tek oturum iptali | Yok — hesap kapatma ya da anahtar rotasyonu (gerekçe: spec §2.4) |
-| İki faktör, oturum yönetim ekranı, WAF | Kapsam dışı (spec §1) |
-
-**Uygulama yalnızca `127.0.0.1`'e bağlanır.** Tünelden dışarı verirken önüne
-ikinci bir kapı (Cloudflare Access) koymak tavsiye edilir — `deploy/README.md`.
-
-### Bilerek doğru yapılanlar
-
-- **Yetki sunucuda uygulanır.** `can_edit_item` her yazma ucunda çalışır; şablon sadece
-  görsel olarak kilitler. Kapsam dışı istek **403** döner — masaüstünde de mobilde de test edilir.
-- **Yetki kapsamı sızmaz.** Karta dahil edilen kişi yalnızca o kartta yetkilidir.
-- **SQL enjeksiyonu yok.** Değerler parametreyle geçer; SQL'e giren tek metin
-  interpolasyonu alan adıdır ve beyaz listeden gelir. FTS sorgusu kullanıcı metniyle
-  birleştirilmez, kelimeler ayıklanıp önek eşleşmesine çevrilir.
-- **XSS'e karşı kaçış açık.** Jinja `select_autoescape`; hiçbir yerde `|safe` yok.
-- **CSP `unsafe-eval` de `unsafe-inline` de istemiyor** (script tarafında):
-  şablonlarda satır içi `<script>` ve `hx-on=` yok, davranış `.js` dosyalarında.
-  Başlıkları uygulama üretir, nginx değil — vekilsiz çalıştırmada da geçerli.
-- **CSRF:** imzalı oturuma bağlı token; HTMX başlıkla, düz formlar gizli alanla
-  taşır. Karşılaştırma `hmac.compare_digest`.
-- **Denetim izi:** giriş, giriş reddi, çıkış, 403 ve pasifleştirme
-  `guvenlik_olaylari` tablosuna yazılır (gövde tutulmaz).
-- **Dosya yükleme var** (kart sohbeti ve takım duvarına mesaj başına tek
-  görsel, `spec/20-sema.md` §3b) — bu satır artık doğru değil, savunması
-  katmanlı: dosya tipi **beyaz liste** (yalnızca JPEG/PNG/WebP/GIF), içerik
-  uzantıya ya da istemcinin gönderdiği `Content-Type`'a değil **magic
-  byte'a** bakılarak doğrulanır, boyut **10 MB** sert tavanla sınırlı ve
-  büyük bir görsele açılan sıkıştırma bombalarına karşı
-  `Image.MAX_IMAGE_PIXELS` ile ayrıca korunur. JPEG/PNG/WebP EXIF'i
-  temizlenip yeniden kodlanır — asıl içerik doğrulaması burada olur, gerçek
-  bir görsel olmayan hiçbir payload bu adımdan sağ çıkmaz. Servis ucu
-  (`/media/{id}`) diğer her uç gibi `LoginGate`'in arkasında, kimliksiz
-  erişilemez; `Content-Type` dosyadan değil **veritabanı sütunundan** sabit
-  gider ve `X-Content-Type-Options: nosniff` eşlik eder, yani tarayıcı
-  içeriği kendi başına koklayıp farklı yorumlamaz. Bu savunmalar oturumu
-  olan birinin kötü niyetli bir dosya yüklemesine karşıdır — oturumsuz
-  erişime karşı değil, o yüzden kapı (Cloudflare Access, `deploy/README.md`
-  "Kapı") burada da aynı şekilde şart.
+- Giriş apex'te: Google OAuth + PKCE → imzalı oturum çerezi (`Domain=.<alan>`, üç
+  host'ta geçerli). JWT yok; kapsam/rol her istekte veritabanından okunur.
+- Yalnız `users` tablosundaki **etkin** e-postalar girer; bilinmeyen adres için kullanıcı
+  oluşmaz. Pasifleştirilen kişi bir sonraki istekte düşer.
+- İlk yönetici `~/nix`'teki agenix sırrından (`EKIPTAKIP_BOOTSTRAP_ADMINS_FILE`) açılışta
+  garanti edilir; sonrası yönetim panelinden.
+- Yanlış yapılandırma **açılışta** yakalanır: yayında sahte kimlik, eksik/kısa
+  `EKIPTAKIP_SECRET_KEY`, eksik Google anahtarı → süreç açılmaz.
+- CSRF: token `GET /api/me` ile gelir, değiştiren her istekte `X-CSRF-Token`.
+- Giriş uçlarında IP başına hız sınırı; giriş, ret, çıkış, 403 `security_events`'e yazılır.
+- **Yetki sunucuda.** Ön yüz düğme göstermek için API'nin döndürdüğü yetkiyi kullanır,
+  kendi karar vermez.
+- SQL parametreli (`sqlx`), metin birleştirme yok.
+- Ekler: tür magic byte'tan, 10 MB tavan, piksel tavanı, yeniden kodlama (EXIF/GPS düşer).
+- Rust yalnız `127.0.0.1`'e bağlanır; önünde nginx (CSP ve güvenlik başlıkları) ve
+  Cloudflare tüneli. Cloudflare Access şu an kapalı — ek katman, tek kapı değil
+  (`deploy/README.md`).
 
 ### Açık bildirimi
 
 Bir açık bulursan issue açma; doğrudan bakımcıya yaz (`Efe0909` GitHub profili).
+
+## Arşiv: alpha-0.1 (Python)
+
+`references/python/` — FastAPI + Jinja2 + HTMX sürümü, olduğu gibi. Rust/TS
+karşılıkları yorumlarda bu yollara atıf yapar; `backend/tools/gen_seed.py` tohumu
+`references/python/shared/seed.py`'den üretir. Hâlâ çalışır:
+
+```bash
+cd references/python && make up     # Postgres kökteki docker-compose.yml'den
+```
+
+VM'deki 0.1 hedefi (`~/nix` `.#teamtracker0.1`) `e02d71d`'ye pinli; bu taşımadan etkilenmez.
+Yeni özellik buraya yazılmaz.
