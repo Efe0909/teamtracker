@@ -242,8 +242,8 @@ export function DueForm(props: { current: string | null; busy: boolean; onSave: 
         <input className={ui.input} type="date" value={v} onChange={(e) => setV(e.target.value)} />
       </label>
       <div className={ui.dact}>
-        <Button type="submit" variant="primary" disabled={props.busy}>
-          <Icon name="check" size={16} /> Kaydet
+        <Button type="submit" variant="primary" aria-busy={props.busy} disabled={props.busy}>
+          <Icon name="check" size={16} /> {props.busy ? "Kaydediliyor…" : "Kaydet"}
         </Button>
       </div>
     </form>

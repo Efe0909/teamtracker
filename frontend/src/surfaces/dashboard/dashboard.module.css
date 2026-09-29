@@ -40,7 +40,7 @@
   margin-bottom: var(--s-3);
 }
 .logoBg {
-  fill: var(--acc-strong);
+  fill: var(--acc-fill);
 }
 .logoLine {
   fill: none;
@@ -300,6 +300,18 @@ a.stat:hover {
 .chip:hover {
   border-color: var(--acc-soft);
 }
+.chip[aria-pressed="true"] {
+  border-color: var(--acc);
+  background: var(--tint);
+  box-shadow: inset 0 0 0 1px var(--acc);
+}
+/* Etkin filtre: "Hepsi" (bos deger) disinda bir secim varsa select vurgulu —
+   hangi filtrenin tabloyu daralttigi bakista gorunsun. JS'siz, :has ile. */
+.bar select:has(option:checked:not([value=""])) {
+  border-color: var(--acc);
+  background-color: var(--tint);
+  font-weight: 600;
+}
 .summary {
   margin-left: auto;
   font-size: var(--fs-sm);
@@ -518,7 +530,7 @@ a.stat:hover {
 }
 .members {
   list-style: none;
-  margin: 0;
+  margin: 0 0 var(--s-3);
   padding: 0;
   display: flex;
   flex-wrap: wrap;
@@ -539,13 +551,31 @@ a.stat:hover {
   font-size: var(--fs-xs);
   font-weight: 700;
 }
+/* Satir ici rol secimi: cercevesiz duz metin "degistirilebilir" demiyordu.
+   Hafif cerceve + ok: yazi degil denetim oldugu bakista belli. */
 .roleSelect {
-  border: 0;
-  background: none;
+  appearance: none;
+  min-height: 26px;
+  padding: 0 20px 0 8px;
+  border: 1px solid var(--line-field);
+  border-radius: var(--r-sm);
+  background-color: var(--panel);
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--dim) 50%),
+    linear-gradient(135deg, var(--dim) 50%, transparent 50%);
+  background-position:
+    right 10px center,
+    right 6px center;
+  background-size: 4px 4px;
+  background-repeat: no-repeat;
   color: var(--dim);
   font-size: var(--fs-xs);
   font-weight: 700;
   cursor: pointer;
+}
+.roleSelect:hover {
+  border-color: var(--acc);
+  color: var(--txt);
 }
 .sectionTitle {
   margin: 0 0 var(--s-2);
@@ -706,15 +736,23 @@ a.stat:hover {
   color: var(--dim);
   font-size: var(--fs-sm);
 }
+/* Kaldir: 2px dolgulu ✕ tiklanmasi zor bir hedefti; 24px yuvarlak alan. */
 .chipX {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin-right: -6px;
   border: 0;
+  border-radius: 50%;
   background: none;
-  padding: 0 2px;
+  padding: 0;
   color: var(--dim);
   cursor: pointer;
 }
 .chipX:hover {
-  color: var(--txt);
+  color: var(--err-text);
+  background: var(--err-bg);
 }
 .personEdit summary {
   cursor: pointer;

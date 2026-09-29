@@ -10,7 +10,7 @@ import { TEAM_ROLE } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
 import { navigate } from "../../lib/router";
 import { Icon } from "../../ui/icons";
-import { Avatar, Button, Dialog, Empty, Link, Loading, Segmented, ui, useToast } from "../../ui/ui";
+import { Avatar, Button, Dialog, Empty, Link, Loading, Req, Segmented, ui, useToast } from "../../ui/ui";
 import { ErrorScreen } from "../errors/ErrorScreen";
 import s from "./dashboard.module.css";
 import { href } from "./routes";
@@ -85,14 +85,14 @@ function EditTeam({ nodeId, name, description }: { nodeId: Uuid; name: string; d
         <Icon name="edit" size={16} /> Düzenle
       </Button>
       <Dialog open={open} onClose={() => setOpen(false)} title="Takımı düzenle">
-        <form onSubmit={(e) => {
+        <form className={ui.formStack} onSubmit={(e) => {
           e.preventDefault();
           m.mutate({ id: nodeId, patch: { name: n, description: d.trim() === "" ? null : d } },
             { onSuccess: () => setOpen(false), onError: (x) => setErr(errorText(x)) });
         }}>
           {err !== null && <p className={ui.error} role="alert">{err}</p>}
           <label className={ui.field}>
-            Ad
+            <span>Ad<Req /></span>
             <input className={ui.input} value={n} onChange={(e) => setN(e.target.value)} required maxLength={200} />
           </label>
           <label className={ui.field}>
@@ -102,7 +102,9 @@ function EditTeam({ nodeId, name, description }: { nodeId: Uuid; name: string; d
           <p className={s.dim}>Ağaçtaki düğümle aynı ad: burada değiştirmek ağacı da değiştirir.</p>
           <div className={ui.dact}>
             <Button onClick={() => setOpen(false)}>Vazgeç</Button>
-            <Button type="submit" variant="primary" disabled={m.isPending || n.trim() === ""}>Kaydet</Button>
+            <Button type="submit" variant="primary" aria-busy={m.isPending} disabled={m.isPending || n.trim() === ""}>
+              {m.isPending ? "Kaydediliyor…" : "Kaydet"}
+            </Button>
           </div>
         </form>
       </Dialog>
@@ -130,24 +132,29 @@ function Members({ team, chat }: { team: TeamView; chat: Uuid }) {
       <h2 id="members-h" className={s.sectionTitle}>Üyeler · {team.members.length}</h2>
       {team.members.length === 0 && <p className={s.dim}>Henüz üye yok.{can && " Aşağıdan ekle."}</p>}
       <ul className={s.members}>
-        {team.members.map((x) => (
-          <li key={x.user_id}>
-            <Avatar user={L.user(x.user_id)} size={24} />
-            {L.user(x.user_id)?.name ?? "?"}
-            {can ? (
-              <>
-                <select className={s.roleSelect} aria-label="Rol" value={x.role}
-                  onChange={(e) => write(x.user_id, e.target.value as TeamRole)}>
-                  {ROLES.map((r) => <option key={r} value={r}>{TEAM_ROLE[r]}</option>)}
-                </select>
-                <button type="button" className={s.chipX} aria-label="Takımdan çıkar"
-                  onClick={() => write(x.user_id, null)}>✕</button>
-              </>
-            ) : (
-              <span className={s.role}>{TEAM_ROLE[x.role]}</span>
-            )}
-          </li>
-        ))}
+        {team.members.map((x) => {
+          // Her satirin denetimi kisinin adini tasir: ekran okuyucuda on tane
+          // ayni "Rol" / "Takımdan çıkar" duyulmasin.
+          const who = L.user(x.user_id)?.name ?? "?";
+          return (
+            <li key={x.user_id}>
+              <Avatar user={L.user(x.user_id)} size={24} />
+              {who}
+              {can ? (
+                <>
+                  <select className={s.roleSelect} aria-label={`${who} — rol`} value={x.role}
+                    onChange={(e) => write(x.user_id, e.target.value as TeamRole)}>
+                    {ROLES.map((r) => <option key={r} value={r}>{TEAM_ROLE[r]}</option>)}
+                  </select>
+                  <button type="button" className={s.chipX} aria-label={`${who} takımdan çıkar`}
+                    onClick={() => write(x.user_id, null)}>✕</button>
+                </>
+              ) : (
+                <span className={s.role}>{TEAM_ROLE[x.role]}</span>
+              )}
+            </li>
+          );
+        })}
       </ul>
       {can && outside.length > 0 && (
         <div className={s.pickRow}>

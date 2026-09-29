@@ -3,13 +3,13 @@
 // ozel dugmeleri (admin yap, rol tanimi) gostermek icin. Duzenleme kontrolleri
 // yerel <details> icinde: satir kapaliyken liste taranabilir kalir.
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { ApiError, errorText } from "../../api/client";
 import { adminOps, useAdmin, useAdminWrite } from "../../api/hooks";
 import type { AdminPerson, AdminRole, AdminView, UserOp } from "../../api/types";
 import { ago, SCOPE } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
-import { Avatar, Button, Empty, Loading, Tag, ui, useToast } from "../../ui/ui";
+import { Avatar, Button, Empty, Loading, Req, Tag, ui, useToast } from "../../ui/ui";
 import { ErrorScreen } from "../errors/ErrorScreen";
 import s from "./dashboard.module.css";
 
@@ -54,6 +54,7 @@ function AdminScreen({ v }: { v: AdminView }) {
 
 function AddUser() {
   const m = useAdminWrite();
+  const toast = useToast();
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [err, setErr] = useState<string | null>(null);
@@ -65,6 +66,8 @@ function AddUser() {
         setErr(null);
         m.mutate(adminOps.addUser(email, name), {
           onSuccess: () => {
+            // Form sessizce bosalinca "oldu mu?" sorusu kaliyordu.
+            toast({ text: `${name} eklendi.`, error: false });
             setEmail("");
             setName("");
           },
@@ -75,18 +78,20 @@ function AddUser() {
       {err !== null && <p className={ui.error} role="alert">{err}</p>}
       <div className={ui.grid2}>
         <label className={ui.field}>
-          E-posta
+          <span>E-posta<Req /></span>
           <input className={ui.input} type="email" value={email} onChange={(e) => setEmail(e.target.value)} required
-            placeholder="ad@ornek.com" autoComplete="off" />
+            placeholder="ad@ornek.com" autoComplete="off" spellCheck={false} />
         </label>
         <label className={ui.field}>
-          Ad
+          <span>Ad<Req /></span>
           <input className={ui.input} value={name} onChange={(e) => setName(e.target.value)} required maxLength={200} />
         </label>
       </div>
       <p className={s.dim}>Eklenen kişi bu e-postanın Google hesabıyla girer. Listede olmayan e-posta giremez.</p>
       <div className={ui.dact}>
-        <Button type="submit" variant="primary" disabled={m.isPending}>Kullanıcı ekle</Button>
+        <Button type="submit" variant="primary" aria-busy={m.isPending} disabled={m.isPending}>
+          {m.isPending ? "Ekleniyor…" : "Kullanıcı ekle"}
+        </Button>
       </div>
     </form>
   );
@@ -193,12 +198,15 @@ function Picker(props: {
   onPick: (v: string) => void;
 }) {
   const [pick, setPick] = useState("");
+  const id = useId();
   if (props.options.length === 0) return <p className={s.dim}>{props.empty}</p>;
+  // label yalniz select'i sarar: "Ver" dugmesi etiketin icinde olunca select'in
+  // erisilebilir adina karisiyordu.
   return (
-    <label className={ui.field}>
-      {props.label}
+    <div className={ui.field}>
+      <label htmlFor={id}>{props.label}</label>
       <span className={s.pickRow}>
-        <select className={ui.input} value={pick} onChange={(e) => setPick(e.target.value)}>
+        <select id={id} className={ui.input} value={pick} onChange={(e) => setPick(e.target.value)}>
           <option value="">— seç —</option>
           {props.options.map((o) => (
             <option key={o.value} value={o.value}>{o.label}</option>
@@ -206,7 +214,7 @@ function Picker(props: {
         </select>
         <Button disabled={pick === ""} onClick={() => { props.onPick(pick); setPick(""); }}>Ver</Button>
       </span>
-    </label>
+    </div>
   );
 }
 
@@ -257,6 +265,7 @@ function RoleForm({ v, role, members }: { v: AdminView; role: AdminRole | null; 
   const done = { onError: (x: unknown) => setErr(errorText(x)) };
   return (
     <form
+      className={ui.formStack}
       onSubmit={(e) => {
         e.preventDefault();
         setErr(null);
@@ -274,21 +283,27 @@ function RoleForm({ v, role, members }: { v: AdminView; role: AdminRole | null; 
     >
       {err !== null && <p className={ui.error} role="alert">{err}</p>}
       <label className={ui.field}>
-        Rol adı
+        <span>Rol adı<Req /></span>
         <input className={ui.input} value={name} onChange={(e) => setName(e.target.value)} required maxLength={200} />
       </label>
-      <fieldset className={s.scopeSet}>
-        <legend>Kapsamlar</legend>
-        {v.scopes.map((k) => (
-          <label key={k}>
-            <input type="checkbox" checked={scopes.has(k)} onChange={() => setScopes((prev) => {
-              const next = new Set(prev);
-              if (next.has(k)) next.delete(k);
-              else next.add(k);
-              return next;
-            })} /> {k} — {SCOPE[k] ?? ""}
-          </label>
-        ))}
+      <fieldset className={`${ui.field} ${s.scopeSet}`}>
+        <legend>Kapsamlar <span className={ui.fieldHint}>— {scopes.size} / {v.scopes.length} seçili</span></legend>
+        <div className={ui.checks}>
+          {v.scopes.map((k) => (
+            <label key={k} className={ui.check}>
+              <input type="checkbox" checked={scopes.has(k)} onChange={() => setScopes((prev) => {
+                const next = new Set(prev);
+                if (next.has(k)) next.delete(k);
+                else next.add(k);
+                return next;
+              })} />
+              <span>
+                {k}
+                {SCOPE[k] !== undefined && <small>{SCOPE[k]}</small>}
+              </span>
+            </label>
+          ))}
+        </div>
       </fieldset>
       <div className={ui.dact}>
         {role !== null && (
@@ -297,8 +312,8 @@ function RoleForm({ v, role, members }: { v: AdminView; role: AdminRole | null; 
             if (ok) m.mutate(adminOps.deleteRole(role.id), done);
           }}>Sil</Button>
         )}
-        <Button type="submit" variant="primary" disabled={m.isPending || name.trim() === ""}>
-          {role === null ? "Oluştur" : "Kaydet"}
+        <Button type="submit" variant="primary" aria-busy={m.isPending} disabled={m.isPending || name.trim() === ""}>
+          {m.isPending ? "Kaydediliyor…" : role === null ? "Oluştur" : "Kaydet"}
         </Button>
       </div>
     </form>

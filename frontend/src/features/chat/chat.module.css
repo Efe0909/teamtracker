@@ -42,7 +42,7 @@
   font-size: var(--fs-md);
 }
 .mine .bub {
-  background: var(--acc-strong);
+  background: var(--acc-fill);
   border-color: transparent;
   color: var(--on-acc);
   border-bottom-left-radius: 16px;
@@ -157,8 +157,12 @@
   color: var(--txt);
 }
 .mentionOpt:hover,
-.mentionOpt:focus-visible {
+.mentionOpt:focus-visible,
+.mentionOpt[aria-selected="true"] {
   background: var(--tint);
+}
+.mentionOpt[aria-selected="true"] {
+  box-shadow: inset 3px 0 0 var(--acc);
 }
 .mentionOpt span {
   color: var(--dim);
@@ -212,10 +216,19 @@
   resize: none;
   padding: 10px 14px;
   border-radius: 22px;
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--line-field);
   background: var(--panel);
   font-size: var(--fs-lg);
   line-height: 1.4;
+  transition: border-color 0.12s;
+}
+.compRow textarea::placeholder {
+  color: var(--dim);
+  opacity: 1;
+}
+.compRow textarea:hover,
+.compRow textarea:focus-visible {
+  border-color: var(--acc);
 }
 .replying {
   display: flex;

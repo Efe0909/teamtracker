@@ -7,7 +7,7 @@ import type { Priority, RecordKind, Uuid } from "../../api/types";
 import { CARD, CARD_TYPES, type CardType } from "../../lib/cards";
 import { PRIORITY, PRIORITY_ORDER } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
-import { Button, ui } from "../../ui/ui";
+import { Button, Req, ui } from "../../ui/ui";
 
 export function NewRecordForm(props: {
   onCreated: (id: Uuid) => void;
@@ -52,7 +52,7 @@ export function NewRecordForm(props: {
     >
       {err !== null && <p className={ui.error} role="alert">{err}</p>}
       <label className={ui.field}>
-        Başlık
+        <span>Başlık<Req /></span>
         <input className={ui.input} value={title} onChange={(e) => setTitle(e.target.value)}
           placeholder="Kısa ve aranabilir bir başlık" required maxLength={200} autoFocus />
       </label>
@@ -74,7 +74,7 @@ export function NewRecordForm(props: {
         </label>
       </div>
       <label className={ui.field}>
-        Birim
+        <span>Birim<Req /></span>
         <select className={ui.input} value={unit} onChange={(e) => setUnit(e.target.value)} required>
           {L.units.map((n) => (
             <option key={n.id} value={n.id}>
@@ -122,19 +122,25 @@ export function NewRecordForm(props: {
       </label>
       {/* Kart bloklari (R4-F12): bos acilir, kayit sayfasinda doldurulur. */}
       <fieldset className={ui.field}>
-        <legend>Kart blokları (isteğe bağlı)</legend>
-        {CARD_TYPES.map((t) => (
-          <label key={t} title={CARD[t].hint}>
-            <input type="checkbox" checked={cards.includes(t)}
-              onChange={() => setCards((xs) => (xs.includes(t) ? xs.filter((x) => x !== t) : [...xs, t]))} />{" "}
-            {CARD[t].label}
-          </label>
-        ))}
+        <legend>Kart blokları <span className={ui.fieldHint}>— isteğe bağlı, sonra da eklenir</span></legend>
+        <div className={ui.checks}>
+          {CARD_TYPES.map((t) => (
+            <label key={t} className={ui.check}>
+              <input type="checkbox" checked={cards.includes(t)}
+                onChange={() => setCards((xs) => (xs.includes(t) ? xs.filter((x) => x !== t) : [...xs, t]))} />
+              <span>
+                {CARD[t].label}
+                <small>{CARD[t].hint}</small>
+              </span>
+            </label>
+          ))}
+        </div>
       </fieldset>
       <div className={ui.dact}>
         {props.onCancel !== undefined && <Button onClick={props.onCancel}>Vazgeç</Button>}
-        <Button type="submit" variant="primary" big disabled={m.isPending || title.trim() === "" || unit === ""}>
-          Kaydı aç
+        <Button type="submit" variant="primary" big aria-busy={m.isPending}
+          disabled={m.isPending || title.trim() === "" || unit === ""}>
+          {m.isPending ? "Açılıyor…" : "Kaydı aç"}
         </Button>
       </div>
     </form>

@@ -194,7 +194,9 @@ function CardForm({ c, type, onClose }: { c: CardView; type: CardType; onClose: 
         ))}
         <div className={ui.dact}>
           <Button onClick={onClose}>Vazgeç</Button>
-          <Button type="submit" variant="primary" disabled={w.isPending}>Kaydet</Button>
+          <Button type="submit" variant="primary" aria-busy={w.isPending} disabled={w.isPending}>
+            {w.isPending ? "Kaydediliyor…" : "Kaydet"}
+          </Button>
         </div>
       </form>
     </Dialog>

@@ -24,17 +24,20 @@
   background: var(--tint);
 }
 .btn:disabled {
-  opacity: 0.55;
-  cursor: default;
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn[aria-busy="true"] {
+  cursor: progress;
 }
 .primary {
-  background: var(--acc-strong);
-  border-color: var(--acc-strong);
+  background: var(--acc-fill);
+  border-color: var(--acc-fill);
   color: var(--on-acc);
 }
 .primary:hover:not(:disabled) {
-  background: var(--acc);
-  border-color: var(--acc);
+  background: var(--acc-fill-hover);
+  border-color: var(--acc-fill-hover);
 }
 .ghost {
   background: transparent;
@@ -270,6 +273,16 @@
   gap: var(--s-2);
   margin-top: var(--s-3);
 }
+/* Dar ekranda buyuk (birincil) dugme basparmak icin tam genislik. */
+@media (max-width: 560px) {
+  .dact > .big {
+    flex: 1;
+  }
+}
+/* Yikici eylem birincil dugmenin yaninda durmasin: sola itilir. */
+.dact > .danger:first-child {
+  margin-right: auto;
+}
 
 /* --- formlar ---------------------------------------------------------- */
 .field {
@@ -281,23 +294,122 @@
   color: var(--dim);
   min-width: 0;
 }
+/* fieldset.field: tarayici cercevesini sil, legend etiket gibi dursun */
+fieldset.field {
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+fieldset.field > legend {
+  padding: 0;
+  margin-bottom: 6px;
+}
+.req::after {
+  content: "*";
+  color: var(--err-text);
+  margin-left: 2px;
+}
+.fieldHint {
+  font-size: var(--fs-xs);
+  font-weight: 400;
+  color: var(--dim);
+}
 .input {
   width: 100%;
   min-height: 40px;
   padding: 8px 12px;
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--line-field);
   border-radius: var(--r-md);
   background: var(--panel);
   color: var(--txt);
   font-size: var(--fs-md);
   font-weight: 400;
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+.input::placeholder {
+  color: var(--dim);
+  opacity: 1;
+}
+.input:hover:not(:disabled) {
+  border-color: var(--acc);
 }
 .input:focus-visible {
   border-color: var(--acc);
 }
+/* Gecersiz: yalniz kullanici dokunduktan sonra (:user-invalid) — bos formu
+   acilista kirmiziya boyama. Renk tek basina degil, tarayici iletisi de var. */
+.input:user-invalid {
+  border-color: var(--err);
+  box-shadow: 0 0 0 1px var(--err);
+}
+.input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: var(--panel2);
+}
+/* Select: platform okunu kaldir, tokenla ciz — iki temada ayni gorunsun. */
+select.input {
+  appearance: none;
+  padding-right: 34px;
+  cursor: pointer;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--dim) 50%),
+    linear-gradient(135deg, var(--dim) 50%, transparent 50%);
+  background-position:
+    right 17px center,
+    right 12px center;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+  text-overflow: ellipsis;
+}
+select.input:disabled {
+  cursor: not-allowed;
+}
 textarea.input {
   resize: vertical;
   min-height: 88px;
+  line-height: 1.45;
+}
+/* Dokunmatik: 44px hedef ve 16px yazi (iOS 16px altinda odakta yakinlastirir). */
+@media (pointer: coarse) {
+  .input {
+    min-height: var(--tap);
+    font-size: var(--fs-lg);
+  }
+}
+
+/* Onay kutusu satiri: tum satir tiklanir, ipucu gorunur (title'a gomulmez). */
+.checks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+}
+.check {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-2);
+  min-height: 36px;
+  padding: 7px var(--s-2);
+  border-radius: var(--r-sm);
+  font-size: var(--fs-md);
+  font-weight: 400;
+  color: var(--txt);
+  cursor: pointer;
+}
+.check:hover {
+  background: var(--tint);
+}
+.check input {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+  cursor: pointer;
+}
+.check small {
+  display: block;
+  font-size: var(--fs-sm);
+  color: var(--dim);
 }
 .grid2 {
   display: grid;

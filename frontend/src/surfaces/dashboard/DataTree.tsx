@@ -16,7 +16,7 @@ import { useCreateNode, useDeleteNode, useNodeTree, usePatchNode } from "../../a
 import type { NodePatch, NodeType, TreeNode, TreeView, Uuid } from "../../api/types";
 import { NODE_TYPE } from "../../lib/labels";
 import { Icon } from "../../ui/icons";
-import { Button, cx, Empty, Loading, Tag, ui, useToast } from "../../ui/ui";
+import { Button, cx, Empty, Loading, Req, Tag, ui, useToast } from "../../ui/ui";
 import { ErrorScreen } from "../errors/ErrorScreen";
 import s from "./dashboard.module.css";
 
@@ -269,7 +269,7 @@ function AddForm(props: { parent: TreeNode | null; types: NodeType[]; onClose: (
       {err !== null && <p className={ui.error} role="alert">{err}</p>}
       <div className={ui.grid2}>
         <label className={ui.field}>
-          {child ? "Alt düğüm adı" : "Düğüm adı"}
+          <span>{child ? "Alt düğüm adı" : "Düğüm adı"}<Req /></span>
           <input className={ui.input} value={name} onChange={(e) => setName(e.target.value)} required maxLength={200}
             autoFocus placeholder={child ? "alt düğüm adı" : "düğüm adı (ör. Maliye)"} />
         </label>
@@ -289,7 +289,9 @@ function AddForm(props: { parent: TreeNode | null; types: NodeType[]; onClose: (
       </label>
       <div className={ui.dact}>
         <Button onClick={() => props.onClose(false)}>Vazgeç</Button>
-        <Button type="submit" variant="primary" disabled={m.isPending || name.trim() === ""}>Ekle</Button>
+        <Button type="submit" variant="primary" aria-busy={m.isPending} disabled={m.isPending || name.trim() === ""}>
+          {m.isPending ? "Ekleniyor…" : "Ekle"}
+        </Button>
       </div>
     </form>
   );
@@ -347,19 +349,22 @@ function EditForm({ node, tree, onClose }: { node: TreeNode; tree: TreeView; onC
       {err !== null && <p className={ui.error} role="alert">{err}</p>}
       <div className={ui.grid2}>
         <label className={ui.field}>
-          Ad
+          <span>Ad<Req /></span>
           <input className={ui.input} value={name} onChange={(e) => setName(e.target.value)} required maxLength={200} autoFocus />
         </label>
         <label className={ui.field}>
           Tür
           {/* Kilitliyse DISABLED: tur gonderilmez, sunucu da reddeder (type_locked). */}
           <select className={ui.input} value={type} onChange={(e) => setType(e.target.value as NodeType)}
-            disabled={!node.can_retype}
-            title={node.can_retype ? undefined : "türe bağlı veri var (takım kartı) — önce o bağ çözülmeli"}>
+            disabled={!node.can_retype}>
             {types.map((t) => (
               <option key={t} value={t}>{NODE_TYPE[t]}</option>
             ))}
           </select>
+          {/* Neden kilitli: title yalniz fareyle gorunuyordu, dokunmatikte/klavyede hic. */}
+          {!node.can_retype && (
+            <span className={ui.fieldHint}>Türe bağlı veri var (takım kartı) — önce o bağ çözülmeli.</span>
+          )}
         </label>
       </div>
       <label className={ui.field}>
@@ -390,7 +395,9 @@ function EditForm({ node, tree, onClose }: { node: TreeNode; tree: TreeView; onC
           </Button>
         )}
         <Button onClick={onClose}>Vazgeç</Button>
-        <Button type="submit" variant="primary" disabled={m.isPending || name.trim() === ""}>Kaydet</Button>
+        <Button type="submit" variant="primary" aria-busy={m.isPending} disabled={m.isPending || name.trim() === ""}>
+          {m.isPending ? "Kaydediliyor…" : "Kaydet"}
+        </Button>
       </div>
     </form>
   );

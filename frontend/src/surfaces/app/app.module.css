@@ -129,7 +129,7 @@
   height: 56px;
   margin-top: -24px;
   border-radius: 50%;
-  background: var(--acc-strong);
+  background: var(--acc-fill);
   color: var(--on-acc);
   box-shadow: var(--sh-lg);
   border: 3px solid var(--panel);
@@ -157,9 +157,16 @@
   min-height: 48px;
   padding: 0 var(--s-4);
   border-radius: var(--r-md);
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--line-field);
   background: var(--panel);
   font-size: var(--fs-lg);
+}
+.search::placeholder {
+  color: var(--dim);
+  opacity: 1;
+}
+.search:focus-visible {
+  border-color: var(--acc);
 }
 .group {
   margin: var(--s-2) var(--s-1) 0;
@@ -255,7 +262,7 @@
   height: 60px;
   border: 0;
   border-radius: 50%;
-  background: var(--acc-strong);
+  background: var(--acc-fill);
   color: var(--on-acc);
   box-shadow: var(--sh-lg);
   display: grid;

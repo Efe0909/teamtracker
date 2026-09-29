@@ -60,6 +60,12 @@ export function Link(props: { href: string; className?: string; children: ReactN
   );
 }
 
+/** Zorunlu alan isareti. Ekran okuyucu `required` ozniteligini zaten okur;
+ *  yildiz yalniz gorsel ve CSS'te (::after) — etiket metnine karismaz. */
+export function Req() {
+  return <span className={s.req} aria-hidden="true" />;
+}
+
 // --- rozetler --------------------------------------------------------------
 
 export function KindTag({ kind }: { kind: RecordKind }) {

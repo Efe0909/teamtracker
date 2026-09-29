@@ -30,6 +30,11 @@ textarea {
   color: inherit;
 }
 
+/* Yerel onay kutusu/radyo/aralik marka renginde; ozel cizim yok. */
+input {
+  accent-color: var(--acc-fill);
+}
+
 :focus-visible {
   outline: 3px solid color-mix(in srgb, var(--acc) 55%, transparent);
   outline-offset: 2px;

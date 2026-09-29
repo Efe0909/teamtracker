@@ -63,14 +63,20 @@ function TextEdit({ d, field, onClose }: { d: RecordDetail; field: "title" | "de
         }}
       >
         {err !== null && <p className={ui.error} role="alert">{err}</p>}
+        {/* Gorunur etiket dialog basligi; alan adini ondan alir. */}
         {field === "title" ? (
-          <input className={ui.input} value={v} onChange={(e) => setV(e.target.value)} maxLength={200} required autoFocus />
+          <input className={ui.input} aria-labelledby="dlg-title" value={v} onChange={(e) => setV(e.target.value)}
+            maxLength={200} required autoFocus />
         ) : (
-          <textarea className={ui.input} value={v} onChange={(e) => setV(e.target.value)} rows={6} autoFocus />
+          <textarea className={ui.input} aria-labelledby="dlg-title" value={v} onChange={(e) => setV(e.target.value)}
+            rows={6} autoFocus />
         )}
         <div className={ui.dact}>
           <Button onClick={onClose}>Vazgeç</Button>
-          <Button type="submit" variant="primary" disabled={m.isPending}>Kaydet</Button>
+          <Button type="submit" variant="primary" aria-busy={m.isPending}
+            disabled={m.isPending || (field === "title" && v.trim() === "")}>
+            {m.isPending ? "Kaydediliyor…" : "Kaydet"}
+          </Button>
         </div>
       </form>
     </Dialog>
@@ -252,8 +258,8 @@ function AddAction({ d, onDone }: { d: RecordDetail; onDone?: () => void }) {
       {d.access.can_edit_deadline && (
         <input className={ui.input} type="date" value={due} onChange={(e) => setDue(e.target.value)} aria-label="Son tarih" />
       )}
-      <Button type="submit" variant="primary" disabled={m.isPending || title.trim() === ""}>
-        <Icon name="plus" size={16} /> Ekle
+      <Button type="submit" variant="primary" aria-busy={m.isPending} disabled={m.isPending || title.trim() === ""}>
+        <Icon name="plus" size={16} /> {m.isPending ? "Ekleniyor…" : "Ekle"}
       </Button>
     </form>
   );

@@ -151,9 +151,10 @@ export function Tasks({ query }: { query: RecordQuery }) {
           </label>
           <label className={ui.field}>
             Sırala
-            <select className={ui.input} value={query.sort ?? "activity"} onChange={(e) => set({ sort: e.target.value === "activity" ? undefined : e.target.value })}>
+            {/* Varsayilan siralama bos deger: URL'e yazilmaz, "etkin filtre" vurgusu da almaz. */}
+            <select className={ui.input} value={query.sort ?? ""} onChange={(e) => set({ sort: e.target.value })}>
               {SORTS.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
+                <option key={o.value} value={o.value === "activity" ? "" : o.value}>{o.label}</option>
               ))}
             </select>
           </label>

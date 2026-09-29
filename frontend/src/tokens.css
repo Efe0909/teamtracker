@@ -16,16 +16,22 @@
   --tint: #efe9fd;
   --line: #e4dcf7;
   --line-strong: #cfc3ee;
+  /* form denetimi cercevesi: WCAG 1.4.11 — panel/panel2/bg uzerinde >= 3:1
+     (--line-strong 1.65:1'de kaliyordu, bos alan "yok" gibi duruyordu). */
+  --line-field: #8f85b5;
 
   /* metin */
   --txt: #2c2440;
-  --dim: #6f6792;
+  --dim: #675f8a; /* --tint uzerinde de >= 4.5 (secili secenek, rozet) */
   --on-acc: #fff;
 
-  /* vurgu */
+  /* vurgu. --acc-strong METIN (baglanti, vurgu); --acc-fill --on-acc ile dolu
+     zemin (birincil dugme). Iki temada ayri: koyuda acik metin, koyu dolgu. */
   --acc: #7c5bff;
   --acc-strong: #6743f5;
   --acc-soft: #b79dff;
+  --acc-fill: #6743f5;
+  --acc-fill-hover: #5632e0;
 
   /* durumlar: nokta/cizgi · metin · zemin */
   --err: #e0455c;
@@ -83,13 +89,16 @@
     --tint: #2a2340;
     --line: #2f2944;
     --line-strong: #463d63;
+    --line-field: #6f6596;
 
     --txt: #ece8f7;
     --dim: #a59ec4;
 
     --acc: #9d84ff;
-    --acc-strong: #7c5bff;
+    --acc-strong: #b19dff;
     --acc-soft: #6e55d8;
+    --acc-fill: #6743f5;
+    --acc-fill-hover: #5632e0;
 
     --err: #ff7a8c;
     --err-text: #ff9aa8;
