@@ -1,7 +1,7 @@
 // Kart turlerinin EKRAN tarafi: etiket, ipucu, alan etiketleri, cevap metni.
 // Davranis (hangi alan kabul edilir, hangi cevap anlamli) Rust
 // `backend/src/api/cards.rs` TYPES'ta — alan anahtarlari iki yerde ayni.
-// Python `shared/cards.py` CARD_TYPES/FIELDS/SIGNUP metinleri.
+// Python `references/python/shared/cards.py` CARD_TYPES/FIELDS/SIGNUP metinleri.
 
 import type { SignupAnswer } from "../api/types";
 import type { IconName } from "../ui/icons";

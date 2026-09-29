@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""shared/seed.py (Python, v1 semasi) -> backend/seed.sql (v2 semasi).
+"""references/python/shared/seed.py (Python, v1 semasi) -> backend/seed.sql (v2 semasi).
 
 Tohumu ELLE cevirmek hata kaynagi: testler seed'deki BASLIKLARA bakiyor
 ("Bütçe onayı 6 gündür bekliyor"), bir harf kaysa test yesil gorunup yanlis
@@ -18,7 +18,7 @@ import pathlib
 import uuid
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-src = (ROOT / "shared/seed.py").read_text().splitlines()
+src = (ROOT / "references/python/shared/seed.py").read_text().splitlines()
 
 ns = {"datetime": datetime.datetime, "timedelta": datetime.timedelta,
       "timezone": datetime.timezone}

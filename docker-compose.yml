@@ -4,8 +4,9 @@
 #   docker compose down           durdur (veri kalir)
 #   docker compose down -v        veriyi de sil
 #
-# Yayinda bu dosya KULLANILMAZ: orada docker-compose.prod.yml kosuyor
-# (~/nix, modules/ekiptakip-app.nix). Buradaki parola gelistirme icindir.
+# Rust yigini ve arsivdeki Python (references/python/Makefile) ayni konteyneri
+# (ekiptakip-db) kullanir. Yayinda KULLANILMAZ: 0.2 yerel Postgres (~/nix),
+# 0.1 references/python/docker-compose.prod.yml. Parola gelistirme icindir.
 
 services:
   db:

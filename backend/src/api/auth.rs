@@ -1,4 +1,4 @@
-//! Giris / cikis. Python karsiligi `shared/identity.py`; akis ayni, iki fark:
+//! Giris / cikis. Python karsiligi `references/python/shared/identity.py`; akis ayni, iki fark:
 //!
 //! - Giris formu apex'te (`polonyum.com`), Google'dan donus de orada
 //!   (`/api/auth/callback`). Oturum cerezi `Domain=<alan>` ile app. ve

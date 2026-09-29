@@ -39,7 +39,7 @@ describe("PWA kurulumu (R1-F01)", () => {
     const html = readFileSync(path.resolve("index.html"), "utf8");
     expect(html).toMatch(/<link rel="manifest" href="\/manifest\.json"/);
     expect(html).toMatch(/apple-mobile-web-app-capable" content="yes"/);
-    // Referansta (sites/mobil/templates/base.html) apple- onekli olanin
+    // Referansta (references/python/sites/mobil/templates/base.html) apple- onekli olanin
     // yaninda genel karsiligi da vardi; 003d86a'da atlanmis (fix commit).
     expect(html).toMatch(/name="mobile-web-app-capable" content="yes"/);
   });
