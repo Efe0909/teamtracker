@@ -10,6 +10,13 @@ import { ERRORS } from "../../api/errors";
 import type { TreeView } from "../../api/types";
 import { DataTree } from "./DataTree";
 
+/** Secici (ui Picker) tetigini acar, listedeki secenek metinlerini dondurur. */
+async function pickerOptions(label: string): Promise<string[]> {
+  fireEvent.click(await screen.findByRole("button", { name: new RegExp(`^${label}:`) }));
+  const opts = await screen.findAllByRole("option");
+  return opts.map((o) => o.textContent ?? "");
+}
+
 function node(over: Partial<TreeView["nodes"][number]> & { id: string; name: string }): TreeView["nodes"][number] {
   return {
     parent_id: null,
@@ -87,9 +94,7 @@ describe("tur secenekleri SUNUCUDAN gelir, yerel enum'dan degil (KNOW-241)", () 
     renderTree();
     await screen.findByText("Üretim Hattı");
     fireEvent.click(screen.getByLabelText(/Üretim Hattı: alt düğüm ekle/));
-    const select = (await screen.findByLabelText("Tür")) as HTMLSelectElement;
-    const options = Array.from(select.options).map((o) => o.textContent);
-    expect(options).toEqual(["Takım"]);
+    expect(await pickerOptions("Tür")).toEqual(["Takım"]);
   });
 
   it("kok ekleme formu yalniz root_types'taki turleri listeler", async () => {
@@ -102,9 +107,7 @@ describe("tur secenekleri SUNUCUDAN gelir, yerel enum'dan degil (KNOW-241)", () 
     renderTree();
     await screen.findByRole("button", { name: /Kök düğüm/ });
     fireEvent.click(screen.getByRole("button", { name: /Kök düğüm/ }));
-    const select = (await screen.findByLabelText("Tür")) as HTMLSelectElement;
-    const options = Array.from(select.options).map((o) => o.textContent);
-    expect(options).toEqual(["Takım", "Adım"]);
+    expect(await pickerOptions("Tür")).toEqual(["Takım", "Adım"]);
   });
 });
 

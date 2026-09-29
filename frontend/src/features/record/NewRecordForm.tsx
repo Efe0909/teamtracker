@@ -1,13 +1,17 @@
 // Yeni kayit formu — masaustu dialogu ve mobil sayfasi AYNI formu cizer.
+// Dil: buyuk cercevesiz baslik + aciklama, altinda ozellik cipleri (tur,
+// oncelik, birim, takim, sorumlu, pillar). Kutu yigini yok.
 
 import { useState } from "react";
 import { errorText } from "../../api/client";
 import { useCreateRecord } from "../../api/hooks";
 import type { Priority, RecordKind, Uuid } from "../../api/types";
 import { CARD, CARD_TYPES, type CardType } from "../../lib/cards";
-import { PRIORITY, PRIORITY_ORDER } from "../../lib/labels";
+import { KIND, PRIORITY, PRIORITY_ORDER } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
-import { Button, ui } from "../../ui/ui";
+import { Icon } from "../../ui/icons";
+import { Button, Picker, PriorityTag, TeamName, ui, Who } from "../../ui/ui";
+import s from "./form.module.css";
 
 export function NewRecordForm(props: {
   onCreated: (id: Uuid) => void;
@@ -20,11 +24,11 @@ export function NewRecordForm(props: {
   const [kind, setKind] = useState<RecordKind>("issue");
   const [title, setTitle] = useState("");
   const [unit, setUnit] = useState<string>(props.defaults?.unit_id ?? L.units[0]?.id ?? "");
-  const [team, setTeam] = useState<string>(props.defaults?.team_id ?? "");
-  const [pillar, setPillar] = useState("");
+  const [team, setTeam] = useState<string | null>(props.defaults?.team_id ?? null);
+  const [pillar, setPillar] = useState<string | null>(null);
   const [cards, setCards] = useState<CardType[]>([]);
   // Sorumlu varsayilani ACAN kisi; bos secim "sorumlusuz ac" demek.
-  const [owner, setOwner] = useState<string>(L.me.id);
+  const [owner, setOwner] = useState<string | null>(L.me.id);
   const [priority, setPriority] = useState<Priority>("medium");
   const [desc, setDesc] = useState("");
 
@@ -40,9 +44,9 @@ export function NewRecordForm(props: {
             title,
             description: desc.trim() === "" ? null : desc,
             unit_id: unit,
-            team_id: team === "" ? null : team,
-            pillar_id: pillar === "" ? null : pillar,
-            owner_id: owner === "" ? null : owner,
+            team_id: team,
+            pillar_id: pillar,
+            owner_id: owner,
             priority,
             card_types: cards,
           },
@@ -51,90 +55,75 @@ export function NewRecordForm(props: {
       }}
     >
       {err !== null && <p className={ui.error} role="alert">{err}</p>}
-      <label className={ui.field}>
-        Başlık
-        <input className={ui.input} value={title} onChange={(e) => setTitle(e.target.value)}
-          placeholder="Kısa ve aranabilir bir başlık" required maxLength={200} autoFocus />
-      </label>
-      <div className={ui.grid2}>
-        <label className={ui.field}>
-          Tür
-          <select className={ui.input} value={kind} onChange={(e) => setKind(e.target.value as RecordKind)}>
-            <option value="issue">Hata — bir şey ters gitti</option>
-            <option value="task">Görev — yapılacak iş</option>
-          </select>
-        </label>
-        <label className={ui.field}>
-          Öncelik
-          <select className={ui.input} value={priority} onChange={(e) => setPriority(e.target.value as Priority)}>
-            {PRIORITY_ORDER.map((p) => (
-              <option key={p} value={p}>{PRIORITY[p]}</option>
-            ))}
-          </select>
-        </label>
+      <div className={s.doc}>
+        <input className={ui.titleInput} value={title} onChange={(e) => setTitle(e.target.value)}
+          placeholder="Başlık — kısa ve aranabilir" required maxLength={200} autoFocus aria-label="Başlık" />
+        <textarea className={s.body} value={desc} onChange={(e) => setDesc(e.target.value)}
+          placeholder="Açıklama: ne oldu, nerede, ne zaman? (isteğe bağlı)" rows={4} aria-label="Açıklama" />
       </div>
-      <label className={ui.field}>
-        Birim
-        <select className={ui.input} value={unit} onChange={(e) => setUnit(e.target.value)} required>
-          {L.units.map((n) => (
-            <option key={n.id} value={n.id}>
-              {"  ".repeat(n.depth)}{n.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      {/* Pillar ORTOGONAL (KNOW-261): kaydin atasi olmak zorunda degil, ayri secilir. */}
-      {L.pillars.length > 0 && (
-        <label className={ui.field}>
-          Pillar
-          <select className={ui.input} value={pillar} onChange={(e) => setPillar(e.target.value)}>
-            <option value="">Pillar yok</option>
-            {L.pillars.map((n) => (
-              <option key={n.id} value={n.id}>{n.name}</option>
-            ))}
-          </select>
-        </label>
-      )}
-      <div className={ui.grid2}>
-        <label className={ui.field}>
-          Takım
-          <select className={ui.input} value={team} onChange={(e) => setTeam(e.target.value)}>
-            <option value="">Takım yok</option>
-            {L.meta.teams.map((t) => (
-              <option key={t.id} value={t.id}>{t.name}</option>
-            ))}
-          </select>
-        </label>
-        <label className={ui.field}>
-          Sorumlu
-          <select className={ui.input} value={owner} onChange={(e) => setOwner(e.target.value)}>
-            <option value="">Sorumlusuz</option>
-            {L.meta.users.map((u) => (
-              <option key={u.id} value={u.id}>{u.id === L.me.id ? `${u.name} (sen)` : u.name}</option>
-            ))}
-          </select>
-        </label>
+
+      <div className={s.chips} role="group" aria-label="Özellikler">
+        <Picker look="chip" active label="Tür" value={kind} onChange={setKind}
+          options={[
+            { value: "issue", label: KIND.issue, hint: "bir şey ters gitti" },
+            { value: "task", label: KIND.task, hint: "yapılacak iş" },
+          ]}>
+          <Icon name="inbox" size={13} /> {KIND[kind]}
+        </Picker>
+        <Picker look="chip" active label="Öncelik" value={priority} onChange={setPriority}
+          options={PRIORITY_ORDER.map((v) => ({ value: v, label: PRIORITY[v], render: <PriorityTag priority={v} bare /> }))}>
+          <PriorityTag priority={priority} bare />
+        </Picker>
+        <Picker look="chip" active={unit !== ""} label="Birim" value={unit} onChange={setUnit} search
+          options={L.units.map((n) => ({ value: n.id, label: n.name, depth: n.depth }))}>
+          <Icon name="tree" size={13} /> {L.node(unit)?.name ?? "Birim seç"}
+        </Picker>
+        <Picker look="chip" active label="Sorumlu" value={owner} onChange={setOwner}
+          options={[
+            { value: null, label: "Sorumlusuz" },
+            ...L.meta.users.map((u) => ({ value: u.id as string | null, label: u.name, render: <Who user={u} />, ...(u.id === L.me.id ? { hint: "sen" } : {}) })),
+          ]}>
+          <Who user={L.user(owner)} empty="Sorumlusuz" size={16} />
+        </Picker>
+        <Picker look="chip" active={team !== null} label="Takım" value={team} onChange={setTeam}
+          options={[
+            { value: null, label: "Takım yok" },
+            ...L.meta.teams.map((t) => ({ value: t.id as string | null, label: t.name, render: <TeamName team={t} /> })),
+          ]}>
+          {team === null ? <><Icon name="plus" size={13} /> Takım</> : <TeamName team={L.team(team)} />}
+        </Picker>
+        {/* Pillar ORTOGONAL (KNOW-261): kaydin atasi olmak zorunda degil, ayri secilir. */}
+        {L.pillars.length > 0 && (
+          <Picker look="chip" active={pillar !== null} label="Pillar" value={pillar} onChange={setPillar}
+            options={[{ value: null, label: "Pillar yok" }, ...L.pillars.map((n) => ({ value: n.id as string | null, label: n.name }))]}>
+            {pillar === null ? <><Icon name="plus" size={13} /> Pillar</> : <><Icon name="pin" size={13} /> {L.node(pillar)?.name}</>}
+          </Picker>
+        )}
       </div>
-      <label className={ui.field}>
-        Açıklama
-        <textarea className={ui.input} value={desc} onChange={(e) => setDesc(e.target.value)}
-          placeholder="Ne oldu, nerede, ne zaman?" rows={4} />
-      </label>
+
       {/* Kart bloklari (R4-F12): bos acilir, kayit sayfasinda doldurulur. */}
-      <fieldset className={ui.field}>
-        <legend>Kart blokları (isteğe bağlı)</legend>
-        {CARD_TYPES.map((t) => (
-          <label key={t} title={CARD[t].hint}>
-            <input type="checkbox" checked={cards.includes(t)}
-              onChange={() => setCards((xs) => (xs.includes(t) ? xs.filter((x) => x !== t) : [...xs, t]))} />{" "}
-            {CARD[t].label}
-          </label>
-        ))}
+      <fieldset className={s.cards}>
+        <legend>Kart blokları <span className={ui.fieldHint}>— isteğe bağlı, sonra da eklenir</span></legend>
+        <div className={s.cardGrid}>
+          {CARD_TYPES.map((t) => (
+            <label key={t} className={s.cardOpt}>
+              <input type="checkbox" checked={cards.includes(t)}
+                onChange={() => setCards((xs) => (xs.includes(t) ? xs.filter((x) => x !== t) : [...xs, t]))} />
+              <Icon name={CARD[t].icon} size={16} />
+              <span>
+                {CARD[t].label}
+                <small>{CARD[t].hint}</small>
+              </span>
+            </label>
+          ))}
+        </div>
       </fieldset>
-      <div className={ui.dact}>
+
+      <div className={`${ui.dact} ${s.foot}`}>
         {props.onCancel !== undefined && <Button onClick={props.onCancel}>Vazgeç</Button>}
-        <Button type="submit" variant="primary" big disabled={m.isPending || title.trim() === "" || unit === ""}>
-          Kaydı aç
+        <Button type="submit" variant="primary" big aria-busy={m.isPending}
+          disabled={m.isPending || title.trim() === "" || unit === ""}>
+          {m.isPending ? "Açılıyor…" : "Kaydı aç"}
         </Button>
       </div>
     </form>

@@ -9,7 +9,8 @@ import { adminOps, useAdmin, useAdminWrite } from "../../api/hooks";
 import type { AdminPerson, AdminRole, AdminView, UserOp } from "../../api/types";
 import { ago, SCOPE } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
-import { Avatar, Button, Empty, Loading, Tag, ui, useToast } from "../../ui/ui";
+import { Icon } from "../../ui/icons";
+import { Avatar, Button, Empty, Loading, Picker as UiPicker, Req, Tag, ui, useToast, type Option } from "../../ui/ui";
 import { ErrorScreen } from "../errors/ErrorScreen";
 import s from "./dashboard.module.css";
 
@@ -27,23 +28,31 @@ export function Admin() {
 function AdminScreen({ v }: { v: AdminView }) {
   const roleName = new Map(v.roles.map((r) => [r.id, r.name]));
   return (
-    <div className={s.page}>
+    <div className={s.page} style={{ maxWidth: 960 }}>
       <div className={s.pageHead}>
-        <h1>Yönetim</h1>
+        <div className={s.pageTitle}>
+          <h1>Yönetim</h1>
+          <p className={s.pageSub}>Kim girebilir, neyi değiştirebilir.</p>
+        </div>
       </div>
+      <h2 className={s.sectionTitle}>Kişi ekle</h2>
       <AddUser />
-      <h2 className={s.sectionTitle}>Kullanıcılar</h2>
+      <h2 className={s.sectionTitle}>
+        Kullanıcılar<span className={s.count}>{v.people.length}</span>
+      </h2>
       {v.people.length === 0 ? (
         <Empty title="Liste boş.">Yukarıdan ilk kullanıcıyı ekle.</Empty>
       ) : (
-        <ul className={s.adminList}>
+        <ul className={`${s.surface} ${s.adminList}`}>
           {v.people.map((p) => (
             <PersonRow key={p.id} p={p} v={v} roleName={roleName} />
           ))}
         </ul>
       )}
-      <h2 className={s.sectionTitle}>Roller</h2>
-      <p className={s.lead}>
+      <h2 className={s.sectionTitle}>
+        Roller<span className={s.count}>{v.roles.length}</span>
+      </h2>
+      <p className={s.lead} style={{ marginTop: -6 }}>
         Rol bir kapsam demeti. Rolün kapsamlarını değiştirmek sahiplerine anında yansır. Oluşturma ve silme yalnız
         yöneticide.
       </p>
@@ -54,17 +63,20 @@ function AdminScreen({ v }: { v: AdminView }) {
 
 function AddUser() {
   const m = useAdminWrite();
+  const toast = useToast();
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [err, setErr] = useState<string | null>(null);
   return (
     <form
-      className={s.adminForm}
+      className={`${s.surface} ${s.adminForm} ${ui.formStack}`}
       onSubmit={(e) => {
         e.preventDefault();
         setErr(null);
         m.mutate(adminOps.addUser(email, name), {
           onSuccess: () => {
+            // Form sessizce bosalinca "oldu mu?" sorusu kaliyordu.
+            toast({ text: `${name} eklendi.`, error: false });
             setEmail("");
             setName("");
           },
@@ -75,18 +87,20 @@ function AddUser() {
       {err !== null && <p className={ui.error} role="alert">{err}</p>}
       <div className={ui.grid2}>
         <label className={ui.field}>
-          E-posta
+          <span>E-posta<Req /></span>
           <input className={ui.input} type="email" value={email} onChange={(e) => setEmail(e.target.value)} required
-            placeholder="ad@ornek.com" autoComplete="off" />
+            placeholder="ad@ornek.com" autoComplete="off" spellCheck={false} />
         </label>
         <label className={ui.field}>
-          Ad
+          <span>Ad<Req /></span>
           <input className={ui.input} value={name} onChange={(e) => setName(e.target.value)} required maxLength={200} />
         </label>
       </div>
       <p className={s.dim}>Eklenen kişi bu e-postanın Google hesabıyla girer. Listede olmayan e-posta giremez.</p>
       <div className={ui.dact}>
-        <Button type="submit" variant="primary" disabled={m.isPending}>Kullanıcı ekle</Button>
+        <Button type="submit" variant="primary" aria-busy={m.isPending} disabled={m.isPending}>
+          {m.isPending ? "Ekleniyor…" : "Kullanıcı ekle"}
+        </Button>
       </div>
     </form>
   );
@@ -140,73 +154,78 @@ function PersonRow({ p, v, roleName }: { p: AdminPerson; v: AdminView; roleName:
 
       <details className={s.personEdit}>
         <summary>Düzenle</summary>
-        <div className={ui.dact}>
+
+        <div className={s.adminRow}>
+          <span className={s.adminKey}>Kapsam</span>
+          <div className={s.chips}>
+            <Grant label="Kapsam ver" empty="Bütün kapsamlar zaten doğrudan verilmiş."
+              options={grantable.map((k) => ({ value: k, label: k, hint: SCOPE[k] ?? "" }))}
+              onPick={(k) => run({ op: "grant_scope", value: k })} />
+          </div>
+        </div>
+
+        <div className={s.adminRow}>
+          <span className={s.adminKey}>Roller</span>
+          <div className={s.chips}>
+            {p.role_ids.map((id) => (
+              <span key={id} className={s.chip}>
+                {roleName.get(id) ?? "?"}
+                <button type="button" className={s.chipX} aria-label={`${roleName.get(id) ?? "?"} rolünü al`}
+                  onClick={() => run({ op: "revoke_role", value: id })}><Icon name="x" size={12} /></button>
+              </span>
+            ))}
+            <Grant label="Rol ver" empty="Verilecek rol yok."
+              options={assignable.map((r) => ({ value: r.id, label: r.name }))}
+              onPick={(id) => run({ op: "grant_role", value: id })} />
+          </div>
+        </div>
+
+        <div className={s.adminRow}>
+          <span className={s.adminKey}>Dal izni</span>
+          <div className={s.chips}>
+            {p.node_ids.map((id) => (
+              <span key={id} className={s.chip}>
+                {L.path(id).join(" › ")}
+                <button type="button" className={s.chipX} aria-label="Dal iznini al"
+                  onClick={() => run({ op: "revoke_node", value: id })}><Icon name="x" size={12} /></button>
+              </span>
+            ))}
+            <Grant label="Dal izni ver" empty="Ağaçta düğüm yok."
+              options={branches.map((n) => ({ value: n.id, label: n.name, depth: n.depth }))}
+          onPick={(id) => run({ op: "grant_node", value: id })} />
+          </div>
+        </div>
+        <span className={s.dim}>Yapı kapsamları yalnız izinli dalda ve altında geçer.</span>
+        <div className={s.adminActs}>
           {(v.is_admin || !p.is_admin) && (
-            <Button onClick={() => run({ op: "active", value: !p.is_active })}>{p.is_active ? "Kapat" : "Aç"}</Button>
+            <Button size="sm" variant={p.is_active ? "danger" : "default"} onClick={() => run({ op: "active", value: !p.is_active })}>
+              {p.is_active ? "Hesabı kapat" : "Hesabı aç"}
+            </Button>
           )}
           {v.is_admin && (
-            <Button onClick={() => run({ op: "admin", value: !p.is_admin })}>
+            <Button size="sm" onClick={() => run({ op: "admin", value: !p.is_admin })}>
               {p.is_admin ? "Yöneticiliği al" : "Yönetici yap"}
             </Button>
           )}
         </div>
-
-        <Picker label="Kapsam ver (tek tek)" empty="Bütün kapsamlar zaten doğrudan verilmiş."
-          options={grantable.map((k) => ({ value: k, label: `${k} — ${SCOPE[k] ?? ""}` }))}
-          onPick={(k) => run({ op: "grant_scope", value: k })} />
-
-        <div className={s.chips}>
-          {p.role_ids.map((id) => (
-            <span key={id} className={s.chip}>
-              {roleName.get(id) ?? "?"}
-              <button type="button" className={s.chipX} aria-label="Rolü al"
-                onClick={() => run({ op: "revoke_role", value: id })}>✕</button>
-            </span>
-          ))}
-        </div>
-        <Picker label="Rol ver" empty="Verilecek rol yok."
-          options={assignable.map((r) => ({ value: r.id, label: r.name }))}
-          onPick={(id) => run({ op: "grant_role", value: id })} />
-
-        <div className={s.chips}>
-          {p.node_ids.map((id) => (
-            <span key={id} className={s.chip}>
-              {L.path(id).join(" › ")}
-              <button type="button" className={s.chipX} aria-label="Dal iznini al"
-                onClick={() => run({ op: "revoke_node", value: id })}>✕</button>
-            </span>
-          ))}
-        </div>
-        <Picker label="Dal izni ver — yapı kapsamları yalnız izinli dalda ve altında geçer" empty="Ağaçta düğüm yok."
-          options={branches.map((n) => ({ value: n.id, label: `${"  ".repeat(n.depth)}${n.name}` }))}
-          onPick={(id) => run({ op: "grant_node", value: id })} />
       </details>
     </li>
   );
 }
 
-/** Tek secim + "Ver". Secenek yoksa ipucu metni. */
-function Picker(props: {
+/** "+ Ver" cipi: listeden secmek = vermek (ayri "Ver" dugmesi yok). Secenek
+ *  yoksa ipucu metni. */
+function Grant(props: {
   label: string;
   empty: string;
-  options: { value: string; label: string }[];
+  options: Option<string>[];
   onPick: (v: string) => void;
 }) {
-  const [pick, setPick] = useState("");
-  if (props.options.length === 0) return <p className={s.dim}>{props.empty}</p>;
+  if (props.options.length === 0) return <span className={s.dim}>{props.empty}</span>;
   return (
-    <label className={ui.field}>
-      {props.label}
-      <span className={s.pickRow}>
-        <select className={ui.input} value={pick} onChange={(e) => setPick(e.target.value)}>
-          <option value="">— seç —</option>
-          {props.options.map((o) => (
-            <option key={o.value} value={o.value}>{o.label}</option>
-          ))}
-        </select>
-        <Button disabled={pick === ""} onClick={() => { props.onPick(pick); setPick(""); }}>Ver</Button>
-      </span>
-    </label>
+    <UiPicker look="chip" label={props.label} value={""} options={props.options} onChange={props.onPick} search>
+      <Icon name="plus" size={13} /> {props.label}
+    </UiPicker>
   );
 }
 
@@ -217,7 +236,7 @@ function Roles({ v }: { v: AdminView }) {
       {v.roles.length === 0 ? (
         <Empty title="Henüz rol yok.">Kullanıcılara kapsamları tek tek ver, ya da bir rol tanımla.</Empty>
       ) : (
-        <ul className={s.adminList}>
+        <ul className={`${s.surface} ${s.adminList}`}>
           {v.roles.map((r) => (
             <li key={r.id} className={s.person}>
               <div className={s.personHead}>
@@ -257,6 +276,7 @@ function RoleForm({ v, role, members }: { v: AdminView; role: AdminRole | null; 
   const done = { onError: (x: unknown) => setErr(errorText(x)) };
   return (
     <form
+      className={ui.formStack}
       onSubmit={(e) => {
         e.preventDefault();
         setErr(null);
@@ -274,21 +294,27 @@ function RoleForm({ v, role, members }: { v: AdminView; role: AdminRole | null; 
     >
       {err !== null && <p className={ui.error} role="alert">{err}</p>}
       <label className={ui.field}>
-        Rol adı
+        <span>Rol adı<Req /></span>
         <input className={ui.input} value={name} onChange={(e) => setName(e.target.value)} required maxLength={200} />
       </label>
-      <fieldset className={s.scopeSet}>
-        <legend>Kapsamlar</legend>
-        {v.scopes.map((k) => (
-          <label key={k}>
-            <input type="checkbox" checked={scopes.has(k)} onChange={() => setScopes((prev) => {
-              const next = new Set(prev);
-              if (next.has(k)) next.delete(k);
-              else next.add(k);
-              return next;
-            })} /> {k} — {SCOPE[k] ?? ""}
-          </label>
-        ))}
+      <fieldset className={`${ui.field} ${s.scopeSet}`}>
+        <legend>Kapsamlar <span className={ui.fieldHint}>— {scopes.size} / {v.scopes.length} seçili</span></legend>
+        <div className={ui.checks}>
+          {v.scopes.map((k) => (
+            <label key={k} className={ui.check}>
+              <input type="checkbox" checked={scopes.has(k)} onChange={() => setScopes((prev) => {
+                const next = new Set(prev);
+                if (next.has(k)) next.delete(k);
+                else next.add(k);
+                return next;
+              })} />
+              <span>
+                {k}
+                {SCOPE[k] !== undefined && <small>{SCOPE[k]}</small>}
+              </span>
+            </label>
+          ))}
+        </div>
       </fieldset>
       <div className={ui.dact}>
         {role !== null && (
@@ -297,8 +323,8 @@ function RoleForm({ v, role, members }: { v: AdminView; role: AdminRole | null; 
             if (ok) m.mutate(adminOps.deleteRole(role.id), done);
           }}>Sil</Button>
         )}
-        <Button type="submit" variant="primary" disabled={m.isPending || name.trim() === ""}>
-          {role === null ? "Oluştur" : "Kaydet"}
+        <Button type="submit" variant="primary" aria-busy={m.isPending} disabled={m.isPending || name.trim() === ""}>
+          {m.isPending ? "Kaydediliyor…" : role === null ? "Oluştur" : "Kaydet"}
         </Button>
       </div>
     </form>

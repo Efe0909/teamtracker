@@ -49,14 +49,14 @@ function renderHead(createdBy: string) {
   );
 }
 
-describe("RecordHead — 'Açan: X · tarih' satırı (R1-F08)", () => {
+describe("RecordHead — 'X açtı · tarih' satırı (R1-F08)", () => {
   it("kaydı açanın adını gösterir", () => {
     const { container } = renderHead("u-selin");
-    expect(container.textContent).toMatch(/Açan: Selin/);
+    expect(container.textContent).toMatch(/Selin açtı/);
   });
 
   it("açan kullanıcı sözlükte yoksa satırı hiç çizmez", () => {
     const { container } = renderHead("u-bilinmeyen");
-    expect(container.textContent).not.toMatch(/Açan:/);
+    expect(container.textContent).not.toMatch(/açtı/);
   });
 });

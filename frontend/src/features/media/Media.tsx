@@ -70,7 +70,7 @@ function Lightbox({ a, onClose }: { a: Attachment; onClose: () => void }) {
         )}
       </div>
       <div className={ui.dact}>
-        <a className={ui.btn} href={attachmentUrl(a.id)} target="_blank" rel="noopener">Tam boyut</a>
+        <a className={`${ui.btn} ${ui["z-md"]}`} href={attachmentUrl(a.id)} target="_blank" rel="noopener">Tam boyut</a>
         {a.can_delete && (
           <Button variant="danger" onClick={() => {
             if (!window.confirm("Görsel silinecek. Mesaj kalır, yerinde “görsel silindi” yazar.")) return;
@@ -95,7 +95,7 @@ export function ImagePicker(props: { onFiles: (files: File[]) => void; busy: boo
       }} />
       <Button variant="ghost" disabled={props.busy} onClick={() => input.current?.click()}
         aria-label={props.label ?? "Görsel ekle"} title={props.label ?? "Görsel ekle"}>
-        <Icon name="image" size={18} />{props.label !== undefined && ` ${props.label}`}
+        <Icon name="image" size={16} />{props.label !== undefined && ` ${props.label}`}
       </Button>
     </>
   );

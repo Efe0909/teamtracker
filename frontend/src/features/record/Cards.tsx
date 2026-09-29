@@ -10,34 +10,42 @@ import type { Attachment, CardView, RecordDetail, SignupAnswer } from "../../api
 import { CARD, CARD_TYPES, type CardType, isCardType, whenLabel } from "../../lib/cards";
 import { useLookup } from "../../lib/lookup";
 import { Icon } from "../../ui/icons";
-import { Avatar, Button, Dialog, ui, useToast } from "../../ui/ui";
+import { Avatar, Button, Dialog, IconButton, Menu, MenuItem, ui, useToast } from "../../ui/ui";
 import { Attachments, ImagePicker } from "../media/Media";
 import s from "./record.module.css";
 
 export function Cards({ d }: { d: RecordDetail }) {
   const w = useCardWrite();
   const toast = useToast();
-  const [adding, setAdding] = useState<CardType | "">("");
   if (d.cards.length === 0 && !d.access.can_edit) return null;
+  const add = (t: CardType) =>
+    w.mutate({ method: "POST", path: `/api/records/${d.record.id}/cards`, body: { card_type: t } },
+      { onError: (e) => toast({ text: errorText(e), error: true }) });
   return (
     <section className={s.section} aria-labelledby="cards-h">
       <div className={s.secHead}>
         <h2 id="cards-h">Kartlar</h2>
         {d.cards.length > 0 && <span className={s.count}>{d.cards.length}</span>}
+        {d.access.can_edit && (
+          <span style={{ marginLeft: "auto" }}>
+            <Menu align="end" trigger={
+              <Button size="sm" disabled={w.isPending}>
+                <Icon name="plus" size={14} /> Kart ekle
+              </Button>
+            }>
+              {CARD_TYPES.map((t) => (
+                <MenuItem key={t} icon={CARD[t].icon} onSelect={() => add(t)}>
+                  {CARD[t].label}
+                </MenuItem>
+              ))}
+            </Menu>
+          </span>
+        )}
       </div>
       {d.cards.map((c) => <Card key={c.id} d={d} c={c} />)}
-      {d.access.can_edit && (
-        <div className={s.addForm}>
-          <select className={ui.input} value={adding} aria-label="Eklenecek kart türü"
-            onChange={(e) => setAdding(e.target.value as CardType | "")}>
-            <option value="">Kart ekle…</option>
-            {CARD_TYPES.map((t) => <option key={t} value={t}>{CARD[t].label}</option>)}
-          </select>
-          <Button disabled={adding === "" || w.isPending} onClick={() =>
-            w.mutate({ method: "POST", path: `/api/records/${d.record.id}/cards`, body: { card_type: adding } },
-              { onSuccess: () => setAdding(""), onError: (e) => toast({ text: errorText(e), error: true }) })}>
-            <Icon name="plus" size={16} /> Ekle
-          </Button>
+      {d.cards.length === 0 && (
+        <div className={s.box}>
+          <span className={s.boxEmpty}>Kart yok. Toplantı, görsel ya da gönüllü havuzu gerekiyorsa “Kart ekle”.</span>
         </div>
       )}
     </section>
@@ -75,10 +83,8 @@ function Card({ d, c }: { d: RecordDetail; c: CardView }) {
         {v("title") !== "" && <span className={s.hint}>{t.label}</span>}
         {d.access.can_edit && (
           <span className={s.cardActs}>
-            <Button variant="ghost" onClick={() => setEditing(true)} aria-label="Kartı düzenle">
-              <Icon name="edit" size={16} />
-            </Button>
-            <Button variant="ghost" onClick={remove} aria-label="Kartı sil"><Icon name="trash" size={16} /></Button>
+            <IconButton icon="edit" label="Kartı düzenle" onClick={() => setEditing(true)} />
+            <IconButton icon="trash" label="Kartı sil" onClick={remove} />
           </span>
         )}
       </div>
@@ -167,7 +173,7 @@ function CardForm({ c, type, onClose }: { c: CardView; type: CardType; onClose: 
     ...Object.fromEntries(CARD[type].fields.map((f) => [f.key, c.data[f.key] ?? ""])) }));
   const set = (k: string, v: string) => setVals((p) => ({ ...p, [k]: v }));
   return (
-    <Dialog open onClose={onClose} title={`${CARD[type].label} düzenle`} hint={CARD[type].hint}>
+    <Dialog open onClose={onClose} title={`${CARD[type].label} düzenle`} hint={CARD[type].hint} wide>
       <form className={ui.formStack} onSubmit={(e) => {
         e.preventDefault();
         setErr(null);
@@ -176,25 +182,31 @@ function CardForm({ c, type, onClose }: { c: CardView; type: CardType; onClose: 
           { onSuccess: onClose, onError: (x) => setErr(errorText(x)) });
       }}>
         {err !== null && <p className={ui.error} role="alert">{err}</p>}
-        <label className={ui.field}>
-          Başlık
-          <input className={ui.input} value={vals["title"] ?? ""} onChange={(e) => set("title", e.target.value)}
-            maxLength={200} placeholder={CARD[type].label} />
-        </label>
-        {CARD[type].fields.map((f) => (
-          <label key={f.key} className={ui.field}>
-            {f.label}
-            {f.kind === "textarea" ? (
-              <textarea className={ui.input} rows={3} value={vals[f.key] ?? ""} onChange={(e) => set(f.key, e.target.value)} />
-            ) : (
-              <input className={ui.input} type={f.kind} min={f.kind === "number" ? 1 : undefined}
-                value={vals[f.key] ?? ""} onChange={(e) => set(f.key, e.target.value)} />
-            )}
-          </label>
-        ))}
+        {/* Belge dili: buyuk cercevesiz baslik, altinda etiket | deger satirlari. */}
+        <input className={ui.titleInput} value={vals["title"] ?? ""} onChange={(e) => set("title", e.target.value)}
+          maxLength={200} placeholder={CARD[type].label} aria-label="Başlık" />
+        <div className={ui.propForm}>
+          {CARD[type].fields.map((f) => (
+            <label key={f.key} className={ui.propField}>
+              <span className={ui.propLabel}>
+                <Icon name={f.icon} size={14} />
+                {f.label}
+              </span>
+              {f.kind === "textarea" ? (
+                <textarea className={`${ui.input} ${ui.ghost}`} rows={3} value={vals[f.key] ?? ""}
+                  placeholder={f.placeholder} onChange={(e) => set(f.key, e.target.value)} />
+              ) : (
+                <input className={`${ui.input} ${ui.ghost}`} type={f.kind} min={f.kind === "number" ? 1 : undefined}
+                  placeholder={f.placeholder} value={vals[f.key] ?? ""} onChange={(e) => set(f.key, e.target.value)} />
+              )}
+            </label>
+          ))}
+        </div>
         <div className={ui.dact}>
           <Button onClick={onClose}>Vazgeç</Button>
-          <Button type="submit" variant="primary" disabled={w.isPending}>Kaydet</Button>
+          <Button type="submit" variant="primary" aria-busy={w.isPending} disabled={w.isPending}>
+            {w.isPending ? "Kaydediliyor…" : "Kaydet"}
+          </Button>
         </div>
       </form>
     </Dialog>

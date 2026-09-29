@@ -3,7 +3,8 @@
 Durum: bölüm 3 **uygulandı** (2026-09-23, `frontend/src/`): tek paket + lazy yüzler,
 tipli rota birliği, `tokens.css` + CSS Modules (sınıf adları `scripts/css-modules.mjs` ile
 tipli üretilir, modül CSS'te ham renk derlemeyi düşürür), TanStack Query, `ERRORS`
-sözlüğü. Bölüm 4'ten Y3, Y4 (geri al ile), Y6, Y8, Y15 geldi.
+sözlüğü. Bölüm 4'ten Y1, Y3, Y4 (geri al ile), Y6, Y8, Y15 geldi. **§6 yeniden markalama
+(2026-09-30)** §2, §3.3–3.7 ve §5'in bazı maddelerini geçersiz kılar — çelişkide §6 geçer.
 Sınır `15-sinirlar.md`'de: Rust yalnız JSON, ön yüz ince. Bu belge ön yüzün *içini* anlatır.
 
 Kanıt: Python başvurusu (`app.py`, `sites/`, `shared/static/`) tohum verisiyle yerelde
@@ -264,4 +265,62 @@ ekranlarla birlikte gelir, ayrı iş değil.
 - **Emoji ikon**, **büyük harf ipucu cümlesi**, **yalnız-hover etiket**.
 - **Ön yüzde süzme**: filtre sunucuda kalır; CSV (Y11) yalnız dönen listeyi yazar.
 - **Bileşen kütüphanesi** (MUI, Chakra…): token + ~10 `ui/` bileşeni yetiyor;
-  kütüphane kendi görsel dilini dayatır.
+  kütüphane kendi görsel dilini dayatır. (Başsız primitifler bu yasağa girmez — §6.)
+
+---
+
+## 6. Yeniden markalama (2026-09-30)
+
+Tetik: kullanıcı panoyu "Google Forms belgesi gibi" buldu — kutu üstüne kutu, her alan
+sıradan bir dropdown. Referanslar: Stele (koyu, yoğun, mono meta), Cloudflare ve
+Tailscale panoları (nötr açık). Kullanıcı "karar ve modelleri kırmaktan çekinme" dedi;
+aşağıdakiler bilinçli olarak önceki maddeleri **geçersiz kılar**.
+
+### Görsel dil
+
+- **Nötr kanvas, tek vurgu.** Lila zemin/çizgi gitti; gri yüzeyler (`--bg`, `--panel`,
+  `--panel2`), mor yalnız vurguda (`--acc*`, `--acc-bg` seçili satır). 1px çizgi, yarıçap
+  6/8/12, gölge yalnız kabarık yüzeyde.
+- **Kutu değil satır.** Bir bölüm = tek yüzey (`.surface`), içi çizgiyle ayrılmış satırlar
+  (Linear/Notion). Kayıt alanları hap kutuları yerine **özellik ızgarası** (etiket | değer).
+- **Yazı:** Inter Variable (arayüz) + JetBrains Mono Variable (sayı, kimlik, zaman);
+  `@fontsource` ile pakette, CDN yok. Tip ölçeği sıkılaştı: gövde 13px masaüstü.
+- **İkon:** lucide (`lucide-react`), `ui/icons.tsx` tipli ad tablosu korunur. §3.7'deki
+  "ikon kütüphanesi yok" geçersiz: el çizimi set yeni ekranlara yetmiyordu.
+- **Durum/öncelik ikonla**: açık ◌, devam ◉, beklemede ⊘, kapandı ✓; öncelik sinyal
+  çubukları — renk tek başına anlam taşımaz (P2 #9 genişledi).
+
+### Tema
+
+`tokens.css`'te her renk bir kez: `light-dark(açık, koyu)`. Seçimi `color-scheme` yapar,
+o da `<html data-theme="light|dark|system">` (varsayılan **light**). Seçim `localStorage`'da
+(`lib/theme.ts`), ilk boyamadan önce `index.html`'deki satır içi betik uygular. Kişi
+menüsünde ve ⌘K'da. Yeni tema = yeni `data-theme` değeri; bileşen dokunulmaz.
+Kontrast sözleşmesi `src/tokens.test.ts`'te iki tema için ölçülür.
+
+### Etkileşim
+
+- **Radix primitifleri** (Popover, DropdownMenu, Dialog, Tooltip) + **cmdk**: davranış ve
+  erişilebilirlik onlarda, görünüm bizde. Başsız oldukları için §5'teki "görsel dil
+  dayatır" gerekçesi geçerli değil. Tailwind/shadcn **alınmadı**: CSS Modules + token
+  kuralı ve ham renk denetimi kalır.
+- **`Picker`** (`ui/ui.tsx`): native `<select>`in yerine tetik + aranabilir liste
+  (7'den fazla seçenekte arama). Görünümler: `field` (form), `chip` (filtre/özellik),
+  `prop` (özellik satırı), `bare`. Seçim iki adım (aç → seç).
+- **Kayıt alanı değişimi artık satır içi seçici**, dialog değil. KNOW-266'nın amacı
+  (kaydırmayla/yanlışlıkla atama olmasın) korunur: select yok, açmak ayrı tık; geri al
+  bildirimi durur. §2'deki "Alan değişimi dialogla" maddesi geçersiz.
+- **Görevler filtresi**: 3+5 select yerine tek satır filtre cipi — boş cip kesikli
+  ("+ Durum"), etkin cip dolu ("Durum: Açık"). P2 #7'nin "Filtre ekle" önerisi bununla
+  kapandı.
+- **Dialog**: native `<dialog>` yerine Radix Dialog — üst katmandaki (top layer) modal
+  içinde açılan Popover portalı arkada kalıyordu. Mobilde alttan çekmece.
+- **⌘K komut paleti** (Y1): sayfa, takım, kayıt araması (sunucu), yeni kayıt, tema.
+- **Kabuk**: 84px ikon rayı yerine tam etiketli kenar çubuğu (arama düğmesi, çalışma
+  alanı, takımlar, kişi menüsü); 900px altında çekmece.
+
+### Ertelenenler
+
+- **Dil değişimi**: metinler hâlâ bileşenlerde. Yapılacaksa önce `lib/labels.ts` kalıbı
+  (tek sözlük, `Record<Anahtar, string>`) bütün ekran metnine genişletilir; kütüphane
+  (i18next) o zaman tartışılır.

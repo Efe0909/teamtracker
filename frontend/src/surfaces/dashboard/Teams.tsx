@@ -10,7 +10,7 @@ import { TEAM_ROLE } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
 import { navigate } from "../../lib/router";
 import { Icon } from "../../ui/icons";
-import { Avatar, Button, Dialog, Empty, Link, Loading, Segmented, ui, useToast } from "../../ui/ui";
+import { Avatar, Button, Dialog, Empty, IconButton, Link, Loading, Picker, Req, Segmented, ui, useToast, Who } from "../../ui/ui";
 import { ErrorScreen } from "../errors/ErrorScreen";
 import s from "./dashboard.module.css";
 import { href } from "./routes";
@@ -44,8 +44,8 @@ export function Teams() {
               const team = L.team(t.id);
               return (
                 <Link key={t.id} href={href({ name: "team", id: t.id })} className={s.teamCard}>
-                  <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ width: 12, height: 12, borderRadius: "50%", background: team?.color ?? "var(--dim)" }} aria-hidden="true" />
+                  <span className={s.teamCardHead}>
+                    <TeamMark name={team?.name ?? "?"} color={team?.color ?? null} />
                     <h2>{team?.name ?? "?"}</h2>
                     {mine.has(t.id) && <span className={s.mine}>Üyesin</span>}
                   </span>
@@ -53,11 +53,11 @@ export function Teams() {
                   <span className={s.teamFoot}>
                     <span className={s.avStack}>
                       {t.members.slice(0, 6).map((m) => (
-                        <Avatar key={m.user_id} user={L.user(m.user_id)} size={26} />
+                        <Avatar key={m.user_id} user={L.user(m.user_id)} size={22} />
                       ))}
                     </span>
-                    {t.members.length} üye · {t.open_records} açık kayıt
-                    <Icon name="chevron" size={16} />
+                    {t.members.length} üye
+                    <span>{t.open_records} açık</span>
                   </span>
                 </Link>
               );
@@ -85,14 +85,14 @@ function EditTeam({ nodeId, name, description }: { nodeId: Uuid; name: string; d
         <Icon name="edit" size={16} /> Düzenle
       </Button>
       <Dialog open={open} onClose={() => setOpen(false)} title="Takımı düzenle">
-        <form onSubmit={(e) => {
+        <form className={ui.formStack} onSubmit={(e) => {
           e.preventDefault();
           m.mutate({ id: nodeId, patch: { name: n, description: d.trim() === "" ? null : d } },
             { onSuccess: () => setOpen(false), onError: (x) => setErr(errorText(x)) });
         }}>
           {err !== null && <p className={ui.error} role="alert">{err}</p>}
           <label className={ui.field}>
-            Ad
+            <span>Ad<Req /></span>
             <input className={ui.input} value={n} onChange={(e) => setN(e.target.value)} required maxLength={200} />
           </label>
           <label className={ui.field}>
@@ -102,7 +102,9 @@ function EditTeam({ nodeId, name, description }: { nodeId: Uuid; name: string; d
           <p className={s.dim}>Ağaçtaki düğümle aynı ad: burada değiştirmek ağacı da değiştirir.</p>
           <div className={ui.dact}>
             <Button onClick={() => setOpen(false)}>Vazgeç</Button>
-            <Button type="submit" variant="primary" disabled={m.isPending || n.trim() === ""}>Kaydet</Button>
+            <Button type="submit" variant="primary" aria-busy={m.isPending} disabled={m.isPending || n.trim() === ""}>
+              {m.isPending ? "Kaydediliyor…" : "Kaydet"}
+            </Button>
           </div>
         </form>
       </Dialog>
@@ -110,7 +112,17 @@ function EditTeam({ nodeId, name, description }: { nodeId: Uuid; name: string; d
   );
 }
 
+/** Takim isareti: rengin uzerinde bas harf (kenar cubugundaki noktanin buyugu). */
+function TeamMark({ name, color }: { name: string; color: string | null }) {
+  return (
+    <span className={s.teamMark} style={color !== null ? { background: color } : undefined} aria-hidden="true">
+      {name.slice(0, 1).toLocaleUpperCase("tr")}
+    </span>
+  );
+}
+
 const ROLES: TeamRole[] = ["lead", "mentor", "member"];
+const ROLE_OPTS = ROLES.map((r) => ({ value: r, label: TEAM_ROLE[r] }));
 
 /** Uyeler (R4-F09): `manage_teams` ya da admin ekler, rol degistirir, cikarir.
  *  Uc ayrica kontrol ediyor; bu bayrak yalniz kontrolleri gostermek icin. */
@@ -118,7 +130,7 @@ function Members({ team, chat }: { team: TeamView; chat: Uuid }) {
   const L = useLookup();
   const toast = useToast();
   const m = useTeamMember(team.id, chat);
-  const [pick, setPick] = useState("");
+  const [pick, setPick] = useState<string | null>(null);
   const [role, setRole] = useState<TeamRole>("member");
   const can = L.meta.me.is_admin || L.can("manage_teams");
   const write = (user_id: Uuid, r: TeamRole | null) =>
@@ -126,39 +138,44 @@ function Members({ team, chat }: { team: TeamView; chat: Uuid }) {
   const outside = L.meta.users.filter((u) => !team.members.some((x) => x.user_id === u.id));
 
   return (
-    <section aria-labelledby="members-h">
-      <h2 id="members-h" className={s.sectionTitle}>Üyeler · {team.members.length}</h2>
-      {team.members.length === 0 && <p className={s.dim}>Henüz üye yok.{can && " Aşağıdan ekle."}</p>}
+    <section className={s.surface} aria-labelledby="members-h">
+      <div className={s.surfaceHead}>
+        <span id="members-h">Üyeler</span>
+        <span className={s.count}>{team.members.length}</span>
+      </div>
+      {team.members.length === 0 && <p className={s.dim} style={{ padding: "12px 16px", margin: 0 }}>Henüz üye yok.</p>}
       <ul className={s.members}>
-        {team.members.map((x) => (
-          <li key={x.user_id}>
-            <Avatar user={L.user(x.user_id)} size={24} />
-            {L.user(x.user_id)?.name ?? "?"}
-            {can ? (
-              <>
-                <select className={s.roleSelect} aria-label="Rol" value={x.role}
-                  onChange={(e) => write(x.user_id, e.target.value as TeamRole)}>
-                  {ROLES.map((r) => <option key={r} value={r}>{TEAM_ROLE[r]}</option>)}
-                </select>
-                <button type="button" className={s.chipX} aria-label="Takımdan çıkar"
-                  onClick={() => write(x.user_id, null)}>✕</button>
-              </>
-            ) : (
-              <span className={s.role}>{TEAM_ROLE[x.role]}</span>
-            )}
-          </li>
-        ))}
+        {team.members.map((x) => {
+          // Her satirin denetimi kisinin adini tasir: ekran okuyucuda on tane
+          // ayni "Rol" / "Takımdan çıkar" duyulmasin.
+          const who = L.user(x.user_id)?.name ?? "?";
+          return (
+            <li key={x.user_id}>
+              <Avatar user={L.user(x.user_id)} size={24} />
+              <span>{who}</span>
+              {can ? (
+                <>
+                  <Picker look="bare" label={`${who} — rol`} value={x.role} options={ROLE_OPTS} align="end"
+                    onChange={(r) => write(x.user_id, r)}>
+                    <span className={s.role}>{TEAM_ROLE[x.role]}</span>
+                  </Picker>
+                  <IconButton icon="x" label={`${who} takımdan çıkar`} onClick={() => write(x.user_id, null)} />
+                </>
+              ) : (
+                <span className={s.role}>{TEAM_ROLE[x.role]}</span>
+              )}
+            </li>
+          );
+        })}
       </ul>
       {can && outside.length > 0 && (
-        <div className={s.pickRow}>
-          <select className={ui.input} aria-label="Eklenecek kişi" value={pick} onChange={(e) => setPick(e.target.value)}>
-            <option value="">— kişi seç —</option>
-            {outside.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
-          </select>
-          <select className={ui.input} aria-label="Rol" value={role} onChange={(e) => setRole(e.target.value as TeamRole)}>
-            {ROLES.map((r) => <option key={r} value={r}>{TEAM_ROLE[r]}</option>)}
-          </select>
-          <Button disabled={pick === "" || m.isPending} onClick={() => { write(pick, role); setPick(""); }}>Ekle</Button>
+        <div className={s.memberAdd}>
+          <Picker label="Eklenecek kişi" value={pick} placeholder="Kişi ekle…" onChange={setPick}
+            options={outside.map((u) => ({ value: u.id as string | null, label: u.name, render: <Who user={u} /> }))} />
+          <Picker label="Rol" value={role} options={ROLE_OPTS} onChange={setRole} className={s.roleField} />
+          <Button disabled={pick === null || m.isPending} onClick={() => { if (pick !== null) write(pick, role); setPick(null); }}>
+            Ekle
+          </Button>
         </div>
       )}
     </section>
@@ -185,23 +202,30 @@ export function TeamPage({ id }: { id: Uuid }) {
   return (
     <div className={s.recordPage}>
       <nav className={s.crumb} aria-label="Konum">
-        <Link href={href({ name: "teams" })}>Takımlar</Link> › <b>{team.name}</b>
+        <Link href={href({ name: "teams" })}>Takımlar</Link>
+        <Icon name="chevron" size={13} />
+        <b>{team.name}</b>
       </nav>
       <div className={s.recordBody}>
         <div className={s.recordMain}>
-          <div className={s.pageHead} style={{ marginBottom: 0 }}>
-            <h1>{team.name}</h1>
+          <div className={s.pageHead} style={{ marginBottom: 0, alignItems: "center" }}>
+            <div className={s.teamHero} style={{ flex: 1, minWidth: 0 }}>
+              <TeamMark name={team.name} color={team.color} />
+              <div className={s.pageTitle}>
+                <h1>{team.name}</h1>
+                {team.description !== null && <p className={s.pageSub}>{team.description}</p>}
+              </div>
+            </div>
             {team.node_id !== null && <EditTeam nodeId={team.node_id} name={team.name} description={team.description} />}
             <Button variant="primary" onClick={() => setCreating(true)}>
-              <Icon name="plus" size={16} /> Bu takıma kayıt aç
+              <Icon name="plus" size={15} /> Kayıt aç
             </Button>
           </div>
-          {team.description !== null && <p className={s.lead} style={{ margin: 0 }}>{team.description}</p>}
 
           <Members team={q.data} chat={team.chat_id} />
 
           <section aria-labelledby="recs-h">
-            <div className={s.pageHead} style={{ marginBottom: 8 }}>
+            <div className={s.pageHead} style={{ marginBottom: 10, alignItems: "center" }}>
               <h2 id="recs-h" className={s.sectionTitle} style={{ flex: 1, margin: 0 }}>Kayıtlar</h2>
               <Segmented label="Kayıt durumu" value={done} onChange={setDone}
                 options={[{ value: "false", label: "Açık" }, { value: "true", label: "Kapanan" }]} />
@@ -211,7 +235,7 @@ export function TeamPage({ id }: { id: Uuid }) {
         </div>
         <aside className={s.recordSide} aria-label="Takım duvarı">
           <div className={s.sideHead}>
-            <Icon name="chat" size={18} /> Takım duvarı
+            <Icon name="chat" size={16} /> Takım duvarı
           </div>
           <div className={s.sideBody}>
             <Chat

@@ -252,8 +252,9 @@ function Composer(props: { chatId: Uuid; reply: FeedItem | null; onClearReply: (
       )}
       {suggestions.length > 0 && (
         <div className={s.mentionList} role="listbox" aria-label="Anma önerileri">
-          {suggestions.map((x) => (
-            <button key={x.key} type="button" role="option" aria-selected={false} className={s.mentionOpt}
+          {/* Enter/Tab ilkini secer — ilki secili gorunmeli ki klavyede ne olacagi belli olsun. */}
+          {suggestions.map((x, i) => (
+            <button key={x.key} type="button" role="option" aria-selected={i === 0} className={s.mentionOpt}
               onMouseDown={(e) => e.preventDefault()} onClick={() => pick(x.key)}>
               <b>@{x.key}</b> <span>{x.label}</span>
             </button>
@@ -303,7 +304,7 @@ function Composer(props: { chatId: Uuid; reply: FeedItem | null; onClearReply: (
           aria-label="Mesaj"
           maxLength={4000}
         />
-        <Button type="submit" variant="primary" big
+        <Button type="submit" variant="primary"
           disabled={m.isPending || uploading > 0 || (text.trim() === "" && pending.length === 0)}>
           Gönder
         </Button>

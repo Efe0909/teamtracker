@@ -1,4 +1,4 @@
-// Masaustu kayit sayfasi: sol ~2/3 is (baslik, alanlar, eylemler), sag dar
+// Masaustu kayit sayfasi: sol is (baslik, ozellikler, eylemler, kartlar), sag
 // sutun sohbet (spec/60 2.4). Admin ile uye AYNI ekran; fark yetkiden
 // (spec/17 etki 1).
 
@@ -7,7 +7,7 @@ import { ApiError } from "../../api/client";
 import { useRecord } from "../../api/hooks";
 import type { Uuid } from "../../api/types";
 import { Chat } from "../../features/chat/Chat";
-import { FieldStrip } from "../../features/record/fields";
+import { Properties } from "../../features/record/fields";
 import { Cards } from "../../features/record/Cards";
 import { ActionList, BallLine, QuickAction, ReadOnlyNote, RecordHead } from "../../features/record/parts";
 import { useLookup } from "../../lib/lookup";
@@ -37,29 +37,34 @@ export function RecordPage({ id }: { id: Uuid }) {
       <nav className={s.crumb} aria-label="Konum">
         <Link href={href({ name: "tasks", query: {} })}>Görevler</Link>
         {path.map((p, i) => (
-          <span key={i}>
-            › {i === path.length - 1 ? (
+          <span key={i} style={{ display: "contents" }}>
+            <Icon name="chevron" size={13} />
+            {i === path.length - 1 ? (
               <Link href={href({ name: "tasks", query: { node: d.record.unit_id } })}>{p}</Link>
             ) : (
-              p
+              <span>{p}</span>
             )}
           </span>
         ))}
+        <Icon name="chevron" size={13} />
+        <b>{d.record.title}</b>
       </nav>
       <div className={s.recordBody}>
         <div className={s.recordMain}>
-          <RecordHead d={d} showPath={false} />
-          <BallLine d={d} />
-          <ReadOnlyNote d={d} />
-          <div className={s.fieldsBlock}>
-            <FieldStrip d={d} />
+          <div className={s.recordInner}>
+            <RecordHead d={d} showPath={false} />
+            <ReadOnlyNote d={d} />
+            <div className={s.fieldsBlock}>
+              <Properties d={d} />
+              <BallLine d={d} />
+            </div>
+            <ActionList d={d} />
+            <Cards d={d} />
           </div>
-          <ActionList d={d} />
-          <Cards d={d} />
         </div>
         <aside className={s.recordSide} aria-label="Sohbet">
           <div className={s.sideHead}>
-            <Icon name="chat" size={18} /> Sohbet
+            <Icon name="chat" size={16} /> Sohbet
           </div>
           <div className={s.sideBody}>
             <Chat

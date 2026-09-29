@@ -16,7 +16,7 @@ import { useCreateNode, useDeleteNode, useNodeTree, usePatchNode } from "../../a
 import type { NodePatch, NodeType, TreeNode, TreeView, Uuid } from "../../api/types";
 import { NODE_TYPE } from "../../lib/labels";
 import { Icon } from "../../ui/icons";
-import { Button, cx, Empty, Loading, Tag, ui, useToast } from "../../ui/ui";
+import { Button, cx, Empty, Loading, Picker, Req, Tag, ui, useToast } from "../../ui/ui";
 import { ErrorScreen } from "../errors/ErrorScreen";
 import s from "./dashboard.module.css";
 
@@ -269,18 +269,15 @@ function AddForm(props: { parent: TreeNode | null; types: NodeType[]; onClose: (
       {err !== null && <p className={ui.error} role="alert">{err}</p>}
       <div className={ui.grid2}>
         <label className={ui.field}>
-          {child ? "Alt düğüm adı" : "Düğüm adı"}
+          <span>{child ? "Alt düğüm adı" : "Düğüm adı"}<Req /></span>
           <input className={ui.input} value={name} onChange={(e) => setName(e.target.value)} required maxLength={200}
             autoFocus placeholder={child ? "alt düğüm adı" : "düğüm adı (ör. Maliye)"} />
         </label>
-        <label className={ui.field}>
-          Tür
-          <select className={ui.input} value={type} onChange={(e) => setType(e.target.value as NodeType)}>
-            {props.types.map((t) => (
-              <option key={t} value={t}>{NODE_TYPE[t]}</option>
-            ))}
-          </select>
-        </label>
+        <div className={ui.field}>
+          <span>Tür</span>
+          <Picker label="Tür" value={type} onChange={setType}
+            options={props.types.map((t) => ({ value: t, label: NODE_TYPE[t] }))} />
+        </div>
       </div>
       <label className={ui.field}>
         Açıklama
@@ -289,7 +286,9 @@ function AddForm(props: { parent: TreeNode | null; types: NodeType[]; onClose: (
       </label>
       <div className={ui.dact}>
         <Button onClick={() => props.onClose(false)}>Vazgeç</Button>
-        <Button type="submit" variant="primary" disabled={m.isPending || name.trim() === ""}>Ekle</Button>
+        <Button type="submit" variant="primary" aria-busy={m.isPending} disabled={m.isPending || name.trim() === ""}>
+          {m.isPending ? "Ekleniyor…" : "Ekle"}
+        </Button>
       </div>
     </form>
   );
@@ -347,37 +346,32 @@ function EditForm({ node, tree, onClose }: { node: TreeNode; tree: TreeView; onC
       {err !== null && <p className={ui.error} role="alert">{err}</p>}
       <div className={ui.grid2}>
         <label className={ui.field}>
-          Ad
+          <span>Ad<Req /></span>
           <input className={ui.input} value={name} onChange={(e) => setName(e.target.value)} required maxLength={200} autoFocus />
         </label>
-        <label className={ui.field}>
-          Tür
+        <div className={ui.field}>
+          <span>Tür</span>
           {/* Kilitliyse DISABLED: tur gonderilmez, sunucu da reddeder (type_locked). */}
-          <select className={ui.input} value={type} onChange={(e) => setType(e.target.value as NodeType)}
-            disabled={!node.can_retype}
-            title={node.can_retype ? undefined : "türe bağlı veri var (takım kartı) — önce o bağ çözülmeli"}>
-            {types.map((t) => (
-              <option key={t} value={t}>{NODE_TYPE[t]}</option>
-            ))}
-          </select>
-        </label>
+          <Picker label="Tür" value={type} onChange={setType} disabled={!node.can_retype}
+            options={types.map((t) => ({ value: t, label: NODE_TYPE[t] }))} />
+          {/* Neden kilitli: title yalniz fareyle gorunuyordu, dokunmatikte/klavyede hic. */}
+          {!node.can_retype && (
+            <span className={ui.fieldHint}>Türe bağlı veri var (takım kartı) — önce o bağ çözülmeli.</span>
+          )}
+        </div>
       </div>
-      <label className={ui.field}>
-        Üst düğüm
-        <select className={ui.input} value={parent} onChange={(e) => setParent(e.target.value)}>
-          {/* Koke cikarmak ve ustu duzenlenemeyen yere tasimak sunucuda reddedilir;
-              burada yalniz sunucunun verdigi bayraklarla soluk cizilir. */}
-          <option value="" disabled={!tree.can_add_root && node.parent_id !== null}>— kök —</option>
-          {tree.nodes
-            .filter((x) => x.id !== node.id)
-            .map((x) => (
-              <option key={x.id} value={x.id} disabled={!x.can_edit && x.id !== node.parent_id}>
-                {"· ".repeat(x.depth)}
-                {x.name}
-              </option>
-            ))}
-        </select>
-      </label>
+      <div className={ui.field}>
+        <span>Üst düğüm</span>
+        {/* Koke cikarmak ve ustu duzenlenemeyen yere tasimak sunucuda reddedilir;
+            burada yalniz sunucunun verdigi bayraklarla soluk cizilir. */}
+        <Picker label="Üst düğüm" value={parent} onChange={setParent} search
+          options={[
+            { value: "", label: "Kök (üst düğüm yok)", disabled: !tree.can_add_root && node.parent_id !== null },
+            ...tree.nodes
+              .filter((x) => x.id !== node.id)
+              .map((x) => ({ value: x.id, label: x.name, depth: x.depth, disabled: !x.can_edit && x.id !== node.parent_id })),
+          ]} />
+      </div>
       <label className={ui.field}>
         Açıklama
         <textarea className={ui.input} rows={2} value={desc} onChange={(e) => setDesc(e.target.value)}
@@ -390,7 +384,9 @@ function EditForm({ node, tree, onClose }: { node: TreeNode; tree: TreeView; onC
           </Button>
         )}
         <Button onClick={onClose}>Vazgeç</Button>
-        <Button type="submit" variant="primary" disabled={m.isPending || name.trim() === ""}>Kaydet</Button>
+        <Button type="submit" variant="primary" aria-busy={m.isPending} disabled={m.isPending || name.trim() === ""}>
+          {m.isPending ? "Kaydediliyor…" : "Kaydet"}
+        </Button>
       </div>
     </form>
   );

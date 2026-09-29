@@ -40,6 +40,6 @@ it("manage_users admin dugmelerini ve rol tanimini gormez", async () => {
   );
   expect(await screen.findByText("Yönetici bütün kapsamlara sahip.")).toBeTruthy();
   expect(screen.queryByText("Yönetici yap")).toBeNull();
-  expect(screen.getAllByRole("button", { name: "Kapat" })).toHaveLength(1); // yalniz Efe
+  expect(screen.getAllByRole("button", { name: "Hesabı kapat" })).toHaveLength(1); // yalniz Efe
   expect(screen.queryByText("Yeni rol")).toBeNull();
 });

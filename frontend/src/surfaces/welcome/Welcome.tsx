@@ -52,7 +52,17 @@ export function Welcome() {
           {load.kind === "loading" && <p className="muted">Yükleniyor…</p>}
           {load.kind === "error" && (
             <p className="alert" role="alert">
-              Sunucuya ulaşılamadı. Sayfayı yenile.
+              Sunucuya ulaşılamadı.{" "}
+              <button
+                className="link"
+                type="button"
+                onClick={() => {
+                  setLoad({ kind: "loading" });
+                  refresh();
+                }}
+              >
+                Tekrar dene
+              </button>
             </p>
           )}
           {load.kind === "ready" &&
@@ -69,8 +79,25 @@ export function Welcome() {
   );
 }
 
+/** Sayfadan ayrilirken dugme "yonlendiriliyor"a doner. Geri tusu sayfayi
+ *  bfcache'ten dondurunce durum sifirlanir — yoksa dugme kilitli kalir. */
+function useLeaving(): [boolean, () => void] {
+  const [leaving, setLeaving] = useState(false);
+  useEffect(() => {
+    const reset = (e: PageTransitionEvent) => {
+      if (e.persisted) setLeaving(false);
+    };
+    window.addEventListener("pageshow", reset);
+    return () => window.removeEventListener("pageshow", reset);
+  }, []);
+  return [leaving, () => setLeaving(true)];
+}
+
 function LoginForm(props: { me: Me; dest: Dest; onDest: (d: Dest) => void; error: string | null }) {
   const { me, dest, onDest, error } = props;
+  // Google'a yonlendirme bir-iki saniye surebilir: ikinci tik ikinci OAuth
+  // akisi baslatmasin, kullanici da bir seyin oldugunu gorsun.
+  const [leaving, leave] = useLeaving();
   return (
     <>
       <h2 id="card-title">Giriş yap</h2>
@@ -87,9 +114,10 @@ function LoginForm(props: { me: Me; dest: Dest; onDest: (d: Dest) => void; error
       </fieldset>
 
       {me.auth === "google" ? (
-        <a className="btn btn-google" href={`/api/auth/google?next=${dest}`}>
+        <a className="btn btn-google" href={`/api/auth/google?next=${dest}`} aria-disabled={leaving}
+          onClick={leave}>
           <GoogleMark />
-          Google ile devam et
+          {leaving ? "Google'a yönlendiriliyor…" : "Google ile devam et"}
         </a>
       ) : (
         <DevLogin me={me} dest={dest} />
@@ -121,11 +149,13 @@ function DestOption(props: { value: Dest; current: Dest; onPick: (d: Dest) => vo
 function DevLogin({ me, dest }: { me: Me; dest: Dest }) {
   const users = me.dev_users ?? [];
   const [userId, setUserId] = useState(users[0]?.id ?? "");
+  const [leaving, leave] = useLeaving();
   return (
     <form
       className="dev"
       onSubmit={(e) => {
         e.preventDefault();
+        leave();
         location.assign(surfaceUrl(dest, `/api/auth/dev-login?user_id=${encodeURIComponent(userId)}`));
       }}
     >
@@ -137,8 +167,8 @@ function DevLogin({ me, dest }: { me: Me; dest: Dest }) {
           </option>
         ))}
       </select>
-      <button className="btn btn-primary" type="submit" disabled={userId === ""}>
-        Giriş yap
+      <button className="btn btn-primary" type="submit" disabled={userId === "" || leaving}>
+        {leaving ? "Giriş yapılıyor…" : "Giriş yap"}
       </button>
     </form>
   );
@@ -174,7 +204,7 @@ function SignedIn(props: { me: Me; name: string; preferred: Dest; onLogout: () =
           });
         }}
       >
-        Çıkış yap
+        {busy ? "Çıkış yapılıyor…" : "Çıkış yap"}
       </button>
     </>
   );

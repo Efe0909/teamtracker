@@ -25,7 +25,7 @@
   margin: 0;
   text-align: center;
   font-size: var(--fs-lg);
-  font-weight: 800;
+  font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -98,7 +98,7 @@
   color: var(--dim);
   text-decoration: none;
   font-size: var(--fs-xs);
-  font-weight: 700;
+  font-weight: 500;
   position: relative;
 }
 .tabOn {
@@ -129,7 +129,7 @@
   height: 56px;
   margin-top: -24px;
   border-radius: 50%;
-  background: var(--acc-strong);
+  background: var(--acc-fill);
   color: var(--on-acc);
   box-shadow: var(--sh-lg);
   border: 3px solid var(--panel);
@@ -157,14 +157,21 @@
   min-height: 48px;
   padding: 0 var(--s-4);
   border-radius: var(--r-md);
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--line-field);
   background: var(--panel);
   font-size: var(--fs-lg);
+}
+.search::placeholder {
+  color: var(--dim);
+  opacity: 1;
+}
+.search:focus-visible {
+  border-color: var(--acc);
 }
 .group {
   margin: var(--s-2) var(--s-1) 0;
   font-size: var(--fs-sm);
-  font-weight: 800;
+  font-weight: 500;
   color: var(--dim);
 }
 .card {
@@ -196,7 +203,7 @@
 }
 .cardTitle {
   font-size: var(--fs-lg);
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1.35;
 }
 .cardMeta {
@@ -255,7 +262,7 @@
   height: 60px;
   border: 0;
   border-radius: 50%;
-  background: var(--acc-strong);
+  background: var(--acc-fill);
   color: var(--on-acc);
   box-shadow: var(--sh-lg);
   display: grid;

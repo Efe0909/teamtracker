@@ -13,5 +13,5 @@ export default defineConfig({
     proxy: { "/api": "http://127.0.0.1:8000" },
   },
   build: { sourcemap: false },
-  test: { environment: "jsdom" },
+  test: { environment: "jsdom", setupFiles: ["./src/test-setup.ts"] },
 });
