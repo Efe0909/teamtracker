@@ -1,251 +1,173 @@
-// Alan seridi: her hap bir dialog acar (dropdown yok — tek dokunusla yanlis
-// atama bedava, kullanici istegi). Yetki API'den (`access`), on yuz karar
-// vermez yalniz gosterir.
+// Kayit ozellikleri: etiket | deger satirlari (Linear/Notion dili). Her deger
+// bir secici — tik → aranabilir liste → sec. Iki adim: kaydirmayla degisen
+// select yok (eski dialog kararinin amaci korunur, kutu kalabaligi gider).
+// Yetki API'den (`access`), on yuz karar vermez yalniz gosterir.
 
 import { useState, type ReactNode } from "react";
 import { errorText } from "../../api/client";
 import { usePatchRecord } from "../../api/hooks";
-import type { RecordDetail, RecordPatch } from "../../api/types";
-import { isDone, PRIORITY, PRIORITY_ORDER, STATUS, STATUS_ORDER } from "../../lib/labels";
+import type { IsoDate, RecordDetail, RecordPatch } from "../../api/types";
+import { isDone, KIND, PRIORITY, PRIORITY_ORDER, STATUS, STATUS_ORDER, toIsoDay } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
-import { Icon } from "../../ui/icons";
-import { Button, Choices, cx, Dialog, Due, PriorityTag, Status, TeamName, ui, useToast, Who, type Choice } from "../../ui/ui";
+import { Icon, type IconName } from "../../ui/icons";
+import { Button, cx, Due, Picker, Popover, PriorityTag, Status, TeamName, Tip, ui, useToast, Who } from "../../ui/ui";
 import s from "./record.module.css";
 
-type FieldKey = "status" | "priority" | "owner_id" | "due_date" | "team_id" | "unit_id" | "pillar_id";
-
-function Pill(props: { k: string; disabled: boolean; onOpen: () => void; children: ReactNode }) {
+function Row(props: { icon: IconName; label: string; children: ReactNode }) {
   return (
-    <button type="button" className={s.pill} disabled={props.disabled} onClick={props.onOpen}>
-      <span className={s.pillKey}>{props.k}</span>
-      <span className={s.pillVal}>{props.children}</span>
-    </button>
+    <div className={s.prop}>
+      <span className={s.propKey}>
+        <Icon name={props.icon} size={14} />
+        {props.label}
+      </span>
+      <span className={s.propVal}>{props.children}</span>
+    </div>
   );
 }
 
-function Empty({ text }: { text: string }) {
-  return <span className={s.pillEmpty}>{text}</span>;
-}
-
-export function FieldStrip({ d, compact = false }: { d: RecordDetail; compact?: boolean }) {
-  const L = useLookup();
-  const r = d.record;
-  const [open, setOpen] = useState<FieldKey | null>(null);
-  const ro = !d.access.can_edit;
-  const node = L.node(r.unit_id);
-  const pillar = L.node(r.pillar_id);
-
-  return (
-    <>
-      <div className={cx(s.strip, !compact && s.primaryStrip)}>
-        <Pill k="Durum" disabled={ro} onOpen={() => setOpen("status")}>
-          <Status status={r.status} />
-        </Pill>
-        <Pill k="Sorumlu" disabled={ro} onOpen={() => setOpen("owner_id")}>
-          <Who user={L.user(r.owner_id)} empty="Sorumlusuz" />
-        </Pill>
-        {/* Kaydi duzenleyebilen acar; kapsami yoksa pencere NEDENINI soyler
-            (Python alan.html) — kilitli dugme sessiz kaliyordu. */}
-        <Pill k="Son tarih" disabled={ro} onOpen={() => setOpen("due_date")}>
-          {r.due_date === null ? <Empty text="Yok" /> : <Due date={r.due_date} done={isDone(r.status)} />}
-        </Pill>
-        <Pill k="Öncelik" disabled={ro} onOpen={() => setOpen("priority")}>
-          <PriorityTag priority={r.priority} />
-        </Pill>
-      </div>
-      <div className={s.strip}>
-        <Pill k="Takım" disabled={ro} onOpen={() => setOpen("team_id")}>
-          <TeamName team={L.team(r.team_id)} empty="Takım yok" />
-        </Pill>
-        <Pill k="Birim" disabled={ro} onOpen={() => setOpen("unit_id")}>
-          {node?.name ?? <Empty text="?" />}
-        </Pill>
-        <Pill k="Pillar" disabled={ro} onOpen={() => setOpen("pillar_id")}>
-          {pillar?.name ?? <Empty text={ro ? "Yok" : "+ Pillar"} />}
-        </Pill>
-      </div>
-      {open !== null && <FieldDialog d={d} field={open} onClose={() => setOpen(null)} />}
-    </>
-  );
-}
-
-const TITLES: Record<FieldKey, string> = {
-  status: "Durumu değiştir",
-  priority: "Önceliği değiştir",
-  owner_id: "Sorumluyu değiştir",
-  due_date: "Son tarihi değiştir",
-  team_id: "Takımı değiştir",
-  unit_id: "Birimi değiştir",
-  pillar_id: "Pillar seç",
-};
-
-function FieldDialog({ d, field, onClose }: { d: RecordDetail; field: FieldKey; onClose: () => void }) {
+export function Properties({ d }: { d: RecordDetail }) {
   const L = useLookup();
   const r = d.record;
   const toast = useToast();
   const m = usePatchRecord(r.id);
-  const [err, setErr] = useState<string | null>(null);
+  const ro = !d.access.can_edit;
 
   // Geri al: ayni alani onceki degerine dondur (spec/16 Y6).
-  const save = (p: RecordPatch, undo: RecordPatch | null) => {
-    setErr(null);
+  const save = (p: RecordPatch, undo: RecordPatch) =>
     m.mutate(p, {
-      onSuccess: () => {
-        onClose();
+      onSuccess: () =>
         toast({
           text: "Kaydedildi",
           error: false,
-          ...(undo !== null ? { undo: () => m.mutate(undo, { onError: (e) => toast({ text: errorText(e), error: true }) }) } : {}),
-        });
-      },
-      onError: (e) => setErr(errorText(e)),
+          undo: () => m.mutate(undo, { onError: (e) => toast({ text: errorText(e), error: true }) }),
+        }),
+      onError: (e) => toast({ text: errorText(e), error: true }),
     });
-  };
 
-  let body: ReactNode;
-  let hint: string | undefined;
-  switch (field) {
-    case "status": {
-      const openActs = d.actions.filter((a) => !isDone(a.status));
-      const opts: Choice<typeof r.status>[] = STATUS_ORDER.map((v) => ({
-        value: v,
-        label: STATUS[v],
-        ...(v === "closed" && openActs.length > 0 ? { disabled: true, note: `${openActs.length} açık eylem` } : {}),
-      }));
-      body = (
-        <>
-          {openActs.length > 0 && (
-            // Kapatma engeli ONDEN soylenir, reddedilince degil (spec/17 I5).
-            <div className={s.warn}>
-              Açık eylemi olan kayıt kapanmaz. Kalanlar:
-              <ul>
-                {openActs.map((a) => (
-                  <li key={a.id}>
-                    {a.title} — {L.user(a.owner_id)?.name ?? "sahipsiz"}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          <Choices options={opts} current={r.status} busy={m.isPending}
-            onPick={(v) => save({ field: "status", value: v }, { field: "status", value: r.status })} />
-        </>
-      );
-      break;
-    }
-    case "priority":
-      body = (
-        <Choices
-          options={PRIORITY_ORDER.map((v) => ({ value: v, label: PRIORITY[v] }))}
-          current={r.priority}
-          busy={m.isPending}
-          onPick={(v) => save({ field: "priority", value: v }, { field: "priority", value: r.priority })}
-        />
-      );
-      break;
-    case "owner_id":
-      body = (
-        <Choices
-          options={[
-            { value: null as string | null, label: "Sorumlusuz" },
-            ...L.meta.users.map((u) => ({ value: u.id as string | null, label: <Who user={u} />, ...(u.id === L.me.id ? { note: "sen" } : {}) })),
-          ]}
-          current={r.owner_id}
-          busy={m.isPending}
-          onPick={(v) => save({ field: "owner_id", value: v }, { field: "owner_id", value: r.owner_id })}
-        />
-      );
-      break;
-    case "team_id":
-      body = (
-        <Choices
-          options={[
-            { value: null as string | null, label: "Takım yok" },
-            ...L.meta.teams.map((t) => ({ value: t.id as string | null, label: <TeamName team={t} /> })),
-          ]}
-          current={r.team_id}
-          busy={m.isPending}
-          onPick={(v) => save({ field: "team_id", value: v }, { field: "team_id", value: r.team_id })}
-        />
-      );
-      break;
-    case "pillar_id":
-      hint = "Pillar kaydın atası olmak zorunda değil.";
-      body = (
-        <Choices
-          options={[
-            { value: null as string | null, label: "Pillar yok" },
-            ...L.pillars.map((n) => ({ value: n.id as string | null, label: n.name })),
-          ]}
-          current={r.pillar_id}
-          busy={m.isPending}
-          onPick={(v) => save({ field: "pillar_id", value: v }, { field: "pillar_id", value: r.pillar_id })}
-        />
-      );
-      break;
-    case "unit_id":
-      body = (
-        <Choices
-          options={L.units.map((n) => ({
-            value: n.id,
-            label: <span style={{ paddingLeft: n.depth * 14 }}>{n.name}</span>,
-          }))}
-          current={r.unit_id}
-          busy={m.isPending}
-          onPick={(v) => save({ field: "unit_id", value: v }, { field: "unit_id", value: r.unit_id })}
-        />
-      );
-      break;
-    case "due_date":
-      body = d.access.can_edit_deadline ? (
-        <DueForm current={r.due_date} busy={m.isPending}
-          onSave={(v) => save({ field: "due_date", value: v }, { field: "due_date", value: r.due_date })} />
-      ) : (
-        <p>Son tarihi değiştirmek <b>edit_deadline</b> kapsamı ister. Yöneticinden iste.</p>
-      );
-      break;
-  }
+  // Kapatma engeli ONDEN soylenir, reddedilince degil (spec/17 I5).
+  const openActs = d.actions.filter((a) => !isDone(a.status)).length;
 
   return (
-    <Dialog open onClose={onClose} title={TITLES[field]} {...(hint !== undefined ? { hint } : {})}>
-      {err !== null && <p className={ui.error} role="alert">{err}</p>}
-      {body}
-    </Dialog>
+    <div className={s.props}>
+      <Row icon="stProgress" label="Durum">
+        <Picker look="prop" label="Durum" disabled={ro} busy={m.isPending} value={r.status}
+          options={STATUS_ORDER.map((v) => ({
+            value: v,
+            label: STATUS[v],
+            render: <Status status={v} />,
+            ...(v === "closed" && openActs > 0 ? { disabled: true, hint: `${openActs} açık eylem` } : {}),
+          }))}
+          onChange={(v) => save({ field: "status", value: v }, { field: "status", value: r.status })} />
+      </Row>
+      <Row icon="user" label="Sorumlu">
+        <Picker look="prop" label="Sorumlu" disabled={ro} busy={m.isPending} value={r.owner_id}
+          options={[
+            { value: null, label: "Sorumlusuz", render: <span className={s.muted}>Sorumlusuz</span> },
+            ...L.meta.users.map((u) => ({ value: u.id as string | null, label: u.name, render: <Who user={u} />, ...(u.id === L.me.id ? { hint: "sen" } : {}) })),
+          ]}
+          onChange={(v) => save({ field: "owner_id", value: v }, { field: "owner_id", value: r.owner_id })} />
+      </Row>
+      <Row icon="calendar" label="Son tarih">
+        {d.access.can_edit_deadline ? (
+          <DueField value={r.due_date} done={isDone(r.status)} disabled={ro} busy={m.isPending}
+            onSave={(v) => save({ field: "due_date", value: v }, { field: "due_date", value: r.due_date })} />
+        ) : (
+          <Tip label="Son tarihi değiştirmek edit_deadline kapsamı ister">
+            <span className={s.propStatic}>
+              <Due date={r.due_date} done={isDone(r.status)} />
+            </span>
+          </Tip>
+        )}
+      </Row>
+      <Row icon="prHigh" label="Öncelik">
+        <Picker look="prop" label="Öncelik" disabled={ro} busy={m.isPending} value={r.priority}
+          options={PRIORITY_ORDER.map((v) => ({ value: v, label: PRIORITY[v], render: <PriorityTag priority={v} bare /> }))}
+          onChange={(v) => save({ field: "priority", value: v }, { field: "priority", value: r.priority })} />
+      </Row>
+      <Row icon="teams" label="Takım">
+        <Picker look="prop" label="Takım" disabled={ro} busy={m.isPending} value={r.team_id}
+          options={[
+            { value: null, label: "Takım yok", render: <span className={s.muted}>Takım yok</span> },
+            ...L.meta.teams.map((t) => ({ value: t.id as string | null, label: t.name, render: <TeamName team={t} /> })),
+          ]}
+          onChange={(v) => save({ field: "team_id", value: v }, { field: "team_id", value: r.team_id })} />
+      </Row>
+      <Row icon="tree" label="Birim">
+        <Picker look="prop" label="Birim" disabled={ro} busy={m.isPending} value={r.unit_id} search
+          options={L.units.map((n) => ({ value: n.id, label: n.name, depth: n.depth }))}
+          onChange={(v) => save({ field: "unit_id", value: v }, { field: "unit_id", value: r.unit_id })} />
+      </Row>
+      {/* Pillar ORTOGONAL (KNOW-261): kaydin atasi olmak zorunda degil. */}
+      <Row icon="pin" label="Pillar">
+        <Picker look="prop" label="Pillar" disabled={ro} busy={m.isPending} value={r.pillar_id}
+          options={[
+            { value: null, label: "Pillar yok", render: <span className={s.muted}>{ro ? "Yok" : "Pillar ekle"}</span> },
+            ...L.pillars.map((n) => ({ value: n.id as string | null, label: n.name })),
+          ]}
+          onChange={(v) => save({ field: "pillar_id", value: v }, { field: "pillar_id", value: r.pillar_id })} />
+      </Row>
+      <Row icon="inbox" label="Tür">
+        <span className={s.propStatic}>{KIND[r.kind]}</span>
+      </Row>
+    </div>
   );
 }
 
-/** Tarih: hizli secimler + serbest tarih. */
-export function DueForm(props: { current: string | null; busy: boolean; onSave: (v: string | null) => void }) {
-  const [v, setV] = useState(props.current ?? "");
+/** Tarih secici: hizli secimler + serbest tarih, acilir yuzeyde. Kayit ve
+ *  eylem ayni bileseni kullanir. */
+export function DueField(props: {
+  value: IsoDate | null;
+  done?: boolean;
+  disabled?: boolean;
+  busy?: boolean;
+  look?: "prop" | "bare";
+  onSave: (v: IsoDate | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [v, setV] = useState<string>(props.value ?? "");
   const plus = (n: number) => {
-    const d = new Date();
-    d.setDate(d.getDate() + n);
-    const p = (x: number) => String(x).padStart(2, "0");
-    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+    const x = new Date();
+    x.setDate(x.getDate() + n);
+    return toIsoDay(x);
+  };
+  const pick = (x: IsoDate | null) => {
+    setOpen(false);
+    if (x !== props.value) props.onSave(x);
   };
   return (
-    <form
-      className={ui.formStack}
-      onSubmit={(e) => {
-        e.preventDefault();
-        props.onSave(v === "" ? null : v);
+    <Popover
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o);
+        if (o) setV(props.value ?? "");
       }}
+      trigger={
+        <button type="button" className={cx(s.dueTrigger, props.look === "bare" && s.dueBare)} disabled={props.disabled === true}
+          aria-label={`Son tarih: ${props.value ?? "yok"}`}>
+          {props.value === null ? <span className={s.muted}>{props.disabled === true ? "Yok" : "Tarih ekle"}</span> : <Due date={props.value} done={props.done === true} />}
+        </button>
+      }
     >
-      <div className={s.strip}>
-        <Button onClick={() => setV(plus(0))}>Bugün</Button>
-        <Button onClick={() => setV(plus(1))}>Yarın</Button>
-        <Button onClick={() => setV(plus(7))}>+1 hafta</Button>
-        <Button variant="ghost" onClick={() => setV("")}>Temizle</Button>
-      </div>
-      <label className={ui.field}>
-        Tarih
-        <input className={ui.input} type="date" value={v} onChange={(e) => setV(e.target.value)} />
-      </label>
-      <div className={ui.dact}>
-        <Button type="submit" variant="primary" aria-busy={props.busy} disabled={props.busy}>
-          <Icon name="check" size={16} /> {props.busy ? "Kaydediliyor…" : "Kaydet"}
-        </Button>
-      </div>
-    </form>
+      <form
+        className={s.dueForm}
+        onSubmit={(e) => {
+          e.preventDefault();
+          pick(v === "" ? null : v);
+        }}
+      >
+        <div className={s.dueQuick}>
+          <Button size="sm" onClick={() => pick(plus(0))}>Bugün</Button>
+          <Button size="sm" onClick={() => pick(plus(1))}>Yarın</Button>
+          <Button size="sm" onClick={() => pick(plus(7))}>+1 hafta</Button>
+        </div>
+        <input className={ui.input} type="date" value={v} onChange={(e) => setV(e.target.value)} aria-label="Tarih" autoFocus />
+        <div className={ui.dact}>
+          {props.value !== null && (
+            <Button variant="ghost" size="sm" onClick={() => pick(null)}>Kaldır</Button>
+          )}
+          <Button type="submit" variant="primary" size="sm" disabled={props.busy === true}>Kaydet</Button>
+        </div>
+      </form>
+    </Popover>
   );
 }

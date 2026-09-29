@@ -8,14 +8,18 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 const css = readFileSync(path.resolve("src/tokens.css"), "utf8");
-const darkAt = css.indexOf("@media (prefers-color-scheme: dark)");
 
-function tokens(block: string): Map<string, string> {
-  return new Map([...block.matchAll(/--([\w-]+):\s*(#[0-9a-fA-F]{3,6})\b/g)].map((m) => [m[1] ?? "", m[2] ?? ""]));
+// `--ad: light-dark(#acik, #koyu)` ya da iki temada ayni `--ad: #renk`.
+const light = new Map<string, string>();
+const dark = new Map<string, string>();
+for (const m of css.matchAll(/--([\w-]+):\s*light-dark\(\s*(#[0-9a-fA-F]{3,6})\s*,\s*(#[0-9a-fA-F]{3,6})\s*\)/g)) {
+  light.set(m[1] ?? "", m[2] ?? "");
+  dark.set(m[1] ?? "", m[3] ?? "");
 }
-const light = tokens(css.slice(0, darkAt));
-// Koyu tema yalniz ezdigi token'lari yazar; gerisi acik temadan gelir.
-const dark = new Map([...light, ...tokens(css.slice(darkAt))]);
+for (const m of css.matchAll(/--([\w-]+):\s*(#[0-9a-fA-F]{3,6})\s*;/g)) {
+  light.set(m[1] ?? "", m[2] ?? "");
+  dark.set(m[1] ?? "", m[2] ?? "");
+}
 
 function lum(hex: string): number {
   let h = hex.slice(1);
@@ -37,8 +41,10 @@ const PAIRS: [string, string, number][] = [
   ["dim", "panel", 4.5],
   ["dim", "bg", 4.5],
   ["dim", "tint", 4.5],
+  ["dim", "panel2", 4.5],
   ["acc-strong", "panel", 4.5],
   ["acc-strong", "bg", 4.5],
+  ["acc-strong", "acc-bg", 4.5],
   ["on-acc", "acc-fill", 4.5],
   ["on-acc", "acc-fill-hover", 4.5],
   ["err-text", "err-bg", 4.5],

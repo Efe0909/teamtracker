@@ -7,8 +7,8 @@ import type { Action, ActionPatch, RecordDetail } from "../../api/types";
 import { ACTION_STATUS, ACTION_STATUS_ORDER, ago, isDone } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
 import { Icon } from "../../ui/icons";
-import { Button, Choices, cx, Dialog, Due, KindTag, Status, ui, useToast, Who } from "../../ui/ui";
-import { DueForm } from "./fields";
+import { Button, cx, Dialog, IconButton, KindTag, Picker, Status, ui, useToast, Who, type Option } from "../../ui/ui";
+import { DueField } from "./fields";
 import s from "./record.module.css";
 
 // --- baslik ----------------------------------------------------------------
@@ -23,24 +23,28 @@ export function RecordHead({ d, showPath = true }: { d: RecordDetail; showPath?:
       {showPath && <div className={s.path}>{L.path(r.unit_id).join(" › ")}</div>}
       <div className={s.titleRow}>
         <h1 className={s.title}>{r.title}</h1>
-        <KindTag kind={r.kind} />
+        {d.access.can_edit && <IconButton icon="edit" label="Başlığı düzenle" onClick={() => setEdit("title")} />}
       </div>
-      {creator !== undefined && (
-        <div className={s.byline}>
-          Açan: {creator.name} · <time dateTime={r.created_at}>{ago(r.created_at)}</time>
-        </div>
-      )}
-      {r.description !== null ? (
-        <p className={s.desc}>{r.description}</p>
-      ) : (
-        <p className={cx(s.desc, s.descEmpty)}>Açıklama yok.</p>
-      )}
-      {d.access.can_edit && (
-        <div className={s.strip}>
-          <button type="button" className={s.editLink} onClick={() => setEdit("title")}>Başlığı düzenle</button>
-          <button type="button" className={s.editLink} onClick={() => setEdit("description")}>Açıklamayı düzenle</button>
-        </div>
-      )}
+      <div className={s.byline}>
+        <KindTag kind={r.kind} />
+        {creator !== undefined && (
+          <span>
+            {creator.name} açtı · <time dateTime={r.created_at}>{ago(r.created_at)}</time>
+          </span>
+        )}
+      </div>
+      <div className={s.descWrap}>
+        {r.description !== null ? (
+          <p className={s.desc}>{r.description}</p>
+        ) : (
+          <p className={cx(s.desc, s.descEmpty)}>Açıklama yok.</p>
+        )}
+        {d.access.can_edit && (
+          <button type="button" className={s.editLink} onClick={() => setEdit("description")}>
+            <Icon name="edit" size={13} /> {r.description === null ? "Açıklama ekle" : "Açıklamayı düzenle"}
+          </button>
+        )}
+      </div>
       {edit !== null && <TextEdit d={d} field={edit} onClose={() => setEdit(null)} />}
     </div>
   );
@@ -69,7 +73,7 @@ function TextEdit({ d, field, onClose }: { d: RecordDetail; field: "title" | "de
             maxLength={200} required autoFocus />
         ) : (
           <textarea className={ui.input} aria-labelledby="dlg-title" value={v} onChange={(e) => setV(e.target.value)}
-            rows={6} autoFocus />
+            rows={8} autoFocus placeholder="Ne oldu, nerede, ne zaman?" />
         )}
         <div className={ui.dact}>
           <Button onClick={onClose}>Vazgeç</Button>
@@ -93,7 +97,7 @@ export function BallLine({ d }: { d: RecordDetail }) {
   if (isDone(d.record.status)) return null;
   return (
     <div className={s.ball}>
-      <Icon name="user" size={16} />
+      <Icon name="user" size={14} />
       {open.length === 0 ? (
         <span>
           Top <b>{L.user(d.record.owner_id)?.name ?? "kimsede değil"}</b>
@@ -101,15 +105,15 @@ export function BallLine({ d }: { d: RecordDetail }) {
         </span>
       ) : (
         <span>
-          Açık eylem: {owners.map((o, i) => (
+          Top: {owners.map((o, i) => (
             <span key={o ?? "none"}>
               {i > 0 && ", "}
-              <b>{o === null ? "sahipsiz" : (L.user(o)?.name ?? "?")}</b>
+              <b>{o === null ? "havuzda" : (L.user(o)?.name ?? "?")}</b>
             </span>
           ))}
         </span>
       )}
-      <span>· son hareket {ago(d.record.updated_at)}</span>
+      <span className={s.muted}>· son hareket {ago(d.record.updated_at)}</span>
     </div>
   );
 }
@@ -126,7 +130,7 @@ export function ReadOnlyNote({ d }: { d: RecordDetail }) {
   const role = d.record.owner_id !== null ? "Sorumlu" : "Kaydı açan";
   return (
     <div className={s.readonly} role="note">
-      <Icon name="lock" size={16} />
+      <Icon name="lock" size={15} />
       <span>
         Bu kayıtta yazma yetkin yok{team !== undefined ? ` — ${team} takımında değilsin` : ""}.
         {contact !== undefined ? ` ${role}: ${contact.name}; dahil olmak için ona yaz.` : ""}
@@ -136,17 +140,17 @@ export function ReadOnlyNote({ d }: { d: RecordDetail }) {
 }
 
 // --- eylemler --------------------------------------------------------------
+// Her satir kendi ozelliklerini satir icinde degistirir: durum, sahip, tarih.
 
 export function ActionList({ d }: { d: RecordDetail }) {
   const L = useLookup();
   const toast = useToast();
-  const [openId, setOpenId] = useState<string | null>(null);
   const patch = usePatchAction();
   const open = d.actions.filter((a) => !isDone(a.status));
   const done = d.actions.filter((a) => isDone(a.status));
-  const current = d.actions.find((a) => a.id === openId);
+  const ro = !d.access.can_edit;
 
-  const quick = (a: Action, p: ActionPatch, undo: ActionPatch, text: string) =>
+  const change = (a: Action, p: ActionPatch, undo: ActionPatch, text: string) =>
     patch.mutate(
       { id: a.id, patch: p },
       {
@@ -155,28 +159,37 @@ export function ActionList({ d }: { d: RecordDetail }) {
       },
     );
 
+  const owners: Option<string | null>[] = [
+    { value: null, label: "Havuzda", render: <span className={s.muted}>Havuzda</span> },
+    ...L.meta.users.map((u) => ({ value: u.id as string | null, label: u.name, render: <Who user={u} /> })),
+  ];
+
   const row = (a: Action) => (
     <li key={a.id} className={cx(s.action, isDone(a.status) && s.actionDone)}>
-      <button type="button" className={s.actionTitle} disabled={!d.access.can_edit} onClick={() => setOpenId(a.id)}>
-        {a.title}
-      </button>
-      <span className={s.actionMeta}>
+      <Picker look="bare" label={`${a.title} — durum`} disabled={ro} value={a.status}
+        options={ACTION_STATUS_ORDER.map((v) => ({ value: v, label: ACTION_STATUS[v], render: <Status status={v} action /> }))}
+        onChange={(v) => change(a, { field: "status", value: v }, { field: "status", value: a.status }, "Durum değişti")}>
         <Status status={a.status} action />
-        <Who user={L.user(a.owner_id)} empty="Havuzda" />
-        {a.due_date !== null && <Due date={a.due_date} done={isDone(a.status)} />}
-        {d.access.can_edit && !isDone(a.status) && a.owner_id === null && (
+      </Picker>
+      <span className={s.actionTitle}>{a.title}</span>
+      <span className={s.actionMeta}>
+        {!ro && !isDone(a.status) && a.owner_id === null && (
           // Havuzdaki eylemi tek dokunusla ustlen (spec/17 etki 8).
-          <Button onClick={() => quick(a, { field: "owner_id", value: L.me.id }, { field: "owner_id", value: null }, "Eylemi üstlendin")}>
+          <Button size="sm" onClick={() => change(a, { field: "owner_id", value: L.me.id }, { field: "owner_id", value: null }, "Eylemi üstlendin")}>
             Üstlen
           </Button>
         )}
-        {d.access.can_edit && !isDone(a.status) && (
-          <Button
-            aria-label={`${a.title} — kapat`}
-            onClick={() => quick(a, { field: "status", value: "closed" }, { field: "status", value: a.status }, "Eylem kapatıldı")}
-          >
-            <Icon name="check" size={16} /> Bitti
-          </Button>
+        {d.access.can_edit_deadline ? (
+          <DueField look="bare" value={a.due_date} done={isDone(a.status)} disabled={ro}
+            onSave={(v) => change(a, { field: "due_date", value: v }, { field: "due_date", value: a.due_date }, "Tarih değişti")} />
+        ) : null}
+        <Picker look="bare" label={`${a.title} — sahip`} disabled={ro} value={a.owner_id} options={owners} align="end"
+          onChange={(v) => change(a, { field: "owner_id", value: v }, { field: "owner_id", value: a.owner_id }, "Sahip değişti")}>
+          <Who user={L.user(a.owner_id)} empty="Havuzda" />
+        </Picker>
+        {!ro && !isDone(a.status) && (
+          <IconButton icon="check" label={`${a.title} — bitti`}
+            onClick={() => change(a, { field: "status", value: "closed" }, { field: "status", value: a.status }, "Eylem kapatıldı")} />
         )}
       </span>
     </li>
@@ -185,22 +198,18 @@ export function ActionList({ d }: { d: RecordDetail }) {
   return (
     <section className={s.section} aria-labelledby="acts-h">
       <div className={s.secHead}>
-        <Icon name="bolt" size={18} />
         <h2 id="acts-h">Eylemler</h2>
-        <span className={s.count}>{open.length} açık</span>
+        <span className={s.count}>
+          {open.length} açık{done.length > 0 ? ` · ${done.length} bitti` : ""}
+        </span>
       </div>
-      {d.actions.length === 0 && (
-        <span className={s.hint}>{d.access.can_edit ? "Henüz eylem yok. Kim ne yapacaksa buraya ekle." : "Henüz eylem yok."}</span>
-      )}
-      <ul className={s.actions}>{open.map(row)}</ul>
-      {done.length > 0 && (
-        <>
-          <span className={s.doneSep}>Tamamlanan · {done.length}</span>
-          <ul className={s.actions}>{done.map(row)}</ul>
-        </>
-      )}
-      {d.access.can_edit && <AddAction d={d} />}
-      {current !== undefined && <ActionDialog d={d} a={current} onClose={() => setOpenId(null)} />}
+      <div className={s.box}>
+        {d.actions.length === 0 && (
+          <span className={s.boxEmpty}>{ro ? "Henüz eylem yok." : "Henüz eylem yok. Kim ne yapacaksa aşağıya ekle."}</span>
+        )}
+        {d.actions.length > 0 && <ul className={s.actions}>{[...open, ...done].map(row)}</ul>}
+        {!ro && <AddAction d={d} />}
+      </div>
     </section>
   );
 }
@@ -211,12 +220,14 @@ export function QuickAction({ d }: { d: RecordDetail }) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <Button variant="ghost" onClick={() => setOpen(true)}>
-        <Icon name="bolt" size={16} /> Hızlı eylem
+      <Button variant="ghost" size="sm" onClick={() => setOpen(true)}>
+        <Icon name="bolt" size={14} /> Hızlı eylem
       </Button>
       <Dialog open={open} onClose={() => setOpen(false)} title="Hızlı eylem"
         hint="Sohbetten çıkmadan: kim ne yapacak? Eylemler listesine eklenir.">
-        <AddAction d={d} onDone={() => setOpen(false)} />
+        <div className={s.box}>
+          <AddAction d={d} onDone={() => setOpen(false)} />
+        </div>
       </Dialog>
     </>
   );
@@ -227,19 +238,19 @@ function AddAction({ d, onDone }: { d: RecordDetail; onDone?: () => void }) {
   const m = useAddAction(d.record.id);
   const toast = useToast();
   const [title, setTitle] = useState("");
-  const [owner, setOwner] = useState("");
-  const [due, setDue] = useState("");
+  const [owner, setOwner] = useState<string | null>(null);
+  const [due, setDue] = useState<string | null>(null);
   return (
     <form
       className={s.addForm}
       onSubmit={(e) => {
         e.preventDefault();
         m.mutate(
-          { title, owner_id: owner === "" ? null : owner, due_date: due === "" ? null : due },
+          { title, owner_id: owner, due_date: due },
           {
             onSuccess: () => {
               setTitle("");
-              setDue("");
+              setDue(null);
               onDone?.();
             },
             onError: (x) => toast({ text: errorText(x), error: true }),
@@ -247,57 +258,21 @@ function AddAction({ d, onDone }: { d: RecordDetail; onDone?: () => void }) {
         );
       }}
     >
-      <input className={ui.input} placeholder="Yeni eylem…" value={title} onChange={(e) => setTitle(e.target.value)}
+      <Icon name="plus" size={15} />
+      <input className={s.addInput} placeholder="Yeni eylem ekle…" value={title} onChange={(e) => setTitle(e.target.value)}
         required maxLength={200} aria-label="Eylem başlığı" />
-      <select className={ui.input} value={owner} onChange={(e) => setOwner(e.target.value)} aria-label="Eylemin sahibi">
-        <option value="">Havuzda (sahipsiz)</option>
-        {L.meta.users.map((u) => (
-          <option key={u.id} value={u.id}>{u.name}</option>
-        ))}
-      </select>
-      {d.access.can_edit_deadline && (
-        <input className={ui.input} type="date" value={due} onChange={(e) => setDue(e.target.value)} aria-label="Son tarih" />
-      )}
-      <Button type="submit" variant="primary" aria-busy={m.isPending} disabled={m.isPending || title.trim() === ""}>
-        <Icon name="plus" size={16} /> {m.isPending ? "Ekleniyor…" : "Ekle"}
+      {d.access.can_edit_deadline && <DueField look="bare" value={due} onSave={setDue} />}
+      <Picker look="bare" label="Eylemin sahibi" value={owner} align="end"
+        options={[
+          { value: null, label: "Havuzda", render: <span className={s.muted}>Havuzda</span> },
+          ...L.meta.users.map((u) => ({ value: u.id as string | null, label: u.name, render: <Who user={u} /> })),
+        ]}
+        onChange={setOwner}>
+        <Who user={L.user(owner)} empty="Havuzda" />
+      </Picker>
+      <Button type="submit" variant="primary" size="sm" aria-busy={m.isPending} disabled={m.isPending || title.trim() === ""}>
+        {m.isPending ? "Ekleniyor…" : "Ekle"}
       </Button>
     </form>
-  );
-}
-
-function ActionDialog({ d, a, onClose }: { d: RecordDetail; a: Action; onClose: () => void }) {
-  const L = useLookup();
-  const m = usePatchAction();
-  const [err, setErr] = useState<string | null>(null);
-  const [tab, setTab] = useState<"status" | "owner" | "due">("status");
-  const save = (p: ActionPatch) =>
-    m.mutate({ id: a.id, patch: p }, { onSuccess: onClose, onError: (e) => setErr(errorText(e)) });
-  return (
-    <Dialog open onClose={onClose} title={a.title}>
-      {err !== null && <p className={ui.error} role="alert">{err}</p>}
-      <div className={s.strip} style={{ marginBottom: 12 }}>
-        <Button variant={tab === "status" ? "primary" : "default"} onClick={() => setTab("status")}>Durum</Button>
-        <Button variant={tab === "owner" ? "primary" : "default"} onClick={() => setTab("owner")}>Sahip</Button>
-        {d.access.can_edit_deadline && (
-          <Button variant={tab === "due" ? "primary" : "default"} onClick={() => setTab("due")}>Son tarih</Button>
-        )}
-      </div>
-      {tab === "status" && (
-        <Choices options={ACTION_STATUS_ORDER.map((v) => ({ value: v, label: ACTION_STATUS[v] }))}
-          current={a.status} busy={m.isPending} onPick={(v) => save({ field: "status", value: v })} />
-      )}
-      {tab === "owner" && (
-        <Choices
-          options={[
-            { value: null as string | null, label: "Havuzda (sahipsiz)" },
-            ...L.meta.users.map((u) => ({ value: u.id as string | null, label: <Who user={u} /> })),
-          ]}
-          current={a.owner_id}
-          busy={m.isPending}
-          onPick={(v) => save({ field: "owner_id", value: v })}
-        />
-      )}
-      {tab === "due" && <DueForm current={a.due_date} busy={m.isPending} onSave={(v) => save({ field: "due_date", value: v })} />}
-    </Dialog>
   );
 }

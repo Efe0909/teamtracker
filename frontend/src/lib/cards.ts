@@ -12,6 +12,8 @@ export interface CardField {
   key: string;
   label: string;
   kind: "text" | "textarea" | "datetime-local" | "url" | "number";
+  icon: IconName;
+  placeholder: string;
 }
 
 export const CARD: Record<CardType, {
@@ -25,7 +27,7 @@ export const CARD: Record<CardType, {
     label: "Medya eki",
     icon: "image",
     hint: "Görseller bu kutuya asılır — sohbete dağılmaz, kayıtla kalır.",
-    fields: [{ key: "description", label: "Açıklama", kind: "textarea" }],
+    fields: [{ key: "description", label: "Açıklama", kind: "textarea", icon: "edit", placeholder: "Görseller neyi gösteriyor?" }],
     answers: {},
   },
   meeting: {
@@ -33,10 +35,10 @@ export const CARD: Record<CardType, {
     icon: "calendar",
     hint: "Ne zaman, nerede, kim — konuşulacaklar tek yerde.",
     fields: [
-      { key: "when", label: "Tarih ve saat", kind: "datetime-local" },
-      { key: "place", label: "Yer", kind: "text" },
-      { key: "link", label: "Bağlantı (Meet/Zoom)", kind: "url" },
-      { key: "agenda", label: "Gündem", kind: "textarea" },
+      { key: "when", label: "Ne zaman", kind: "datetime-local", icon: "calendar", placeholder: "" },
+      { key: "place", label: "Yer", kind: "text", icon: "pin", placeholder: "Toplantı odası, adres…" },
+      { key: "link", label: "Bağlantı", kind: "url", icon: "external", placeholder: "https://meet.google.com/…" },
+      { key: "agenda", label: "Gündem", kind: "textarea", icon: "tasks", placeholder: "Konuşulacak maddeler…" },
     ],
     answers: { yes: "Katılıyorum", maybe: "Belki", no: "Katılamıyorum" },
   },
@@ -45,8 +47,8 @@ export const CARD: Record<CardType, {
     icon: "teams",
     hint: "İş burada durur, isteyen üstüne alır — atama yok, gönüllülük var.",
     fields: [
-      { key: "need", label: "Kaç kişi lazım", kind: "number" },
-      { key: "detail", label: "Ne yapılacak", kind: "textarea" },
+      { key: "need", label: "Kişi sayısı", kind: "number", icon: "teams", placeholder: "Kaç kişi lazım?" },
+      { key: "detail", label: "Ne yapılacak", kind: "textarea", icon: "tasks", placeholder: "Gönüllünün yapacağı iş…" },
     ],
     answers: { yes: "Bu işi alıyorum" },
   },

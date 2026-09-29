@@ -1,6 +1,7 @@
 // Gorev Yoneticisi. Filtre = gezinme DEGIL (KNOW-234): URL'e replaceState
 // ile yazilir, geri tusu sismez ama yenilemede ve paylasilan baglantida kalir.
-// 3 birincil filtre + "Diger filtreler" (spec/16 P2 #7). Suzme SUNUCUDA.
+// Filtreler tek satir cip: bos cip kesikli ("Durum"), etkin cip dolu
+// ("Durum: Açık"). Suzme SUNUCUDA.
 
 import { useEffect, useState } from "react";
 import { useRecords, type RecordQuery } from "../../api/hooks";
@@ -9,7 +10,10 @@ import { ago, isDone, KIND, PRIORITY, PRIORITY_ORDER, STATUS, STATUS_ORDER } fro
 import { useLookup } from "../../lib/lookup";
 import { navigate } from "../../lib/router";
 import { Icon } from "../../ui/icons";
-import { Button, Dialog, Due, Empty, KindTag, Link, Loading, PriorityTag, Segmented, Status, TeamName, ui, Who } from "../../ui/ui";
+import {
+  Avatar, Button, Dialog, Due, Empty, KindTag, Link, Loading, Picker, PriorityTag, Segmented, Status, TeamName, ui, Who,
+  type Option,
+} from "../../ui/ui";
 import { NewRecordForm } from "../../features/record/NewRecordForm";
 import s from "./dashboard.module.css";
 import { href } from "./routes";
@@ -22,12 +26,14 @@ const QUICK = [
   { value: "unassigned", label: "Atanmamış" },
 ] as const;
 
-const SORTS = [
-  { value: "activity", label: "Son hareket" },
+const SORTS: Option<string>[] = [
+  { value: "", label: "Son hareket" },
   { value: "date", label: "Son tarih" },
   { value: "priority", label: "Öncelik" },
   { value: "newest", label: "En yeni" },
-] as const;
+];
+
+type Key = keyof RecordQuery;
 
 export function Tasks({ query }: { query: RecordQuery }) {
   const L = useLookup();
@@ -46,9 +52,9 @@ export function Tasks({ query }: { query: RecordQuery }) {
     // `set` her cizimde yeni; bagimlilik bilerek yalniz arama metni.
   }, [search]);
 
-  function set(p: { [K in keyof RecordQuery]?: string | undefined }) {
+  function set(p: { [K in Key]?: string | undefined }) {
     const next: RecordQuery = { ...query };
-    for (const [k, v] of Object.entries(p) as [keyof RecordQuery, string | undefined][]) {
+    for (const [k, v] of Object.entries(p) as [Key, string | undefined][]) {
       if (v === undefined || v === "") delete next[k];
       else (next as Record<string, string>)[k] = v;
     }
@@ -57,128 +63,87 @@ export function Tasks({ query }: { query: RecordQuery }) {
 
   const data = rows.data ?? [];
   const open = data.filter((r) => !isDone(r.status)).length;
-  const secondary = ["kind", "priority", "team", "pillar", "sort"].filter((k) => query[k as keyof RecordQuery] !== undefined).length;
+  const any = Object.keys(query).some((k) => k !== "quick" && k !== "sort");
+
+  // Filtre cipi: bos deger "Hepsi"; secim varsa cip dolu ve degeri gosterir.
+  const chip = (k: Key, label: string, options: Option<string>[]) => {
+    const v = query[k] ?? "";
+    const cur = options.find((o) => o.value === v);
+    return (
+      <Picker
+        look="chip"
+        label={label}
+        active={v !== ""}
+        value={v}
+        options={[{ value: "", label: "Hepsi" }, ...options]}
+        onChange={(x) => set({ [k]: x })}
+      >
+        {v === "" ? (
+          <>
+            <Icon name="plus" size={13} /> {label}
+          </>
+        ) : (
+          <>
+            {label}: <b>{cur?.label ?? "?"}</b>
+          </>
+        )}
+      </Picker>
+    );
+  };
 
   return (
     <div className={s.page}>
       <div className={s.pageHead}>
-        <h1>Görevler</h1>
-        <Button variant="primary" big onClick={() => setCreating(true)}>
-          <Icon name="plus" size={18} /> Kayıt aç
+        <div className={s.pageTitle}>
+          <h1>
+            Görevler<span className={s.count}>{data.length}</span>
+          </h1>
+        </div>
+        <Button variant="primary" onClick={() => setCreating(true)}>
+          <Icon name="plus" size={15} /> Yeni kayıt
         </Button>
       </div>
 
-      <div style={{ marginBottom: 12, maxWidth: 640 }}>
+      <div className={s.toolbar}>
         <Segmented label="Hızlı filtre" options={[...QUICK]} value={(query.quick ?? "all") as (typeof QUICK)[number]["value"]}
           onChange={(v) => set({ quick: v === "all" ? undefined : v })} />
-      </div>
-
-      <div className={s.bar}>
-        <label className={`${ui.field} ${s.searchBox}`}>
-          Ara
+        <label className={s.search}>
+          <Icon name="search" size={15} />
+          <span className="visually-hidden">Ara</span>
           <input className={ui.input} type="search" value={search} onChange={(e) => setSearch(e.target.value)}
             placeholder="Başlık veya açıklamada ara…" />
         </label>
-        <label className={ui.field}>
-          Birim
-          <select className={ui.input} value={query.node ?? ""} onChange={(e) => set({ node: e.target.value })}>
-            <option value="">Hepsi</option>
-            {L.meta.nodes.filter((n) => n.node_type !== "team" && n.node_type !== "pillar").map((n) => (
-              <option key={n.id} value={n.id}>{"  ".repeat(n.depth)}{n.name}</option>
-            ))}
-          </select>
-        </label>
-        <label className={ui.field}>
-          Sorumlu
-          <select className={ui.input} value={query.person ?? ""} onChange={(e) => set({ person: e.target.value })}>
-            <option value="">Hepsi</option>
-            <option value="me">Ben</option>
-            <option value="none">Sorumlusuz</option>
-            {L.meta.users.map((u) => (
-              <option key={u.id} value={u.id}>{u.name}</option>
-            ))}
-          </select>
-        </label>
-        <label className={ui.field}>
-          Durum
-          <select className={ui.input} value={query.status ?? ""} onChange={(e) => set({ status: e.target.value })}>
-            <option value="">Hepsi</option>
-            {STATUS_ORDER.map((v) => (
-              <option key={v} value={v}>{STATUS[v]}</option>
-            ))}
-          </select>
-        </label>
       </div>
 
-      <details className={s.more} open={secondary > 0}>
-        <summary>Diğer filtreler{secondary > 0 ? ` · ${secondary} etkin` : ""}</summary>
-        <div className={s.bar}>
-          <label className={ui.field}>
-            Tür
-            <select className={ui.input} value={query.kind ?? ""} onChange={(e) => set({ kind: e.target.value })}>
-              <option value="">Hepsi</option>
-              <option value="issue">{KIND.issue}</option>
-              <option value="task">{KIND.task}</option>
-            </select>
-          </label>
-          <label className={ui.field}>
-            Öncelik
-            <select className={ui.input} value={query.priority ?? ""} onChange={(e) => set({ priority: e.target.value })}>
-              <option value="">Hepsi</option>
-              {PRIORITY_ORDER.map((v) => (
-                <option key={v} value={v}>{PRIORITY[v]}</option>
-              ))}
-            </select>
-          </label>
-          <label className={ui.field}>
-            Takım
-            <select className={ui.input} value={query.team ?? ""} onChange={(e) => set({ team: e.target.value })}>
-              <option value="">Hepsi</option>
-              {L.meta.teams.map((t) => (
-                <option key={t.id} value={t.id}>{t.name}</option>
-              ))}
-            </select>
-          </label>
-          <label className={ui.field}>
-            Pillar
-            <select className={ui.input} value={query.pillar ?? ""} onChange={(e) => set({ pillar: e.target.value })}>
-              <option value="">Hepsi</option>
-              <option value="none">Pillar yok</option>
-              {L.pillars.map((n) => (
-                <option key={n.id} value={n.id}>{n.name}</option>
-              ))}
-            </select>
-          </label>
-          <label className={ui.field}>
-            Sırala
-            {/* Varsayilan siralama bos deger: URL'e yazilmaz, "etkin filtre" vurgusu da almaz. */}
-            <select className={ui.input} value={query.sort ?? ""} onChange={(e) => set({ sort: e.target.value })}>
-              {SORTS.map((o) => (
-                <option key={o.value} value={o.value === "activity" ? "" : o.value}>{o.label}</option>
-              ))}
-            </select>
-          </label>
-        </div>
-      </details>
-
-      <div className={s.chips}>
-        {PRIORITY_ORDER.map((p) => {
-          const n = data.filter((r) => r.priority === p && !isDone(r.status)).length;
-          return n === 0 ? null : (
-            <button key={p} type="button" className={s.chip} onClick={() => set({ priority: query.priority === p ? undefined : p })}
-              aria-pressed={query.priority === p}>
-              <PriorityTag priority={p} /> <b>{n}</b>
-            </button>
-          );
-        })}
-        {Object.keys(query).length > 0 && (
-          <Button variant="ghost" onClick={() => { setSearch(""); navigate(href({ name: "tasks", query: {} }), { replace: true }); }}>
-            <Icon name="x" size={16} /> Filtreleri temizle
+      <div className={s.filters}>
+        <Icon name="filter" size={15} />
+        {chip("status", "Durum", STATUS_ORDER.map((v) => ({ value: v, label: STATUS[v], render: <Status status={v} /> })))}
+        {chip("person", "Sorumlu", [
+          { value: "me", label: "Ben" },
+          { value: "none", label: "Sorumlusuz" },
+          ...L.meta.users.map((u) => ({ value: u.id, label: u.name, render: <Who user={u} /> })),
+        ])}
+        {chip("priority", "Öncelik", PRIORITY_ORDER.map((v) => ({ value: v, label: PRIORITY[v], render: <PriorityTag priority={v} bare /> })))}
+        {chip("node", "Birim", L.meta.nodes
+          .filter((n) => n.node_type !== "team" && n.node_type !== "pillar")
+          .map((n) => ({ value: n.id, label: n.name, depth: n.depth })))}
+        {chip("team", "Takım", L.meta.teams.map((t) => ({ value: t.id, label: t.name, render: <TeamName team={t} /> })))}
+        {chip("kind", "Tür", [{ value: "issue", label: KIND.issue }, { value: "task", label: KIND.task }])}
+        {L.pillars.length > 0 &&
+          chip("pillar", "Pillar", [{ value: "none", label: "Pillar yok" }, ...L.pillars.map((n) => ({ value: n.id, label: n.name }))])}
+        {any && (
+          <Button variant="ghost" size="sm" onClick={() => { setSearch(""); navigate(href({ name: "tasks", query: {} }), { replace: true }); }}>
+            Temizle
           </Button>
         )}
         <span className={s.summary} aria-live="polite">
-          {rows.isFetching ? "Yükleniyor… · " : ""}Açık {open} · Kapalı {data.length - open} · Toplam {data.length}
+          {rows.isFetching ? "yükleniyor · " : ""}
+          {open} açık · {data.length - open} kapalı
         </span>
+        <span className={s.filterSep} aria-hidden="true" />
+        <Picker look="bare" label="Sırala" value={query.sort ?? ""} options={SORTS} onChange={(v) => set({ sort: v })} align="end">
+          <Icon name="sliders" size={14} /> {SORTS.find((o) => o.value === (query.sort ?? ""))?.label}
+        </Picker>
       </div>
 
       {rows.data === undefined ? <Loading /> : <RecordTable rows={data} />}
@@ -202,7 +167,7 @@ export function RecordTable({ rows, showTeam = true }: { rows: RecordSummary[]; 
   if (rows.length === 0) {
     return (
       <div className={s.tableWrap}>
-        <Empty title="Kayıt yok">Bu filtrelere uyan kayıt bulunamadı.</Empty>
+        <Empty title="Kayıt yok" icon="search">Bu filtrelere uyan kayıt bulunamadı.</Empty>
       </div>
     );
   }
@@ -212,12 +177,12 @@ export function RecordTable({ rows, showTeam = true }: { rows: RecordSummary[]; 
         <thead>
           <tr>
             <th scope="col">Kayıt</th>
-            <th scope="col">Birim</th>
-            {showTeam && <th scope="col">Takım</th>}
-            <th scope="col">Öncelik</th>
             <th scope="col">Durum</th>
+            <th scope="col">Öncelik</th>
             <th scope="col">Sorumlu</th>
             <th scope="col">Son tarih</th>
+            <th scope="col">Birim</th>
+            {showTeam && <th scope="col">Takım</th>}
             <th scope="col">Hareket</th>
           </tr>
         </thead>
@@ -225,26 +190,33 @@ export function RecordTable({ rows, showTeam = true }: { rows: RecordSummary[]; 
           {rows.map((r) => {
             const to = href({ name: "record", id: r.id });
             const path = L.path(r.unit_id);
+            const owner = L.user(r.owner_id);
             return (
               // Satirin tamami tiklanir; klavye/ekran okuyucu icin baslik bir baglanti.
               <tr key={r.id} onClick={(e) => { if (!(e.target as HTMLElement).closest("a")) navigate(to); }}>
                 <td>
                   <span className={s.rowTitle}>
-                    <KindTag kind={r.kind} />
                     <Link href={to}>{r.title}</Link>
+                    <KindTag kind={r.kind} />
                     {r.messages > 0 && (
                       <span className={s.msgs} title={`${r.messages} mesaj`}>
-                        <Icon name="chat" size={14} /> {r.messages}
+                        <Icon name="chat" size={13} /> {r.messages}
                       </span>
                     )}
                   </span>
                 </td>
+                <td><Status status={r.status} /></td>
+                <td><PriorityTag priority={r.priority} bare /></td>
+                <td>
+                  {owner === undefined ? <span className={s.dim}>—</span> : (
+                    <span title={owner.name} style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
+                      <Avatar user={owner} size={20} /> {owner.name}
+                    </span>
+                  )}
+                </td>
+                <td><Due date={r.due_date} done={isDone(r.status)} actionLate={r.action_overdue} /></td>
                 <td className={s.unit} title={path.join(" › ")}>{path[path.length - 1] ?? "?"}</td>
                 {showTeam && <td><TeamName team={L.team(r.team_id)} /></td>}
-                <td><PriorityTag priority={r.priority} /></td>
-                <td><Status status={r.status} /></td>
-                <td><Who user={L.user(r.owner_id)} empty="Sorumlusuz" /></td>
-                <td><Due date={r.due_date} done={isDone(r.status)} actionLate={r.action_overdue} /></td>
                 <td className={s.nowrap}>{ago(r.updated_at)}</td>
               </tr>
             );

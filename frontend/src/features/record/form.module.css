@@ -1,0 +1,105 @@
+/* Yeni kayit formu: belge + ozellik cipleri. */
+
+.doc {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.body {
+  width: 100%;
+  min-height: 96px;
+  padding: 8px 2px;
+  border: 0;
+  background: transparent;
+  color: var(--txt);
+  font-size: var(--fs-lg);
+  line-height: 1.6;
+  resize: vertical;
+}
+.body::placeholder {
+  color: var(--dim);
+}
+.body:focus-visible {
+  outline: none;
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.cards {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.cards > legend {
+  padding: 0;
+  margin-bottom: 8px;
+  font-size: var(--fs-sm);
+  font-weight: 500;
+}
+.cardGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+@media (max-width: 560px) {
+  .cardGrid {
+    grid-template-columns: 1fr;
+  }
+}
+.cardOpt {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--panel);
+  cursor: pointer;
+  font-size: var(--fs-md);
+  font-weight: 500;
+  transition:
+    border-color 0.12s var(--ease),
+    background 0.12s var(--ease);
+}
+.cardOpt:hover {
+  border-color: var(--line-strong);
+}
+.cardOpt > svg {
+  color: var(--dim);
+}
+.cardOpt:has(input:checked) {
+  border-color: var(--acc);
+  background: var(--acc-bg);
+}
+.cardOpt:has(input:checked) > svg {
+  color: var(--acc-strong);
+}
+.cardOpt:has(input:focus-visible) {
+  outline: 2px solid var(--acc);
+  outline-offset: 2px;
+}
+.cardOpt input {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  margin: 0;
+  width: 15px;
+  height: 15px;
+}
+.cardOpt small {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--fs-sm);
+  font-weight: 400;
+  color: var(--dim);
+  line-height: 1.4;
+}
+.foot {
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}

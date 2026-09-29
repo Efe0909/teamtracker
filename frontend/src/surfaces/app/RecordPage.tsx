@@ -6,7 +6,7 @@ import { ApiError } from "../../api/client";
 import { useFeed, useRecord, useTeam } from "../../api/hooks";
 import type { Uuid } from "../../api/types";
 import { Chat } from "../../features/chat/Chat";
-import { FieldStrip } from "../../features/record/fields";
+import { Properties } from "../../features/record/fields";
 import { Cards } from "../../features/record/Cards";
 import { ActionList, BallLine, QuickAction, ReadOnlyNote, RecordHead } from "../../features/record/parts";
 import { TEAM_ROLE } from "../../lib/labels";
@@ -88,9 +88,9 @@ export function RecordPage({ id }: { id: Uuid }) {
       <TopBar title="Kayıt" back />
       <div className={s.recordPad}>
         <RecordHead d={d} />
-        <BallLine d={d} />
         <ReadOnlyNote d={d} />
-        <FieldStrip d={d} compact />
+        <Properties d={d} />
+        <BallLine d={d} />
         <ActionList d={d} />
         <Cards d={d} />
       </div>

@@ -304,7 +304,7 @@ function Composer(props: { chatId: Uuid; reply: FeedItem | null; onClearReply: (
           aria-label="Mesaj"
           maxLength={4000}
         />
-        <Button type="submit" variant="primary" big
+        <Button type="submit" variant="primary"
           disabled={m.isPending || uploading > 0 || (text.trim() === "" && pending.length === 0)}>
           Gönder
         </Button>

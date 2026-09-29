@@ -2,66 +2,87 @@
    Ham renk YALNIZ burada yazilir; *.module.css hex iceremez (npm run build
    denetliyor). Sozlesme: spec/16-on-yuz.md §3.4.
 
-   Kontrast: metin token'lari (--txt, --dim, --*-text) her iki temada da
-   zeminlerinde >= 4.5:1. Durumlarin acik tonlari (--err, --warn, --ok) yalniz
-   nokta/cizgi icin; metin icin --*-text. */
+   Tema: her renk BIR KEZ, `light-dark(acik, koyu)` ile yazilir. Hangisinin
+   cozulecegini `color-scheme` secer; o da <html data-theme> ile ayarlanir
+   (lib/theme.ts): light (varsayilan) · dark · system. Yeni tema = yeni
+   data-theme degeri, bilesenler dokunulmaz.
+
+   Kontrast: metin token'lari (--txt, --dim, --acc-strong, --*-text) her iki
+   temada zeminlerinde >= 4.5:1; --line-field >= 3:1 (WCAG 1.4.11).
+   src/tokens.test.ts olcer. Durumlarin acik tonlari (--err, --warn, --ok)
+   yalniz nokta/cizgi icin. */
 
 :root {
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+:root[data-theme="system"] {
   color-scheme: light dark;
+}
 
-  /* zemin ve yuzey */
-  --bg: #f4f1fb;
-  --panel: #fff;
-  --panel2: #f8f6fe;
-  --tint: #efe9fd;
-  --line: #e4dcf7;
-  --line-strong: #cfc3ee;
-  /* form denetimi cercevesi: WCAG 1.4.11 — panel/panel2/bg uzerinde >= 3:1
-     (--line-strong 1.65:1'de kaliyordu, bos alan "yok" gibi duruyordu). */
-  --line-field: #8f85b5;
+:root {
+  /* zemin ve yuzey: notr gri, mor yalniz vurguda */
+  --bg: light-dark(#f7f7f8, #0d0d10);
+  --panel: light-dark(#ffffff, #151518);
+  --panel2: light-dark(#f3f3f5, #1b1b1f);
+  --tint: light-dark(#efeff2, #232329);
+  --line: light-dark(#e6e6ea, #26262c);
+  --line-strong: light-dark(#d6d6dc, #33333b);
+  --line-field: light-dark(#8b8b96, #6b6b77);
 
   /* metin */
-  --txt: #2c2440;
-  --dim: #675f8a; /* --tint uzerinde de >= 4.5 (secili secenek, rozet) */
-  --on-acc: #fff;
+  --txt: light-dark(#18181b, #ececf0);
+  --dim: light-dark(#5f5f69, #a0a0aa);
+  --on-acc: #ffffff;
 
-  /* vurgu. --acc-strong METIN (baglanti, vurgu); --acc-fill --on-acc ile dolu
-     zemin (birincil dugme). Iki temada ayri: koyuda acik metin, koyu dolgu. */
-  --acc: #7c5bff;
-  --acc-strong: #6743f5;
-  --acc-soft: #b79dff;
-  --acc-fill: #6743f5;
-  --acc-fill-hover: #5632e0;
+  /* vurgu. --acc-strong METIN (baglanti, secili gezinme); --acc-fill --on-acc
+     ile dolu zemin (birincil dugme); --acc-bg secili satir/gezinme zemini. */
+  --acc: light-dark(#6e56cf, #8e7cf0);
+  --acc-strong: light-dark(#5b46c2, #b3a6ff);
+  --acc-soft: light-dark(#c9bff5, #4a3f8c);
+  --acc-bg: light-dark(#f1eefd, #221d38);
+  --acc-fill: #6e56cf;
+  --acc-fill-hover: #5b46c2;
 
   /* durumlar: nokta/cizgi · metin · zemin */
-  --err: #e0455c;
-  --err-text: #b3243d;
-  --err-bg: #fdecef;
-  --warn: #e0a126;
-  --warn-text: #8a5d00;
-  --warn-bg: #fdf3dc;
-  --ok: #22a06b;
-  --ok-text: #177a50;
-  --ok-bg: #e2f5ec;
-  --info-text: #3b5bc9;
-  --info-bg: #e6ecff;
+  --err: light-dark(#e5484d, #ff6369);
+  --err-text: light-dark(#c4242b, #ff8f91);
+  --err-bg: light-dark(#fdeeee, #2d1618);
+  --warn: light-dark(#f5a524, #ffc53d);
+  --warn-text: light-dark(#875600, #f2c34f);
+  --warn-bg: light-dark(#fdf4e1, #2a210e);
+  --ok: light-dark(#30a46c, #3dd68c);
+  --ok-text: light-dark(#17714a, #52cc95);
+  --ok-bg: light-dark(#e8f7ee, #10261c);
+  --info-text: light-dark(#1f5bc4, #7eb6ff);
+  --info-bg: light-dark(#ebf2fe, #101e38);
 
-  --sh: 0 1px 2px rgba(60, 40, 120, 0.05), 0 6px 20px rgba(90, 60, 180, 0.07);
-  --sh-lg: 0 2px 6px rgba(60, 40, 120, 0.07), 0 14px 40px rgba(90, 60, 180, 0.14);
-  --backdrop: rgba(38, 26, 80, 0.42);
+  /* light-dark() yalniz RENK alir: golgenin rengi temaya gore, geometri sabit. */
+  --sh: 0 1px 2px light-dark(rgb(16 16 24 / 0.05), rgb(0 0 0 / 0.4));
+  /* yukselti: acilir menu, dialog, toast */
+  --sh-lg: 0 12px 32px -8px light-dark(rgb(16 16 24 / 0.22), rgb(0 0 0 / 0.75)),
+    0 0 0 1px light-dark(rgb(16 16 24 / 0.05), rgb(255 255 255 / 0.06));
+  --backdrop: light-dark(rgb(16 16 24 / 0.32), rgb(0 0 0 / 0.6));
 
-  /* tip olcegi — baska boyut yazilmaz */
+  /* yazi: Inter (arayuz) + JetBrains Mono (kimlik, sayi, meta). Fontlar
+     paketle gelir (@fontsource), CDN yok. */
+  --font-sans: "Inter Variable", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* tip olcegi — baska boyut yazilmaz. Masaustu yogun (13px govde). */
   --fs-xs: 11px;
-  --fs-sm: 12.5px;
-  --fs-md: 14px;
-  --fs-lg: 16px;
-  --fs-xl: 20px;
-  --fs-2xl: 28px;
+  --fs-sm: 12px;
+  --fs-md: 13px;
+  --fs-lg: 15px;
+  --fs-xl: 18px;
+  --fs-2xl: 24px;
 
   /* yaricap */
-  --r-sm: 8px;
-  --r-md: 12px;
-  --r-lg: 18px;
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
   --radius: var(--r-lg);
 
   /* aralik: 4'un katlari */
@@ -72,48 +93,13 @@
   --s-5: 20px;
   --s-6: 24px;
 
-  --rail: 64px;
+  --side: 232px;
   --tap: 44px;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
 
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--font-sans);
+  font-feature-settings: "cv11", "ss01";
   color: var(--txt);
   background: var(--bg);
   -webkit-text-size-adjust: 100%;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #13101c;
-    --panel: #1c1828;
-    --panel2: #221d31;
-    --tint: #2a2340;
-    --line: #2f2944;
-    --line-strong: #463d63;
-    --line-field: #6f6596;
-
-    --txt: #ece8f7;
-    --dim: #a59ec4;
-
-    --acc: #9d84ff;
-    --acc-strong: #b19dff;
-    --acc-soft: #6e55d8;
-    --acc-fill: #6743f5;
-    --acc-fill-hover: #5632e0;
-
-    --err: #ff7a8c;
-    --err-text: #ff9aa8;
-    --err-bg: #3a1822;
-    --warn: #f0b54a;
-    --warn-text: #f3c56e;
-    --warn-bg: #3a2c12;
-    --ok: #4cc28e;
-    --ok-text: #6fd3a6;
-    --ok-bg: #143126;
-    --info-text: #9fb3ff;
-    --info-bg: #1c2446;
-
-    --sh: 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 20px rgba(0, 0, 0, 0.3);
-    --sh-lg: 0 2px 6px rgba(0, 0, 0, 0.35), 0 14px 40px rgba(0, 0, 0, 0.45);
-    --backdrop: rgba(0, 0, 0, 0.6);
-  }
 }
