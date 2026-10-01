@@ -13,14 +13,14 @@ import { isDone } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
 import { navigate } from "../../lib/router";
 import { Icon } from "../../ui/icons";
-import { Avatar, Button, Dialog, Empty, Link, Loading, Segmented, Tag, useToast } from "../../ui/ui";
+import { Avatar, Button, Dialog, Empty, Link, Loading, Tag, useToast } from "../../ui/ui";
 import { ErrorScreen } from "../errors/ErrorScreen";
 import { Banner } from "./Banner";
 import { KpiSkeleton } from "./KpiSkeleton";
 import s from "./dashboard.module.css";
 import { href } from "./routes";
-import { RecordTable } from "./Tasks";
-import { Members, TeamForm, TeamMark, useCanManageTeams } from "./Teams";
+import { MembersWidget, RecordsWidget, TeamForm, TeamMark, useCanManageTeams } from "./Teams";
+import { ArrangeButton, useWidgetOrder } from "./Widget";
 
 export function Pillars() {
   const L = useLookup();
@@ -103,6 +103,8 @@ export function PillarPage({ id }: { id: Uuid }) {
   return <PillarScreen p={p} />;
 }
 
+const PILLAR_WIDGETS = ["members", "records", "kpi"] as const;
+
 function PillarScreen({ p }: { p: MetaPillar }) {
   const L = useLookup();
   const can = useCanManageTeams();
@@ -110,10 +112,10 @@ function PillarScreen({ p }: { p: MetaPillar }) {
   const w = useTeamWrite();
   const q = useTeam(p.team_id);
   const team = L.team(p.team_id);
-  const [done, setDone] = useState<"false" | "true">("false");
-  const rows = useRecords({ pillar: p.id, done });
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [arranging, setArranging] = useState(false);
+  const W = useWidgetOrder("pillar", PILLAR_WIDGETS, arranging);
 
   if (q.error !== null || team === undefined) {
     return <ErrorScreen code={q.error instanceof ApiError && q.error.code !== "not_found" ? "network" : "not_found"} />;
@@ -147,6 +149,7 @@ function PillarScreen({ p }: { p: MetaPillar }) {
                 {p.description !== null && <p className={s.pageSub}>{p.description}</p>}
               </div>
             </div>
+            <ArrangeButton on={arranging} onChange={setArranging} />
             {can && (
               <Button onClick={() => setEditing(true)}>
                 <Icon name="edit" size={15} /> Düzenle
@@ -159,17 +162,11 @@ function PillarScreen({ p }: { p: MetaPillar }) {
             )}
           </div>
 
-          <Members team={q.data} chat={team.chat_id} />
-
-          <section aria-labelledby="recs-h">
-            <div className={s.pageHead} style={{ marginBottom: 10, alignItems: "center" }}>
-              <h2 id="recs-h" className={s.sectionTitle} style={{ flex: 1, margin: 0 }}>Kayıtlar</h2>
-              <Segmented label="Kayıt durumu" value={done} onChange={setDone}
-                options={[{ value: "false", label: "Açık" }, { value: "true", label: "Kapanan" }]} />
-            </div>
-            {rows.data === undefined ? <Loading /> : <RecordTable rows={rows.data} />}
-          </section>
-          <KpiSkeleton />
+          {W.order.map((w) =>
+            w === "members" ? <MembersWidget key={w} team={q.data} chat={team.chat_id} move={W.moveOf(w)} />
+            : w === "records" ? <RecordsWidget key={w} query={{ pillar: p.id }} showTeam move={W.moveOf(w)} />
+            : <KpiSkeleton key={w} move={W.moveOf(w)} />,
+          )}
         </div>
         <aside className={s.recordSide} aria-label="Pillar sohbeti">
           <div className={s.sideHead}>
