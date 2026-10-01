@@ -233,7 +233,25 @@
 .scrim {
   display: none;
 }
+.foldOpen {
+  display: none;
+}
+@media (min-width: 901px) {
+  .shell[data-folded="true"] .side {
+    display: none;
+  }
+  .shell[data-folded="true"] .foldOpen {
+    display: block;
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    z-index: 40;
+  }
+}
 @media (max-width: 900px) {
+  .foldBtn {
+    display: none;
+  }
   .side {
     position: fixed;
     left: 0;
@@ -1517,3 +1535,25 @@ a.row:hover {
 .lv2 { background: color-mix(in srgb, var(--acc) 50%, var(--tint)); }
 .lv3 { background: color-mix(in srgb, var(--acc) 75%, var(--tint)); }
 .lv4 { background: var(--acc); }
+
+/* --- KPI iskeleti ---------------------------------------------------------- */
+.kpiGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--s-4);
+  padding: var(--s-4);
+}
+.kpiChart {
+  width: 100%;
+  height: auto;
+}
+.kpiBar {
+  fill: var(--tint);
+}
+.kpiLine {
+  fill: none;
+  stroke: var(--line-strong);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}

@@ -29,6 +29,8 @@ export default function Dashboard() {
   const route = parse(useLocation());
   const [drawer, setDrawer] = useState(false);
   const [palette, setPalette] = useState(false);
+  // Masaustunde kenar cubugu daraltilir; tercih cihazda hatirlanir.
+  const [folded, setFolded] = useStored("side.folded", false);
 
   // Gezinince cekmece kapanir.
   useEffect(() => setDrawer(false), [route.name, "id" in route ? route.id : ""]);
@@ -44,9 +46,14 @@ export default function Dashboard() {
   }, []);
 
   return (
-    <div className={s.shell} data-drawer={drawer}>
+    <div className={s.shell} data-drawer={drawer} data-folded={folded}>
       <a className={s.skip} href="#main">İçeriğe geç</a>
-      <Sidebar route={route} onSearch={() => setPalette(true)} />
+      <Sidebar route={route} onSearch={() => setPalette(true)} onFold={() => setFolded(true)} />
+      {folded && (
+        <span className={s.foldOpen}>
+          <IconButton icon="chevron" label="Kenar çubuğunu aç" onClick={() => setFolded(false)} />
+        </span>
+      )}
       <button type="button" className={s.scrim} aria-label="Menüyü kapat" tabIndex={-1} onClick={() => setDrawer(false)} />
       <div className={s.column}>
         <header className={s.mobileBar}>
@@ -123,7 +130,7 @@ const THEME_OPTS: { value: Theme; label: string; icon: IconName }[] = [
   { value: "system", label: "Sistem", icon: "system" },
 ];
 
-function Sidebar({ route, onSearch }: { route: Route; onSearch: () => void }) {
+function Sidebar({ route, onSearch, onFold }: { route: Route; onSearch: () => void; onFold: () => void }) {
   const L = useLookup();
   const theme = useTheme();
   const admin = L.meta.me.is_admin || L.can("manage_users");
@@ -149,6 +156,9 @@ function Sidebar({ route, onSearch }: { route: Route; onSearch: () => void }) {
       <div className={s.sideTop}>
         <Brand />
         <span className={s.ver}>alpha 0.2</span>
+        <span className={s.foldBtn}>
+          <IconButton icon="back" label="Kenar çubuğunu daralt" onClick={onFold} />
+        </span>
       </div>
 
       <button type="button" className={s.searchBtn} onClick={onSearch}>

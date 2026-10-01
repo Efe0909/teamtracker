@@ -16,6 +16,7 @@ import { Icon } from "../../ui/icons";
 import { Avatar, Button, Dialog, Empty, Link, Loading, Segmented, Tag, useToast } from "../../ui/ui";
 import { ErrorScreen } from "../errors/ErrorScreen";
 import { Banner } from "./Banner";
+import { KpiSkeleton } from "./KpiSkeleton";
 import s from "./dashboard.module.css";
 import { href } from "./routes";
 import { RecordTable } from "./Tasks";
@@ -168,6 +169,7 @@ function PillarScreen({ p }: { p: MetaPillar }) {
             </div>
             {rows.data === undefined ? <Loading /> : <RecordTable rows={rows.data} />}
           </section>
+          <KpiSkeleton />
         </div>
         <aside className={s.recordSide} aria-label="Pillar sohbeti">
           <div className={s.sideHead}>
