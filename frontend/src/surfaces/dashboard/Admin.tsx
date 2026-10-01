@@ -10,7 +10,9 @@ import type { AdminPerson, AdminRole, AdminView, UserOp } from "../../api/types"
 import { ago, SCOPE } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
 import { Icon } from "../../ui/icons";
-import { Avatar, Button, Empty, Loading, Picker as UiPicker, Req, Tag, ui, useToast, type Option } from "../../ui/ui";
+import { Avatar, Button, Empty, Loading, Picker as UiPicker, Req, Segmented, Tag, ui, useToast, type Option } from "../../ui/ui";
+import { useStored } from "../../lib/stored";
+import { AdminActivity } from "./AdminActivity";
 import { ErrorScreen } from "../errors/ErrorScreen";
 import s from "./dashboard.module.css";
 
@@ -27,6 +29,8 @@ export function Admin() {
 
 function AdminScreen({ v }: { v: AdminView }) {
   const roleName = new Map(v.roles.map((r) => [r.id, r.name]));
+  const [tab, setTab] = useState<"people" | "activity">("people");
+  const [peopleOpen, setPeopleOpen] = useStored("admin.people.open", true);
   return (
     <div className={s.page} style={{ maxWidth: 960 }}>
       <div className={s.pageHead}>
@@ -35,12 +39,18 @@ function AdminScreen({ v }: { v: AdminView }) {
           <p className={s.pageSub}>Kim girebilir, neyi değiştirebilir.</p>
         </div>
       </div>
+      <Segmented label="Yönetim bölümü" value={tab} onChange={setTab}
+        options={[{ value: "people", label: "Kişiler ve roller" }, { value: "activity", label: "Aktivite" }]} />
+      {tab === "activity" ? <AdminActivity /> : <>
       <h2 className={s.sectionTitle}>Kişi ekle</h2>
       <AddUser />
       <h2 className={s.sectionTitle}>
-        Kullanıcılar<span className={s.count}>{v.people.length}</span>
+        <button type="button" className={s.navHeadBtn} aria-expanded={peopleOpen} onClick={() => setPeopleOpen(!peopleOpen)}
+          style={{ font: "inherit", color: "inherit", padding: 0 }}>
+          <Icon name="chevron" size={14} /> Kullanıcılar<span className={s.count}>{v.people.length}</span>
+        </button>
       </h2>
-      {v.people.length === 0 ? (
+      {!peopleOpen ? null : v.people.length === 0 ? (
         <Empty title="Liste boş.">Yukarıdan ilk kullanıcıyı ekle.</Empty>
       ) : (
         <ul className={`${s.surface} ${s.adminList}`}>
@@ -57,6 +67,7 @@ function AdminScreen({ v }: { v: AdminView }) {
         yöneticide.
       </p>
       <Roles v={v} />
+      </>}
     </div>
   );
 }

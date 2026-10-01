@@ -21,6 +21,7 @@ import type {
   NodePatch,
   NoticeList,
   NotifyLevel,
+  PersonUse,
   NotifyPrefs,
   PillarPatch,
   RecordDetail,
@@ -46,6 +47,7 @@ export const keys = {
   team: (id: Uuid) => ["team", id] as const,
   notifications: ["notifications"] as const,
   notifyPrefs: ["notify-prefs"] as const,
+  adminActivity: ["admin", "activity"] as const,
   myActions: ["my-actions"] as const,
   nodes: ["nodes"] as const,
   admin: ["admin"] as const,
@@ -392,5 +394,12 @@ export function useSetChatPref(chat: Uuid) {
   return useMutation({
     mutationFn: (mode: NotifyLevel | null) => request<NotifyPrefs>("PUT", `/api/chats/${chat}/prefs`, { mode }),
     onSuccess: (p) => afterPrefs(qc, p),
+  });
+}
+
+export function useAdminActivity() {
+  return useQuery({
+    queryKey: keys.adminActivity,
+    queryFn: () => request<PersonUse[]>("GET", "/api/admin/activity"),
   });
 }

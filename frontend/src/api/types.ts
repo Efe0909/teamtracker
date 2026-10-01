@@ -409,3 +409,12 @@ export interface ProfilePatch {
   birth_year?: number | null;
   avatar_id?: Uuid | null;
 }
+
+/** GET /api/admin/activity: kisi basina kullanim ozeti. */
+export interface PersonUse {
+  user_id: Uuid;
+  last_login_at: IsoTime | null;
+  last_seen_at: IsoTime | null;
+  /** Son 120 gun, eskiden yeniye; kullanimsiz gunler yok. `day` = "2026-10-01". */
+  days: { day: string; requests: number; minutes: number }[];
+}

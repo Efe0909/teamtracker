@@ -1445,3 +1445,75 @@ a.row:hover {
 .starOn svg {
   fill: currentColor;
 }
+
+/* --- yonetim: aktivite ----------------------------------------------------- */
+.activityBar {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  margin-bottom: var(--s-3);
+}
+.activitySearch {
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--line-field);
+  border-radius: var(--r-md);
+  background: var(--panel);
+  color: var(--txt);
+  font: inherit;
+}
+.activityTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-md);
+}
+.activityTable th {
+  text-align: left;
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  color: var(--dim);
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.activityTable td {
+  padding: 8px 12px;
+  border-top: 1px solid var(--line);
+}
+.activityTable tbody tr {
+  cursor: pointer;
+}
+.activityTable tbody tr:hover,
+.activityTable tbody tr[aria-selected="true"] {
+  background: var(--acc-bg);
+}
+.activityWho {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.matrixHead {
+  margin-bottom: var(--s-3);
+}
+.matrix {
+  display: flex;
+  gap: 3px;
+}
+.matrixCol {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.matrixCell,
+.matrixGap {
+  width: 13px;
+  height: 13px;
+  border-radius: 3px;
+}
+.matrixCell {
+  background: var(--tint);
+}
+.lv0 { background: var(--tint); }
+.lv1 { background: color-mix(in srgb, var(--acc) 25%, var(--tint)); }
+.lv2 { background: color-mix(in srgb, var(--acc) 50%, var(--tint)); }
+.lv3 { background: color-mix(in srgb, var(--acc) 75%, var(--tint)); }
+.lv4 { background: var(--acc); }
