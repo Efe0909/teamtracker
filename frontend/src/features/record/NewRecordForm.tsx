@@ -16,7 +16,7 @@ import s from "./form.module.css";
 export function NewRecordForm(props: {
   onCreated: (id: Uuid) => void;
   onCancel?: () => void;
-  defaults?: { team_id?: Uuid; unit_id?: Uuid };
+  defaults?: { team_id?: Uuid; unit_id?: Uuid; pillar_id?: Uuid };
 }) {
   const L = useLookup();
   const m = useCreateRecord();
@@ -25,7 +25,7 @@ export function NewRecordForm(props: {
   const [title, setTitle] = useState("");
   const [unit, setUnit] = useState<string>(props.defaults?.unit_id ?? L.units[0]?.id ?? "");
   const [team, setTeam] = useState<string | null>(props.defaults?.team_id ?? null);
-  const [pillar, setPillar] = useState<string | null>(null);
+  const [pillar, setPillar] = useState<string | null>(props.defaults?.pillar_id ?? null);
   const [cards, setCards] = useState<CardType[]>([]);
   // Sorumlu varsayilani ACAN kisi; bos secim "sorumlusuz ac" demek.
   const [owner, setOwner] = useState<string | null>(L.me.id);
@@ -88,7 +88,7 @@ export function NewRecordForm(props: {
         <Picker look="chip" active={team !== null} label="Takım" value={team} onChange={setTeam}
           options={[
             { value: null, label: "Takım yok" },
-            ...L.meta.teams.map((t) => ({ value: t.id as string | null, label: t.name, render: <TeamName team={t} /> })),
+            ...L.plainTeams.map((t) => ({ value: t.id as string | null, label: t.name, render: <TeamName team={t} /> })),
           ]}>
           {team === null ? <><Icon name="plus" size={13} /> Takım</> : <TeamName team={L.team(team)} />}
         </Picker>
@@ -96,7 +96,7 @@ export function NewRecordForm(props: {
         {L.pillars.length > 0 && (
           <Picker look="chip" active={pillar !== null} label="Pillar" value={pillar} onChange={setPillar}
             options={[{ value: null, label: "Pillar yok" }, ...L.pillars.map((n) => ({ value: n.id as string | null, label: n.name }))]}>
-            {pillar === null ? <><Icon name="plus" size={13} /> Pillar</> : <><Icon name="pin" size={13} /> {L.node(pillar)?.name}</>}
+            {pillar === null ? <><Icon name="plus" size={13} /> Pillar</> : <><Icon name="pin" size={13} /> {L.pillar(pillar)?.name}</>}
           </Picker>
         )}
       </div>

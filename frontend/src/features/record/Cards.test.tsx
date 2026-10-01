@@ -23,7 +23,7 @@ it("bilinmeyen tur bozuk, toplanti alanlari ve cevaplari cizilir", () => {
     ],
     access: { can_edit: false, can_edit_deadline: false },
   } as unknown as RecordDetail;
-  const meta: Meta = { me: { id: "u", is_admin: false, scopes: [], team_ids: [] }, users: [], teams: [], nodes: [] };
+  const meta: Meta = { me: { id: "u", is_admin: false, scopes: [], team_ids: [] }, users: [], teams: [], pillars: [], nodes: [] };
   render(
     <QueryClientProvider client={new QueryClient()}>
       <LookupProvider meta={meta}>

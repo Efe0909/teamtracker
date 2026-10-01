@@ -124,10 +124,8 @@ export function Tasks({ query }: { query: RecordQuery }) {
           ...L.meta.users.map((u) => ({ value: u.id, label: u.name, render: <Who user={u} /> })),
         ])}
         {chip("priority", "Öncelik", PRIORITY_ORDER.map((v) => ({ value: v, label: PRIORITY[v], render: <PriorityTag priority={v} bare /> })))}
-        {chip("node", "Birim", L.meta.nodes
-          .filter((n) => n.node_type !== "team" && n.node_type !== "pillar")
-          .map((n) => ({ value: n.id, label: n.name, depth: n.depth })))}
-        {chip("team", "Takım", L.meta.teams.map((t) => ({ value: t.id, label: t.name, render: <TeamName team={t} /> })))}
+        {chip("node", "Birim", L.meta.nodes.map((n) => ({ value: n.id, label: n.name, depth: n.depth })))}
+        {chip("team", "Takım", L.plainTeams.map((t) => ({ value: t.id, label: t.name, render: <TeamName team={t} /> })))}
         {chip("kind", "Tür", [{ value: "issue", label: KIND.issue }, { value: "task", label: KIND.task }])}
         {L.pillars.length > 0 &&
           chip("pillar", "Pillar", [{ value: "none", label: "Pillar yok" }, ...L.pillars.map((n) => ({ value: n.id, label: n.name }))])}

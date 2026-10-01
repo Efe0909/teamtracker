@@ -88,7 +88,7 @@ export function Properties({ d }: { d: RecordDetail }) {
         <Picker look="prop" label="Takım" disabled={ro} busy={m.isPending} value={r.team_id}
           options={[
             { value: null, label: "Takım yok", render: <span className={s.muted}>Takım yok</span> },
-            ...L.meta.teams.map((t) => ({ value: t.id as string | null, label: t.name, render: <TeamName team={t} /> })),
+            ...L.plainTeams.map((t) => ({ value: t.id as string | null, label: t.name, render: <TeamName team={t} /> })),
           ]}
           onChange={(v) => save({ field: "team_id", value: v }, { field: "team_id", value: r.team_id })} />
       </Row>
@@ -97,7 +97,7 @@ export function Properties({ d }: { d: RecordDetail }) {
           options={L.units.map((n) => ({ value: n.id, label: n.name, depth: n.depth }))}
           onChange={(v) => save({ field: "unit_id", value: v }, { field: "unit_id", value: r.unit_id })} />
       </Row>
-      {/* Pillar ORTOGONAL (KNOW-261): kaydin atasi olmak zorunda degil. */}
+      {/* Pillar ORTOGONAL: agacta degil, ayri tablo (spec/22); birimden bagimsiz secilir. */}
       <Row icon="pin" label="Pillar">
         <Picker look="prop" label="Pillar" disabled={ro} busy={m.isPending} value={r.pillar_id}
           options={[

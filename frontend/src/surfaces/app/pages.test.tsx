@@ -8,7 +8,7 @@ import type { Meta } from "../../api/types";
 import { LookupProvider } from "../../lib/lookup";
 import { TodoPage } from "./pages";
 
-const META: Meta = { me: { id: "u1", is_admin: false, scopes: [], team_ids: [] }, users: [], teams: [], nodes: [] };
+const META: Meta = { me: { id: "u1", is_admin: false, scopes: [], team_ids: [] }, users: [], teams: [], pillars: [], nodes: [] };
 
 function mockMatchMedia(matches: boolean): void {
   window.matchMedia = vi.fn().mockImplementation((query: string) => ({

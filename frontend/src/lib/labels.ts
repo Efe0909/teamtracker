@@ -33,8 +33,6 @@ export const TEAM_ROLE: Record<TeamRole, string> = { lead: "Lider", mentor: "Men
 export const NODE_TYPE: Record<NodeType, string> = {
   cell: "Cell",
   machine: "Makine",
-  pillar: "Pillar",
-  team: "Takım",
   task: "Görev",
   step: "Adım",
   operational: "Operational",

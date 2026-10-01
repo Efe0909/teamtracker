@@ -29,6 +29,13 @@ const READY: { slug: string; icon: IconName; name: string; desc: string; route: 
     route: { name: "teams" },
   },
   {
+    slug: "pillars",
+    icon: "pin",
+    name: "Pillar'lar",
+    desc: "Kesişen sorumluluk alanları: kendi takımı, sohbeti ve kayıtları.",
+    route: { name: "pillars" },
+  },
+  {
     slug: "outcome-tree",
     icon: "tree",
     name: "Veri Yönetimi",

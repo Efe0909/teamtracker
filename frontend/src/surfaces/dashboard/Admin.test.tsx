@@ -29,7 +29,7 @@ it("manage_users admin dugmelerini ve rol tanimini gormez", async () => {
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => view }));
   const meta: Meta = {
     me: { id: "b", is_admin: false, scopes: ["manage_users"], team_ids: [] },
-    users: [], teams: [], nodes: [],
+    users: [], teams: [], pillars: [], nodes: [],
   };
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>

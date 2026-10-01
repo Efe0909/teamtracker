@@ -12,6 +12,7 @@ const META: Meta = {
   me: { id: "u-me", is_admin: false, scopes: [], team_ids: [] },
   users: [{ id: "u-selin", name: "Selin", color: null, is_admin: false, last_seen_at: null }],
   teams: [],
+  pillars: [],
   nodes: [],
 };
 

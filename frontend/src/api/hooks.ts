@@ -17,11 +17,14 @@ import type {
   NewAction,
   NewNode,
   NewRecord,
+  NewTeam,
   NodePatch,
   Notice,
+  PillarPatch,
   RecordDetail,
   RecordPatch,
   RecordSummary,
+  TeamPatch,
   TeamRole,
   TeamView,
   TreeView,
@@ -240,6 +243,41 @@ export function useTeamMember(team: Uuid, chat: Uuid) {
     },
   });
 }
+
+// --- takim ve pillar yazmalari (spec/22) ------------------------------------
+// Takim/pillar adi, rengi, dugum baglari sozlukte (`/api/meta`): her yazma onu
+// tazeler. Uclar govde dondurmez (201 {id} ya da 204).
+
+function afterTeamWrite(qc: QueryClient) {
+  void qc.invalidateQueries({ queryKey: keys.meta });
+  void qc.invalidateQueries({ queryKey: keys.teams });
+  void qc.invalidateQueries({ queryKey: keys.recordsAll });
+  void qc.invalidateQueries({ queryKey: keys.nodes });
+}
+
+/** Tek yazma kancasi; islem `teamOps`/`pillarOps` ile kurulur (adminOps kalibi). */
+export function useTeamWrite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (w: { method: "POST" | "PATCH" | "PUT" | "DELETE"; path: string; body?: unknown }) =>
+      request<{ id?: Uuid; team_id?: Uuid } | null>(w.method, w.path, w.body),
+    onSuccess: () => afterTeamWrite(qc),
+  });
+}
+
+export const teamOps = {
+  create: (b: NewTeam) => ({ method: "POST" as const, path: "/api/teams", body: b }),
+  patch: (id: Uuid, p: TeamPatch) => ({ method: "PATCH" as const, path: `/api/teams/${id}`, body: p }),
+  remove: (id: Uuid) => ({ method: "DELETE" as const, path: `/api/teams/${id}` }),
+  link: (id: Uuid, node: Uuid) => ({ method: "PUT" as const, path: `/api/teams/${id}/nodes/${node}` }),
+  unlink: (id: Uuid, node: Uuid) => ({ method: "DELETE" as const, path: `/api/teams/${id}/nodes/${node}` }),
+};
+
+export const pillarOps = {
+  create: (b: NewTeam) => ({ method: "POST" as const, path: "/api/pillars", body: b }),
+  patch: (id: Uuid, p: PillarPatch) => ({ method: "PATCH" as const, path: `/api/pillars/${id}`, body: p }),
+  remove: (id: Uuid) => ({ method: "DELETE" as const, path: `/api/pillars/${id}` }),
+};
 
 // --- yapi (veri yonetimi) ---------------------------------------------------
 

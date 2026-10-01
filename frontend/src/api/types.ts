@@ -12,7 +12,8 @@ export type RecordKind = "issue" | "task";
 export type RecordStatus = "open" | "in_progress" | "pending" | "closed" | "cancelled";
 export type ActionStatus = "open" | "in_progress" | "closed" | "cancelled";
 export type Priority = "critical" | "high" | "medium" | "low";
-export type NodeType = "cell" | "machine" | "pillar" | "team" | "task" | "step" | "operational" | "generic";
+/** Agac yalniz YAPI: takim ve pillar ayri tablolar (spec/22). */
+export type NodeType = "cell" | "machine" | "task" | "step" | "operational" | "generic";
 export type TeamRole = "lead" | "mentor" | "member";
 
 // --- /api/meta -------------------------------------------------------------
@@ -30,8 +31,22 @@ export interface MetaTeam {
   name: string;
   description: string | null;
   color: string | null;
-  node_id: Uuid | null;
   chat_id: Uuid;
+  /** Takimin calistigi agac dugumleri (team_nodes, N:M). */
+  node_ids: Uuid[];
+  /** Bu takim bir pillar'in OZEL takimiysa o pillar; sıradan takimda null. */
+  pillar_id: Uuid | null;
+}
+
+/** Pillar: ozel takimi (`team_id`) uyeleri ve sohbeti tasir (spec/22). */
+export interface MetaPillar {
+  id: Uuid;
+  name: string;
+  description: string | null;
+  color: string | null;
+  team_id: Uuid;
+  is_active: boolean;
+  sort_order: number;
 }
 
 export interface MetaNode {
@@ -47,6 +62,8 @@ export interface Meta {
   me: { id: Uuid; is_admin: boolean; scopes: string[]; team_ids: Uuid[] };
   users: MetaUser[];
   teams: MetaTeam[];
+  /** sort_order, sonra ad; pasifler de gelir. */
+  pillars: MetaPillar[];
   nodes: MetaNode[];
 }
 
@@ -243,7 +260,8 @@ export interface TreeNode {
   can_edit: boolean;
   can_retype: boolean;
   can_hard_delete: boolean;
-  delete_counts: { children: number; records: number; permissions: number };
+  /** `teams`: kopacak takim baglari (team_nodes). Silmeyi engellemez. */
+  delete_counts: { children: number; records: number; permissions: number; teams: number };
 }
 
 // --- /api/admin (yonetim paneli) -------------------------------------------
@@ -293,6 +311,25 @@ export interface TreeView {
   root_types: NodeType[];
   child_types: NodeType[];
   nodes: TreeNode[];
+}
+
+/** POST /api/teams ve /api/pillars ortak govde. */
+export interface NewTeam {
+  name: string;
+  description: string | null;
+  color: string | null;
+}
+
+/** Verilmeyen alan degismez; null = sil. */
+export interface TeamPatch {
+  name?: string;
+  description?: string | null;
+  color?: string | null;
+}
+
+export interface PillarPatch extends TeamPatch {
+  is_active?: boolean;
+  sort_order?: number;
 }
 
 export interface NewNode {
