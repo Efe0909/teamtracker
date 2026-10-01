@@ -57,6 +57,21 @@ async fn wall(
     Ok(())
 }
 
+/// Banner'i yaz; ek yoksa ya da silinmisse 400 (`invalid_banner`).
+async fn set_banner(tx: &mut Tx<'_>, team: Uuid, banner: Option<Uuid>) -> Result<()> {
+    if let Some(a) = banner {
+        let ok: bool = sqlx::query_scalar(
+            "select exists(select 1 from attachments where id = $1 and deleted_at is null)")
+            .bind(a).fetch_one(&mut **tx).await?;
+        if !ok {
+            return Err(AppError::BadRequest("invalid_banner"));
+        }
+    }
+    sqlx::query("update teams set banner_id = $2 where id = $1")
+        .bind(team).bind(banner).execute(&mut **tx).await?;
+    Ok(())
+}
+
 /// Sohbet + takim satiri; `team_created` duvara yazilir. (id, chat_id) doner.
 async fn insert_team(
     tx: &mut Tx<'_>, actor: Uuid, name: &str, description: Option<&str>, color: Option<&str>,
@@ -116,6 +131,9 @@ pub struct TeamPatch {
     description: Option<Option<String>>,
     #[serde(default, deserialize_with = "common::present")]
     color: Option<Option<String>>,
+    /// Yuklenmis ek (`/api/attachments`); `null` banner'i kaldirir.
+    #[serde(default, deserialize_with = "common::present")]
+    banner_id: Option<Option<Uuid>>,
 }
 
 pub async fn patch_team(
@@ -145,6 +163,9 @@ pub async fn patch_team(
         .bind(id).bind(&next_name)
         .bind(description.unwrap_or(old_description)).bind(color.unwrap_or(old_color))
         .execute(&mut *tx).await.map_err(name_taken)?;
+    if let Some(banner) = p.banner_id {
+        set_banner(&mut tx, id, banner).await?;
+    }
     if next_name != old_name {
         wall(&mut tx, chat, me.id, "team_renamed", &next_name, None,
             Some(json!({ "from": old_name, "to": next_name }).to_string())).await?;
@@ -257,6 +278,9 @@ pub struct PillarPatch {
     is_active: Option<bool>,
     #[serde(default)]
     sort_order: Option<i32>,
+    /// Ozel takimin banner'i; bkz. `TeamPatch::banner_id`.
+    #[serde(default, deserialize_with = "common::present")]
+    banner_id: Option<Option<Uuid>>,
 }
 
 pub async fn patch_pillar(
@@ -298,6 +322,9 @@ pub async fn patch_pillar(
     sqlx::query("update teams set name = $2, description = $3, color = $4 where id = $1")
         .bind(old.team_id).bind(&next_name).bind(&next_description).bind(&next_color)
         .execute(&mut *tx).await.map_err(name_taken)?;
+    if let Some(banner) = p.banner_id {
+        set_banner(&mut tx, old.team_id, banner).await?;
+    }
     if next_name != old.name {
         wall(&mut tx, old.chat_id, me.id, "team_renamed", &next_name, None,
             Some(json!({ "from": old.name, "to": next_name }).to_string())).await?;
