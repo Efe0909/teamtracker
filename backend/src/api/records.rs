@@ -83,6 +83,11 @@ pub async fn list(
         let tree = common::tree(&st);
         f.push_where(&mut qb, &me, &tree);
     }
+    // Sabitlenenler widget'i: yalniz benim sabitlediklerim.
+    if params.get("pinned").is_some_and(|v| v == "true") {
+        qb.push(" and exists(select 1 from record_pins p where p.record_id = r.id and p.user_id = ")
+            .push_bind(me.id).push(")");
+    }
     qb.push(f.order_by()).push(" limit ").push_bind(LIST_LIMIT);
     Ok(Json(qb.build_query_as().fetch_all(&st.pool).await?))
 }
@@ -96,6 +101,8 @@ pub struct Detail {
     participants: Vec<Uuid>,
     cards: Vec<CardView>,
     access: Access,
+    /// Bu kisi kaydi sabitlemis mi.
+    pinned: bool,
 }
 
 #[derive(Serialize)]
@@ -131,8 +138,18 @@ pub(crate) async fn detail_of(st: &AppState, me: &User, rec: Record) -> Result<D
         .bind(rec.id).fetch_all(&st.pool).await?;
     let can_edit = scope::can_edit_record(&st.pool, me, &rec, &st.tree).await?;
     let can_edit_deadline = can_edit && common::has_scope(st, me, "edit_deadline").await?;
-    let cards = cards::of_record(st, me, &rec).await?;
-    Ok(Detail { record: rec, actions, participants, cards, access: Access { can_edit, can_edit_deadline } })
+    let mut cards = cards::of_record(st, me, &rec).await?;
+    // Kisiye ozel sira; listede olmayan kart (yeni) sona, kendi sirasiyla.
+    let order: Option<Vec<Uuid>> = sqlx::query_scalar(
+        "select card_ids from card_order where user_id = $1 and record_id = $2")
+        .bind(me.id).bind(rec.id).fetch_optional(&st.pool).await?;
+    if let Some(order) = order {
+        cards.sort_by_key(|c| order.iter().position(|id| *id == c.id()).unwrap_or(usize::MAX));
+    }
+    let pinned: bool = sqlx::query_scalar(
+        "select exists(select 1 from record_pins where user_id = $1 and record_id = $2)")
+        .bind(me.id).bind(rec.id).fetch_one(&st.pool).await?;
+    Ok(Detail { record: rec, actions, participants, cards, access: Access { can_edit, can_edit_deadline }, pinned })
 }
 
 /// Okuma herkese acik (giris yapmis her aktif kullanici): yetki DEGISTIRMEYI
@@ -566,5 +583,47 @@ pub async fn remove_participant(
         touch(&mut tx, rec.id).await?;
     }
     tx.commit().await?;
+    Ok(Json(detail_of(&st, &me, rec).await?))
+}
+
+// --- kisiye ozel: sabitleme ve kart sirasi ---------------------------------
+
+/// Sabitle / kaldir (IDEMPOTENT). Okuma herkese acik oldugu icin yetki aranmaz.
+pub async fn pin(
+    State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>,
+) -> Result<Json<Detail>> {
+    let rec = load(&st.pool, common::id(&raw)?).await?;
+    sqlx::query("insert into record_pins (user_id, record_id) values ($1, $2) on conflict do nothing")
+        .bind(me.id).bind(rec.id).execute(&st.pool).await?;
+    Ok(Json(detail_of(&st, &me, rec).await?))
+}
+
+pub async fn unpin(
+    State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>,
+) -> Result<Json<Detail>> {
+    let rec = load(&st.pool, common::id(&raw)?).await?;
+    sqlx::query("delete from record_pins where user_id = $1 and record_id = $2")
+        .bind(me.id).bind(rec.id).execute(&st.pool).await?;
+    Ok(Json(detail_of(&st, &me, rec).await?))
+}
+
+#[derive(Deserialize)]
+pub struct CardOrder {
+    ids: Vec<Uuid>,
+}
+
+/// Bu kayittaki kart sirami. Yetki gerekmez: yalniz benim gorunumum.
+pub async fn set_card_order(
+    State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>,
+    Body(b): Body<CardOrder>,
+) -> Result<Json<Detail>> {
+    let rec = load(&st.pool, common::id(&raw)?).await?;
+    if b.ids.len() > 200 {
+        return Err(AppError::BadRequest("invalid_body"));
+    }
+    sqlx::query(
+        "insert into card_order (user_id, record_id, card_ids) values ($1, $2, $3)
+         on conflict (user_id, record_id) do update set card_ids = excluded.card_ids")
+        .bind(me.id).bind(rec.id).bind(&b.ids).execute(&st.pool).await?;
     Ok(Json(detail_of(&st, &me, rec).await?))
 }

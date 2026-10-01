@@ -185,6 +185,12 @@ pub struct CardView {
     attachments: Vec<AttachView>,
 }
 
+impl CardView {
+    pub fn id(&self) -> Uuid {
+        self.id
+    }
+}
+
 /// Kaydin kartlari: TEK kart sorgusu, TEK ek sorgusu (N+1 yok).
 pub async fn of_record(st: &AppState, me: &User, rec: &Record) -> Result<Vec<CardView>> {
     let rows: Vec<(Uuid, String, Value)> = sqlx::query_as(
