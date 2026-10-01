@@ -48,6 +48,16 @@ pub async fn has_scope(st: &AppState, user: &User, scope: &str) -> Result<bool, 
     Ok(db::scope::active(&st.pool, user).await?.iter().any(|s| s == scope))
 }
 
+/// Alan GELDIYSE (null dahil) `Some`; gelmediyse `#[serde(default)]` None.
+/// PATCH'te "yok = degismez" ile "null = sil" ayrimi icin.
+pub fn present<'de, D, T>(d: D) -> Result<Option<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: serde::Deserialize<'de>,
+{
+    T::deserialize(d).map(Some)
+}
+
 /// Serbest metin girdisi: bosluk kirpilir, bos ise None, sinir asilirsa 400.
 pub fn text(raw: Option<String>, max: usize, code: &'static str) -> Result<Option<String>, AppError> {
     match raw.map(|s| s.trim().to_string()).filter(|s| !s.is_empty()) {

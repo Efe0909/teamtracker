@@ -178,17 +178,6 @@ impl TreeIndex {
             .collect()
     }
 
-    /// `items.unit_id` olabilecek dugumler — `team` ve `pillar` HARIC
-    /// (spec/21-sema-v2.md §10). Birim listesini besleyen sey bu.
-    pub fn units(&self, active_only: bool) -> Vec<Uuid> {
-        self.order.iter().copied()
-            .filter(|i| {
-                let n = &self.nodes[i];
-                n.node_type.is_unit() && (!active_only || n.is_active)
-            })
-            .collect()
-    }
-
     pub fn roots(&self) -> &[Uuid] { &self.roots }
     pub fn order(&self) -> &[Uuid] { &self.order }
     pub fn len(&self) -> usize { self.nodes.len() }
@@ -211,7 +200,7 @@ mod tests {
     /// kok(1) ├ a(2) ├ a1(4)
     ///        │      └ a2(5)
     ///        └ b(3)
-    /// ayri kok: pillar(6), team(7)
+    /// ayri kok: baska(6), kokun altinda genel(7)
     fn fixture() -> TreeIndex {
         TreeIndex::build(vec![
             n(1, None,    "kok",    NodeType::Cell),
@@ -219,8 +208,8 @@ mod tests {
             n(3, Some(1), "b",      NodeType::Machine),
             n(4, Some(2), "a1",     NodeType::Task),
             n(5, Some(2), "a2",     NodeType::Task),
-            n(6, None,    "pillar", NodeType::Pillar),
-            n(7, Some(1), "team",   NodeType::Team),
+            n(6, None,    "baska",  NodeType::Cell),
+            n(7, Some(1), "genel",  NodeType::Generic),
         ])
     }
 
@@ -263,16 +252,6 @@ mod tests {
         assert_eq!(ix.get(u(1)).unwrap().depth, 0);
         assert_eq!(ix.get(u(2)).unwrap().depth, 1);
         assert_eq!(ix.get(u(4)).unwrap().depth, 2);
-    }
-
-    #[test]
-    fn units_team_ve_pillari_eler() {
-        let ix = fixture();
-        let units = ix.units(true);
-        assert!(!units.contains(&u(6)), "pillar unit DEGIL");
-        assert!(!units.contains(&u(7)), "team unit DEGIL");
-        assert!(units.contains(&u(2)), "machine unit");
-        assert_eq!(units.len(), 5, "7 dugum - pillar - team");
     }
 
     #[test]

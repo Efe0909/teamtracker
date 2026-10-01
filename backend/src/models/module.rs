@@ -31,7 +31,7 @@ pub const MODULES: &[Module] = &[
     Module {
         slug: "teams", icon: "👥", name: "Takımlar",
         ready: true,
-        desc: "Takımlar, roller (lider/mentor/üye), takım duvarı ve \"bu takıma kayıt aç\". Takım düğümü (node_type='team') açıldığında kart kendiliğinden doğar.",
+        desc: "Takımlar, roller (lider/mentor/üye), takım duvarı ve \"bu takıma kayıt aç\". Takım ve pillar'lar ağaçtan bağımsız; takım ağaca düğüm bağlarıyla (team_nodes) bağlanır.",
         plan: &[
 
         ],

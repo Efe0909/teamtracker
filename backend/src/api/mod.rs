@@ -14,6 +14,7 @@ mod home;
 mod meta;
 mod nodes;
 mod records;
+mod teams;
 
 use axum::{
     extract::{DefaultBodyLimit, State},
@@ -47,8 +48,13 @@ pub fn router() -> Router<AppState> {
         .route("/api/actions/{id}", patch(records::patch_action))
         .route("/api/chats/{id}/feed", get(chats::feed))
         .route("/api/chats/{id}/messages", post(chats::post))
-        .route("/api/teams", get(home::teams))
-        .route("/api/teams/{id}", get(home::team))
+        .route("/api/teams", get(home::teams).post(teams::create_team))
+        .route("/api/teams/{id}",
+            get(home::team).patch(teams::patch_team).delete(teams::delete_team))
+        .route("/api/teams/{id}/nodes/{node}",
+            put(teams::link_node).delete(teams::unlink_node))
+        .route("/api/pillars", post(teams::create_pillar))
+        .route("/api/pillars/{id}", patch(teams::patch_pillar).delete(teams::delete_pillar))
         .route("/api/teams/{id}/members", post(home::set_member))
         .route("/api/teams/{id}/members/{user}", delete(home::drop_member))
         .route("/api/notifications", get(home::notifications))

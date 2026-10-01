@@ -99,7 +99,13 @@ t meta
 R=$(g w /api/meta)
 ok "$(jq -r .me.id <<<"$R")" "$SELIN" "me.id"
 ok "$(jq '.users|length' <<<"$R")" 3 "users"
-ok "$(jq '.teams|length' <<<"$R")" 3 "teams"
+ok "$(jq '.teams|length' <<<"$R")" 5 "teams (3 sade + 2 pillar takimi)"
+ok "$(jq -c '[.pillars[]|.name]' <<<"$R")" '["Güvenlik","Kalite"]' "pillars sort_order, ad"
+ok "$(jq -c '.pillars[0]|keys' <<<"$R")" '["color","description","id","is_active","name","sort_order","team_id"]' "MetaPillar alanlari"
+ok "$(jq -c '.teams[0]|keys' <<<"$R")" '["chat_id","color","description","id","name","node_ids","pillar_id"]' "MetaTeam alanlari (node_id yok)"
+ok "$(jq '[.teams[]|select(.pillar_id!=null)]|length' <<<"$R")" 2 "pillar takimlari pillar_id tasir"
+ok "$(jq '[.teams[]|select(.name=="Satın Alım")|.node_ids|length][0]' <<<"$R")" 2 "team_nodes: Satin Alim iki dugumde"
+ok "$(jq -c '[.nodes[].node_type]|unique' <<<"$R")" '["cell","generic","machine","operational","step"]' "agacta team/pillar turu yok"
 ok "$(jq '[.nodes[]|select(.depth==0)]|length > 0' <<<"$R")" true "agac koku"
 ok "$(jq '.users[0]|has("email")' <<<"$R")" false "e-posta sizmaz"
 
@@ -171,7 +177,7 @@ ok "$(w n POST "$NT" /api/records "{\"kind\":\"task\",\"title\":\"x\",\"unit_id\
 
 t home_teams_notifications
 ok "$(g w /api/home | jq '.counts|has("overdue_records")')" true "sayaclar"
-ok "$(g w /api/teams | jq length)" 3 "takimlar"
+ok "$(g w /api/teams | jq length)" 5 "takimlar"
 ok "$(g w /api/notifications | jq 'map(select(.actor_id=="'"$SELIN"'"))|length')" 0 "kendi hareketim yok"
 ok "$(w w POST "$WT" /api/pins/uydurma '' | jq -r .error)" not_found "bilinmeyen pin"
 
@@ -244,27 +250,18 @@ ok "$(w w POST "$WT" /api/nodes "{\"name\":\"$LONG\",\"node_type\":\"generic\",\
 t node_invalid_parent
 ok "$(w w POST "$WT" /api/nodes '{"name":"X","node_type":"generic","parent_id":"00000000-0000-0000-0000-000000000000"}' | jq -r .error)" invalid_parent "olmayan ust"
 
-t node_team_projection
-# Tur 'team' -> teams satiri + sohbet dogar (KNOW-262). Ayni ad ikinci kez
-# kullanilinca "(2)" olur (teams.name TEKIL, dugum adi degil).
-w w POST "$WT" /api/nodes "{\"name\":\"Kalite Takımı\",\"node_type\":\"team\",\"parent_id\":\"$MALZEME\"}" >/dev/null
-TNA=$(DB "select id from nodes where name='Kalite Takımı' and parent_id='$MALZEME'")
-ok "$(DB "select count(*) from nodes where id='$TNA'")" 1 "dugum olustu"
-ok "$(DB "select name from teams where node_id='$TNA'")" "Kalite Takımı" "takim satiri dogdu"
-ok "$(DB "select count(*) from chats where id=(select chat_id from teams where node_id='$TNA')")" 1 "sohbeti var"
-ok "$(DB "select count(*) from activity where verb='team_created' and subject_label='Kalite Takımı'")" 1 "gecmise yazildi"
-ok "$(DB "select count(*) from activity where verb='node_created' and subject_label='Kalite Takımı'")" 1 "node_created de ayrica yazilir"
-ok "$(DB "select chat_id is null from activity where verb='node_created' and subject_label='Kalite Takımı'")" t "dugum olaylari chat_id NULL (akista cizilmez)"
-
-w w POST "$WT" /api/nodes "{\"name\":\"Kalite Takımı\",\"node_type\":\"team\",\"parent_id\":\"$URETIM\"}" >/dev/null
-TNB=$(DB "select id from nodes where name='Kalite Takımı' and parent_id='$URETIM'")
-ok "$(DB "select name from teams where node_id='$TNB'")" "Kalite Takımı (2)" "ikinci ayni ad (2) olur"
-
-w w PATCH "$WT" "/api/nodes/$TNA" '{"name":"Kalite Ekibi"}' >/dev/null
-ok "$(DB "select name from teams where node_id='$TNA'")" "Kalite Ekibi" "yeniden adlandirma takima da isliyor"
-
-ok "$(w w PATCH "$WT" "/api/nodes/$TNA" '{"node_type":"generic"}' | jq -r .error)" type_locked "projeksiyonu olan dugumun turu kilitli"
-ok "$(wc_ w PATCH "$WT" "/api/nodes/$TNA" '{"node_type":"generic"}')" 409 "type_locked 409 doner"
+t node_types_no_team_pillar
+# Takim ve pillar agactan ayrildi (spec/22): o turle yazma invalid_type,
+# tur listeleri onlari icermez.
+ok "$(w w POST "$WT" /api/nodes "{\"name\":\"Kalite Takımı\",\"node_type\":\"team\",\"parent_id\":\"$MALZEME\"}" | jq -r .error)" invalid_type "team turu ekleme"
+ok "$(wc_ w POST "$WT" /api/nodes "{\"name\":\"Kalite\",\"node_type\":\"pillar\",\"parent_id\":null}")" 400 "pillar turu 400"
+ok "$(w w PATCH "$WT" "/api/nodes/$ULASIM" '{"node_type":"team"}' | jq -r .error)" invalid_type "tur degisimi team"
+R=$(g w /api/nodes)
+ok "$(jq -c '.root_types' <<<"$R")" '["cell","machine","task","step","operational","generic"]' "root_types"
+ok "$(jq -c '.child_types' <<<"$R")" '["machine","task","step","operational","generic"]' "child_types"
+ok "$(jq -r ".nodes[]|select(.id==\"$BUTCEN\").delete_counts.teams" <<<"$R")" 1 "delete_counts.teams (Maliye bagi)"
+ok "$(jq -r ".nodes[]|select(.id==\"$ROOT1\").delete_counts.teams" <<<"$R")" 4 "alt agac toplami (4 seed bagi)"
+ok "$(jq -r ".nodes[]|select(.id==\"$ULASIM\").can_retype" <<<"$R")" true "tur kilidi yok"
 
 t node_hard_delete
 ok "$(wc_ n DELETE "$NT" "/api/nodes/$ETIKET" '')" 200 "bos (virgin) dugumu yalniz edit ile siler"
@@ -281,10 +278,13 @@ ok "$(DB "select chat_id is null from activity where verb='node_deleted' and sub
 ok "$(DB "select detail from activity where verb='node_deleted' and subject_label='Dolum Makinesi'")" '{"descendants":1}' "goturulen alt dugum sayisi (Kapak Ünitesi)"
 DB "delete from user_scopes where user_id='$DENIZ' and scope='hard_delete_nodes'" >/dev/null
 
-ok "$(wc_ w DELETE "$WT" "/api/nodes/$TNB" '')" 200 "admin kalici silmede yetenegi atlar"
-ok "$(DB "select count(*) from nodes where id='$TNB'")" 0 "dugum gitti"
-ok "$(DB "select node_id from teams where name='Kalite Takımı (2)'")" "" "takimin node_id'si null oldu"
-ok "$(DB "select count(*) from teams where name='Kalite Takımı (2)'")" 1 "takim satiri hayatta"
+SATIN=$(DB "select id from teams where name='Satın Alım'")
+DB "insert into team_nodes (team_id,node_id) values ('$SATIN','$SALON')" >/dev/null
+ok "$(wc_ w DELETE "$WT" "/api/nodes/$SALON" '')" 200 "admin kalici silmede yetenegi atlar"
+ok "$(DB "select count(*) from nodes where id='$SALON'")" 0 "dugum gitti"
+ok "$(DB "select count(*) from team_nodes where node_id='$SALON'")" 0 "team_nodes baglari cascade ile gitti"
+ok "$(DB "select count(*) from teams where id='$SATIN'")" 1 "takim hayatta"
+ok "$(DB "select count(*) from team_nodes where team_id='$SATIN'")" 2 "takimin diger baglari durur"
 
 t node_activity_olgu
 AC0=$(DB "select count(*) from activity where verb='node_changed'")
@@ -375,6 +375,117 @@ ok "$(w w DELETE "$WT" "/api/teams/$TM/members/$DENIZ" '' | jq -r "[.members[]|s
 ok "$(wc_ w DELETE "$WT" "/api/teams/$TM/members/$DENIZ" '')" 404 "uye degilse 404"
 ok "$(DB "select string_agg(verb, ',' order by created_at) from activity where chat_id='$TMC' and verb like 'member_%'")" "member_added,member_role,member_removed" "duvara olgu, ayni rol yazilmaz"
 ok "$(DB "select detail from activity where chat_id='$TMC' and verb='member_role'")" '{"from":"member","to":"mentor"}' "rol degisimi once/sonra"
+
+# --- takim ve pillar yazmalari (spec/22) ---------------------------------------
+t teams_crud
+R=$(w w POST "$WT" /api/teams '{"name":"Bakım","description":"Makine bakımı","color":"#0f766e"}')
+TID=$(jq -r .id <<<"$R")
+ok "$(jq -c 'keys' <<<"$R")" '["id"]' "201 { id }"
+ok "$(wc_ w POST "$WT" /api/teams '{"name":"Bakım2","description":null,"color":null}')" 201 "201"
+TID2=$(DB "select id from teams where name='Bakım2'")
+ok "$(DB "select count(*) from chats where id=(select chat_id from teams where id='$TID')")" 1 "sohbetiyle birlikte"
+ok "$(DB "select count(*) from activity where verb='team_created' and chat_id=(select chat_id from teams where id='$TID')")" 1 "team_created duvara"
+ok "$(w w POST "$WT" /api/teams '{"name":"Bakım","description":null,"color":null}' | jq -r .error)" name_taken "ayni ad"
+ok "$(wc_ w POST "$WT" /api/teams '{"name":"Bakım","description":null,"color":null}')" 409 "409"
+ok "$(w w POST "$WT" /api/teams '{"name":"  ","description":null,"color":null}' | jq -r .error)" invalid_name "bos ad"
+ok "$(wc_ n POST "$NT" /api/teams '{"name":"Yetkisiz","description":null,"color":null}')" 403 "manage_teams yoksa 403"
+ok "$(DB "select count(*) from teams where name='Yetkisiz'")" 0 "403 yazmaz"
+
+t teams_patch
+ok "$(wc_ w PATCH "$WT" "/api/teams/$TID" '{"name":"Bakım Ekibi"}')" 204 "ad"
+ok "$(DB "select name||'|'||description from teams where id='$TID'")" "Bakım Ekibi|Makine bakımı" "verilmeyen alan degismez"
+w w PATCH "$WT" "/api/teams/$TID" '{"description":null,"color":"#111111"}' >/dev/null
+ok "$(DB "select coalesce(description,'NULL')||'|'||color from teams where id='$TID'")" "NULL|#111111" "null siler"
+ok "$(w w PATCH "$WT" "/api/teams/$TID" '{"name":"Maliye"}' | jq -r .error)" name_taken "ad cakismasi"
+ok "$(DB "select detail from activity where verb='team_renamed' and chat_id=(select chat_id from teams where id='$TID')")" '{"from":"Bakım","to":"Bakım Ekibi"}' "team_renamed olgusu"
+ok "$(wc_ w PATCH "$WT" "/api/teams/00000000-0000-0000-0000-000000000000" '{"name":"x"}')" 404 "olmayan takim"
+ok "$(wc_ n PATCH "$NT" "/api/teams/$TID" '{"name":"x"}')" 403 "yetkisiz"
+
+t team_node_links
+ok "$(wc_ w PUT "$WT" "/api/teams/$TID/nodes/$MEKAN" '')" 204 "bagla"
+ok "$(wc_ w PUT "$WT" "/api/teams/$TID/nodes/$MEKAN" '')" 204 "idempotent"
+ok "$(DB "select count(*) from team_nodes where team_id='$TID' and node_id='$MEKAN'")" 1 "tek satir"
+ok "$(DB "select string_agg(verb||':'||target_label, ',') from activity where verb like 'team_node_%' and chat_id=(select chat_id from teams where id='$TID')")" "team_node_linked:Mekan & Lojistik" "tekrar baglama iz birakmaz"
+ok "$(g w /api/meta | jq -c ".teams[]|select(.id==\"$TID\").node_ids")" "[\"$MEKAN\"]" "meta.node_ids"
+ok "$(w w PUT "$WT" "/api/teams/$TID/nodes/00000000-0000-0000-0000-000000000000" '' | jq -r .error)" invalid_node "olmayan dugum"
+DB "update nodes set is_active=false where id='$ULASIM'" >/dev/null
+ok "$(w w PUT "$WT" "/api/teams/$TID/nodes/$ULASIM" '' | jq -r .error)" invalid_node "pasif dugum"
+DB "update nodes set is_active=true where id='$ULASIM'" >/dev/null
+ok "$(wc_ w PUT "$WT" "/api/teams/00000000-0000-0000-0000-000000000000/nodes/$MEKAN" '')" 404 "olmayan takim"
+ok "$(wc_ n PUT "$NT" "/api/teams/$TID/nodes/$ULASIM" '')" 403 "yetkisiz"
+ok "$(g w /api/nodes | jq -r ".nodes[]|select(.id==\"$MEKAN\").delete_counts.teams")" 1 "delete_counts.teams"
+ok "$(wc_ w DELETE "$WT" "/api/teams/$TID/nodes/$MEKAN" '')" 204 "kopar"
+ok "$(wc_ w DELETE "$WT" "/api/teams/$TID/nodes/$MEKAN" '')" 204 "yoksa da 204"
+ok "$(DB "select string_agg(verb, ',' order by created_at) from activity where verb like 'team_node_%' and chat_id=(select chat_id from teams where id='$TID')")" "team_node_linked,team_node_unlinked" "kopma bir kez yazildi"
+
+t teams_delete
+TREC=$(w w POST "$WT" /api/records "{\"kind\":\"task\",\"title\":\"Takim silme\",\"unit_id\":\"$UNIT\",\"owner_id\":null,\"team_id\":\"$TID2\"}" | jq -r .id)
+TCHAT=$(DB "select chat_id from teams where id='$TID2'")
+ok "$(wc_ n DELETE "$NT" "/api/teams/$TID2" '')" 403 "yetkisiz"
+ok "$(wc_ w DELETE "$WT" "/api/teams/$TID2" '')" 204 "sil"
+ok "$(DB "select count(*) from teams where id='$TID2'")" 0 "gitti"
+ok "$(DB "select count(*) from chats where id='$TCHAT'")" 0 "sohbet tetikleyiciyle gitti"
+ok "$(DB "select coalesce(team_id::text,'NULL') from records where id='$TREC'")" NULL "records.team_id NULL"
+ok "$(wc_ w DELETE "$WT" "/api/teams/$TID2" '')" 404 "ikinci silme 404"
+
+t pillars_crud
+R=$(w w POST "$WT" /api/pillars '{"name":"Çevre","description":"Çevre pillar","color":"#0f766e"}')
+PID=$(jq -r .id <<<"$R"); PTID=$(jq -r .team_id <<<"$R")
+ok "$(jq -c 'keys' <<<"$R")" '["id","team_id"]' "201 { id, team_id }"
+ok "$(DB "select team_id from pillars where id='$PID'")" "$PTID" "ozel takim bagli"
+ok "$(DB "select name||'|'||description||'|'||color from teams where id='$PTID'")" "Çevre|Çevre pillar|#0f766e" "takim pillar'dan turedi"
+ok "$(DB "select count(*) from chats where id=(select chat_id from teams where id='$PTID')")" 1 "sohbet var"
+ok "$(DB "select sort_order from pillars where id='$PID'")" 2 "sona eklenir"
+ok "$(w w POST "$WT" /api/pillars '{"name":"Çevre","description":null,"color":null}' | jq -r .error)" name_taken "pillar adi"
+ok "$(wc_ w POST "$WT" /api/pillars '{"name":"Maliye","description":null,"color":null}')" 409 "takim adiyla cakisma"
+ok "$(DB "select count(*) from pillars")" 3 "basarisiz POST pillar birakmaz"
+ok "$(DB "select count(*) from teams")" 7 "...takim da (islem geri alindi)"
+ok "$(w w POST "$WT" /api/pillars '{"name":"","description":null,"color":null}' | jq -r .error)" invalid_name "bos ad"
+ok "$(wc_ n POST "$NT" /api/pillars '{"name":"Yetkisiz","description":null,"color":null}')" 403 "manage_teams yoksa 403"
+R=$(g w /api/meta)
+ok "$(jq -r ".teams[]|select(.id==\"$PTID\").pillar_id" <<<"$R")" "$PID" "meta: takim.pillar_id"
+ok "$(jq -c '[.pillars[].name]' <<<"$R")" '["Güvenlik","Kalite","Çevre"]' "meta.pillars sirasi"
+
+t pillars_patch
+ok "$(wc_ w PATCH "$WT" "/api/pillars/$PID" '{"name":"Çevre ve İSG","description":null,"is_active":false,"sort_order":-1}')" 204 "204"
+ok "$(DB "select name||'|'||coalesce(description,'NULL')||'|'||is_active||'|'||sort_order from pillars where id='$PID'")" "Çevre ve İSG|NULL|false|-1" "pillar alanlari"
+ok "$(DB "select name||'|'||coalesce(description,'NULL') from teams where id='$PTID'")" "Çevre ve İSG|NULL" "ozel takima da yazildi"
+ok "$(g w /api/meta | jq -c '[.pillars[]|[.name,.is_active]]')" '[["Çevre ve İSG",false],["Güvenlik",true],["Kalite",true]]' "pasifler de gelir, sort_order'a gore"
+ok "$(DB "select detail from activity where verb='team_renamed' and chat_id=(select chat_id from teams where id='$PTID')")" '{"from":"Çevre","to":"Çevre ve İSG"}' "team_renamed duvara"
+ok "$(w w PATCH "$WT" "/api/pillars/$PID" '{"name":"Kalite"}' | jq -r .error)" name_taken "ad cakismasi"
+ok "$(DB "select name from teams where id='$PTID'")" "Çevre ve İSG" "cakisma takimi bozmaz"
+ok "$(w w PATCH "$WT" "/api/teams/$PTID" '{"name":"Baska"}' | jq -r .error)" team_is_pillar "ozel takimin adi takimdan degismez"
+ok "$(wc_ w PATCH "$WT" "/api/teams/$PTID" '{"name":"Baska"}')" 409 "409"
+ok "$(w w DELETE "$WT" "/api/teams/$PTID" '' | jq -r .error)" team_is_pillar "ozel takim silinmez"
+ok "$(wc_ w PATCH "$WT" "/api/pillars/00000000-0000-0000-0000-000000000000" '{"name":"x"}')" 404 "olmayan pillar"
+ok "$(wc_ n PATCH "$NT" "/api/pillars/$PID" '{"name":"x"}')" 403 "yetkisiz"
+
+t records_pillar
+ok "$(w w POST "$WT" /api/records "{\"kind\":\"task\",\"title\":\"Pasif pillar\",\"unit_id\":\"$UNIT\",\"owner_id\":null,\"pillar_id\":\"$PID\"}" | jq -r .error)" invalid_pillar "pasif pillar"
+ok "$(w w POST "$WT" /api/records "{\"kind\":\"task\",\"title\":\"Yok pillar\",\"unit_id\":\"$UNIT\",\"owner_id\":null,\"pillar_id\":\"$UNIT\"}" | jq -r .error)" invalid_pillar "dugum kimligi pillar degil"
+w w PATCH "$WT" "/api/pillars/$PID" '{"is_active":true}' >/dev/null
+PREC=$(w w POST "$WT" /api/records "{\"kind\":\"task\",\"title\":\"Pillar kaydi\",\"unit_id\":\"$UNIT\",\"owner_id\":null,\"pillar_id\":\"$PID\"}" | jq -r .id)
+ok "$(DB "select pillar_id from records where id='$PREC'")" "$PID" "aktif pillar"
+KALITE=$(DB "select id from pillars where name='Kalite'")
+# Kalite'nin iki tohum kaydindan biri (Kapak Ünitesi) node_hard_delete'te gitti.
+ok "$(g w "/api/records?pillar=$KALITE" | jq length)" 1 "?pillar= pillars tablosuna bakar"
+ok "$(g w "/api/records?pillar=$PID" | jq -r '.[0].title')" "Pillar kaydi" "yeni pillar suzgeci"
+ok "$(w w PATCH "$WT" "/api/records/$PREC" "{\"field\":\"pillar_id\",\"value\":\"$UNIT\"}" | jq -r .error)" invalid_pillar "PATCH da pillars'a bakar"
+ok "$(w w PATCH "$WT" "/api/records/$PREC" "{\"field\":\"pillar_id\",\"value\":\"$KALITE\"}" | jq -r .record.pillar_id)" "$KALITE" "PATCH pillar"
+w w PATCH "$WT" "/api/records/$PREC" "{\"field\":\"pillar_id\",\"value\":\"$PID\"}" >/dev/null
+
+t pillars_delete
+DB "insert into user_scopes (user_id,scope) values ('$EFE','manage_teams')" >/dev/null
+ok "$(wc_ e DELETE "$ET" "/api/pillars/$PID" '')" 403 "manage_teams yetmez, yalniz admin"
+ok "$(wc_ e PATCH "$ET" "/api/pillars/$PID" '{"sort_order":9}')" 204 "manage_teams yazar"
+DB "delete from user_scopes where user_id='$EFE' and scope='manage_teams'" >/dev/null
+PCHAT=$(DB "select chat_id from teams where id='$PTID'")
+ok "$(wc_ w DELETE "$WT" "/api/pillars/$PID" '')" 204 "admin siler"
+ok "$(DB "select count(*) from pillars where id='$PID'")" 0 "pillar gitti"
+ok "$(DB "select count(*) from teams where id='$PTID'")" 0 "ozel takim gitti"
+ok "$(DB "select count(*) from chats where id='$PCHAT'")" 0 "sohbet gitti"
+ok "$(DB "select coalesce(pillar_id::text,'NULL') from records where id='$PREC'")" NULL "records.pillar_id NULL"
+ok "$(wc_ w DELETE "$WT" "/api/pillars/$PID" '')" 404 "ikinci silme 404"
 
 # --- anma (R4-F03) -----------------------------------------------------------
 t mention_invites
