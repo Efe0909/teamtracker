@@ -74,8 +74,17 @@ export function Welcome() {
         </section>
       </main>
 
-      <footer className="foot">EkipTakip · alpha 0.2</footer>
+      <Foot />
     </div>
+  );
+}
+
+// Gizlilik linki ana sayfada GORUNUR olmali: Google marka dogrulamasi bunu arar.
+export function Foot() {
+  return (
+    <footer className="foot">
+      EkipTakip · alpha 0.2 · <a href="/privacy">Gizlilik</a> · <a href="/terms">Koşullar</a>
+    </footer>
   );
 }
 
@@ -212,7 +221,7 @@ function SignedIn(props: { me: Me; name: string; preferred: Dest; onLogout: () =
 
 // --- simgeler ------------------------------------------------------------
 
-function Brand() {
+export function Brand() {
   return (
     <span className="brand">
       <svg className="brand-mark" viewBox="0 0 32 32" aria-hidden="true">

@@ -8,6 +8,7 @@ import { currentSurface } from "./api/session";
 import { ErrorScreen } from "./surfaces/errors/ErrorScreen";
 import { Session } from "./surfaces/Session";
 import { Entry } from "./surfaces/welcome/Entry";
+import { Legal } from "./surfaces/welcome/Legal";
 import { Welcome } from "./surfaces/welcome/Welcome";
 import { ToastProvider } from "./ui/ui";
 
@@ -26,7 +27,12 @@ const queryClient = new QueryClient({
 
 export function App() {
   const surface = currentSurface();
-  if (surface === "welcome") return location.pathname === "/welcome" ? <Welcome /> : <Entry />;
+  if (surface === "welcome") {
+    const path = location.pathname;
+    if (path === "/welcome") return <Welcome />;
+    if (path === "/privacy" || path === "/terms") return <Legal page={path === "/privacy" ? "privacy" : "terms"} />;
+    return <Entry />;
+  }
   return (
     <QueryClientProvider client={queryClient}>
       <ToastProvider>
