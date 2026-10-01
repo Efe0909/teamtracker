@@ -9,8 +9,9 @@ import { useCardWrite } from "../../api/hooks";
 import type { Attachment, CardView, RecordDetail, SignupAnswer } from "../../api/types";
 import { CARD, CARD_TYPES, type CardType, isCardType, whenLabel } from "../../lib/cards";
 import { useLookup } from "../../lib/lookup";
+import { useStored } from "../../lib/stored";
 import { Icon } from "../../ui/icons";
-import { Avatar, Button, Dialog, IconButton, Menu, MenuItem, ui, useToast } from "../../ui/ui";
+import { Avatar, Button, cx, Dialog, IconButton, Menu, MenuItem, ui, useToast } from "../../ui/ui";
 import { Attachments, ImagePicker } from "../media/Media";
 import s from "./record.module.css";
 
@@ -53,6 +54,8 @@ export function Cards({ d }: { d: RecordDetail }) {
 }
 
 function Card({ d, c }: { d: RecordDetail; c: CardView }) {
+  // Kapali kartlar cihazda hatirlanir (kayit/kart gezintisinde ayni kalir).
+  const [collapsed, setCollapsed] = useStored<string[]>("cards.collapsed", []);
   const w = useCardWrite();
   const toast = useToast();
   const [editing, setEditing] = useState(false);
@@ -74,13 +77,18 @@ function Card({ d, c }: { d: RecordDetail; c: CardView }) {
   }
   const t = CARD[c.card_type];
   const v = (k: string) => c.data[k] ?? "";
+  const folded = collapsed.includes(c.id);
 
   return (
-    <div className={s.card}>
+    <div className={cx(s.card, s.cardHover)}>
       <div className={s.cardHead}>
-        <Icon name={t.icon} size={18} />
-        <b>{v("title") !== "" ? v("title") : t.label}</b>
-        {v("title") !== "" && <span className={s.hint}>{t.label}</span>}
+        <button type="button" className={s.cardToggle} aria-expanded={!folded}
+          onClick={() => setCollapsed(folded ? collapsed.filter((x) => x !== c.id) : [...collapsed, c.id])}>
+          <span className={cx(s.caret, !folded && s.caretOpen)}><Icon name="chevron" size={14} /></span>
+          <Icon name={t.icon} size={18} />
+          <b>{v("title") !== "" ? v("title") : t.label}</b>
+          {v("title") !== "" && <span className={s.hint}>{t.label}</span>}
+        </button>
         {d.access.can_edit && (
           <span className={s.cardActs}>
             <IconButton icon="edit" label="Kartı düzenle" onClick={() => setEditing(true)} />
@@ -89,22 +97,26 @@ function Card({ d, c }: { d: RecordDetail; c: CardView }) {
         )}
       </div>
 
-      {c.card_type === "meeting" && (
-        <dl className={s.cardFields}>
-          {v("when") !== "" && <><dt>Ne zaman</dt><dd>{whenLabel(v("when"))}</dd></>}
-          {v("place") !== "" && <><dt>Yer</dt><dd>{v("place")}</dd></>}
-          {v("link") !== "" && (
-            <><dt>Bağlantı</dt><dd><a href={v("link")} target="_blank" rel="noopener noreferrer">{v("link")}</a></dd></>
-          )}
-        </dl>
+      {!folded && (
+        <>
+        {c.card_type === "meeting" && (
+          <dl className={s.cardFields}>
+            {v("when") !== "" && <><dt>Ne zaman</dt><dd>{whenLabel(v("when"))}</dd></>}
+            {v("place") !== "" && <><dt>Yer</dt><dd>{v("place")}</dd></>}
+            {v("link") !== "" && (
+              <><dt>Bağlantı</dt><dd><a href={v("link")} target="_blank" rel="noopener noreferrer">{v("link")}</a></dd></>
+            )}
+          </dl>
+        )}
+        {c.card_type === "pool" && v("need") !== "" && <p className={s.hint}>{v("need")} kişi lazım</p>}
+        {["description", "agenda", "detail"].map((k) => v(k) !== "" && <p key={k} className={s.desc}>{v(k)}</p>)}
+        {Object.keys(c.data).length === 0 && <p className={s.hint}>{t.hint}</p>}
+
+        {c.card_type === "media" && <MediaBody d={d} c={c} />}
+        {Object.keys(t.answers).length > 0 && <Signups c={c} answers={t.answers} />}
+
+        </>
       )}
-      {c.card_type === "pool" && v("need") !== "" && <p className={s.hint}>{v("need")} kişi lazım</p>}
-      {["description", "agenda", "detail"].map((k) => v(k) !== "" && <p key={k} className={s.desc}>{v(k)}</p>)}
-      {Object.keys(c.data).length === 0 && <p className={s.hint}>{t.hint}</p>}
-
-      {c.card_type === "media" && <MediaBody d={d} c={c} />}
-      {Object.keys(t.answers).length > 0 && <Signups c={c} answers={t.answers} />}
-
       {editing && <CardForm c={c} type={c.card_type} onClose={() => setEditing(false)} />}
     </div>
   );

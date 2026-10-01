@@ -393,6 +393,28 @@
 .cardHead b {
   font-weight: 600;
 }
+.cardToggle {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+/* Duzenle/sil simgeleri yalniz uzerine gelince (odakta da) gorunur. */
+.cardHover .cardActs {
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.cardHover:hover .cardActs,
+.cardHover:focus-within .cardActs {
+  opacity: 1;
+}
 .cardActs {
   margin-left: auto;
   display: inline-flex;
@@ -435,4 +457,10 @@
 .cardAdd {
   display: flex;
   gap: 8px;
+}
+
+@media (hover: none) {
+  .cardHover .cardActs {
+    opacity: 1;
+  }
 }
