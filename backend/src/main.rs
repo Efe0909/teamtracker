@@ -18,11 +18,11 @@ mod media;
 mod mentions;
 #[allow(dead_code)]
 mod models;
-#[allow(dead_code)]
 mod mail;
 mod push;
 mod ratelimit;
 mod state;
+mod webpush;
 
 use std::net::SocketAddr;
 
@@ -32,6 +32,12 @@ use state::AppState;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // `ekiptakip vapid-keygen`: web push anahtar cifti (ortam degiskeni satirlari).
+    if std::env::args().nth(1).as_deref() == Some("vapid-keygen") {
+        let (private, public) = webpush::keygen();
+        println!("VAPID_PRIVATE={private}\nVAPID_PUBLIC={public}");
+        return Ok(());
+    }
     tracing_subscriber::fmt::init();
 
     let cfg = config::Config::from_env()?;

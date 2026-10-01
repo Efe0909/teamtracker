@@ -96,7 +96,7 @@ function AddUser() {
           <input className={ui.input} value={name} onChange={(e) => setName(e.target.value)} required maxLength={200} />
         </label>
       </div>
-      <p className={s.dim}>Eklenen kişi bu e-postanın Google hesabıyla girer. Listede olmayan e-posta giremez.</p>
+      <p className={s.dim}>Eklenen kişi bu e-postanın Google hesabıyla girer. Listede olmayan e-posta giremez. Kişiye davet postası (telefona kurulum + bildirim anlatımı) otomatik hazırlanır.</p>
       <div className={ui.dact}>
         <Button type="submit" variant="primary" aria-busy={m.isPending} disabled={m.isPending}>
           {m.isPending ? "Ekleniyor…" : "Kullanıcı ekle"}

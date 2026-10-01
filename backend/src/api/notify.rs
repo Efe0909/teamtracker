@@ -7,12 +7,13 @@
 
 use std::collections::HashMap;
 
+
 use axum::{
     extract::{Path, State},
     http::StatusCode,
     Json,
 };
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Timelike, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -24,6 +25,7 @@ use crate::{
     models::enums::NotifyLevel,
     push,
     state::AppState,
+    webpush::{self, Outcome, Target},
 };
 
 /// Beni ilgilendiren sohbetlerdeki son hareketler, benimkiler haric; tercihime
@@ -213,4 +215,89 @@ pub async fn unsubscribe(
     sqlx::query("delete from push_subscriptions where user_id = $1 and endpoint = $2")
         .bind(me.id).bind(&b.endpoint).execute(&st.pool).await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Serialize)]
+pub struct VapidKey {
+    /// `applicationServerKey`; null = sunucuda push kapali.
+    public_key: Option<String>,
+}
+
+pub async fn vapid(State(st): State<AppState>, CurrentUser(_): CurrentUser) -> Json<VapidKey> {
+    Json(VapidKey { public_key: st.vapid.as_ref().map(|v| v.public_key().to_string()) })
+}
+
+/// Bu sohbete yazilan mesaj icin push: kimlere, `push::decide` karar verir.
+/// Arka planda calisir; hata mesaj yazmayi bozmaz. Icerik push'a KONMAZ
+/// (kilit ekraninda gorunur, spec/40): yalniz "kim, nerede".
+pub async fn fanout(st: AppState, chat: Uuid, author: Uuid, body: String) {
+    if st.vapid.is_none() {
+        return;
+    }
+    if let Err(e) = fanout_inner(&st, chat, author, &body).await {
+        tracing::warn!("push dagitimi: {e:?}");
+    }
+}
+
+async fn fanout_inner(st: &AppState, chat: Uuid, author: Uuid, body: &str) -> Result<()> {
+    let Some(vapid) = st.vapid.as_ref() else { return Ok(()) };
+    // Sohbetin sahibi ve izleyicileri: kayit ya da takim duvari.
+    let rec: Option<(Uuid, String, Vec<Uuid>)> = sqlx::query_as(
+        "select r.id, r.title, array(
+                  select r.owner_id where r.owner_id is not null
+                  union select r.created_by
+                  union select user_id from record_participants where record_id = r.id
+                  union select owner_id from actions where record_id = r.id and owner_id is not null
+                  union select user_id from team_members where team_id = r.team_id)
+           from records r where r.chat_id = $1")
+        .bind(chat).fetch_optional(&st.pool).await?;
+    let (url, title, audience) = match rec {
+        Some((id, title, aud)) => (format!("/record/{id}"), title, aud),
+        None => {
+            let team: Option<(Uuid, String, Vec<Uuid>)> = sqlx::query_as(
+                "select t.id, t.name, array(select user_id from team_members where team_id = t.id)
+                   from teams t where t.chat_id = $1")
+                .bind(chat).fetch_optional(&st.pool).await?;
+            let Some((id, name, aud)) = team else { return Ok(()) };
+            (format!("/team/{id}"), name, aud)
+        }
+    };
+    let author_name: String = sqlx::query_scalar("select name from users where id = $1")
+        .bind(author).fetch_one(&st.pool).await?;
+    let hour = Utc::now().hour() as i16;
+    for uid in audience.into_iter().filter(|u| *u != author) {
+        let prefs = load_prefs(st, uid).await?;
+        let name: Option<String> = sqlx::query_scalar("select name from users where id = $1 and is_active")
+            .bind(uid).fetch_optional(&st.pool).await?;
+        let Some(name) = name else { continue };
+        let mentioned = mentions_me(Some(body), &mentions::handle(&name));
+        let quiet = prefs.quiet_start.zip(prefs.quiet_end);
+        if !push::decide(prefs.level, prefs.chats.get(&chat).copied(), mentioned, quiet, hour).push {
+            continue;
+        }
+        let text = if mentioned { format!("{author_name} seni andı") } else { format!("{author_name} yeni mesaj yazdı") };
+        let payload = serde_json::json!({ "title": title, "body": text, "url": url, "tag": chat }).to_string();
+        let subs: Vec<(Uuid, String, String, String)> = sqlx::query_as(
+            "select id, endpoint, p256dh, auth from push_subscriptions where user_id = $1")
+            .bind(uid).fetch_all(&st.pool).await?;
+        for (id, endpoint, p256dh, auth) in subs {
+            match webpush::send(vapid, &Target { endpoint: &endpoint, p256dh: &p256dh, auth: &auth }, payload.as_bytes()).await {
+                Outcome::Sent => {
+                    sqlx::query("update push_subscriptions set last_ok_at = now(), fail_count = 0 where id = $1")
+                        .bind(id).execute(&st.pool).await?;
+                }
+                // Olu abonelik: sil, yoksa sunucu olu adreslere gondermeye devam eder.
+                Outcome::Gone => {
+                    sqlx::query("delete from push_subscriptions where id = $1").bind(id).execute(&st.pool).await?;
+                }
+                Outcome::Failed => {
+                    sqlx::query("update push_subscriptions set fail_count = fail_count + 1 where id = $1")
+                        .bind(id).execute(&st.pool).await?;
+                    sqlx::query("delete from push_subscriptions where id = $1 and fail_count >= 5")
+                        .bind(id).execute(&st.pool).await?;
+                }
+            }
+        }
+    }
+    Ok(())
 }

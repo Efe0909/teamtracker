@@ -65,6 +65,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/notifications/seen", post(notify::seen))
         .route("/api/me/notifications", get(notify::prefs).patch(notify::patch_prefs))
         .route("/api/chats/{id}/prefs", put(notify::set_chat))
+        .route("/api/push/vapid", get(notify::vapid))
         .route("/api/push/subscriptions", post(notify::subscribe).delete(notify::unsubscribe))
         .route("/api/nodes", get(nodes::tree).post(nodes::create))
         .route("/api/nodes/{id}", patch(nodes::patch).delete(nodes::delete))

@@ -194,6 +194,8 @@ pub async fn post(
         invite(&mut tx, rid, me.id, &body).await?;
     }
     tx.commit().await?;
+    // Push arka planda: mesaj yazma ag gecikmesini beklemez.
+    tokio::spawn(crate::api::notify::fanout(st.clone(), chat, me.id, body));
     Ok(Json(Posted { id }))
 }
 

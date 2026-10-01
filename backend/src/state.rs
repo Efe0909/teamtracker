@@ -47,6 +47,8 @@ pub struct AppState {
     /// await boyunca tutulur. ponytail: tek surec (KNOW-85); yatayda
     /// veritabani kilidi gerekir.
     pub structure: Arc<tokio::sync::Mutex<()>>,
+    /// Web push anahtari; yoksa push KAPALI (liste calisir).
+    pub vapid: Option<Arc<crate::webpush::Vapid>>,
 }
 
 impl FromRef<AppState> for Key {
@@ -61,7 +63,12 @@ impl AppState {
         let http = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(10))
             .build()?;
+        let vapid = crate::webpush::Vapid::new(&cfg.vapid_private, &cfg.vapid_sub).map(Arc::new);
+        if vapid.is_none() {
+            tracing::info!("VAPID_PRIVATE yok ya da bozuk: web push kapali");
+        }
         Ok(AppState {
+            vapid,
             pool,
             key: crate::auth::key_from(&cfg),
             cfg: Arc::new(cfg),
