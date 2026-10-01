@@ -67,7 +67,15 @@ const OPTION_MAX: usize = 100;
 const LOCAL_OFFSET_SECS: i64 = 3 * 3600;
 
 /// Oylama ayarlari: secenekler (+ foto kimligi), `allow_other`, `closes_at`.
-fn clean_poll(data: &Map<String, Value>, out: &mut Map<String, Value>) -> Result<()> {
+fn clean_poll(data: &Map<String, Value>, out: &mut Map<String, Value>, fixed: PollFeatures) -> Result<()> {
+    let flag = |k: &str| data.get(k).and_then(Value::as_bool) == Some(true);
+    let (media, timer) = fixed.unwrap_or_else(|| (flag("media_enabled"), flag("timer_enabled")));
+    if media {
+        out.insert("media_enabled".into(), json!(true));
+    }
+    if timer {
+        out.insert("timer_enabled".into(), json!(true));
+    }
     let raw = data.get("options").and_then(Value::as_array).cloned().unwrap_or_default();
     let mut options = Vec::new();
     for o in &raw {
@@ -84,7 +92,7 @@ fn clean_poll(data: &Map<String, Value>, out: &mut Map<String, Value>) -> Result
         };
         let mut e = Map::new();
         e.insert("label".into(), json!(label));
-        if let Some(a) = photo {
+        if let Some(a) = photo.filter(|_| media) {
             let id: Uuid = a.parse().map_err(|_| AppError::BadRequest("invalid_options"))?;
             e.insert("attachment_id".into(), json!(id));
         }
@@ -97,7 +105,7 @@ fn clean_poll(data: &Map<String, Value>, out: &mut Map<String, Value>) -> Result
     if data.get("allow_other").and_then(Value::as_bool) == Some(true) {
         out.insert("allow_other".into(), json!(true));
     }
-    if let Some(c) = data.get("closes_at").and_then(Value::as_str).filter(|s| !s.is_empty()) {
+    if let Some(c) = data.get("closes_at").and_then(Value::as_str).filter(|s| timer && !s.is_empty()) {
         if chrono::NaiveDateTime::parse_from_str(c, "%Y-%m-%dT%H:%M").is_err() {
             return Err(AppError::BadRequest("invalid_when"));
         }
@@ -121,7 +129,11 @@ const FIELD_MAX: usize = 4000;
 
 /// Beyaz liste + dogrulama. `when` "2026-09-20T14:30" (datetime-local),
 /// `link` yalniz http(s) — `javascript:` bir baglanti olarak cizilmesin.
-fn clean(t: &CardType, title: Option<String>, data: &Map<String, Value>) -> Result<Value> {
+/// Oylamanin opt-in ozellikleri (medya, sayac/sure): yalniz kart OLUSTURULURKEN
+/// acilir, sonra degismez. `fixed`: duzenlemede kartin mevcut hali.
+type PollFeatures = Option<(bool, bool)>;
+
+fn clean(t: &CardType, title: Option<String>, data: &Map<String, Value>, fixed: PollFeatures) -> Result<Value> {
     let mut out = Map::new();
     if let Some(title) = common::text(title, 200, "invalid_title")? {
         out.insert("title".into(), json!(title));
@@ -141,7 +153,7 @@ fn clean(t: &CardType, title: Option<String>, data: &Map<String, Value>) -> Resu
         out.insert((*f).into(), json!(v));
     }
     if t.poll {
-        clean_poll(data, &mut out)?;
+        clean_poll(data, &mut out, fixed)?;
     }
     Ok(Value::Object(out))
 }
@@ -178,6 +190,9 @@ pub struct CardView {
     /// Yalniz oylamada; `data`dan ayri cunku metin degil.
     options: Vec<Value>,
     allow_other: bool,
+    /// Olusturulurken acilan opt-in ozellikler; sonradan degismez.
+    media_enabled: bool,
+    timer_enabled: bool,
     closes_at: Option<String>,
     closed: bool,
     votes: Vec<Vote>,
@@ -222,6 +237,10 @@ pub async fn of_record(st: &AppState, me: &User, rec: &Record) -> Result<Vec<Car
             .and_then(|v| v.as_array().cloned()).unwrap_or_default();
         let allow_other = data.as_object_mut().and_then(|o| o.remove("allow_other"))
             .and_then(|v| v.as_bool()).unwrap_or(false);
+        let media_enabled = data.as_object_mut().and_then(|o| o.remove("media_enabled"))
+            .and_then(|v| v.as_bool()).unwrap_or(false);
+        let timer_enabled = data.as_object_mut().and_then(|o| o.remove("timer_enabled"))
+            .and_then(|v| v.as_bool()).unwrap_or(false);
         let closes_at = data.as_object_mut().and_then(|o| o.remove("closes_at"))
             .and_then(|v| v.as_str().map(str::to_string));
         let mut votes: Vec<Vote> = votes.and_then(|s| s.as_object().cloned()).unwrap_or_default()
@@ -244,7 +263,7 @@ pub async fn of_record(st: &AppState, me: &User, rec: &Record) -> Result<Vec<Car
             known: kind(&card_type).is_some(),
             attachments: media.remove(&id).unwrap_or_default(),
             closed: poll_closed(closes_at.as_deref()),
-            id, card_type, data, signups, options, allow_other, closes_at, votes,
+            id, card_type, data, signups, options, allow_other, media_enabled, timer_enabled, closes_at, votes,
         }
     }).collect())
 }
@@ -267,7 +286,7 @@ pub async fn insert(
     title: Option<String>, data: &Map<String, Value>,
 ) -> Result<()> {
     let t = kind(card_type).ok_or(AppError::BadRequest("invalid_card_type"))?;
-    let data = clean(t, title, data)?;
+    let data = clean(t, title, data, None)?;
     let card: Uuid = sqlx::query_scalar(
         "insert into cards (record_id, card_type, data, created_by, sort_order)
          values ($1, $2, $3, $4,
@@ -339,7 +358,11 @@ pub async fn patch(
 ) -> Result<Json<Detail>> {
     let (id, t, rec) = load(&st, &raw).await?;
     records::require_edit(&st, &me, &rec).await?;
-    let data = clean(t.ok_or(AppError::BadRequest("invalid_card_type"))?, b.title, &b.data)?;
+    let existing: Value = sqlx::query_scalar("select data from cards where id = $1")
+        .bind(id).fetch_one(&st.pool).await?;
+    let on = |k: &str| existing.get(k).and_then(Value::as_bool) == Some(true);
+    let data = clean(t.ok_or(AppError::BadRequest("invalid_card_type"))?, b.title, &b.data,
+        Some((on("media_enabled"), on("timer_enabled"))))?;
     let mut tx = st.pool.begin().await?;
     sqlx::query(
         "update cards set data = jsonb_strip_nulls(
@@ -493,18 +516,25 @@ mod tests {
         assert!(meeting.is_some());
         if let Some(m) = meeting {
             let data = obj(json!({ "when": "2026-10-01T18:30", "link": "https://meet.x/a", "evil": "x" }));
-            assert_eq!(clean(m, Some("Planlama".into()), &data).ok(),
+            assert_eq!(clean(m, Some("Planlama".into()), &data, None).ok(),
                 Some(json!({ "title": "Planlama", "when": "2026-10-01T18:30", "link": "https://meet.x/a" })));
-            assert!(clean(m, None, &obj(json!({ "link": "javascript:alert(1)" }))).is_err());
+            assert!(clean(m, None, &obj(json!({ "link": "javascript:alert(1)" })), None).is_err());
         }
         let poll = kind("poll").map(|p| clean(p, Some("Yemek?".into()), &obj(json!({
-            "options": ["Pide", { "label": "Lahmacun" }], "allow_other": true, "closes_at": "2026-10-02T18:00", "evil": 1,
-        }))));
+            "options": ["Pide", { "label": "Lahmacun" }], "allow_other": true, "closes_at": "2026-10-02T18:00",
+            "timer_enabled": true, "evil": 1,
+        })), None));
         assert_eq!(poll.and_then(Result::ok), Some(json!({
-            "title": "Yemek?", "allow_other": true, "closes_at": "2026-10-02T18:00",
+            "title": "Yemek?", "allow_other": true, "closes_at": "2026-10-02T18:00", "timer_enabled": true,
             "options": [{ "label": "Pide" }, { "label": "Lahmacun" }],
         })));
-        assert!(kind("poll").is_some_and(|p| clean(p, None, &obj(json!({ "options": [""] }))).is_err()));
+        assert!(kind("poll").is_some_and(|p| clean(p, None, &obj(json!({ "options": [""] })), None).is_err()));
+        // Opt-in kapaliysa sure ve foto sessizce atilir; duzenlemede ozellik degistirilemez.
+        let off = kind("poll").map(|p| clean(p, None, &obj(json!({
+            "options": [{ "label": "A", "attachment_id": "6f9619ff-8b86-d011-b42d-00cf4fc964ff" }],
+            "closes_at": "2026-10-02T18:00", "timer_enabled": true, "media_enabled": true,
+        })), Some((false, false))));
+        assert_eq!(off.and_then(Result::ok), Some(json!({ "options": [{ "label": "A" }] })));
         assert!(poll_closed(Some("2000-01-01T00:00")) && !poll_closed(Some("2999-01-01T00:00")) && !poll_closed(None));
         assert!(kind("survey").is_none(), "taninmayan tur BOZUK cizilir, eklenemez");
     }

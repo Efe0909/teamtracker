@@ -193,6 +193,9 @@ export interface CardView {
   /** Yalniz oylamada (card_type "poll"). */
   options: PollOption[];
   allow_other: boolean;
+  /** Olusturulurken acilan opt-in ozellikler (secenek fotosu, sayac/sure); sonradan degismez. */
+  media_enabled: boolean;
+  timer_enabled: boolean;
   /** "2026-10-02T18:00" (Turkiye saati) ya da null; `closed` sunucuda hesaplanir. */
   closes_at: string | null;
   closed: boolean;

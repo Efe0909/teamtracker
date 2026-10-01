@@ -105,7 +105,7 @@ export function NewRecordForm(props: {
       <fieldset className={s.cards}>
         <legend>Kart blokları <span className={ui.fieldHint}>— isteğe bağlı, sonra da eklenir</span></legend>
         <div className={s.cardGrid}>
-          {CARD_TYPES.map((t) => (
+          {CARD_TYPES.filter((t) => t !== "poll").map((t) => (
             <label key={t} className={s.cardOpt}>
               <input type="checkbox" checked={cards.includes(t)}
                 onChange={() => setCards((xs) => (xs.includes(t) ? xs.filter((x) => x !== t) : [...xs, t]))} />

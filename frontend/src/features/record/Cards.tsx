@@ -22,6 +22,7 @@ export function Cards({ d }: { d: RecordDetail }) {
   const order = useCardOrder(d.record.id);
   // Kart DUZENI modu: kartlarin kendi duzenle/sil dugmelerinden bagimsiz, yalniz siralama.
   const [layout, setLayout] = useState(false);
+  const [creatingPoll, setCreatingPoll] = useState(false);
   if (d.cards.length === 0 && !d.access.can_edit) return null;
   // Sira kisiye ozel (sunucuda): komsuyla yer degistirip tum sirayi gonder.
   const move = (i: number, dir: -1 | 1) => {
@@ -34,7 +35,7 @@ export function Cards({ d }: { d: RecordDetail }) {
     order.mutate(ids, { onError: (e) => toast({ text: errorText(e), error: true }) });
   };
   const add = (t: CardType) =>
-    w.mutate({ method: "POST", path: `/api/records/${d.record.id}/cards`, body: { card_type: t } },
+    t === "poll" ? setCreatingPoll(true) : w.mutate({ method: "POST", path: `/api/records/${d.record.id}/cards`, body: { card_type: t } },
       { onError: (e) => toast({ text: errorText(e), error: true }) });
   return (
     <section className={s.section} aria-labelledby="cards-h">
@@ -63,6 +64,7 @@ export function Cards({ d }: { d: RecordDetail }) {
           </span>
         )}
       </div>
+      {creatingPoll && <PollForm recordId={d.record.id} onClose={() => setCreatingPoll(false)} />}
       {d.cards.map((c, i) => (
         <Card key={c.id} d={d} c={c} layout={layout} first={i === 0} last={i === d.cards.length - 1} busy={order.isPending}
           onMove={(dir) => move(i, dir)} />

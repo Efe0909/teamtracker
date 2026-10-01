@@ -4,7 +4,7 @@
 import { useEffect, useRef, useState } from "react";
 import { errorText, upload } from "../../api/client";
 import { useCardWrite } from "../../api/hooks";
-import type { Attachment, CardView, PollOption } from "../../api/types";
+import type { Attachment, CardView, PollOption, Uuid } from "../../api/types";
 import { useLookup } from "../../lib/lookup";
 import { Icon } from "../../ui/icons";
 import { Avatar, Button, cx, Dialog, ui, useToast } from "../../ui/ui";
@@ -107,16 +107,20 @@ export function PollBody({ c }: { c: CardView }) {
   );
 }
 
-export function PollForm({ c, onClose }: { c: CardView; onClose: () => void }) {
+/** Olusturma (`recordId`) ve duzenleme (`c`). Medya ve sayac OPT-IN: yalniz olusturulurken
+ *  secilir, kart olusunca degismez (sunucu da korur). */
+export function PollForm({ c, recordId, onClose }: { c?: CardView; recordId?: Uuid; onClose: () => void }) {
   const w = useCardWrite();
   const file = useRef<HTMLInputElement>(null);
   const photoFor = useRef(0);
+  const creating = c === undefined;
   const [err, setErr] = useState<string | null>(null);
-  const [title, setTitle] = useState(c.data["title"] ?? "");
-  const [options, setOptions] = useState<PollOption[]>(c.options.length > 0 ? c.options : [{ label: "" }, { label: "" }]);
-  const [allowOther, setAllowOther] = useState(c.allow_other);
-  const [askMedia, setAskMedia] = useState(c.options.some((o) => o.attachment_id !== undefined));
-  const [closesAt, setClosesAt] = useState(c.closes_at ?? "");
+  const [title, setTitle] = useState(c?.data["title"] ?? "");
+  const [options, setOptions] = useState<PollOption[]>(c !== undefined && c.options.length > 0 ? c.options : [{ label: "" }, { label: "" }]);
+  const [allowOther, setAllowOther] = useState(c?.allow_other ?? false);
+  const [mediaOn, setMediaOn] = useState(c?.media_enabled ?? false);
+  const [timerOn, setTimerOn] = useState(c?.timer_enabled ?? false);
+  const [closesAt, setClosesAt] = useState(c?.closes_at ?? "");
   const set = (i: number, o: PollOption) => setOptions((p) => p.map((x, j) => (j === i ? o : x)));
 
   const pick = (f: File) => {
@@ -127,14 +131,17 @@ export function PollForm({ c, onClose }: { c: CardView; onClose: () => void }) {
   };
 
   return (
-    <Dialog open onClose={onClose} title="Oylamayı düzenle" wide>
+    <Dialog open onClose={onClose} title={creating ? "Oylama ekle" : "Oylamayı düzenle"} wide>
       <form className={ui.formStack} onSubmit={(e) => {
         e.preventDefault();
         setErr(null);
         const kept = options.filter((o) => o.label.trim() !== "")
-          .map((o) => (askMedia && o.attachment_id !== undefined ? o : { label: o.label }));
-        w.mutate({ method: "PATCH", path: `/api/cards/${c.id}`,
-          body: { title, data: { options: kept, allow_other: allowOther, closes_at: closesAt } } },
+          .map((o) => (mediaOn && o.attachment_id !== undefined ? o : { label: o.label }));
+        const data = { options: kept, allow_other: allowOther, closes_at: timerOn ? closesAt : "",
+          ...(creating ? { media_enabled: mediaOn, timer_enabled: timerOn } : {}) };
+        w.mutate(creating
+          ? { method: "POST", path: `/api/records/${recordId ?? ""}/cards`, body: { card_type: "poll", title, data } }
+          : { method: "PATCH", path: `/api/cards/${c.id}`, body: { title, data } },
           { onSuccess: onClose, onError: (x) => setErr(errorText(x)) });
       }}>
         {err !== null && <p className={ui.error} role="alert">{err}</p>}
@@ -145,7 +152,7 @@ export function PollForm({ c, onClose }: { c: CardView; onClose: () => void }) {
             <div key={i} className={s.pollEditRow}>
               <input className={ui.input} value={o.label} maxLength={100} aria-label={`Seçenek ${i + 1}`}
                 placeholder={`Seçenek ${i + 1}`} onChange={(e) => set(i, { ...o, label: e.target.value })} />
-              {askMedia && (
+              {mediaOn && (
                 <button type="button" className={s.pollPhoto} onClick={() => { photoFor.current = i; file.current?.click(); }}>
                   {o.attachment_id !== undefined
                     ? <img src={`/api/attachments/${o.attachment_id}/thumb`} alt="" />
@@ -171,14 +178,29 @@ export function PollForm({ c, onClose }: { c: CardView; onClose: () => void }) {
           <input type="checkbox" checked={allowOther} onChange={(e) => setAllowOther(e.target.checked)} />
           “Diğer” seçeneği — kişi ne istediğini yazar, ayrı sekmede görünür
         </label>
-        <label className={ui.check}>
-          <input type="checkbox" checked={askMedia} onChange={(e) => setAskMedia(e.target.checked)} />
-          Seçenek başına fotoğraf
-        </label>
-        <label className={ui.field}>
-          <span>Bitiş <span className={ui.fieldHint}>— boşsa süresiz; geri sayım kartta görünür</span></span>
-          <input className={ui.input} type="datetime-local" value={closesAt} onChange={(e) => setClosesAt(e.target.value)} />
-        </label>
+        {creating ? (
+          <fieldset className={ui.field}>
+            <legend>İsteğe bağlı özellikler <span className={ui.fieldHint}>— yalnız oluştururken seçilir, sonra değişmez</span></legend>
+            <label className={ui.check}>
+              <input type="checkbox" checked={mediaOn} onChange={(e) => setMediaOn(e.target.checked)} />
+              Medya — seçenek başına fotoğraf
+            </label>
+            <label className={ui.check}>
+              <input type="checkbox" checked={timerOn} onChange={(e) => setTimerOn(e.target.checked)} />
+              Sayaç — bitiş zamanı ve geri sayım
+            </label>
+          </fieldset>
+        ) : (mediaOn || timerOn) && (
+          <p className={ui.fieldHint}>
+            Açık özellikler: {[mediaOn && "medya", timerOn && "sayaç"].filter(Boolean).join(", ")} (oluştururken seçilmişti).
+          </p>
+        )}
+        {timerOn && (
+          <label className={ui.field}>
+            <span>Bitiş</span>
+            <input className={ui.input} type="datetime-local" value={closesAt} onChange={(e) => setClosesAt(e.target.value)} />
+          </label>
+        )}
         <div className={ui.dact}>
           <Button onClick={onClose}>Vazgeç</Button>
           <Button type="submit" variant="primary" disabled={w.isPending}>{w.isPending ? "Kaydediliyor…" : "Kaydet"}</Button>

@@ -23,7 +23,7 @@ const META: Meta = {
 };
 const poll: CardView = {
   id: "c", card_type: "poll", known: true, data: { title: "Yemek?" }, signups: [], attachments: [],
-  options: [{ label: "Pide" }, { label: "Lahmacun" }], allow_other: true, closes_at: null, closed: false,
+  options: [{ label: "Pide" }, { label: "Lahmacun" }], allow_other: true, media_enabled: false, timer_enabled: false, closes_at: null, closed: false,
   votes: [{ user_id: "b", option: null, text: "Kebap", at: null }, { user_id: "a", option: 1, text: null, at: null }],
 };
 
