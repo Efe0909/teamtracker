@@ -42,6 +42,7 @@ export type ApiErrorCode =
   | "invalid_link"
   | "invalid_answer"
   | "invalid_type"
+  | "invalid_color"
   | "invalid_node"
   | "name_taken"
   | "team_is_pillar"
@@ -86,6 +87,7 @@ export const ERRORS = {
   invalid_link: "Bağlantı http:// ya da https:// ile başlamalı.",
   invalid_answer: "Bu kartta böyle bir cevap yok.",
   invalid_type: "Bu düğüm türü burada kullanılamaz.",
+  invalid_color: "Renk değeri geçersiz.",
   invalid_node: "Seçilen düğüm bulunamadı ya da pasif.",
   name_taken: "Bu adla bir takım ya da pillar zaten var.",
   team_is_pillar: "Bu takım bir pillar'ın özel takımı; adı ve silinmesi pillar sayfasından yönetilir.",
