@@ -182,6 +182,7 @@ export function CollapsibleProps({ d, children }: { d: RecordDetail; children: R
         ) : (
           <span className={s.propsSummary}>
             <Status status={r.status} />
+            <KindTag kind={r.kind} />
             <PriorityTag priority={r.priority} bare />
             <Who user={owner} empty="Sorumlusuz" size={18} />
             <span className={s.muted}>{r.due_date ?? "Tarihsiz"}</span>
