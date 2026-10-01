@@ -5,7 +5,6 @@ use axum::{
     http::StatusCode,
     Json,
 };
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -138,7 +137,7 @@ pub struct MemberIn {
     role: TeamRole,
 }
 
-async fn manage_teams(st: &AppState, me: &crate::models::user::User) -> Result<()> {
+pub(super) async fn manage_teams(st: &AppState, me: &crate::models::user::User) -> Result<()> {
     if me.is_admin || common::has_scope(st, me, "manage_teams").await? {
         Ok(())
     } else {
@@ -210,47 +209,4 @@ pub async fn drop_member(
 
 async fn one_team(st: &AppState, id: Uuid) -> Result<Json<TeamView>> {
     team_views(st, Some(id)).await?.into_iter().next().map(Json).ok_or(AppError::NotFound)
-}
-
-// --- bildirimler -----------------------------------------------------------
-
-/// Beni ilgilendiren sohbetlerdeki son hareketler, benimkiler haric.
-/// Okundu bilgisi YOK (spec/20 §6 Faz 3); liste son 60 satir.
-#[derive(Serialize, sqlx::FromRow)]
-pub struct Notice {
-    kind: String,
-    id: Uuid,
-    created_at: DateTime<Utc>,
-    actor_id: Option<Uuid>,
-    verb: Option<String>,
-    subject_label: Option<String>,
-    target_label: Option<String>,
-    body: Option<String>,
-    record_id: Option<Uuid>,
-    team_id: Option<Uuid>,
-    title: String,
-}
-
-pub async fn notifications(
-    State(st): State<AppState>, CurrentUser(me): CurrentUser,
-) -> Result<Json<Vec<Notice>>> {
-    Ok(Json(sqlx::query_as(
-        "with mine as (
-           select r.chat_id, r.id as record_id, null::uuid as team_id, r.title
-             from records r
-            where r.owner_id = $1 or r.created_by = $1
-               or exists(select 1 from record_participants p
-                          where p.record_id = r.id and p.user_id = $1)
-               or exists(select 1 from actions a where a.record_id = r.id and a.owner_id = $1)
-               or r.team_id in (select team_id from team_members where user_id = $1)
-           union all
-           select t.chat_id, null, t.id, t.name
-             from teams t join team_members m on m.team_id = t.id and m.user_id = $1
-         )
-         select f.kind, f.id, f.created_at, f.actor_id, f.verb, f.subject_label,
-                f.target_label, f.body, mine.record_id, mine.team_id, mine.title
-           from chat_feed f join mine on mine.chat_id = f.chat_id
-          where f.actor_id is distinct from $1
-          order by f.created_at desc limit 60")
-        .bind(me.id).fetch_all(&st.pool).await?))
 }

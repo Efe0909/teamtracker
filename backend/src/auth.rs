@@ -117,8 +117,19 @@ async fn resolve(p: &Parts, st: &AppState) -> Result<Option<User>, AppError> {
 ///
 /// Hata yutulur — damga yazilamadi diye istek dusmemeli.
 async fn touch_presence(st: &AppState, id: Uuid) {
+    // Istek sayaci HER istekte artar (bellekte); veritabanina dakikada bir akar.
+    *st.pending_requests.lock().unwrap_or_else(|e| e.into_inner()).entry(id).or_insert(0) += 1;
     if !presence_due(&st.presence, id, Instant::now()) {
         return;
+    }
+    let n = st.pending_requests.lock().unwrap_or_else(|e| e.into_inner()).remove(&id).unwrap_or(0);
+    if let Err(e) = sqlx::query(
+        "insert into user_activity (user_id, day, requests, minutes) values ($1, current_date, $2, 1)
+         on conflict (user_id, day) do update
+           set requests = user_activity.requests + excluded.requests, minutes = user_activity.minutes + 1")
+        .bind(id).bind(n as i32).execute(&st.pool).await
+    {
+        tracing::warn!("activity update failed: {e}");
     }
     if let Err(e) = sqlx::query("update users set last_seen_at = now() where id = $1")
         .bind(id).execute(&st.pool).await

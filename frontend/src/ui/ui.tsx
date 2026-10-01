@@ -175,15 +175,34 @@ export function Due({ date, done = false, actionLate = false }: { date: IsoDate 
 // USTUNDE kalmali, yoksa sayfasi acik biri yanip soner. Python'da da 2 dk.
 const ONLINE_MS = 2 * 60_000;
 
-export function Avatar({ user, size = 24 }: { user: Pick<MetaUser, "name" | "color" | "last_seen_at"> | undefined; size?: number }) {
+type AvatarUser = Pick<MetaUser, "name" | "color" | "last_seen_at"> &
+  Partial<Pick<MetaUser, "avatar_id" | "birth_day" | "birth_month">>;
+
+function isBirthday(u: AvatarUser | undefined): boolean {
+  if (u?.birth_day == null || u.birth_month == null) return false;
+  const now = new Date();
+  return u.birth_day === now.getDate() && u.birth_month === now.getMonth() + 1;
+}
+
+export function Avatar({ user, size = 24 }: { user: AvatarUser | undefined; size?: number }) {
   const online = user?.last_seen_at != null && Date.now() - new Date(user.last_seen_at).getTime() < ONLINE_MS;
+  const photo = user?.avatar_id ?? null;
   return (
     <span
       className={cx(s.av, online && s.online)}
       style={{ width: size, height: size, fontSize: Math.round(size * 0.44), ...(user?.color != null ? { background: user.color } : {}) }}
       aria-hidden="true"
     >
-      {(user?.name ?? "?").slice(0, 1).toLocaleUpperCase("tr")}
+      {photo !== null ? (
+        <img className={s.avImg} src={`/api/attachments/${photo}/thumb`} alt="" loading="lazy" />
+      ) : (
+        (user?.name ?? "?").slice(0, 1).toLocaleUpperCase("tr")
+      )}
+      {isBirthday(user) && (
+        <span className={s.cake}>
+          <Icon name="cake" size={Math.max(10, Math.round(size * 0.45))} />
+        </span>
+      )}
     </span>
   );
 }

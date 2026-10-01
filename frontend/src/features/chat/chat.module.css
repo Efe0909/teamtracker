@@ -274,3 +274,10 @@
   font-size: var(--fs-sm);
   color: var(--dim);
 }
+
+.nick {
+  display: block;
+  font-size: var(--fs-sm);
+  font-weight: 400;
+  color: var(--dim);
+}

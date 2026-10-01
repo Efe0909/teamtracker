@@ -33,8 +33,6 @@ export const TEAM_ROLE: Record<TeamRole, string> = { lead: "Lider", mentor: "Men
 export const NODE_TYPE: Record<NodeType, string> = {
   cell: "Cell",
   machine: "Makine",
-  pillar: "Pillar",
-  team: "Takım",
   task: "Görev",
   step: "Adım",
   operational: "Operational",
@@ -117,3 +115,10 @@ export function ago(t: IsoTime): string {
 export function clock(t: IsoTime): string {
   return timeFmt.format(new Date(t));
 }
+
+/** Bildirim kademesi: `label` ayar listesinde, `short` zil ipucunda. Karar sunucuda: backend push.rs `decide`. */
+export const NOTIFY: Record<"all" | "mentions" | "none", { label: string; short: string }> = {
+  all: { label: "Her hareket", short: "her hareket" },
+  mentions: { label: "Yalnızca anıldığımda (@adım, @all, @here, @team)", short: "yalnız anmalar" },
+  none: { label: "Hiçbiri — sessize al", short: "sessiz" },
+};

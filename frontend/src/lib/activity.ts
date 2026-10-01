@@ -41,6 +41,7 @@ function valueText(field: string, v: unknown, L: Lookup, action: boolean): strin
     case "team_id":
       return L.team(s)?.name ?? "silinmiş takım";
     case "pillar_id":
+      return L.pillar(s)?.name ?? "silinmiş pillar";
     case "unit_id":
       return L.node(s)?.name ?? "silinmiş düğüm";
     case "due_date":
@@ -73,6 +74,23 @@ export function describe(item: FeedItem | Notice, L: Lookup): string {
       return ch === null
         ? `“${item.subject_label ?? ""}” eylemini değiştirdi`
         : `“${item.subject_label ?? ""}” · ${FIELD[field] ?? field}: ${valueText(field, ch.from, L, true)} → ${valueText(field, ch.to, L, true)}`;
+    // takim yazmalari (spec/22): subject = takim adi, target = dugum adi
+    case "joined":
+      return "kayda katıldı";
+    case "join_requested":
+      return "katılma isteği gönderdi";
+    case "join_approved":
+      return `${item.subject_label ?? ""} kişisinin katılma isteğini onayladı`;
+    case "team_created":
+      return `“${item.subject_label ?? ""}” takımını kurdu`;
+    case "team_renamed":
+      return ch === null
+        ? "takımın adını değiştirdi"
+        : `takımın adını değiştirdi: ${String(ch.from)} → ${String(ch.to)}`;
+    case "team_node_linked":
+      return `takımı “${item.target_label ?? ""}” birimine bağladı`;
+    case "team_node_unlinked":
+      return `takımın “${item.target_label ?? ""}” birimiyle bağını kopardı`;
     case "member_added":
       return `${item.subject_label ?? ""} kişisini takıma ekledi (${roleText(ch?.to)})`;
     case "member_role":

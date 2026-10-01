@@ -17,11 +17,18 @@ import type {
   NewAction,
   NewNode,
   NewRecord,
+  NewTeam,
   NodePatch,
-  Notice,
+  NoticeList,
+  NotifyLevel,
+  PersonUse,
+  NotifyPrefs,
+  PillarPatch,
   RecordDetail,
   RecordPatch,
   RecordSummary,
+  ProfilePatch,
+  TeamPatch,
   TeamRole,
   TeamView,
   TreeView,
@@ -39,6 +46,8 @@ export const keys = {
   teams: ["teams"] as const,
   team: (id: Uuid) => ["team", id] as const,
   notifications: ["notifications"] as const,
+  notifyPrefs: ["notify-prefs"] as const,
+  adminActivity: ["admin", "activity"] as const,
   myActions: ["my-actions"] as const,
   nodes: ["nodes"] as const,
   admin: ["admin"] as const,
@@ -58,6 +67,8 @@ export interface RecordQuery {
   quick?: string;
   sort?: string;
   done?: "true" | "false";
+  /** Yalniz benim sabitlediklerim. */
+  pinned?: "true";
 }
 
 // --- okumalar --------------------------------------------------------------
@@ -104,7 +115,7 @@ export function useTeam(id: Uuid) {
 export function useNotifications() {
   return useQuery({
     queryKey: keys.notifications,
-    queryFn: () => request<Notice[]>("GET", "/api/notifications"),
+    queryFn: () => request<NoticeList>("GET", "/api/notifications"),
     refetchInterval: 60_000,
   });
 }
@@ -131,6 +142,53 @@ export function usePatchRecord(id: Uuid) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (p: RecordPatch) => request<RecordDetail>("PATCH", `/api/records/${id}`, p),
+    onSuccess: (d) => afterRecordWrite(qc, d),
+  });
+}
+
+/** Katilimci ekle (PUT) / cikar (DELETE); yanit guncel kayittir. */
+export function useParticipant(recordId: Uuid) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (w: { user: Uuid; on: boolean }) =>
+      request<RecordDetail>(w.on ? "PUT" : "DELETE", `/api/records/${recordId}/participants/${w.user}`),
+    onSuccess: (d) => afterRecordWrite(qc, d),
+  });
+}
+
+/** Sabitle (PUT) / kaldir (DELETE). */
+export function usePin(recordId: Uuid) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (on: boolean) => request<RecordDetail>(on ? "PUT" : "DELETE", `/api/records/${recordId}/pin`),
+    onSuccess: (d) => afterRecordWrite(qc, d),
+  });
+}
+
+/** Bu kayittaki kart sirasi (yalniz benim gorunumum, sunucuda). */
+export function useCardOrder(recordId: Uuid) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: Uuid[]) => request<RecordDetail>("PUT", `/api/records/${recordId}/card-order`, { ids }),
+    onSuccess: (d) => qc.setQueryData(keys.record(d.record.id), d),
+  });
+}
+
+/** Katil (public: aninda; request/private: istek) / istegi geri cek. */
+export function useJoin(recordId: Uuid) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (join: boolean) => request<RecordDetail>(join ? "POST" : "DELETE", `/api/records/${recordId}/join`),
+    onSuccess: (d) => afterRecordWrite(qc, d),
+  });
+}
+
+/** Sorumlu/acan/admin: istegi onayla ya da reddet. */
+export function useDecideJoin(recordId: Uuid) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (w: { user: Uuid; approve: boolean }) =>
+      request<RecordDetail>("POST", `/api/records/${recordId}/join-requests/${w.user}`, { approve: w.approve }),
     onSuccess: (d) => afterRecordWrite(qc, d),
   });
 }
@@ -241,6 +299,41 @@ export function useTeamMember(team: Uuid, chat: Uuid) {
   });
 }
 
+// --- takim ve pillar yazmalari (spec/22) ------------------------------------
+// Takim/pillar adi, rengi, dugum baglari sozlukte (`/api/meta`): her yazma onu
+// tazeler. Uclar govde dondurmez (201 {id} ya da 204).
+
+function afterTeamWrite(qc: QueryClient) {
+  void qc.invalidateQueries({ queryKey: keys.meta });
+  void qc.invalidateQueries({ queryKey: keys.teams });
+  void qc.invalidateQueries({ queryKey: keys.recordsAll });
+  void qc.invalidateQueries({ queryKey: keys.nodes });
+}
+
+/** Tek yazma kancasi; islem `teamOps`/`pillarOps` ile kurulur (adminOps kalibi). */
+export function useTeamWrite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (w: { method: "POST" | "PATCH" | "PUT" | "DELETE"; path: string; body?: unknown }) =>
+      request<{ id?: Uuid; team_id?: Uuid } | null>(w.method, w.path, w.body),
+    onSuccess: () => afterTeamWrite(qc),
+  });
+}
+
+export const teamOps = {
+  create: (b: NewTeam) => ({ method: "POST" as const, path: "/api/teams", body: b }),
+  patch: (id: Uuid, p: TeamPatch) => ({ method: "PATCH" as const, path: `/api/teams/${id}`, body: p }),
+  remove: (id: Uuid) => ({ method: "DELETE" as const, path: `/api/teams/${id}` }),
+  link: (id: Uuid, node: Uuid) => ({ method: "PUT" as const, path: `/api/teams/${id}/nodes/${node}` }),
+  unlink: (id: Uuid, node: Uuid) => ({ method: "DELETE" as const, path: `/api/teams/${id}/nodes/${node}` }),
+};
+
+export const pillarOps = {
+  create: (b: NewTeam) => ({ method: "POST" as const, path: "/api/pillars", body: b }),
+  patch: (id: Uuid, p: PillarPatch) => ({ method: "PATCH" as const, path: `/api/pillars/${id}`, body: p }),
+  remove: (id: Uuid) => ({ method: "DELETE" as const, path: `/api/pillars/${id}` }),
+};
+
 // --- yapi (veri yonetimi) ---------------------------------------------------
 
 /** Yazma guncel agaci dondurur. Dugumler HER ekrani besliyor (`/api/meta`:
@@ -304,5 +397,58 @@ export function useDeleteNode() {
   return useMutation({
     mutationFn: (id: Uuid) => request<TreeView>("DELETE", `/api/nodes/${id}`),
     onSuccess: (t) => afterTreeWrite(qc, t),
+  });
+}
+
+// --- profil -----------------------------------------------------------------
+
+export function usePatchProfile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (p: ProfilePatch) => request<null>("PATCH", "/api/me/profile", p),
+    // Ad/foto her ekranda cozuldugu icin sozluk tazelenir.
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.meta }),
+  });
+}
+
+export function useMarkSeen() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => request<null>("POST", "/api/notifications/seen"),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.notifications }),
+  });
+}
+
+export function useNotifyPrefs() {
+  return useQuery({ queryKey: keys.notifyPrefs, queryFn: () => request<NotifyPrefs>("GET", "/api/me/notifications") });
+}
+
+function afterPrefs(qc: QueryClient, p: NotifyPrefs) {
+  qc.setQueryData(keys.notifyPrefs, p);
+  void qc.invalidateQueries({ queryKey: keys.notifications });
+}
+
+export function usePatchNotifyPrefs() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (p: { level?: NotifyLevel; quiet_start?: number | null; quiet_end?: number | null }) =>
+      request<NotifyPrefs>("PATCH", "/api/me/notifications", p),
+    onSuccess: (p) => afterPrefs(qc, p),
+  });
+}
+
+/** Sohbet/kayit icin ozel secim; `null` varsayilana doner. */
+export function useSetChatPref(chat: Uuid) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (mode: NotifyLevel | null) => request<NotifyPrefs>("PUT", `/api/chats/${chat}/prefs`, { mode }),
+    onSuccess: (p) => afterPrefs(qc, p),
+  });
+}
+
+export function useAdminActivity() {
+  return useQuery({
+    queryKey: keys.adminActivity,
+    queryFn: () => request<PersonUse[]>("GET", "/api/admin/activity"),
   });
 }

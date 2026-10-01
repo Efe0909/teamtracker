@@ -139,10 +139,9 @@ impl Filters {
 
         match &self.pillar {
             Some(Pillar::None_) => { qb.push(" and r.pillar_id is null"); }
-            Some(Pillar::Id(id)) if tree.get(*id).is_some() => {
-                qb.push(" and r.pillar_id = ").push_bind(*id);
-            }
-            _ => {}
+            // FK pillars'a: var olmayan kimlik zaten bos kume verir.
+            Some(Pillar::Id(id)) => { qb.push(" and r.pillar_id = ").push_bind(*id); }
+            None => {}
         }
 
         if let Some(q) = &self.search {

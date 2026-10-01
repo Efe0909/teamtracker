@@ -70,6 +70,15 @@ pub async fn feed(
 ) -> Result<Json<Feed>> {
     let chat = common::id(&raw)?;
     chat_exists(&st, chat).await?;
+    // Gizli kayitta sohbet yalniz uyelere acik.
+    let owner_rec: Option<Uuid> = sqlx::query_scalar("select id from records where chat_id = $1")
+        .bind(chat).fetch_optional(&st.pool).await?;
+    if let Some(rid) = owner_rec {
+        let rec = Record::fetch(&st.pool, rid).await?.ok_or(AppError::NotFound)?;
+        if records::is_restricted(&st, &me, &rec).await? {
+            return Err(AppError::Forbidden);
+        }
+    }
     let items: Vec<FeedItem> = sqlx::query_as(
         "select kind, id, created_at, actor_id, verb, subject_label, target_label, body,
                 reply_to_id, edited_at
@@ -194,6 +203,8 @@ pub async fn post(
         invite(&mut tx, rid, me.id, &body).await?;
     }
     tx.commit().await?;
+    // Push arka planda: mesaj yazma ag gecikmesini beklemez.
+    tokio::spawn(crate::api::notify::fanout(st.clone(), chat, me.id, body));
     Ok(Json(Posted { id }))
 }
 

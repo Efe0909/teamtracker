@@ -13,12 +13,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { errorText } from "../../api/client";
 import { useCreateNode, useDeleteNode, useNodeTree, usePatchNode } from "../../api/hooks";
-import type { NodePatch, NodeType, TreeNode, TreeView, Uuid } from "../../api/types";
+import type { MetaTeam, NodePatch, NodeType, TreeNode, TreeView, Uuid } from "../../api/types";
 import { NODE_TYPE } from "../../lib/labels";
+import { useLookup } from "../../lib/lookup";
 import { Icon } from "../../ui/icons";
-import { Button, cx, Empty, Loading, Picker, Req, Tag, ui, useToast } from "../../ui/ui";
+import { Button, cx, Empty, Link, Loading, Picker, Req, Tag, ui, useToast } from "../../ui/ui";
 import { ErrorScreen } from "../errors/ErrorScreen";
 import s from "./dashboard.module.css";
+import { href } from "./routes";
 
 /** Acik form: bir dugumun duzenleme ya da alt dugum paneli; `id` null = kok ekleme. */
 type Panel = { id: Uuid | null; kind: "edit" | "add" } | null;
@@ -45,6 +47,13 @@ function TreeScreen({ tree }: { tree: TreeView }) {
   const [panel, setPanel] = useState<Panel>(null);
 
   const byId = useMemo(() => new Map(tree.nodes.map((n) => [n.id, n])), [tree.nodes]);
+  const L = useLookup();
+  /** dugum -> orada calisan takimlar (sozlukteki team_nodes'un tersi). */
+  const teamsAt = useMemo(() => {
+    const m = new Map<Uuid, MetaTeam[]>();
+    for (const t of L.meta.teams) for (const n of t.node_ids) m.set(n, [...(m.get(n) ?? []), t]);
+    return m;
+  }, [L.meta.teams]);
   /** Kokten bu dugume kadar butun ustleri — gorunurluk kararinin girdisi. */
   const ancestors = (n: TreeNode): Uuid[] => {
     const out: Uuid[] = [];
@@ -171,6 +180,13 @@ function TreeScreen({ tree }: { tree: TreeView }) {
                   )}
                   <span className={s.tname}>{n.name}</span>
                   <Tag tone="neutral">{NODE_TYPE[n.node_type]}</Tag>
+                  {/* Bu birimde calisan takimlar (team_nodes, spec/22). */}
+                  {(teamsAt.get(n.id) ?? []).map((t) => (
+                    <Link key={t.id} href={href({ name: "team", id: t.id })} className={s.tteam}>
+                      <span className={s.teamDot} style={t.color !== null ? { background: t.color } : undefined} aria-hidden="true" />
+                      {t.name}
+                    </Link>
+                  ))}
                   {n.child_count > 0 && (
                     <span className={s.tcount} title="alt düğüm sayısı">
                       {n.child_count}
@@ -328,7 +344,7 @@ function EditForm({ node, tree, onClose }: { node: TreeNode; tree: TreeView; onC
     // kullaniciya verdirir (spec/72 §6.2).
     const ok = window.confirm(
       `${node.name} KALICI olarak silinecek. Birlikte gidecekler: ${c.children} alt düğüm, ` +
-        `${c.records} kayıt, ${c.permissions} dal izni. Bu geri alınamaz — kapatmak için ` +
+        `${c.records} kayıt, ${c.permissions} dal izni, ${c.teams} takım bağı. Bu geri alınamaz — kapatmak için ` +
         "pasifleştirmeyi kullan. Emin misin?",
     );
     if (ok) del.mutate(node.id, { onSuccess: onClose, onError });
@@ -356,7 +372,7 @@ function EditForm({ node, tree, onClose }: { node: TreeNode; tree: TreeView; onC
             options={types.map((t) => ({ value: t, label: NODE_TYPE[t] }))} />
           {/* Neden kilitli: title yalniz fareyle gorunuyordu, dokunmatikte/klavyede hic. */}
           {!node.can_retype && (
-            <span className={ui.fieldHint}>Türe bağlı veri var (takım kartı) — önce o bağ çözülmeli.</span>
+            <span className={ui.fieldHint}>Türe bağlı veri var — önce o bağ çözülmeli.</span>
           )}
         </div>
       </div>

@@ -5,29 +5,51 @@
 
 import { useState } from "react";
 import { errorText, upload } from "../../api/client";
-import { useCardWrite } from "../../api/hooks";
+import { useCardOrder, useCardWrite } from "../../api/hooks";
 import type { Attachment, CardView, RecordDetail, SignupAnswer } from "../../api/types";
 import { CARD, CARD_TYPES, type CardType, isCardType, whenLabel } from "../../lib/cards";
 import { useLookup } from "../../lib/lookup";
+import { useStored } from "../../lib/stored";
 import { Icon } from "../../ui/icons";
-import { Avatar, Button, Dialog, IconButton, Menu, MenuItem, ui, useToast } from "../../ui/ui";
+import { Avatar, Button, cx, Dialog, IconButton, Menu, MenuItem, ui, useToast } from "../../ui/ui";
 import { Attachments, ImagePicker } from "../media/Media";
+import { PollBody, PollForm } from "./Poll";
 import s from "./record.module.css";
 
 export function Cards({ d }: { d: RecordDetail }) {
   const w = useCardWrite();
   const toast = useToast();
+  const order = useCardOrder(d.record.id);
+  // Kart DUZENI modu: kartlarin kendi duzenle/sil dugmelerinden bagimsiz, yalniz siralama.
+  const [layout, setLayout] = useState(false);
+  const [creatingPoll, setCreatingPoll] = useState(false);
   if (d.cards.length === 0 && !d.access.can_edit) return null;
+  // Sira kisiye ozel (sunucuda): komsuyla yer degistirip tum sirayi gonder.
+  const move = (i: number, dir: -1 | 1) => {
+    const ids = d.cards.map((c) => c.id);
+    const j = i + dir;
+    const a = ids[i], b = ids[j];
+    if (a === undefined || b === undefined) return;
+    ids[i] = b;
+    ids[j] = a;
+    order.mutate(ids, { onError: (e) => toast({ text: errorText(e), error: true }) });
+  };
   const add = (t: CardType) =>
-    w.mutate({ method: "POST", path: `/api/records/${d.record.id}/cards`, body: { card_type: t } },
+    t === "poll" ? setCreatingPoll(true) : w.mutate({ method: "POST", path: `/api/records/${d.record.id}/cards`, body: { card_type: t } },
       { onError: (e) => toast({ text: errorText(e), error: true }) });
   return (
     <section className={s.section} aria-labelledby="cards-h">
       <div className={s.secHead}>
         <h2 id="cards-h">Kartlar</h2>
         {d.cards.length > 0 && <span className={s.count}>{d.cards.length}</span>}
+        {d.cards.length > 1 && (
+          <Button size="sm" variant={layout ? "primary" : "default"} aria-pressed={layout} style={{ marginLeft: "auto" }}
+            onClick={() => setLayout(!layout)}>
+            <Icon name="sliders" size={14} /> {layout ? "Düzeni bitir" : "Düzeni düzenle"}
+          </Button>
+        )}
         {d.access.can_edit && (
-          <span style={{ marginLeft: "auto" }}>
+          <span style={d.cards.length > 1 ? undefined : { marginLeft: "auto" }}>
             <Menu align="end" trigger={
               <Button size="sm" disabled={w.isPending}>
                 <Icon name="plus" size={14} /> Kart ekle
@@ -42,7 +64,11 @@ export function Cards({ d }: { d: RecordDetail }) {
           </span>
         )}
       </div>
-      {d.cards.map((c) => <Card key={c.id} d={d} c={c} />)}
+      {creatingPoll && <PollForm recordId={d.record.id} onClose={() => setCreatingPoll(false)} />}
+      {d.cards.map((c, i) => (
+        <Card key={c.id} d={d} c={c} layout={layout} first={i === 0} last={i === d.cards.length - 1} busy={order.isPending}
+          onMove={(dir) => move(i, dir)} />
+      ))}
       {d.cards.length === 0 && (
         <div className={s.box}>
           <span className={s.boxEmpty}>Kart yok. Toplantı, görsel ya da gönüllü havuzu gerekiyorsa “Kart ekle”.</span>
@@ -52,7 +78,11 @@ export function Cards({ d }: { d: RecordDetail }) {
   );
 }
 
-function Card({ d, c }: { d: RecordDetail; c: CardView }) {
+function Card({ d, c, layout, first, last, busy, onMove }: {
+  d: RecordDetail; c: CardView; layout: boolean; first: boolean; last: boolean; busy: boolean; onMove: (dir: -1 | 1) => void;
+}) {
+  // Kapali kartlar cihazda hatirlanir (kayit/kart gezintisinde ayni kalir).
+  const [collapsed, setCollapsed] = useStored<string[]>("cards.collapsed", []);
   const w = useCardWrite();
   const toast = useToast();
   const [editing, setEditing] = useState(false);
@@ -74,14 +104,24 @@ function Card({ d, c }: { d: RecordDetail; c: CardView }) {
   }
   const t = CARD[c.card_type];
   const v = (k: string) => c.data[k] ?? "";
+  const folded = collapsed.includes(c.id);
 
   return (
-    <div className={s.card}>
+    <div className={cx(s.card, s.cardHover)}>
       <div className={s.cardHead}>
-        <Icon name={t.icon} size={18} />
-        <b>{v("title") !== "" ? v("title") : t.label}</b>
-        {v("title") !== "" && <span className={s.hint}>{t.label}</span>}
-        {d.access.can_edit && (
+        <button type="button" className={s.cardToggle} aria-expanded={!folded}
+          onClick={() => setCollapsed(folded ? collapsed.filter((x) => x !== c.id) : [...collapsed, c.id])}>
+          <span className={cx(s.caret, !folded && s.caretOpen)}><Icon name="chevron" size={14} /></span>
+          <Icon name={t.icon} size={18} />
+          <b>{v("title") !== "" ? v("title") : t.label}</b>
+          {v("title") !== "" && <span className={s.hint}>{t.label}</span>}
+        </button>
+        {layout ? (
+          <span className={s.cardLayoutActs}>
+            <IconButton icon="up" label="Yukarı taşı" disabled={first || busy} onClick={() => onMove(-1)} />
+            <IconButton icon="down" label="Aşağı taşı" disabled={last || busy} onClick={() => onMove(1)} />
+          </span>
+        ) : d.access.can_edit && (
           <span className={s.cardActs}>
             <IconButton icon="edit" label="Kartı düzenle" onClick={() => setEditing(true)} />
             <IconButton icon="trash" label="Kartı sil" onClick={remove} />
@@ -89,23 +129,29 @@ function Card({ d, c }: { d: RecordDetail; c: CardView }) {
         )}
       </div>
 
-      {c.card_type === "meeting" && (
-        <dl className={s.cardFields}>
-          {v("when") !== "" && <><dt>Ne zaman</dt><dd>{whenLabel(v("when"))}</dd></>}
-          {v("place") !== "" && <><dt>Yer</dt><dd>{v("place")}</dd></>}
-          {v("link") !== "" && (
-            <><dt>Bağlantı</dt><dd><a href={v("link")} target="_blank" rel="noopener noreferrer">{v("link")}</a></dd></>
-          )}
-        </dl>
-      )}
-      {c.card_type === "pool" && v("need") !== "" && <p className={s.hint}>{v("need")} kişi lazım</p>}
-      {["description", "agenda", "detail"].map((k) => v(k) !== "" && <p key={k} className={s.desc}>{v(k)}</p>)}
-      {Object.keys(c.data).length === 0 && <p className={s.hint}>{t.hint}</p>}
+      {!folded && (
+        <>
+        {c.card_type === "meeting" && (
+          <dl className={s.cardFields}>
+            {v("when") !== "" && <><dt>Ne zaman</dt><dd>{whenLabel(v("when"))}</dd></>}
+            {v("place") !== "" && <><dt>Yer</dt><dd>{v("place")}</dd></>}
+            {v("link") !== "" && (
+              <><dt>Bağlantı</dt><dd><a href={v("link")} target="_blank" rel="noopener noreferrer">{v("link")}</a></dd></>
+            )}
+          </dl>
+        )}
+        {c.card_type === "pool" && v("need") !== "" && <p className={s.hint}>{v("need")} kişi lazım</p>}
+        {["description", "agenda", "detail"].map((k) => v(k) !== "" && <p key={k} className={s.desc}>{v(k)}</p>)}
+        {Object.keys(c.data).length === 0 && <p className={s.hint}>{t.hint}</p>}
 
+        {c.card_type === "poll" && <PollBody c={c} />}
       {c.card_type === "media" && <MediaBody d={d} c={c} />}
-      {Object.keys(t.answers).length > 0 && <Signups c={c} answers={t.answers} />}
+        {Object.keys(t.answers).length > 0 && <Signups c={c} answers={t.answers} />}
 
-      {editing && <CardForm c={c} type={c.card_type} onClose={() => setEditing(false)} />}
+        </>
+      )}
+      {editing && c.card_type === "poll" && <PollForm c={c} onClose={() => setEditing(false)} />}
+      {editing && c.card_type !== "poll" && <CardForm c={c} type={c.card_type} onClose={() => setEditing(false)} />}
     </div>
   );
 }

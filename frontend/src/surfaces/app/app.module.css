@@ -319,3 +319,15 @@
   border-radius: 999px;
   background: var(--panel);
 }
+
+.cardUnread {
+  border-color: var(--acc-soft);
+  background: var(--acc-bg);
+}
+
+button.card {
+  width: 100%;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}

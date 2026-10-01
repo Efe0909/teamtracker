@@ -32,6 +32,11 @@ pub struct Config {
     pub vapid_public: String,
     pub vapid_sub: String,
 
+    /// Resend: anahtar bos ise posta yalniz kuyrukta bekler.
+    pub mail_api_key: String,
+    pub mail_from: String,
+    pub mail_api_url: String,
+
     /// Ilk yonetici listesinin DOSYA yolu (KNOW-320): satir basina bir
     /// e-posta. Icerik degil yol: liste agenix sirri, ortamda gorunmesin.
     pub bootstrap_admins_file: Option<String>,
@@ -108,11 +113,27 @@ impl Config {
             media_accel: var("EKIPTAKIP_MEDIA_ACCEL"),
             vapid_private: var("VAPID_PRIVATE"),
             vapid_public: var("VAPID_PUBLIC"),
+            mail_api_key: var("RESEND_API_KEY"),
+            mail_from: Some(var("MAIL_FROM")).filter(|s| !s.is_empty())
+                .unwrap_or_else(|| "EkipTakip <ozumaker@polonyum.com>".into()),
+            mail_api_url: Some(var("RESEND_API_URL")).filter(|s| !s.is_empty())
+                .unwrap_or_else(|| "https://api.resend.com/emails".into()),
             vapid_sub: Some(var("VAPID_SUB")).filter(|s| !s.is_empty())
                 .unwrap_or_else(|| "mailto:yonetici@polonyum.com".into()),
             bootstrap_admins_file: Some(var("EKIPTAKIP_BOOTSTRAP_ADMINS_FILE")).filter(|s| !s.is_empty()),
             env,
         })
+    }
+
+    /// Davet postasindaki baglantilar: yapilandirilmis host'lar, yoksa yerel gelistirme.
+    pub fn app_url(&self) -> String {
+        self.url_of(&self.host_app, "app.localhost:5173")
+    }
+    pub fn dashboard_url(&self) -> String {
+        self.url_of(&self.host_dashboard, "dashboard.localhost:5173")
+    }
+    fn url_of(&self, host: &str, dev: &str) -> String {
+        if host.is_empty() { format!("http://{dev}") } else { format!("https://{host}") }
     }
 
     pub fn in_production(&self) -> bool { self.env == Env::Production }

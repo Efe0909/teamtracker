@@ -4,8 +4,11 @@
 // Mobil yuze BAGLANTI YOK — bilincli ayrim (KNOW-153).
 
 import { useEffect, useState } from "react";
+import { NotifySettings } from "../../features/profile/NotifySettings";
+import { ProfileDialog } from "../../features/profile/ProfileDialog";
 import { useLookup } from "../../lib/lookup";
 import { useLocation } from "../../lib/router";
+import { useStored } from "../../lib/stored";
 import { setTheme, useTheme, type Theme } from "../../lib/theme";
 import { Icon, type IconName } from "../../ui/icons";
 import { Avatar, cx, IconButton, Kbd, Link, Menu, MenuItem, MenuLabel, MenuRadio, MenuSep } from "../../ui/ui";
@@ -15,7 +18,9 @@ import { Admin } from "./Admin";
 import s from "./dashboard.module.css";
 import { DataTree } from "./DataTree";
 import { Home } from "./Home";
+import { People } from "./People";
 import { Palette } from "./Palette";
+import { PillarPage, Pillars } from "./Pillars";
 import { RecordPage } from "./RecordPage";
 import { href, parse, type Route } from "./routes";
 import { Tasks } from "./Tasks";
@@ -25,6 +30,8 @@ export default function Dashboard() {
   const route = parse(useLocation());
   const [drawer, setDrawer] = useState(false);
   const [palette, setPalette] = useState(false);
+  // Masaustunde kenar cubugu daraltilir; tercih cihazda hatirlanir.
+  const [folded, setFolded] = useStored("side.folded", false);
 
   // Gezinince cekmece kapanir.
   useEffect(() => setDrawer(false), [route.name, "id" in route ? route.id : ""]);
@@ -40,9 +47,14 @@ export default function Dashboard() {
   }, []);
 
   return (
-    <div className={s.shell} data-drawer={drawer}>
+    <div className={s.shell} data-drawer={drawer} data-folded={folded}>
       <a className={s.skip} href="#main">İçeriğe geç</a>
-      <Sidebar route={route} onSearch={() => setPalette(true)} />
+      <Sidebar route={route} onSearch={() => setPalette(true)} onFold={() => setFolded(true)} />
+      {folded && (
+        <span className={s.foldOpen}>
+          <IconButton icon="chevron" label="Kenar çubuğunu aç" onClick={() => setFolded(false)} />
+        </span>
+      )}
       <button type="button" className={s.scrim} aria-label="Menüyü kapat" tabIndex={-1} onClick={() => setDrawer(false)} />
       <div className={s.column}>
         <header className={s.mobileBar}>
@@ -71,8 +83,14 @@ function Page({ route }: { route: Route }) {
       return <Teams />;
     case "team":
       return <TeamPage id={route.id} />;
+    case "pillars":
+      return <Pillars />;
+    case "pillar":
+      return <PillarPage id={route.id} />;
     case "tree":
       return <DataTree />;
+    case "people":
+      return <People />;
     case "admin":
       return <Admin />;
     case "notFound":
@@ -102,6 +120,8 @@ const NAV: NavItem[] = [
   { route: { name: "home" }, icon: "home", label: "Panolar", match: ["home"] },
   { route: { name: "tasks", query: {} }, icon: "tasks", label: "Görevler", match: ["tasks", "record"] },
   { route: { name: "teams" }, icon: "teams", label: "Takımlar", match: ["teams"] },
+  { route: { name: "people" }, icon: "user", label: "Ekip", match: ["people"] },
+  { route: { name: "pillars" }, icon: "pin", label: "Pillar'lar", match: ["pillars"] },
   { route: { name: "tree" }, icon: "tree", label: "Veri yönetimi", match: ["tree"] },
 ];
 
@@ -114,13 +134,16 @@ const THEME_OPTS: { value: Theme; label: string; icon: IconName }[] = [
   { value: "system", label: "Sistem", icon: "system" },
 ];
 
-function Sidebar({ route, onSearch }: { route: Route; onSearch: () => void }) {
+function Sidebar({ route, onSearch, onFold }: { route: Route; onSearch: () => void; onFold: () => void }) {
   const L = useLookup();
   const theme = useTheme();
   const admin = L.meta.me.is_admin || L.can("manage_users");
   const mine = new Set(L.meta.me.team_ids);
-  const teams = [...L.meta.teams].sort((a, b) => Number(mine.has(b.id)) - Number(mine.has(a.id)) || a.name.localeCompare(b.name, "tr"));
-  const current = route.name === "team" ? route.id : null;
+  const teams = [...L.plainTeams].sort((a, b) => Number(mine.has(b.id)) - Number(mine.has(a.id)) || a.name.localeCompare(b.name, "tr"));
+  const [profileOpen, setProfileOpen] = useState(!L.meta.me.profile_complete);
+  const [notifyOpen, setNotifyOpen] = useState(false);
+  const [teamsOpen, setTeamsOpen] = useStored("nav.teams.open", true);
+  const current = route.name === "team" || route.name === "pillar" ? route.id : null;
 
   const item = (n: NavItem) => {
     const on = n.match.includes(route.name);
@@ -137,6 +160,9 @@ function Sidebar({ route, onSearch }: { route: Route; onSearch: () => void }) {
       <div className={s.sideTop}>
         <Brand />
         <span className={s.ver}>alpha 0.2</span>
+        <span className={s.foldBtn}>
+          <IconButton icon="back" label="Kenar çubuğunu daralt" onClick={onFold} />
+        </span>
       </div>
 
       <button type="button" className={s.searchBtn} onClick={onSearch}>
@@ -154,10 +180,31 @@ function Sidebar({ route, onSearch }: { route: Route; onSearch: () => void }) {
         {admin && item(ADMIN_NAV)}
       </div>
 
+      {L.pillars.length > 0 && (
+        <div className={s.navGroup}>
+          <span className={s.navHead}>Pillar'lar</span>
+          {L.pillars.map((p) => (
+            <Link
+              key={p.id}
+              href={href({ name: "pillar", id: p.id })}
+              className={cx(s.nav, current === p.id && s.navOn)}
+              aria-current={current === p.id ? "page" : undefined}
+            >
+              <span className={s.pillarDot} style={p.color !== null ? { background: p.color } : undefined} aria-hidden="true" />
+              <span>{p.name}</span>
+              {mine.has(p.team_id) && <span className={s.navMeta}>üye</span>}
+            </Link>
+          ))}
+        </div>
+      )}
+
       {teams.length > 0 && (
         <div className={s.navGroup}>
-          <span className={s.navHead}>Takımlar</span>
-          {teams.map((t) => (
+          <button type="button" className={s.navHeadBtn} aria-expanded={teamsOpen} onClick={() => setTeamsOpen(!teamsOpen)}>
+            <span>Takımlar</span>
+            <Icon name="chevron" size={12} />
+          </button>
+          {teamsOpen && teams.map((t) => (
             <Link
               key={t.id}
               href={href({ name: "team", id: t.id })}
@@ -187,6 +234,13 @@ function Sidebar({ route, onSearch }: { route: Route; onSearch: () => void }) {
           </button>
         }
       >
+        <MenuItem icon="user" onSelect={() => setProfileOpen(true)}>
+          Profilim
+        </MenuItem>
+        <MenuItem icon="bell" onSelect={() => setNotifyOpen(true)}>
+          Bildirimler
+        </MenuItem>
+        <MenuSep />
         <MenuLabel>Tema</MenuLabel>
         <MenuRadio value={theme} onChange={setTheme} options={THEME_OPTS} />
         <MenuSep />
@@ -194,6 +248,8 @@ function Sidebar({ route, onSearch }: { route: Route; onSearch: () => void }) {
           Çıkış yap
         </MenuItem>
       </Menu>
+      <NotifySettings open={notifyOpen} onClose={() => setNotifyOpen(false)} />
+      <ProfileDialog open={profileOpen} onClose={() => setProfileOpen(false)} />
     </nav>
   );
 }

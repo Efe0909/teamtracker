@@ -5,18 +5,19 @@
 import { useState } from "react";
 import { errorText } from "../../api/client";
 import { useCreateRecord } from "../../api/hooks";
-import type { Priority, RecordKind, Uuid } from "../../api/types";
+import type { AccessMode, Priority, RecordKind, Uuid } from "../../api/types";
 import { CARD, CARD_TYPES, type CardType } from "../../lib/cards";
 import { KIND, PRIORITY, PRIORITY_ORDER } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
 import { Icon } from "../../ui/icons";
 import { Button, Picker, PriorityTag, TeamName, ui, Who } from "../../ui/ui";
+import { ACCESS } from "./Join";
 import s from "./form.module.css";
 
 export function NewRecordForm(props: {
   onCreated: (id: Uuid) => void;
   onCancel?: () => void;
-  defaults?: { team_id?: Uuid; unit_id?: Uuid };
+  defaults?: { team_id?: Uuid; unit_id?: Uuid; pillar_id?: Uuid };
 }) {
   const L = useLookup();
   const m = useCreateRecord();
@@ -25,12 +26,13 @@ export function NewRecordForm(props: {
   const [title, setTitle] = useState("");
   const [unit, setUnit] = useState<string>(props.defaults?.unit_id ?? L.units[0]?.id ?? "");
   const [team, setTeam] = useState<string | null>(props.defaults?.team_id ?? null);
-  const [pillar, setPillar] = useState<string | null>(null);
+  const [pillar, setPillar] = useState<string | null>(props.defaults?.pillar_id ?? null);
   const [cards, setCards] = useState<CardType[]>([]);
   // Sorumlu varsayilani ACAN kisi; bos secim "sorumlusuz ac" demek.
   const [owner, setOwner] = useState<string | null>(L.me.id);
   const [priority, setPriority] = useState<Priority>("medium");
   const [desc, setDesc] = useState("");
+  const [access, setAccess] = useState<AccessMode>("public");
 
   return (
     <form
@@ -49,6 +51,7 @@ export function NewRecordForm(props: {
             owner_id: owner,
             priority,
             card_types: cards,
+            access_mode: access,
           },
           { onSuccess: (r) => props.onCreated(r.id), onError: (x) => setErr(errorText(x)) },
         );
@@ -88,15 +91,19 @@ export function NewRecordForm(props: {
         <Picker look="chip" active={team !== null} label="Takım" value={team} onChange={setTeam}
           options={[
             { value: null, label: "Takım yok" },
-            ...L.meta.teams.map((t) => ({ value: t.id as string | null, label: t.name, render: <TeamName team={t} /> })),
+            ...L.plainTeams.map((t) => ({ value: t.id as string | null, label: t.name, render: <TeamName team={t} /> })),
           ]}>
           {team === null ? <><Icon name="plus" size={13} /> Takım</> : <TeamName team={L.team(team)} />}
+        </Picker>
+        <Picker look="chip" active={access !== "public"} label="Erişim" value={access} onChange={setAccess}
+          options={(Object.keys(ACCESS) as AccessMode[]).map((v) => ({ value: v, label: ACCESS[v].label, hint: ACCESS[v].hint }))}>
+          <Icon name="lock" size={13} /> {ACCESS[access].label}
         </Picker>
         {/* Pillar ORTOGONAL (KNOW-261): kaydin atasi olmak zorunda degil, ayri secilir. */}
         {L.pillars.length > 0 && (
           <Picker look="chip" active={pillar !== null} label="Pillar" value={pillar} onChange={setPillar}
             options={[{ value: null, label: "Pillar yok" }, ...L.pillars.map((n) => ({ value: n.id as string | null, label: n.name }))]}>
-            {pillar === null ? <><Icon name="plus" size={13} /> Pillar</> : <><Icon name="pin" size={13} /> {L.node(pillar)?.name}</>}
+            {pillar === null ? <><Icon name="plus" size={13} /> Pillar</> : <><Icon name="pin" size={13} /> {L.pillar(pillar)?.name}</>}
           </Picker>
         )}
       </div>
@@ -105,7 +112,7 @@ export function NewRecordForm(props: {
       <fieldset className={s.cards}>
         <legend>Kart blokları <span className={ui.fieldHint}>— isteğe bağlı, sonra da eklenir</span></legend>
         <div className={s.cardGrid}>
-          {CARD_TYPES.map((t) => (
+          {CARD_TYPES.filter((t) => t !== "poll").map((t) => (
             <label key={t} className={s.cardOpt}>
               <input type="checkbox" checked={cards.includes(t)}
                 onChange={() => setCards((xs) => (xs.includes(t) ? xs.filter((x) => x !== t) : [...xs, t]))} />

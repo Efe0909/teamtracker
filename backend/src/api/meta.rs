@@ -23,6 +23,8 @@ pub struct Meta {
     me: MeInfo,
     users: Vec<UserOut>,
     teams: Vec<TeamOut>,
+    /// `sort_order`, sonra ad; pasifler de gelir (`is_active` ile).
+    pillars: Vec<PillarOut>,
     /// Ekrandaki agac sirasiyla (Euler turu); `depth` girinti icin.
     nodes: Vec<NodeOut>,
 }
@@ -34,6 +36,8 @@ struct MeInfo {
     /// Etkin yetenekler (dogrudan + rollerden). Admin hepsine sahip.
     scopes: Vec<String>,
     team_ids: Vec<Uuid>,
+    /// Telefon zorunlu: bos ise on yuz profil penceresini acar.
+    profile_complete: bool,
 }
 
 #[derive(Serialize, sqlx::FromRow)]
@@ -43,6 +47,12 @@ struct UserOut {
     color: Option<String>,
     is_admin: bool,
     last_seen_at: Option<DateTime<Utc>>,
+    nickname: Option<String>,
+    phone: Option<String>,
+    avatar_id: Option<Uuid>,
+    birth_day: Option<i16>,
+    birth_month: Option<i16>,
+    birth_year: Option<i16>,
 }
 
 #[derive(Serialize, sqlx::FromRow)]
@@ -51,8 +61,23 @@ struct TeamOut {
     name: String,
     description: Option<String>,
     color: Option<String>,
-    node_id: Option<Uuid>,
     chat_id: Uuid,
+    /// `team_nodes`: takimin bagli oldugu agac dugumleri.
+    node_ids: Vec<Uuid>,
+    /// Bu takim bir pillar'in OZEL takimiysa o pillar.
+    pillar_id: Option<Uuid>,
+    banner_id: Option<Uuid>,
+}
+
+#[derive(Serialize, sqlx::FromRow)]
+struct PillarOut {
+    id: Uuid,
+    name: String,
+    description: Option<String>,
+    color: Option<String>,
+    team_id: Uuid,
+    is_active: bool,
+    sort_order: i32,
 }
 
 #[derive(Serialize)]
@@ -69,11 +94,25 @@ pub async fn meta(State(st): State<AppState>, CurrentUser(me): CurrentUser) -> R
     let scopes = db::scope::active(&st.pool, &me).await?;
     let team_ids = sqlx::query_scalar("select team_id from team_members where user_id = $1")
         .bind(me.id).fetch_all(&st.pool).await?;
+    let profile_complete: bool = sqlx::query_scalar(
+        "select coalesce(btrim(phone), '') <> '' from users where id = $1")
+        .bind(me.id).fetch_one(&st.pool).await?;
     let users = sqlx::query_as(
-        "select id, name, color, is_admin, last_seen_at from users where is_active order by name")
+        "select id, name, color, is_admin, last_seen_at, nickname, phone, avatar_id,
+                birth_day, birth_month, birth_year
+           from users where is_active order by name")
         .fetch_all(&st.pool).await?;
     let teams = sqlx::query_as(
-        "select id, name, description, color, node_id, chat_id from teams order by name")
+        "select t.id, t.name, t.description, t.color, t.chat_id,
+                array(select n.node_id from team_nodes n where n.team_id = t.id
+                       order by n.linked_at, n.node_id) as node_ids,
+                (select p.id from pillars p where p.team_id = t.id) as pillar_id,
+                t.banner_id
+           from teams t order by t.name")
+        .fetch_all(&st.pool).await?;
+    let pillars = sqlx::query_as(
+        "select id, name, description, color, team_id, is_active, sort_order
+           from pillars order by sort_order, name")
         .fetch_all(&st.pool).await?;
 
     let nodes = {
@@ -85,7 +124,7 @@ pub async fn meta(State(st): State<AppState>, CurrentUser(me): CurrentUser) -> R
     };
 
     Ok(Json(Meta {
-        me: MeInfo { id: me.id, is_admin: me.is_admin, scopes, team_ids },
-        users, teams, nodes,
+        me: MeInfo { id: me.id, is_admin: me.is_admin, scopes, team_ids, profile_complete },
+        users, teams, pillars, nodes,
     }))
 }

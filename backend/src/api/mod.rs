@@ -13,7 +13,10 @@ mod common;
 mod home;
 mod meta;
 mod nodes;
+mod notify;
+mod profile;
 mod records;
+mod teams;
 
 use axum::{
     extract::{DefaultBodyLimit, State},
@@ -34,24 +37,41 @@ pub fn router() -> Router<AppState> {
         .route("/api/auth/logout", post(auth::logout))
         .route("/api/auth/dev-login", get(auth::dev_login))
         .route("/api/meta", get(meta::meta))
+        .route("/api/me/profile", patch(profile::patch))
         .route("/api/home", get(home::home))
         .route("/api/pins/{slug}", post(home::pin).delete(home::unpin))
         .route("/api/records", get(records::list).post(records::create))
         .route("/api/records/{id}", get(records::get).patch(records::patch))
+        .route("/api/records/{id}/participants/{user}", put(records::add_participant).delete(records::remove_participant))
+        .route("/api/records/{id}/join", post(records::join).delete(records::cancel_join))
+        .route("/api/records/{id}/join-requests/{user}", post(records::decide_join))
+        .route("/api/records/{id}/pin", put(records::pin).delete(records::unpin))
+        .route("/api/records/{id}/card-order", put(records::set_card_order))
         .route("/api/records/{id}/actions", post(records::add_action))
         .route("/api/records/{id}/cards", post(cards::create))
         .route("/api/cards/{id}", patch(cards::patch).delete(cards::delete))
         .route("/api/cards/{id}/signup", put(cards::signup))
+        .route("/api/cards/{id}/vote", put(cards::vote))
         .route("/api/cards/{id}/attachments", post(cards::attach))
         .route("/api/actions/mine", get(records::my_actions))
         .route("/api/actions/{id}", patch(records::patch_action))
         .route("/api/chats/{id}/feed", get(chats::feed))
         .route("/api/chats/{id}/messages", post(chats::post))
-        .route("/api/teams", get(home::teams))
-        .route("/api/teams/{id}", get(home::team))
+        .route("/api/teams", get(home::teams).post(teams::create_team))
+        .route("/api/teams/{id}",
+            get(home::team).patch(teams::patch_team).delete(teams::delete_team))
+        .route("/api/teams/{id}/nodes/{node}",
+            put(teams::link_node).delete(teams::unlink_node))
+        .route("/api/pillars", post(teams::create_pillar))
+        .route("/api/pillars/{id}", patch(teams::patch_pillar).delete(teams::delete_pillar))
         .route("/api/teams/{id}/members", post(home::set_member))
         .route("/api/teams/{id}/members/{user}", delete(home::drop_member))
-        .route("/api/notifications", get(home::notifications))
+        .route("/api/notifications", get(notify::list))
+        .route("/api/notifications/seen", post(notify::seen))
+        .route("/api/me/notifications", get(notify::prefs).patch(notify::patch_prefs))
+        .route("/api/chats/{id}/prefs", put(notify::set_chat))
+        .route("/api/push/vapid", get(notify::vapid))
+        .route("/api/push/subscriptions", post(notify::subscribe).delete(notify::unsubscribe))
         .route("/api/nodes", get(nodes::tree).post(nodes::create))
         .route("/api/nodes/{id}", patch(nodes::patch).delete(nodes::delete))
         // Govde siniri yalniz yuklemede genis (axum varsayilani 2 MB); nginx
@@ -65,6 +85,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/attachments/{id}/tags/{tag}", delete(attachments::remove_tag))
         .route("/api/tags", get(attachments::tags))
         .route("/api/admin", get(admin::get))
+        .route("/api/admin/activity", get(admin::activity))
         .route("/api/admin/users", post(admin::add_user))
         .route("/api/admin/users/{id}", patch(admin::patch_user))
         .route("/api/admin/roles", post(admin::create_role))

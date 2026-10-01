@@ -7,7 +7,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ERRORS } from "../../api/errors";
-import type { TreeView } from "../../api/types";
+import type { Meta, TreeView } from "../../api/types";
+import { LookupProvider } from "../../lib/lookup";
 import { DataTree } from "./DataTree";
 
 /** Secici (ui Picker) tetigini acar, listedeki secenek metinlerini dondurur. */
@@ -28,7 +29,7 @@ function node(over: Partial<TreeView["nodes"][number]> & { id: string; name: str
     can_edit: false,
     can_retype: true,
     can_hard_delete: false,
-    delete_counts: { children: 0, records: 0, permissions: 0 },
+    delete_counts: { children: 0, records: 0, permissions: 0, teams: 0 },
     ...over,
   };
 }
@@ -49,11 +50,21 @@ function stubFetch(tree: TreeView, onWrite?: (method: string, url: string, body:
   );
 }
 
+const META: Meta = {
+  me: { id: "u1", is_admin: false, scopes: [], team_ids: [], profile_complete: true },
+  users: [],
+  teams: [{ id: "t1", name: "Maliye", description: null, color: null, chat_id: "c1", node_ids: ["n1"], pillar_id: null, banner_id: null }],
+  pillars: [],
+  nodes: [],
+};
+
 function renderTree() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <DataTree />
+      <LookupProvider meta={META}>
+        <DataTree />
+      </LookupProvider>
     </QueryClientProvider>,
   );
 }
@@ -88,26 +99,26 @@ describe("tur secenekleri SUNUCUDAN gelir, yerel enum'dan degil (KNOW-241)", () 
     stubFetch({
       can_add_root: false,
       root_types: ["cell"],
-      child_types: ["team"],
+      child_types: ["machine"],
       nodes: [node({ id: "n1", name: "Üretim Hattı", can_edit: true, child_count: 0 })],
     });
     renderTree();
     await screen.findByText("Üretim Hattı");
     fireEvent.click(screen.getByLabelText(/Üretim Hattı: alt düğüm ekle/));
-    expect(await pickerOptions("Tür")).toEqual(["Takım"]);
+    expect(await pickerOptions("Tür")).toEqual(["Makine"]);
   });
 
   it("kok ekleme formu yalniz root_types'taki turleri listeler", async () => {
     stubFetch({
       can_add_root: true,
-      root_types: ["team", "step"],
+      root_types: ["operational", "step"],
       child_types: ["generic"],
       nodes: [],
     });
     renderTree();
     await screen.findByRole("button", { name: /Kök düğüm/ });
     fireEvent.click(screen.getByRole("button", { name: /Kök düğüm/ }));
-    expect(await pickerOptions("Tür")).toEqual(["Takım", "Adım"]);
+    expect(await pickerOptions("Tür")).toEqual(["Operational", "Adım"]);
   });
 });
 
@@ -159,5 +170,20 @@ describe("API hata kodu Turkce metne cevrilir (api/errors.ts)", () => {
     fireEvent.change(await screen.findByLabelText("Düğüm adı"), { target: { value: "x" } });
     fireEvent.click(screen.getByRole("button", { name: "Ekle" }));
     await waitFor(() => expect(screen.getByRole("alert").textContent).toBe(ERRORS.invalid_name));
+  });
+});
+
+describe("takim baglari (team_nodes, spec/22)", () => {
+  it("dugumde calisan takim satirda gorunur", async () => {
+    stubFetch({
+      can_add_root: false,
+      root_types: ["cell"],
+      child_types: ["generic"],
+      nodes: [node({ id: "n1", name: "Bütçe Onayı" }), node({ id: "n2", name: "Sevkiyat" })],
+    });
+    renderTree();
+    await screen.findByText("Bütçe Onayı");
+    const chips = screen.getAllByRole("link", { name: "Maliye" });
+    expect(chips).toHaveLength(1); // yalniz n1'de; n2 bagsiz
   });
 });

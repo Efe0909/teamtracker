@@ -1,0 +1,51 @@
+.photo {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+}
+.photoBtn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  background: var(--panel);
+  color: var(--txt);
+  font: inherit;
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+.photoBtn:hover:not(:disabled) {
+  background: var(--tint);
+}
+.birth {
+  display: grid;
+  grid-template-columns: 80px 1fr 100px;
+  gap: var(--s-2);
+}
+
+.editAv {
+  appearance: none;
+  position: relative;
+  display: inline-flex;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.pen {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  background: var(--panel);
+  color: var(--txt);
+}

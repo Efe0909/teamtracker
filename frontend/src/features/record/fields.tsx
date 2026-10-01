@@ -6,11 +6,12 @@
 import { useState, type ReactNode } from "react";
 import { errorText } from "../../api/client";
 import { usePatchRecord } from "../../api/hooks";
-import type { IsoDate, RecordDetail, RecordPatch } from "../../api/types";
+import type { AccessMode, IsoDate, RecordDetail, RecordPatch } from "../../api/types";
 import { isDone, KIND, PRIORITY, PRIORITY_ORDER, STATUS, STATUS_ORDER, toIsoDay } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
 import { Icon, type IconName } from "../../ui/icons";
 import { Button, cx, Due, Picker, Popover, PriorityTag, Status, TeamName, Tip, ui, useToast, Who } from "../../ui/ui";
+import { ACCESS } from "./Join";
 import s from "./record.module.css";
 
 function Row(props: { icon: IconName; label: string; children: ReactNode }) {
@@ -88,7 +89,7 @@ export function Properties({ d }: { d: RecordDetail }) {
         <Picker look="prop" label="Takım" disabled={ro} busy={m.isPending} value={r.team_id}
           options={[
             { value: null, label: "Takım yok", render: <span className={s.muted}>Takım yok</span> },
-            ...L.meta.teams.map((t) => ({ value: t.id as string | null, label: t.name, render: <TeamName team={t} /> })),
+            ...L.plainTeams.map((t) => ({ value: t.id as string | null, label: t.name, render: <TeamName team={t} /> })),
           ]}
           onChange={(v) => save({ field: "team_id", value: v }, { field: "team_id", value: r.team_id })} />
       </Row>
@@ -97,7 +98,7 @@ export function Properties({ d }: { d: RecordDetail }) {
           options={L.units.map((n) => ({ value: n.id, label: n.name, depth: n.depth }))}
           onChange={(v) => save({ field: "unit_id", value: v }, { field: "unit_id", value: r.unit_id })} />
       </Row>
-      {/* Pillar ORTOGONAL (KNOW-261): kaydin atasi olmak zorunda degil. */}
+      {/* Pillar ORTOGONAL: agacta degil, ayri tablo (spec/22); birimden bagimsiz secilir. */}
       <Row icon="pin" label="Pillar">
         <Picker look="prop" label="Pillar" disabled={ro} busy={m.isPending} value={r.pillar_id}
           options={[
@@ -105,6 +106,15 @@ export function Properties({ d }: { d: RecordDetail }) {
             ...L.pillars.map((n) => ({ value: n.id as string | null, label: n.name })),
           ]}
           onChange={(v) => save({ field: "pillar_id", value: v }, { field: "pillar_id", value: r.pillar_id })} />
+      </Row>
+      <Row icon="lock" label="Erişim">
+        {d.membership.can_decide ? (
+          <Picker look="prop" label="Erişim kipi" busy={m.isPending} value={d.membership.mode}
+            options={(Object.keys(ACCESS) as AccessMode[]).map((v) => ({ value: v, label: ACCESS[v].label, hint: ACCESS[v].hint }))}
+            onChange={(v) => save({ field: "access_mode", value: v }, { field: "access_mode", value: d.membership.mode })} />
+        ) : (
+          <span className={s.propStatic}>{ACCESS[d.membership.mode].label}</span>
+        )}
       </Row>
       <Row icon="inbox" label="Tür">
         <span className={s.propStatic}>{KIND[r.kind]}</span>

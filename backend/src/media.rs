@@ -290,7 +290,7 @@ fn probe(root: &Path) -> (Option<String>, Option<String>, Option<String>) {
 ///  - sahibi (kayit/takim) silinmis SOHBETLER: dugum kalici silinince kayit
 ///    cascade ile gider ama `records.chat_id` sohbeti tutmaz; mesajlari ve
 ///    ekleri kimsenin gormedigi yerde kalirdi.
-///  - hicbir mesaja/karta BAGLANMAMIS ekler: yuklenip gonderilmeyen, ya da
+///  - hicbir mesaja/karta/profile/banner'a BAGLANMAMIS ekler: yuklenip gonderilmeyen, ya da
 ///    karti/mesaji silinen. Satir gider, DOSYA da (cascade diske dokunmaz).
 ///
 /// Bir gunluk pay: yeni yuklenmis ama henuz baglanmamis ek silinmesin.
@@ -307,6 +307,8 @@ pub async fn sweep(pool: &PgPool) -> Result<(u64, usize), sqlx::Error> {
             where a.created_at < now() - interval '1 day'
               and not exists (select 1 from card_attachments x where x.attachment_id = a.id)
               and not exists (select 1 from message_attachments x where x.attachment_id = a.id)
+              and not exists (select 1 from users u where u.avatar_id = a.id)
+              and not exists (select 1 from teams t where t.banner_id = a.id)
            returning volume_id, storage_key, thumb_key)
          select v.mount_path, v.media_prefix, d.storage_key, d.thumb_key
            from d join storage_volumes v on v.id = d.volume_id")

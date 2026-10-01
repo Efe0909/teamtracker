@@ -65,7 +65,8 @@ struct NodeView {
     child_count: i64,
     /// Bu dugumde `edit_nodes` + dal izni var mi.
     can_edit: bool,
-    /// Projeksiyon satiri (takim karti) olan dugumun turu degismez (spec/72 §6.3).
+    /// Tur kilidi KALKTI (takim projeksiyonu yok, spec/22); alan on yuz
+    /// uyumu icin duruyor, hep true.
     can_retype: bool,
     /// Bos (virgin) dugumu duzenleyebilen siler; bagimlisi olan icin ayrica
     /// `hard_delete_nodes` (spec/72 §6.2).
@@ -79,6 +80,8 @@ struct DeleteCounts {
     children: i64,
     records: i64,
     permissions: i64,
+    /// Kopacak `team_nodes` baglari (silmeyi ENGELLEMEZ, cascade).
+    teams: i64,
 }
 
 pub async fn tree(State(st): State<AppState>, CurrentUser(me): CurrentUser) -> Result<Json<TreeView>> {
@@ -103,12 +106,14 @@ async fn view(st: &AppState, access: &NodeAccess) -> Result<TreeView> {
         e.0 += 1;
         e.1.records += own.records;
         e.1.permissions += own.permissions;
+        e.1.teams += own.teams;
         let sum = *e;
         if let Some(p) = tree.get(id).and_then(|n| n.parent_id) {
             let pe = totals.entry(p).or_default();
             pe.0 += sum.0;
             pe.1.records += sum.1.records;
             pe.1.permissions += sum.1.permissions;
+            pe.1.teams += sum.1.teams;
         }
     }
 
@@ -126,7 +131,7 @@ async fn view(st: &AppState, access: &NodeAccess) -> Result<TreeView> {
             depth: n.depth,
             child_count: deps.get(&n.id).map_or(0, |d: &Deps| d.children),
             can_edit,
-            can_retype: !deps::has_projection(&deps, n.id),
+            can_retype: true,
             can_hard_delete: can_edit
                 && (deps::is_virgin(&deps, n.id) || access.on(&tree, n.id, NodeScope::HardDelete)),
             delete_counts: counts,
@@ -146,8 +151,9 @@ async fn view(st: &AppState, access: &NodeAccess) -> Result<TreeView> {
 #[derive(Deserialize)]
 pub struct NewNode {
     name: String,
-    /// Enum: serbest metin tur serde'de duser (spec/72 §3).
-    node_type: NodeType,
+    /// Metin gelir, `parse_type` enum'a cevirir: `team`/`pillar` gibi artik
+    /// olmayan tur `invalid_type` olsun, `invalid_body` degil.
+    node_type: String,
     /// null = kok.
     #[serde(default)]
     parent_id: Option<Uuid>,
@@ -160,9 +166,14 @@ fn name_of(raw: String) -> Result<String> {
     common::text(Some(raw), NAME_MAX, "invalid_name")?.ok_or(AppError::BadRequest("invalid_name"))
 }
 
+fn parse_type(raw: String) -> Result<NodeType> {
+    serde_json::from_value(Value::String(raw)).map_err(|_| AppError::BadRequest("invalid_type"))
+}
+
 pub async fn create(
     State(st): State<AppState>, CurrentUser(me): CurrentUser, Body(b): Body<NewNode>,
 ) -> Result<Json<TreeView>> {
+    let node_type = parse_type(b.node_type)?;
     let name = name_of(b.name)?;
     let description = common::text(b.description, TEXT_MAX, "invalid_description")?;
     let access = NodeAccess::load(&st.pool, &me).await?;
@@ -181,7 +192,7 @@ pub async fn create(
                 if !parent.is_active {
                     return Err(AppError::BadRequest("inactive_parent"));
                 }
-                if b.node_type.is_root_only() {
+                if node_type.is_root_only() {
                     return Err(AppError::BadRequest("root_only"));
                 }
             }
@@ -191,19 +202,15 @@ pub async fn create(
 
     let mut tx = st.pool.begin().await?;
     // Kardeslerin SONUNA: sira elle verilmiyor, ekleme sirasi korunuyor.
-    let id: Uuid = sqlx::query_scalar(
+    sqlx::query(
         "insert into nodes (parent_id, name, node_type, description, created_by, sort_order)
          values ($1, $2, $3, $4, $5,
                  coalesce((select max(sort_order) from nodes
-                            where parent_id is not distinct from $1), -1) + 1)
-         returning id")
-        .bind(b.parent_id).bind(&name).bind(b.node_type).bind(&description).bind(me.id)
-        .fetch_one(&mut *tx).await?;
+                            where parent_id is not distinct from $1), -1) + 1)")
+        .bind(b.parent_id).bind(&name).bind(node_type).bind(&description).bind(me.id)
+        .execute(&mut *tx).await?;
     log(&mut tx, me.id, "node_created", &name, parent_name.as_deref(),
-        json!({ "node_type": b.node_type })).await?;
-    if b.node_type == NodeType::Team {
-        sync_team(&mut tx, me.id, id, &name, description.as_deref()).await?;
-    }
+        json!({ "node_type": node_type })).await?;
     tx.commit().await?;
     st.rebuild_tree().await?;
     Ok(Json(view(&st, &access).await?))
@@ -219,23 +226,14 @@ pub struct NodePatch {
     #[serde(default)]
     name: Option<String>,
     #[serde(default)]
-    node_type: Option<NodeType>,
-    #[serde(default, deserialize_with = "present")]
+    node_type: Option<String>,
+    #[serde(default, deserialize_with = "common::present")]
     description: Option<Option<String>>,
-    #[serde(default, deserialize_with = "present")]
+    #[serde(default, deserialize_with = "common::present")]
     parent_id: Option<Option<Uuid>>,
     /// Pasiflestir / geri ac. Yikici degil, ek yetenek istemez (spec/72 §6).
     #[serde(default)]
     is_active: Option<bool>,
-}
-
-/// Alan GELDIYSE (null dahil) `Some`; gelmediyse `#[serde(default)]` None.
-fn present<'de, D, T>(d: D) -> std::result::Result<Option<T>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-    T: Deserialize<'de>,
-{
-    T::deserialize(d).map(Some)
 }
 
 /// Degisiklik sonrasi satirin tamami — tek UPDATE, tek islem. Python once
@@ -253,12 +251,12 @@ pub async fn patch(
     Body(p): Body<NodePatch>,
 ) -> Result<Json<TreeView>> {
     let id = common::id(&raw)?;
+    let new_type = p.node_type.map(parse_type).transpose()?;
     let name = p.name.map(name_of).transpose()?;
     let description = p.description
         .map(|d| common::text(d, TEXT_MAX, "invalid_description")).transpose()?;
     let access = NodeAccess::load(&st.pool, &me).await?;
     let _write = st.structure.lock().await;
-    let deps = deps::deps_by_node(&st.pool).await?;
     let current_description: Option<String> =
         sqlx::query_scalar("select description from nodes where id = $1")
             .bind(id).fetch_optional(&st.pool).await?.flatten();
@@ -271,17 +269,11 @@ pub async fn patch(
         }
         let next = Next {
             name: name.unwrap_or_else(|| node.name.clone()),
-            node_type: p.node_type.unwrap_or(node.node_type),
+            node_type: new_type.unwrap_or(node.node_type),
             description: description.unwrap_or_else(|| current_description.clone()),
             parent_id: p.parent_id.unwrap_or(node.parent_id),
             is_active: p.is_active.unwrap_or(node.is_active),
         };
-        // TUR KILIDI (spec/72 §6.3): projeksiyon satiri olan dugumun turu
-        // degisirse o satir sessizce sahipsiz kalir. is_virgin DEGIL — cocugu
-        // olmak turu degistirmeye engel degil.
-        if next.node_type != node.node_type && deps::has_projection(&deps, id) {
-            return Err(AppError::Conflict("type_locked"));
-        }
         if next.parent_id != node.parent_id {
             match next.parent_id {
                 // Koke cikarmak da kok islemi: yalniz admin.
@@ -345,14 +337,9 @@ pub async fn patch(
         .bind(id).bind(&next.name).bind(next.node_type).bind(&next.description)
         .bind(next.parent_id).bind(next.is_active)
         .execute(&mut *tx).await?;
-    // Ad/aciklama node'da degisti -> takim karti da degisir; tur 'team'e
-    // donduyse takim dogar. Senkron BURADA, cagiran ekranda degil (KNOW-262).
     for (field, from, to) in changes {
         log(&mut tx, me.id, "node_changed", &next.name, Some(field),
             json!({ "from": from, "to": to })).await?;
-    }
-    if next.node_type == NodeType::Team {
-        sync_team(&mut tx, me.id, id, &next.name, next.description.as_deref()).await?;
     }
     tx.commit().await?;
     st.rebuild_tree().await?;
@@ -369,7 +356,7 @@ pub async fn patch(
 // hicbir dugum virgin olamazdi.
 //
 // Fiiller: node_created (hedef=ust adi, detay=tur), node_changed (hedef=alan,
-// detay={from,to}), node_deleted (detay=alt dugum sayisi), team_created.
+// detay={from,to}), node_deleted (detay=alt dugum sayisi).
 
 async fn log(
     tx: &mut Tx<'_>, actor: Uuid, verb: &str, subject: &str, target: Option<&str>, detail: Value,
@@ -383,71 +370,7 @@ async fn log(
     Ok(())
 }
 
-// --- takim projeksiyonu (spec/72 §5, KNOW-262) -----------------------------
-//
-// `team` turundeki dugum bir `teams` satiri TASIR. Ad ve aciklama node'dan
-// TURER — iki yerde ad tutmak ikisinin ayrismasi demek. Kimlik ve renk
-// kullanicidan istenmez; sohbet (takim duvari) satiri da burada dogar.
-//
-// Tek yon: node -> teams. Tur kilidi (has_projection) projeksiyonu olan
-// dugumun turunu degistirmedigi icin "tur team'den cikti" durumu yok.
-// Kalici silmede `teams.node_id` null'a duser, takim karti kalir (sema).
-
-const TEAM_COLORS: [&str; 10] = [
-    "#8e6bff", "#1c8a5b", "#b4501a", "#2c74ad", "#d13350",
-    "#b47a09", "#5a5280", "#0f766e", "#9333ea", "#be185d",
-];
-
 type Tx<'a> = sqlx::Transaction<'a, sqlx::Postgres>;
-
-/// IDEMPOTENT: satir yoksa dogar, varsa ad/aciklama tazelenir.
-async fn sync_team(
-    tx: &mut Tx<'_>, actor: Uuid, node_id: Uuid, name: &str, description: Option<&str>,
-) -> Result<()> {
-    let row: Option<(Uuid, String, Option<String>)> =
-        sqlx::query_as("select id, name, description from teams where node_id = $1")
-            .bind(node_id).fetch_optional(&mut **tx).await?;
-    match row {
-        None => {
-            let id = Uuid::new_v4();
-            let color = TEAM_COLORS[(id.as_u128() % TEAM_COLORS.len() as u128) as usize];
-            let team_name = free_team_name(tx, name, None).await?;
-            let chat_id: Uuid = sqlx::query_scalar("insert into chats default values returning id")
-                .fetch_one(&mut **tx).await?;
-            sqlx::query(
-                "insert into teams (id, name, description, node_id, chat_id, color)
-                 values ($1, $2, $3, $4, $5, $6)")
-                .bind(id).bind(&team_name).bind(description).bind(node_id).bind(chat_id).bind(color)
-                .execute(&mut **tx).await?;
-            log(tx, actor, "team_created", &team_name, Some(name), Value::Null).await?;
-        }
-        Some((id, team_name, team_description))
-            if team_name != name || team_description.as_deref() != description =>
-        {
-            let team_name = free_team_name(tx, name, Some(id)).await?;
-            sqlx::query("update teams set name = $2, description = $3 where id = $1")
-                .bind(id).bind(&team_name).bind(description).execute(&mut **tx).await?;
-        }
-        Some(_) => {}
-    }
-    Ok(())
-}
-
-/// `teams.name` TEKIL ama agacta ayni ad iki dalda serbest: ikinci takim
-/// "Dolum (2)" olur, insert patlamaz.
-async fn free_team_name(tx: &mut Tx<'_>, name: &str, except: Option<Uuid>) -> Result<String> {
-    let mut candidate = name.to_string();
-    for n in 2.. {
-        let taken: Option<i32> = sqlx::query_scalar(
-            "select 1 from teams where name = $1 and ($2::uuid is null or id <> $2)")
-            .bind(&candidate).bind(except).fetch_optional(&mut **tx).await?;
-        if taken.is_none() {
-            break;
-        }
-        candidate = format!("{name} ({n})");
-    }
-    Ok(candidate)
-}
 
 // --- kalici silme ----------------------------------------------------------
 
@@ -475,6 +398,7 @@ pub async fn delete(
         (node.name.clone(), tree.subtree(id).len().saturating_sub(1))
     };
     let mut tx = st.pool.begin().await?;
+    // Bagli takim baglari (team_nodes) cascade ile gider; takimlar kalir.
     sqlx::query("delete from nodes where id = $1").bind(id).execute(&mut *tx).await?;
     log(&mut tx, me.id, "node_deleted", &name, None, json!({ "descendants": descendants })).await?;
     tx.commit().await?;

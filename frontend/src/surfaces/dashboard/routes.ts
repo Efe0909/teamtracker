@@ -9,8 +9,11 @@ export type Route =
   | { name: "home" }
   | { name: "tasks"; query: RecordQuery }
   | { name: "record"; id: Uuid }
+  | { name: "people" }
   | { name: "teams" }
   | { name: "team"; id: Uuid }
+  | { name: "pillars" }
+  | { name: "pillar"; id: Uuid }
   | { name: "tree" }
   | { name: "admin" }
   | { name: "notFound" };
@@ -32,8 +35,11 @@ export function parse(url: URL): Route {
     return { name: "tasks", query };
   }
   if (a === "tasks" && b !== undefined && seg.length === 2) return { name: "record", id: b };
+  if (a === "people" && seg.length === 1) return { name: "people" };
   if (a === "teams" && seg.length === 1) return { name: "teams" };
   if (a === "teams" && b !== undefined && seg.length === 2) return { name: "team", id: b };
+  if (a === "pillars" && seg.length === 1) return { name: "pillars" };
+  if (a === "pillars" && b !== undefined && seg.length === 2) return { name: "pillar", id: b };
   if (a === "outcome-tree" && seg.length === 1) return { name: "tree" };
   if (a === "admin" && seg.length === 1) return { name: "admin" };
   return { name: "notFound" };
@@ -59,9 +65,15 @@ export function href(r: Route): string {
       return "/teams";
     case "team":
       return `/teams/${r.id}`;
+    case "pillars":
+      return "/pillars";
+    case "pillar":
+      return `/pillars/${r.id}`;
     case "tree":
       // Python'daki adres ve modul/pin kimligi (`models/module.rs`) ayni.
       return "/outcome-tree";
+    case "people":
+      return "/people";
     case "admin":
       return "/admin";
   }

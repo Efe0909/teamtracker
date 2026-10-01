@@ -12,7 +12,8 @@ export type RecordKind = "issue" | "task";
 export type RecordStatus = "open" | "in_progress" | "pending" | "closed" | "cancelled";
 export type ActionStatus = "open" | "in_progress" | "closed" | "cancelled";
 export type Priority = "critical" | "high" | "medium" | "low";
-export type NodeType = "cell" | "machine" | "pillar" | "team" | "task" | "step" | "operational" | "generic";
+/** Agac yalniz YAPI: takim ve pillar ayri tablolar (spec/22). */
+export type NodeType = "cell" | "machine" | "task" | "step" | "operational" | "generic";
 export type TeamRole = "lead" | "mentor" | "member";
 
 // --- /api/meta -------------------------------------------------------------
@@ -23,6 +24,14 @@ export interface MetaUser {
   color: string | null;
   is_admin: boolean;
   last_seen_at: IsoTime | null;
+  /** Istege bagli takma ad; sohbette adin altinda gorunur. */
+  nickname: string | null;
+  phone: string | null;
+  /** Profil fotografi (ek kimligi); yoksa bas harf. */
+  avatar_id: Uuid | null;
+  birth_day: number | null;
+  birth_month: number | null;
+  birth_year: number | null;
 }
 
 export interface MetaTeam {
@@ -30,8 +39,24 @@ export interface MetaTeam {
   name: string;
   description: string | null;
   color: string | null;
-  node_id: Uuid | null;
   chat_id: Uuid;
+  /** Takimin calistigi agac dugumleri (team_nodes, N:M). */
+  node_ids: Uuid[];
+  /** Bu takim bir pillar'in OZEL takimiysa o pillar; sıradan takimda null. */
+  pillar_id: Uuid | null;
+  /** Banner fotografi (ek kimligi); pillar sayfasi ozel takiminkini gosterir. */
+  banner_id: Uuid | null;
+}
+
+/** Pillar: ozel takimi (`team_id`) uyeleri ve sohbeti tasir (spec/22). */
+export interface MetaPillar {
+  id: Uuid;
+  name: string;
+  description: string | null;
+  color: string | null;
+  team_id: Uuid;
+  is_active: boolean;
+  sort_order: number;
 }
 
 export interface MetaNode {
@@ -44,9 +69,11 @@ export interface MetaNode {
 }
 
 export interface Meta {
-  me: { id: Uuid; is_admin: boolean; scopes: string[]; team_ids: Uuid[] };
+  me: { id: Uuid; is_admin: boolean; scopes: string[]; team_ids: Uuid[]; profile_complete: boolean };
   users: MetaUser[];
   teams: MetaTeam[];
+  /** sort_order, sonra ad; pasifler de gelir. */
+  pillars: MetaPillar[];
   nodes: MetaNode[];
 }
 
@@ -104,6 +131,24 @@ export interface RecordDetail {
   participants: Uuid[];
   cards: CardView[];
   access: { can_edit: boolean; can_edit_deadline: boolean };
+  /** Bu kisi kaydi sabitlemis mi (Panolar widget'i). */
+  pinned: boolean;
+  membership: Membership;
+}
+
+export type AccessMode = "public" | "request" | "private";
+
+/** Erisim kipi + bu kisinin kayitla iliskisi (Rust records.rs Membership). */
+export interface Membership {
+  mode: AccessMode;
+  /** Uye = yazma yetkisi olan her yol (admin, sorumlu, acan, katilimci, takim, dal). */
+  is_member: boolean;
+  /** private kayitta uye olmayan: eylem/kart/katilimci/sohbet gizli. */
+  restricted: boolean;
+  request: "pending" | "denied" | null;
+  /** Istekleri sorumlu, acan ve admin karara baglar. */
+  can_decide: boolean;
+  requests: { user_id: Uuid; created_at: IsoTime }[];
 }
 
 // --- ekler ve kartlar (Rust api/attachments.rs, api/cards.rs) ---------------
@@ -123,6 +168,20 @@ export interface Attachment {
 
 export type SignupAnswer = "yes" | "maybe" | "no";
 
+export interface PollOption {
+  label: string;
+  /** Secenek fotografi (ek kimligi). */
+  attachment_id?: Uuid;
+}
+
+export interface PollVote {
+  user_id: Uuid;
+  /** Secenek sirasi; serbest cevapta null. */
+  option: number | null;
+  text: string | null;
+  at: IsoTime | null;
+}
+
 export interface CardView {
   id: Uuid;
   card_type: string;
@@ -131,6 +190,16 @@ export interface CardView {
   /** `title` + turun alanlari, hepsi metin. */
   data: Record<string, string | undefined>;
   signups: { user_id: Uuid; answer: SignupAnswer; note: string | null; at: IsoTime | null }[];
+  /** Yalniz oylamada (card_type "poll"). */
+  options: PollOption[];
+  allow_other: boolean;
+  /** Olusturulurken acilan opt-in ozellikler (secenek fotosu, sayac/sure); sonradan degismez. */
+  media_enabled: boolean;
+  timer_enabled: boolean;
+  /** "2026-10-02T18:00" (Turkiye saati) ya da null; `closed` sunucuda hesaplanir. */
+  closes_at: string | null;
+  closed: boolean;
+  votes: PollVote[];
   attachments: Attachment[];
 }
 
@@ -144,7 +213,8 @@ export type RecordPatch =
   | { field: "unit_id"; value: Uuid }
   | { field: "due_date"; value: IsoDate | null }
   | { field: "title"; value: string }
-  | { field: "description"; value: string | null };
+  | { field: "description"; value: string | null }
+  | { field: "access_mode"; value: AccessMode };
 
 export type ActionPatch =
   | { field: "status"; value: ActionStatus }
@@ -163,6 +233,8 @@ export interface NewRecord {
   priority: Priority;
   /** Acilista bos kart bloklari (kart secici). */
   card_types: string[];
+  /** Erisim kipi; kayit sayfasindan sonra da degisir. */
+  access_mode: AccessMode;
 }
 
 export interface NewAction {
@@ -215,10 +287,15 @@ export interface TeamView {
   open_records: number;
 }
 
+export type NotifyLevel = "all" | "mentions" | "none";
+
 export interface Notice {
   kind: "message" | "activity";
   id: Uuid;
   created_at: IsoTime;
+  chat_id: Uuid;
+  /** Son "gordum" damgasindan yeni mi (sunucu hesaplar). */
+  unread: boolean;
   actor_id: Uuid | null;
   verb: string | null;
   subject_label: string | null;
@@ -227,6 +304,20 @@ export interface Notice {
   record_id: Uuid | null;
   team_id: Uuid | null;
   title: string;
+}
+
+export interface NoticeList {
+  items: Notice[];
+  unread: number;
+}
+
+/** Iki katman: varsayilan (`level`) + sohbet basina ozel secim (`chats`). */
+export interface NotifyPrefs {
+  level: NotifyLevel;
+  /** Sessiz saat 0-23, ikisi birlikte; null = kapali. Yalniz push'u susturur. */
+  quiet_start: number | null;
+  quiet_end: number | null;
+  chats: Record<Uuid, NotifyLevel>;
 }
 
 // --- veri yonetimi (/api/nodes) ---------------------------------------------
@@ -243,7 +334,8 @@ export interface TreeNode {
   can_edit: boolean;
   can_retype: boolean;
   can_hard_delete: boolean;
-  delete_counts: { children: number; records: number; permissions: number };
+  /** `teams`: kopacak takim baglari (team_nodes). Silmeyi engellemez. */
+  delete_counts: { children: number; records: number; permissions: number; teams: number };
 }
 
 // --- /api/admin (yonetim paneli) -------------------------------------------
@@ -266,6 +358,14 @@ export interface AdminPerson {
   scopes: AdminScopeRow[];
   role_ids: Uuid[];
   node_ids: Uuid[];
+  /** Bildirim ayari ozeti (yalniz gorunurluk). */
+  notify_level: NotifyLevel;
+  quiet_start: number | null;
+  quiet_end: number | null;
+  /** Anlik bildirim icin kayitli cihaz sayisi. */
+  push_devices: number;
+  /** Sohbet basina ozel bildirim secimi sayisi. */
+  chat_overrides: number;
 }
 
 export interface AdminRole {
@@ -285,7 +385,8 @@ export interface AdminView {
 export type UserOp =
   | { op: "active" | "admin"; value: boolean }
   | { op: "grant_scope" | "revoke_scope"; value: string }
-  | { op: "grant_role" | "revoke_role" | "grant_node" | "revoke_node"; value: Uuid };
+  | { op: "grant_role" | "revoke_role" | "grant_node" | "revoke_node"; value: Uuid }
+  | { op: "avatar"; value: Uuid | null };
 
 export interface TreeView {
   can_add_root: boolean;
@@ -293,6 +394,27 @@ export interface TreeView {
   root_types: NodeType[];
   child_types: NodeType[];
   nodes: TreeNode[];
+}
+
+/** POST /api/teams ve /api/pillars ortak govde. */
+export interface NewTeam {
+  name: string;
+  description: string | null;
+  color: string | null;
+}
+
+/** Verilmeyen alan degismez; null = sil. */
+export interface TeamPatch {
+  name?: string;
+  /** Yuklenmis ek kimligi; null = banner'i kaldir. */
+  banner_id?: Uuid | null;
+  description?: string | null;
+  color?: string | null;
+}
+
+export interface PillarPatch extends TeamPatch {
+  is_active?: boolean;
+  sort_order?: number;
 }
 
 export interface NewNode {
@@ -309,4 +431,23 @@ export interface NodePatch {
   description?: string | null;
   parent_id?: Uuid | null;
   is_active?: boolean;
+}
+
+/** Kisinin kendi profili; verilmeyen alan degismez, null = sil. */
+export interface ProfilePatch {
+  nickname?: string | null;
+  phone?: string | null;
+  birth_day?: number | null;
+  birth_month?: number | null;
+  birth_year?: number | null;
+  avatar_id?: Uuid | null;
+}
+
+/** GET /api/admin/activity: kisi basina kullanim ozeti. */
+export interface PersonUse {
+  user_id: Uuid;
+  last_login_at: IsoTime | null;
+  last_seen_at: IsoTime | null;
+  /** Son 120 gun, eskiden yeniye; kullanimsiz gunler yok. `day` = "2026-10-01". */
+  days: { day: string; requests: number; minutes: number }[];
 }

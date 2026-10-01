@@ -269,6 +269,22 @@
   background: var(--line-field);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--txt) 8%, transparent) inset;
 }
+.avImg {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.cake {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  display: grid;
+  place-items: center;
+  color: var(--warn);
+  background: var(--panel);
+  border-radius: 50%;
+}
 .online::after {
   content: "";
   position: absolute;

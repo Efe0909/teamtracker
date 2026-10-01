@@ -111,6 +111,26 @@
   color: var(--dim);
   letter-spacing: 0.01em;
 }
+.navHeadBtn {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  color: var(--dim);
+  cursor: pointer;
+}
+.navHeadBtn svg {
+  transition: transform 0.12s;
+}
+.navHeadBtn[aria-expanded="true"] svg {
+  transform: rotate(90deg);
+}
 .nav {
   display: flex;
   align-items: center;
@@ -156,6 +176,16 @@
   border-radius: 3px;
   flex: none;
   background: var(--dim);
+}
+/* pillar: elmas — takim noktasindan bakista ayrilsin */
+.pillarDot {
+  width: 8px;
+  height: 8px;
+  margin: 0 4px;
+  border-radius: 1.5px;
+  flex: none;
+  background: var(--dim);
+  rotate: 45deg;
 }
 .grow {
   flex: 1;
@@ -203,7 +233,25 @@
 .scrim {
   display: none;
 }
+.foldOpen {
+  display: none;
+}
+@media (min-width: 901px) {
+  .shell[data-folded="true"] .side {
+    display: none;
+  }
+  .shell[data-folded="true"] .foldOpen {
+    display: block;
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    z-index: 40;
+  }
+}
 @media (max-width: 900px) {
+  .foldBtn {
+    display: none;
+  }
   .side {
     position: fixed;
     left: 0;
@@ -546,6 +594,19 @@ a.row:hover {
   font-size: var(--fs-sm);
   color: var(--dim);
 }
+/* Sag sutunlar sabit genisliktir: avatar+ad ve zaman satirlar arasi hizali kalir. */
+.rowWho {
+  flex: none;
+  width: 132px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.rowTime {
+  width: 72px;
+  text-align: right;
+}
 .soonList {
   display: flex;
   flex-wrap: wrap;
@@ -633,7 +694,25 @@ a.row:hover {
   border-bottom: 1px solid var(--line);
   white-space: nowrap;
 }
+.table th {
+  overflow: hidden;
+  white-space: nowrap;
+}
+.colGrip {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 8px;
+  height: 100%;
+  cursor: col-resize;
+  touch-action: none;
+}
+.colGrip:hover {
+  background: var(--acc-soft);
+}
 .table td {
+  overflow: hidden;
+  text-overflow: ellipsis;
   padding: 0 12px;
   height: 42px;
   border-bottom: 1px solid var(--line);
@@ -918,6 +997,78 @@ a.row:hover {
 .memberAdd > :first-child {
   flex: 1;
 }
+.pillarMark {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--r-sm);
+  color: var(--on-acc);
+  font-weight: 600;
+  font-size: var(--fs-md);
+  background: var(--dim);
+  flex: none;
+  box-shadow: inset 0 0 0 2px rgb(255 255 255 / 0.25);
+}
+.teamHero .pillarMark {
+  width: 40px;
+  height: 40px;
+  font-size: var(--fs-lg);
+}
+.inactiveCard {
+  opacity: 0.6;
+}
+.nodeLine {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-sm);
+  color: var(--dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nodeLine > svg {
+  flex: none;
+}
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 0;
+}
+.swatch {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.12);
+}
+.swatch[aria-checked="true"] {
+  box-shadow:
+    0 0 0 2px var(--panel),
+    0 0 0 4px var(--acc);
+}
+.dangerZone {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+.dangerZone > span {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--fs-md);
+}
+.dangerZone b {
+  font-weight: 500;
+}
 .memberAdd > .roleField {
   width: 130px;
   flex: none;
@@ -1006,6 +1157,29 @@ a.row:hover {
   font-family: var(--font-mono);
   font-size: var(--fs-xs);
   text-align: center;
+}
+.tteam {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 6px 0 2px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--panel);
+  color: var(--dim);
+  font-size: var(--fs-xs);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.tteam:hover {
+  color: var(--txt);
+  border-color: var(--line-strong);
+}
+.tteam .teamDot {
+  width: 7px;
+  height: 7px;
+  margin: 0 2px;
 }
 .tacts {
   margin-left: auto;
@@ -1175,4 +1349,267 @@ a.row:hover {
 }
 .scopeSet {
   margin: 0;
+}
+
+/* --- banner: takim/pillar sayfasinin ustu, 4:1 kirpilir ---------------------- */
+.banner {
+  position: relative;
+  aspect-ratio: 4 / 1;
+  max-height: 220px;
+  width: 100%;
+  margin-bottom: var(--s-4);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  background: var(--tint);
+}
+.bannerImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.bannerTools {
+  position: absolute;
+  right: var(--s-2);
+  bottom: var(--s-2);
+  display: flex;
+  gap: var(--s-2);
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.banner:hover .bannerTools,
+.banner:focus-within .bannerTools {
+  opacity: 1;
+}
+.bannerBtn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  background: var(--panel);
+  color: var(--txt);
+  font: inherit;
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+
+/* --- birim secici (favoriler cihazda) ---------------------------------------- */
+.unitPicker {
+  border-top: 1px solid var(--line);
+  padding: var(--s-2) var(--s-4) var(--s-3);
+}
+.unitBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  padding: var(--s-1) 0;
+}
+.favFilter,
+.unitCaret,
+.unitName,
+.star {
+  appearance: none;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--dim);
+  cursor: pointer;
+}
+.favFilter {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  font-size: var(--fs-sm);
+}
+.favFilterOn {
+  background: var(--acc-bg);
+  color: var(--acc-strong);
+}
+.unitList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 260px;
+  overflow: auto;
+}
+.unitRow {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 28px;
+}
+.unitCaret {
+  width: 18px;
+  display: inline-grid;
+  place-items: center;
+}
+.unitCaret svg {
+  transition: transform 0.12s;
+}
+.unitCaret[aria-expanded="true"] svg {
+  transform: rotate(90deg);
+}
+.unitName {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  text-align: left;
+  color: var(--txt);
+  font-size: var(--fs-md);
+}
+.unitName:hover:not(:disabled) {
+  color: var(--acc-strong);
+}
+.unitOn {
+  font-weight: 600;
+  color: var(--acc-strong);
+  cursor: default;
+}
+.starOn {
+  color: var(--warn);
+}
+.starOn svg {
+  fill: currentColor;
+}
+
+/* --- yonetim: aktivite ----------------------------------------------------- */
+.activityBar {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  margin-bottom: var(--s-3);
+}
+.activitySearch {
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--line-field);
+  border-radius: var(--r-md);
+  background: var(--panel);
+  color: var(--txt);
+  font: inherit;
+}
+.activityTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-md);
+}
+.activityTable th {
+  text-align: left;
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  color: var(--dim);
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.activityTable td {
+  padding: 8px 12px;
+  border-top: 1px solid var(--line);
+}
+.activityTable tbody tr {
+  cursor: pointer;
+}
+.activityTable tbody tr:hover,
+.activityTable tbody tr[aria-selected="true"] {
+  background: var(--acc-bg);
+}
+.activityWho {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.matrixHead {
+  margin-bottom: var(--s-3);
+}
+.matrix {
+  display: flex;
+  gap: 3px;
+}
+.matrixCol {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.matrixCell,
+.matrixGap {
+  width: 13px;
+  height: 13px;
+  border-radius: 3px;
+}
+.matrixCell {
+  background: var(--tint);
+}
+.lv0 { background: var(--tint); }
+.lv1 { background: color-mix(in srgb, var(--acc) 25%, var(--tint)); }
+.lv2 { background: color-mix(in srgb, var(--acc) 50%, var(--tint)); }
+.lv3 { background: color-mix(in srgb, var(--acc) 75%, var(--tint)); }
+.lv4 { background: var(--acc); }
+
+/* --- KPI iskeleti ---------------------------------------------------------- */
+.kpiGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--s-4);
+  padding: var(--s-4);
+}
+.kpiChart {
+  width: 100%;
+  height: auto;
+}
+.kpiBar {
+  fill: var(--tint);
+}
+.kpiLine {
+  fill: none;
+  stroke: var(--line-strong);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* --- ekip sayfasi ---------------------------------------------------------- */
+.peopleGrid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--s-4);
+}
+.personCard {
+  display: flex;
+  gap: var(--s-3);
+  padding: var(--s-4);
+}
+.personInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.table .rowTitle {
+  min-width: 0;
+}
+
+/* --- yonetim: toplu islem cubugu ------------------------------------------ */
+.bulkBar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin-bottom: var(--s-3);
+  padding: 8px 12px;
+  border: 1px solid var(--acc-soft);
+  border-radius: var(--r-lg);
+  background: var(--acc-bg);
 }

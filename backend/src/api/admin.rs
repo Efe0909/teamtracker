@@ -27,7 +27,7 @@ use crate::{
     audit,
     auth::CurrentUser,
     error::{AppError, Result},
-    models::user::{User, COLORS},
+    models::{enums::NotifyLevel, user::{User, COLORS}},
     state::AppState,
 };
 
@@ -67,6 +67,14 @@ struct Person {
     /// Dal izinleri (`user_node_scopes`). Python'da arayuzu yoktu: panelden
     /// verilen `edit_nodes` dalsiz ise yaramiyordu (yetenek + dal birlikte).
     node_ids: Vec<Uuid>,
+    /// Bildirim ayari ozeti (yalniz gorunurluk; kisi kendi ayarini kendi degistirir).
+    notify_level: NotifyLevel,
+    quiet_start: Option<i16>,
+    quiet_end: Option<i16>,
+    /// Anlik bildirim icin kayitli cihaz sayisi.
+    push_devices: i64,
+    /// Bu kisiye ozel sessize alinmis / ozel secimli sohbet sayisi.
+    chat_overrides: i64,
 }
 
 #[derive(Serialize)]
@@ -85,6 +93,11 @@ struct UserRow {
     is_admin: bool,
     is_active: bool,
     last_seen_at: Option<DateTime<Utc>>,
+    notify_level: NotifyLevel,
+    quiet_start: Option<i16>,
+    quiet_end: Option<i16>,
+    push_devices: i64,
+    chat_overrides: i64,
 }
 
 fn group<T>(rows: Vec<(Uuid, T)>) -> HashMap<Uuid, Vec<T>> {
@@ -108,7 +121,11 @@ async fn view(p: &PgPool, me: &User) -> Result<Json<AdminView>> {
     let nodes = group(sqlx::query_as::<_, (Uuid, Uuid)>(
         "select user_id, node_id from user_node_scopes").fetch_all(p).await?);
     let users: Vec<UserRow> = sqlx::query_as(
-        "select id, email, name, color, is_admin, is_active, last_seen_at from users order by name")
+        "select u.id, u.email, u.name, u.color, u.is_admin, u.is_active, u.last_seen_at,
+                u.notify_level, u.quiet_start, u.quiet_end,
+                (select count(*) from push_subscriptions p where p.user_id = u.id) as push_devices,
+                (select count(*) from chat_prefs c where c.user_id = u.id) as chat_overrides
+           from users u order by u.name")
         .fetch_all(p).await?;
 
     let people = users.into_iter().map(|u| {
@@ -129,6 +146,8 @@ async fn view(p: &PgPool, me: &User) -> Result<Json<AdminView>> {
             node_ids: nodes.get(&u.id).cloned().unwrap_or_default(),
             id: u.id, email: u.email, name: u.name, color: u.color,
             is_admin: u.is_admin, is_active: u.is_active, last_seen_at: u.last_seen_at,
+            notify_level: u.notify_level, quiet_start: u.quiet_start, quiet_end: u.quiet_end,
+            push_devices: u.push_devices, chat_overrides: u.chat_overrides,
         }
     }).collect();
 
@@ -185,6 +204,9 @@ pub async fn add_user(
     if added == 0 {
         return Err(AppError::Conflict("user_exists"));
     }
+    // Otomatik davet postasi (kuyruga; gonderici henuz yok).
+    let mail = crate::mail::invite(&name, &email, &st.cfg.app_url(), &st.cfg.dashboard_url());
+    crate::mail::enqueue(&st.pool, "invite", &mail).await?;
     view(&st.pool, &me).await
 }
 
@@ -200,6 +222,8 @@ pub enum UserOp {
     RevokeRole(Uuid),
     GrantNode(Uuid),
     RevokeNode(Uuid),
+    /// Baskasi adina profil fotografi (yonetici yukler); null kaldirir.
+    Avatar(Option<Uuid>),
 }
 
 pub async fn patch_user(
@@ -293,6 +317,21 @@ pub async fn patch_user(
                  on conflict do nothing")
                 .bind(id).bind(node).bind(me.id).execute(&mut *tx).await?.rows_affected();
             (n > 0).then_some(("scope_granted", Some(format!("dal: {name}"))))
+        }
+        UserOp::Avatar(photo) => {
+            // Ek benim yukledigim, silinmemis olmali. Guvenlik olayi degil: kayit yok.
+            if let Some(a) = photo {
+                let ok: bool = sqlx::query_scalar(
+                    "select exists(select 1 from attachments
+                                    where id = $1 and uploader_id = $2 and deleted_at is null)")
+                    .bind(a).bind(me.id).fetch_one(&mut *tx).await?;
+                if !ok {
+                    return Err(AppError::BadRequest("invalid_avatar"));
+                }
+            }
+            sqlx::query("update users set avatar_id = $2 where id = $1")
+                .bind(id).bind(photo).execute(&mut *tx).await?;
+            None
         }
         UserOp::RevokeNode(node) => {
             let name = node_name(&st, node)?;
@@ -415,4 +454,51 @@ pub async fn delete_role(
     audit::log_event(&st, audit::client_ip(&headers), "role_deleted", Some(me.id), Some(&me.email),
         Some(&name)).await;
     view(&st.pool, &me).await
+}
+
+// --- aktivite ----------------------------------------------------------------
+
+#[derive(Serialize)]
+pub struct DayUse {
+    day: chrono::NaiveDate,
+    requests: i32,
+    minutes: i32,
+}
+
+#[derive(sqlx::FromRow)]
+struct LoginRow {
+    id: Uuid,
+    last_login_at: Option<DateTime<Utc>>,
+    last_seen_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Serialize)]
+pub struct PersonUse {
+    user_id: Uuid,
+    last_login_at: Option<DateTime<Utc>>,
+    last_seen_at: Option<DateTime<Utc>>,
+    /// Son 120 gun, eskiden yeniye; kullanimsiz gunler yok.
+    days: Vec<DayUse>,
+}
+
+/// Kisi bazli kullanim: son giris, son hareket, gunluk istek/dakika.
+pub async fn activity(
+    State(st): State<AppState>, CurrentUser(me): CurrentUser,
+) -> Result<Json<Vec<PersonUse>>> {
+    can_manage(&st, &me).await?;
+    let people: Vec<LoginRow> = sqlx::query_as(
+        "select id, last_login_at, last_seen_at from users order by name")
+        .fetch_all(&st.pool).await?;
+    let rows: Vec<(Uuid, chrono::NaiveDate, i32, i32)> = sqlx::query_as(
+        "select user_id, day, requests, minutes from user_activity
+          where day > current_date - 120 order by day")
+        .fetch_all(&st.pool).await?;
+    let mut by: HashMap<Uuid, Vec<DayUse>> = HashMap::new();
+    for (u, day, requests, minutes) in rows {
+        by.entry(u).or_default().push(DayUse { day, requests, minutes });
+    }
+    Ok(Json(people.into_iter().map(|p| PersonUse {
+        days: by.remove(&p.id).unwrap_or_default(), user_id: p.id,
+        last_login_at: p.last_login_at, last_seen_at: p.last_seen_at,
+    }).collect()))
 }

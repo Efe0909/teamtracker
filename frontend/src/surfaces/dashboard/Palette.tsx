@@ -19,6 +19,8 @@ const PAGES: { label: string; icon: IconName; route: Route; keys: string[] }[] =
   { label: "Geciken kayıtlar", icon: "alert", route: { name: "tasks", query: { quick: "overdue" } }, keys: ["gecikme"] },
   { label: "Açık eylemlerim", icon: "bolt", route: { name: "tasks", query: { quick: "my_actions" } }, keys: ["benim"] },
   { label: "Takımlar", icon: "teams", route: { name: "teams" }, keys: ["ekip"] },
+  { label: "Ekip", icon: "user", route: { name: "people" }, keys: ["kişi", "profil", "telefon", "doğum günü"] },
+  { label: "Pillar'lar", icon: "pin", route: { name: "pillars" }, keys: ["pillar", "alan"] },
   { label: "Veri yönetimi", icon: "tree", route: { name: "tree" }, keys: ["ağaç", "düğüm", "birim"] },
 ];
 
@@ -88,9 +90,21 @@ export function Palette({ open, onOpenChange }: { open: boolean; onOpenChange: (
             )}
           </Command.Group>
 
-          {L.meta.teams.length > 0 && (
+          {L.pillars.length > 0 && (
+            <Command.Group heading="Pillar'lar" className={s.palGroup}>
+              {L.pillars.map((p) => (
+                <Command.Item key={p.id} value={`pillar-${p.id}`} keywords={[p.name, "pillar"]} className={s.palItem}
+                  onSelect={() => go({ name: "pillar", id: p.id })}>
+                  <span className={s.pillarDot} style={p.color !== null ? { background: p.color } : undefined} aria-hidden="true" />
+                  {p.name}
+                </Command.Item>
+              ))}
+            </Command.Group>
+          )}
+
+          {L.plainTeams.length > 0 && (
             <Command.Group heading="Takımlar" className={s.palGroup}>
-              {L.meta.teams.map((t) => (
+              {L.plainTeams.map((t) => (
                 <Command.Item key={t.id} value={`team-${t.id}`} keywords={[t.name, "takım"]} className={s.palItem}
                   onSelect={() => go({ name: "team", id: t.id })}>
                   <span className={s.teamDot} style={t.color !== null ? { background: t.color } : undefined} aria-hidden="true" />

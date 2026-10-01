@@ -2,7 +2,7 @@
 // yalniz kimlik tasidigi icin her ekran bunu kullanir.
 
 import { createContext, useContext, useMemo, type ReactNode } from "react";
-import type { Meta, MetaNode, MetaTeam, MetaUser, Uuid } from "../api/types";
+import type { Meta, MetaNode, MetaPillar, MetaTeam, MetaUser, Uuid } from "../api/types";
 
 export interface Lookup {
   meta: Meta;
@@ -13,9 +13,13 @@ export interface Lookup {
   /** Kokten dugume adlar, dugum dahil. */
   path: (id: Uuid) => string[];
   can: (scope: string) => boolean;
-  /** Kayit acilabilecek birimler: aktif, team/pillar olmayan (spec/21 §10). */
+  pillar: (id: Uuid | null | undefined) => MetaPillar | undefined;
+  /** Kayit acilabilecek birimler: aktif dugumler (agac yalniz yapi, spec/22). */
   units: MetaNode[];
-  pillars: MetaNode[];
+  /** Secilebilir pillar'lar: aktif olanlar, sort_order sirasiyla. */
+  pillars: MetaPillar[];
+  /** Sıradan takimlar: bir pillar'in OZEL takimi olmayanlar. */
+  plainTeams: MetaTeam[];
 }
 
 const Ctx = createContext<Lookup | null>(null);
@@ -25,12 +29,19 @@ export function LookupProvider({ meta, children }: { meta: Meta; children: React
     const users = new Map(meta.users.map((u) => [u.id, u]));
     const teams = new Map(meta.teams.map((t) => [t.id, t]));
     const nodes = new Map(meta.nodes.map((n) => [n.id, n]));
+    const pillars = new Map(meta.pillars.map((p) => [p.id, p]));
     const me: MetaUser = users.get(meta.me.id) ?? {
       id: meta.me.id,
       name: "?",
       color: null,
       is_admin: meta.me.is_admin,
       last_seen_at: null,
+      nickname: null,
+      phone: null,
+      avatar_id: null,
+      birth_day: null,
+      birth_month: null,
+      birth_year: null,
     };
     const path = (id: Uuid): string[] => {
       const out: string[] = [];
@@ -49,8 +60,10 @@ export function LookupProvider({ meta, children }: { meta: Meta; children: React
       node: (id) => (id == null ? undefined : nodes.get(id)),
       path,
       can: (scope) => meta.me.is_admin || meta.me.scopes.includes(scope),
-      units: meta.nodes.filter((n) => n.is_active && n.node_type !== "team" && n.node_type !== "pillar"),
-      pillars: meta.nodes.filter((n) => n.is_active && n.node_type === "pillar"),
+      pillar: (id) => (id == null ? undefined : pillars.get(id)),
+      units: meta.nodes.filter((n) => n.is_active),
+      pillars: meta.pillars.filter((p) => p.is_active),
+      plainTeams: meta.teams.filter((t) => t.pillar_id === null),
     };
   }, [meta]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

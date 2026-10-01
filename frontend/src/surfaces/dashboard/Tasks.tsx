@@ -3,9 +3,11 @@
 // Filtreler tek satir cip: bos cip kesikli ("Durum"), etkin cip dolu
 // ("Durum: Açık"). Suzme SUNUCUDA.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRecords, type RecordQuery } from "../../api/hooks";
 import type { RecordSummary } from "../../api/types";
+import { resolveWidths, clampWidth } from "../../lib/columns";
+import { useStored } from "../../lib/stored";
 import { ago, isDone, KIND, PRIORITY, PRIORITY_ORDER, STATUS, STATUS_ORDER } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
 import { navigate } from "../../lib/router";
@@ -124,10 +126,8 @@ export function Tasks({ query }: { query: RecordQuery }) {
           ...L.meta.users.map((u) => ({ value: u.id, label: u.name, render: <Who user={u} /> })),
         ])}
         {chip("priority", "Öncelik", PRIORITY_ORDER.map((v) => ({ value: v, label: PRIORITY[v], render: <PriorityTag priority={v} bare /> })))}
-        {chip("node", "Birim", L.meta.nodes
-          .filter((n) => n.node_type !== "team" && n.node_type !== "pillar")
-          .map((n) => ({ value: n.id, label: n.name, depth: n.depth })))}
-        {chip("team", "Takım", L.meta.teams.map((t) => ({ value: t.id, label: t.name, render: <TeamName team={t} /> })))}
+        {chip("node", "Birim", L.meta.nodes.map((n) => ({ value: n.id, label: n.name, depth: n.depth })))}
+        {chip("team", "Takım", L.plainTeams.map((t) => ({ value: t.id, label: t.name, render: <TeamName team={t} /> })))}
         {chip("kind", "Tür", [{ value: "issue", label: KIND.issue }, { value: "task", label: KIND.task }])}
         {L.pillars.length > 0 &&
           chip("pillar", "Pillar", [{ value: "none", label: "Pillar yok" }, ...L.pillars.map((n) => ({ value: n.id, label: n.name }))])}
@@ -162,8 +162,36 @@ export function Tasks({ query }: { query: RecordQuery }) {
 }
 
 /** Tablo: gorev listesi ve takim sayfasi AYNI satiri cizer. */
+type ColKey = "title" | "status" | "priority" | "owner" | "due" | "unit" | "team" | "updated";
+const COLS: { key: ColKey; label: string; width: number }[] = [
+  { key: "title", label: "Kayıt", width: 340 },
+  { key: "status", label: "Durum", width: 130 },
+  { key: "priority", label: "Öncelik", width: 110 },
+  { key: "owner", label: "Sorumlu", width: 150 },
+  { key: "due", label: "Son tarih", width: 140 },
+  { key: "unit", label: "Birim", width: 170 },
+  { key: "team", label: "Takım", width: 130 },
+  { key: "updated", label: "Hareket", width: 100 },
+];
+const DEFAULTS = Object.fromEntries(COLS.map((c) => [c.key, c.width])) as Record<ColKey, number>;
+
 export function RecordTable({ rows, showTeam = true }: { rows: RecordSummary[]; showTeam?: boolean }) {
   const L = useLookup();
+  const [saved, setSaved] = useStored<Record<string, number>>("table.cols", {});
+  const widths = resolveWidths(DEFAULTS, saved);
+  const drag = useRef<{ key: ColKey; x: number; w: number } | null>(null);
+  const cols = COLS.filter((c) => showTeam || c.key !== "team");
+  // Surukleme: imlec yakalanir, birakinca genislik cihaza yazilir.
+  const start = (key: ColKey) => (e: React.PointerEvent<HTMLSpanElement>) => {
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    drag.current = { key, x: e.clientX, w: widths[key] };
+  };
+  const move = (e: React.PointerEvent<HTMLSpanElement>) => {
+    const d = drag.current;
+    if (d !== null) setSaved({ ...saved, [d.key]: clampWidth(d.w + e.clientX - d.x) });
+  };
+  const end = () => { drag.current = null; };
   if (rows.length === 0) {
     return (
       <div className={s.tableWrap}>
@@ -173,17 +201,20 @@ export function RecordTable({ rows, showTeam = true }: { rows: RecordSummary[]; 
   }
   return (
     <div className={s.tableWrap}>
-      <table className={s.table}>
+      <table className={s.table} style={{ tableLayout: "fixed", width: cols.reduce((n, c) => n + widths[c.key], 0) }}>
+        <colgroup>
+          {cols.map((c) => <col key={c.key} style={{ width: widths[c.key] }} />)}
+        </colgroup>
         <thead>
           <tr>
-            <th scope="col">Kayıt</th>
-            <th scope="col">Durum</th>
-            <th scope="col">Öncelik</th>
-            <th scope="col">Sorumlu</th>
-            <th scope="col">Son tarih</th>
-            <th scope="col">Birim</th>
-            {showTeam && <th scope="col">Takım</th>}
-            <th scope="col">Hareket</th>
+            {cols.map((c) => (
+              <th key={c.key} scope="col">
+                {c.label}
+                <span className={s.colGrip} role="separator" aria-label={`${c.label} sütun genişliği`}
+                  onPointerDown={start(c.key)} onPointerMove={move} onPointerUp={end} onPointerCancel={end}
+                  onDoubleClick={() => setSaved(Object.fromEntries(Object.entries(saved).filter(([k]) => k !== c.key)))} />
+              </th>
+            ))}
           </tr>
         </thead>
         <tbody>

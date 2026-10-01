@@ -7,6 +7,7 @@ mod api;
 mod audit;
 mod auth;
 mod bootstrap;
+mod channel;
 mod config;
 mod csrf;
 // Alan katmani: agac, kapsam, filtre, akis. Butunu Python'dan tasindi, JSON
@@ -18,10 +19,11 @@ mod media;
 mod mentions;
 #[allow(dead_code)]
 mod models;
-#[allow(dead_code)]
+mod mail;
 mod push;
 mod ratelimit;
 mod state;
+mod webpush;
 
 use std::net::SocketAddr;
 
@@ -31,6 +33,12 @@ use state::AppState;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // `ekiptakip vapid-keygen`: web push anahtar cifti (ortam degiskeni satirlari).
+    if std::env::args().nth(1).as_deref() == Some("vapid-keygen") {
+        let (private, public) = webpush::keygen();
+        println!("VAPID_PRIVATE={private}\nVAPID_PUBLIC={public}");
+        return Ok(());
+    }
     tracing_subscriber::fmt::init();
 
     let cfg = config::Config::from_env()?;
@@ -57,6 +65,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Agac ACILISTA tek sorguyla kurulur, her istekte SQL'e gidilmez (KNOW-179).
     let addr = SocketAddr::new(cfg.bind, cfg.port);
     let state = AppState::new(pool, cfg).await?;
+    // Posta kuyrugu tuketici (anahtar varsa).
+    if let Some(resend) = state.mailer.clone() {
+        tokio::spawn(mail::run_outbox(state.pool.clone(), resend));
+    }
 
     // axum'da SON eklenen katman EN DISTA calisir:
     //   TraceLayer -> denetim (403) -> CSRF kapisi -> rotalar

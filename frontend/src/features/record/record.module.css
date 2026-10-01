@@ -76,6 +76,76 @@
 }
 
 /* "top kimde" satiri (spec/17 I1) */
+.ballWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ballUpdates {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: var(--fs-sm);
+}
+.ballUpdates li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.propsPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.propsToggle,
+.ball {
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 2px 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.propsToggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--dim);
+}
+.propsSummary {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--txt);
+}
+.caret {
+  display: inline-grid;
+  transition: transform 0.12s;
+}
+.caretOpen {
+  transform: rotate(90deg);
+}
+.stack {
+  display: inline-flex;
+  align-items: center;
+}
+.stackItem + .stackItem {
+  margin-left: -6px;
+}
+.stackItem {
+  border: 2px solid var(--panel);
+  border-radius: 50%;
+  display: inline-flex;
+}
+.stackMore {
+  margin-left: 4px;
+  font-size: var(--fs-sm);
+  color: var(--dim);
+}
 .ball {
   display: flex;
   align-items: center;
@@ -323,6 +393,28 @@
 .cardHead b {
   font-weight: 600;
 }
+.cardToggle {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+/* Duzenle/sil simgeleri yalniz uzerine gelince (odakta da) gorunur. */
+.cardHover .cardActs {
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.cardHover:hover .cardActs,
+.cardHover:focus-within .cardActs {
+  opacity: 1;
+}
 .cardActs {
   margin-left: auto;
   display: inline-flex;
@@ -365,4 +457,237 @@
 .cardAdd {
   display: flex;
   gap: 8px;
+}
+
+@media (hover: none) {
+  .cardHover .cardActs {
+    opacity: 1;
+  }
+}
+
+/* --- oylama --------------------------------------------------------------- */
+.poll {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+.pollClosed {
+  color: var(--err-text);
+}
+.pollTabs {
+  display: flex;
+  gap: var(--s-3);
+  border-bottom: 1px solid var(--line);
+}
+.pollTabs button {
+  appearance: none;
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  padding: 4px 0;
+  font: inherit;
+  font-size: var(--fs-sm);
+  color: var(--dim);
+  cursor: pointer;
+}
+.pollTabs button[aria-selected="true"] {
+  color: var(--txt);
+  border-bottom-color: var(--acc);
+}
+.pollList,
+.pollOthers {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pollOthers li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pollOpt {
+  appearance: none;
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 8px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  background: var(--panel);
+  color: var(--txt);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.pollOpt:disabled {
+  cursor: default;
+}
+.pollOptOn {
+  border-color: var(--acc);
+}
+.pollBar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--acc-bg);
+  z-index: 0;
+  transition: width 0.2s;
+}
+.pollLabel,
+.pollCount,
+.pollImg {
+  position: relative;
+  z-index: 1;
+}
+.pollLabel {
+  flex: 1;
+}
+.pollCount {
+  font-family: var(--font-mono);
+  color: var(--dim);
+}
+.pollImg {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--r-sm);
+  object-fit: cover;
+}
+.pollEdit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  align-items: flex-start;
+}
+.pollEditRow {
+  display: flex;
+  gap: var(--s-2);
+  width: 100%;
+}
+.pollPhoto {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  background: var(--panel);
+  color: var(--dim);
+  font: inherit;
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+.pollPhoto img {
+  width: 24px;
+  height: 24px;
+  object-fit: cover;
+  border-radius: var(--r-sm);
+}
+
+.stackBtn {
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 2px;
+  border-radius: var(--r-md);
+  cursor: pointer;
+}
+.stackBtn:hover {
+  background: var(--tint);
+}
+.stackAdd {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin-left: 4px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 50%;
+  color: var(--dim);
+}
+.people {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  min-width: 220px;
+}
+.people ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 240px;
+  overflow: auto;
+}
+.people li {
+  padding: 3px 0;
+}
+
+.pinnedBtn {
+  color: var(--warn);
+}
+.pinnedBtn svg {
+  fill: currentColor;
+}
+
+/* --- erisim kipleri: katil bandi, iskelet ---------------------------------- */
+.joinBanner {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s-3);
+  padding: 10px 14px;
+  border: 1px solid var(--acc-soft);
+  border-radius: var(--r-lg);
+  background: var(--acc-bg);
+  font-size: var(--fs-md);
+}
+.joinText {
+  flex: 1;
+  min-width: 200px;
+}
+.joinList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+.joinList li {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  padding: var(--s-4);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--r-lg);
+}
+.skelLine,
+.skelBlock {
+  display: block;
+  border-radius: var(--r-sm);
+  background: var(--tint);
+}
+.skelLine {
+  height: 12px;
+}
+.skelBlock {
+  height: 56px;
+}
+
+.cardLayoutActs {
+  margin-left: auto;
+  display: inline-flex;
+  gap: 2px;
 }

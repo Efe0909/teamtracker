@@ -29,6 +29,13 @@ const READY: { slug: string; icon: IconName; name: string; desc: string; route: 
     route: { name: "teams" },
   },
   {
+    slug: "pillars",
+    icon: "pin",
+    name: "Pillar'lar",
+    desc: "Kesişen sorumluluk alanları: kendi takımı, sohbeti ve kayıtları.",
+    route: { name: "pillars" },
+  },
+  {
     slug: "outcome-tree",
     icon: "tree",
     name: "Veri Yönetimi",
@@ -57,6 +64,7 @@ export function Home() {
   const L = useLookup();
   const home = useHome();
   const recent = useRecords({});
+  const pinned = useRecords({ pinned: "true" });
   const [creating, setCreating] = useState(false);
   useEffect(() => {
     document.title = "Panolar — EkipTakip";
@@ -103,6 +111,32 @@ export function Home() {
         </div>
       )}
 
+      {pinned.data !== undefined && pinned.data.length > 0 && (
+        <section className={s.surface} aria-labelledby="pinned-h" style={{ marginBottom: 20 }}>
+          <div className={s.surfaceHead}>
+            <span id="pinned-h">Sabitlenenler</span>
+            <span className={s.count}>{pinned.data.length}</span>
+          </div>
+          <ul className={s.rows}>
+            {pinned.data.map((r) => (
+              <li key={r.id}>
+                <Link href={href({ name: "record", id: r.id })} className={s.row}>
+                  <Status status={r.status} />
+                  <span className={s.rowMain}>
+                    <b>{r.title}</b>
+                    <span>{L.path(r.unit_id).join(" › ")}</span>
+                  </span>
+                  <span className={s.rowWho}>
+                    <Who user={L.user(r.owner_id)} empty="Sorumlusuz" />
+                  </span>
+                  <span className={`${s.rowMeta} ${s.rowTime}`}>{ago(r.updated_at)}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       <div className={s.homeGrid}>
         <section className={s.surface} aria-labelledby="recent-h">
           <div className={s.surfaceHead}>
@@ -121,8 +155,10 @@ export function Home() {
                       <b>{r.title}</b>
                       <span>{L.path(r.unit_id).join(" › ")}</span>
                     </span>
-                    <Who user={L.user(r.owner_id)} empty="Sorumlusuz" />
-                    <span className={s.rowMeta}>{ago(r.updated_at)}</span>
+                    <span className={s.rowWho}>
+                      <Who user={L.user(r.owner_id)} empty="Sorumlusuz" />
+                    </span>
+                    <span className={`${s.rowMeta} ${s.rowTime}`}>{ago(r.updated_at)}</span>
                   </Link>
                 </li>
               ))}
