@@ -41,11 +41,18 @@ export function PollBody({ c }: { c: CardView }) {
   const [other, setOther] = useState("");
   const mine = c.votes.find((v) => v.user_id === L.me.id);
   const closed = c.closed || (c.closes_at !== null && remaining(c.closes_at, now) === "Kapandı");
-  const others = c.votes.filter((v) => v.option === null);
+  const others = c.votes.filter((v) => v.text !== null);
   const total = c.votes.length;
-  const send = (body: { option?: number; other?: string }) =>
+  // Govde kisinin TUM secimi: coklu secimde isaretliler + (varsa) diger cevabi korunur.
+  const send = (body: { options: number[]; other?: string }) =>
     w.mutate({ method: "PUT", path: `/api/cards/${c.id}/vote`, body },
       { onError: (e) => toast({ text: errorText(e), error: true }) });
+  const keepOther = c.multiple_choice && mine?.text != null ? { other: mine.text } : {};
+  const toggle = (i: number, on: boolean) => {
+    if (!c.multiple_choice) return send({ options: on ? [] : [i] });
+    const picked = mine?.options ?? [];
+    send({ options: on ? picked.filter((x) => x !== i) : [...picked, i], ...keepOther });
+  };
 
   if (c.options.length === 0) return <p className={s.hint}>Henüz seçenek yok. Kartı düzenleyip seçenekleri ekle.</p>;
   return (
@@ -55,6 +62,7 @@ export function PollBody({ c }: { c: CardView }) {
           <Icon name="calendar" size={13} /> {remaining(c.closes_at, now)}
         </p>
       )}
+      {c.multiple_choice && !closed && <p className={s.hint}>Birden çok seçenek işaretleyebilirsin.</p>}
       {c.allow_other && (
         <div className={s.pollTabs} role="tablist">
           <button type="button" role="tab" aria-selected={tab === "votes"} onClick={() => setTab("votes")}>Oylar</button>
@@ -66,12 +74,15 @@ export function PollBody({ c }: { c: CardView }) {
       {tab === "votes" ? (
         <ul className={s.pollList}>
           {c.options.map((o: PollOption, i) => {
-            const n = c.votes.filter((v) => v.option === i).length;
-            const on = mine?.option === i;
+            const n = c.votes.filter((v) => v.options.includes(i)).length;
+            const on = mine?.options.includes(i) === true;
             return (
               <li key={i}>
                 <button type="button" className={cx(s.pollOpt, on && s.pollOptOn)} aria-pressed={on}
-                  disabled={w.isPending || closed} onClick={() => send(on ? {} : { option: i })}>
+                  disabled={w.isPending || closed} onClick={() => toggle(i, on)}>
+                  {c.multiple_choice && (
+                    <span className={s.pollCheck} aria-hidden="true">{on && <Icon name="check" size={12} />}</span>
+                  )}
                   {o.attachment_id !== undefined && (
                     <img className={s.pollImg} src={`/api/attachments/${o.attachment_id}/thumb`} alt="" loading="lazy" />
                   )}
@@ -96,7 +107,10 @@ export function PollBody({ c }: { c: CardView }) {
       {c.allow_other && !closed && tab === "votes" && (
         <form className={s.addForm} onSubmit={(e) => {
           e.preventDefault();
-          if (other.trim() !== "") { send({ other }); setOther(""); setTab("other"); }
+          if (other.trim() === "") return;
+          send({ options: c.multiple_choice ? (mine?.options ?? []) : [], other });
+          setOther("");
+          setTab("other");
         }}>
           <input className={ui.input} value={other} onChange={(e) => setOther(e.target.value)} maxLength={200}
             placeholder="Diğer: ne istiyorsun?" aria-label="Diğer cevap" />
@@ -120,6 +134,7 @@ export function PollForm({ c, recordId, onClose }: { c?: CardView; recordId?: Uu
   const [allowOther, setAllowOther] = useState(c?.allow_other ?? false);
   const [mediaOn, setMediaOn] = useState(c?.media_enabled ?? false);
   const [timerOn, setTimerOn] = useState(c?.timer_enabled ?? false);
+  const [multiOn, setMultiOn] = useState(c?.multiple_choice ?? false);
   const [closesAt, setClosesAt] = useState(c?.closes_at ?? "");
   const set = (i: number, o: PollOption) => setOptions((p) => p.map((x, j) => (j === i ? o : x)));
 
@@ -138,7 +153,7 @@ export function PollForm({ c, recordId, onClose }: { c?: CardView; recordId?: Uu
         const kept = options.filter((o) => o.label.trim() !== "")
           .map((o) => (mediaOn && o.attachment_id !== undefined ? o : { label: o.label }));
         const data = { options: kept, allow_other: allowOther, closes_at: timerOn ? closesAt : "",
-          ...(creating ? { media_enabled: mediaOn, timer_enabled: timerOn } : {}) };
+          ...(creating ? { media_enabled: mediaOn, timer_enabled: timerOn, multiple_choice: multiOn } : {}) };
         w.mutate(creating
           ? { method: "POST", path: `/api/records/${recordId ?? ""}/cards`, body: { card_type: "poll", title, data } }
           : { method: "PATCH", path: `/api/cards/${c.id}`, body: { title, data } },
@@ -189,10 +204,14 @@ export function PollForm({ c, recordId, onClose }: { c?: CardView; recordId?: Uu
               <input type="checkbox" checked={timerOn} onChange={(e) => setTimerOn(e.target.checked)} />
               Sayaç — bitiş zamanı ve geri sayım
             </label>
+            <label className={ui.check}>
+              <input type="checkbox" checked={multiOn} onChange={(e) => setMultiOn(e.target.checked)} />
+              Çoklu seçim — kişi birden çok seçenek işaretleyebilir
+            </label>
           </fieldset>
-        ) : (mediaOn || timerOn) && (
+        ) : (mediaOn || timerOn || multiOn) && (
           <p className={ui.fieldHint}>
-            Açık özellikler: {[mediaOn && "medya", timerOn && "sayaç"].filter(Boolean).join(", ")} (oluştururken seçilmişti).
+            Açık özellikler: {[mediaOn && "medya", timerOn && "sayaç", multiOn && "çoklu seçim"].filter(Boolean).join(", ")} (oluştururken seçilmişti).
           </p>
         )}
         {timerOn && (
