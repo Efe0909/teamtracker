@@ -20,6 +20,8 @@ export function Cards({ d }: { d: RecordDetail }) {
   const w = useCardWrite();
   const toast = useToast();
   const order = useCardOrder(d.record.id);
+  // Kart DUZENI modu: kartlarin kendi duzenle/sil dugmelerinden bagimsiz, yalniz siralama.
+  const [layout, setLayout] = useState(false);
   if (d.cards.length === 0 && !d.access.can_edit) return null;
   // Sira kisiye ozel (sunucuda): komsuyla yer degistirip tum sirayi gonder.
   const move = (i: number, dir: -1 | 1) => {
@@ -39,8 +41,14 @@ export function Cards({ d }: { d: RecordDetail }) {
       <div className={s.secHead}>
         <h2 id="cards-h">Kartlar</h2>
         {d.cards.length > 0 && <span className={s.count}>{d.cards.length}</span>}
+        {d.cards.length > 1 && (
+          <Button size="sm" variant={layout ? "primary" : "default"} aria-pressed={layout} style={{ marginLeft: "auto" }}
+            onClick={() => setLayout(!layout)}>
+            <Icon name="sliders" size={14} /> {layout ? "Düzeni bitir" : "Düzeni düzenle"}
+          </Button>
+        )}
         {d.access.can_edit && (
-          <span style={{ marginLeft: "auto" }}>
+          <span style={d.cards.length > 1 ? undefined : { marginLeft: "auto" }}>
             <Menu align="end" trigger={
               <Button size="sm" disabled={w.isPending}>
                 <Icon name="plus" size={14} /> Kart ekle
@@ -56,7 +64,7 @@ export function Cards({ d }: { d: RecordDetail }) {
         )}
       </div>
       {d.cards.map((c, i) => (
-        <Card key={c.id} d={d} c={c} first={i === 0} last={i === d.cards.length - 1} busy={order.isPending}
+        <Card key={c.id} d={d} c={c} layout={layout} first={i === 0} last={i === d.cards.length - 1} busy={order.isPending}
           onMove={(dir) => move(i, dir)} />
       ))}
       {d.cards.length === 0 && (
@@ -68,8 +76,8 @@ export function Cards({ d }: { d: RecordDetail }) {
   );
 }
 
-function Card({ d, c, first, last, busy, onMove }: {
-  d: RecordDetail; c: CardView; first: boolean; last: boolean; busy: boolean; onMove: (dir: -1 | 1) => void;
+function Card({ d, c, layout, first, last, busy, onMove }: {
+  d: RecordDetail; c: CardView; layout: boolean; first: boolean; last: boolean; busy: boolean; onMove: (dir: -1 | 1) => void;
 }) {
   // Kapali kartlar cihazda hatirlanir (kayit/kart gezintisinde ayni kalir).
   const [collapsed, setCollapsed] = useStored<string[]>("cards.collapsed", []);
@@ -106,12 +114,17 @@ function Card({ d, c, first, last, busy, onMove }: {
           <b>{v("title") !== "" ? v("title") : t.label}</b>
           {v("title") !== "" && <span className={s.hint}>{t.label}</span>}
         </button>
-        <span className={s.cardActs}>
-          <IconButton icon="up" label="Yukarı taşı" disabled={first || busy} onClick={() => onMove(-1)} />
-          <IconButton icon="down" label="Aşağı taşı" disabled={last || busy} onClick={() => onMove(1)} />
-          {d.access.can_edit && <IconButton icon="edit" label="Kartı düzenle" onClick={() => setEditing(true)} />}
-          {d.access.can_edit && <IconButton icon="trash" label="Kartı sil" onClick={remove} />}
-        </span>
+        {layout ? (
+          <span className={s.cardLayoutActs}>
+            <IconButton icon="up" label="Yukarı taşı" disabled={first || busy} onClick={() => onMove(-1)} />
+            <IconButton icon="down" label="Aşağı taşı" disabled={last || busy} onClick={() => onMove(1)} />
+          </span>
+        ) : d.access.can_edit && (
+          <span className={s.cardActs}>
+            <IconButton icon="edit" label="Kartı düzenle" onClick={() => setEditing(true)} />
+            <IconButton icon="trash" label="Kartı sil" onClick={remove} />
+          </span>
+        )}
       </div>
 
       {!folded && (

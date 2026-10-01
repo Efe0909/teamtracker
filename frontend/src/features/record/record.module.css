@@ -685,3 +685,9 @@
 .skelBlock {
   height: 56px;
 }
+
+.cardLayoutActs {
+  margin-left: auto;
+  display: inline-flex;
+  gap: 2px;
+}
