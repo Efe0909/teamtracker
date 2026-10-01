@@ -4,6 +4,7 @@
 // Mobil yuze BAGLANTI YOK — bilincli ayrim (KNOW-153).
 
 import { useEffect, useState } from "react";
+import { NotifySettings } from "../../features/profile/NotifySettings";
 import { ProfileDialog } from "../../features/profile/ProfileDialog";
 import { useLookup } from "../../lib/lookup";
 import { useLocation } from "../../lib/router";
@@ -129,6 +130,7 @@ function Sidebar({ route, onSearch }: { route: Route; onSearch: () => void }) {
   const mine = new Set(L.meta.me.team_ids);
   const teams = [...L.plainTeams].sort((a, b) => Number(mine.has(b.id)) - Number(mine.has(a.id)) || a.name.localeCompare(b.name, "tr"));
   const [profileOpen, setProfileOpen] = useState(!L.meta.me.profile_complete);
+  const [notifyOpen, setNotifyOpen] = useState(false);
   const [teamsOpen, setTeamsOpen] = useStored("nav.teams.open", true);
   const current = route.name === "team" || route.name === "pillar" ? route.id : null;
 
@@ -221,6 +223,9 @@ function Sidebar({ route, onSearch }: { route: Route; onSearch: () => void }) {
         <MenuItem icon="user" onSelect={() => setProfileOpen(true)}>
           Profilim
         </MenuItem>
+        <MenuItem icon="bell" onSelect={() => setNotifyOpen(true)}>
+          Bildirimler
+        </MenuItem>
         <MenuSep />
         <MenuLabel>Tema</MenuLabel>
         <MenuRadio value={theme} onChange={setTheme} options={THEME_OPTS} />
@@ -229,6 +234,7 @@ function Sidebar({ route, onSearch }: { route: Route; onSearch: () => void }) {
           Çıkış yap
         </MenuItem>
       </Menu>
+      <NotifySettings open={notifyOpen} onClose={() => setNotifyOpen(false)} />
       <ProfileDialog open={profileOpen} onClose={() => setProfileOpen(false)} />
     </nav>
   );

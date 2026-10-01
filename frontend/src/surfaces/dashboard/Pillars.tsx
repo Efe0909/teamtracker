@@ -7,6 +7,7 @@ import { ApiError, errorText } from "../../api/client";
 import { pillarOps, useRecords, useTeam, useTeams, useTeamWrite } from "../../api/hooks";
 import type { MetaPillar, Uuid } from "../../api/types";
 import { Chat } from "../../features/chat/Chat";
+import { ChatBell } from "../../features/chat/ChatBell";
 import { NewRecordForm } from "../../features/record/NewRecordForm";
 import { isDone } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
@@ -171,6 +172,7 @@ function PillarScreen({ p }: { p: MetaPillar }) {
         <aside className={s.recordSide} aria-label="Pillar sohbeti">
           <div className={s.sideHead}>
             <Icon name="chat" size={16} /> Pillar sohbeti
+            <ChatBell chatId={team.chat_id} />
           </div>
           <div className={s.sideBody}>
             <Chat

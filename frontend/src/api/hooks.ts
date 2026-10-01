@@ -19,7 +19,9 @@ import type {
   NewRecord,
   NewTeam,
   NodePatch,
-  Notice,
+  NoticeList,
+  NotifyLevel,
+  NotifyPrefs,
   PillarPatch,
   RecordDetail,
   RecordPatch,
@@ -43,6 +45,7 @@ export const keys = {
   teams: ["teams"] as const,
   team: (id: Uuid) => ["team", id] as const,
   notifications: ["notifications"] as const,
+  notifyPrefs: ["notify-prefs"] as const,
   myActions: ["my-actions"] as const,
   nodes: ["nodes"] as const,
   admin: ["admin"] as const,
@@ -108,7 +111,7 @@ export function useTeam(id: Uuid) {
 export function useNotifications() {
   return useQuery({
     queryKey: keys.notifications,
-    queryFn: () => request<Notice[]>("GET", "/api/notifications"),
+    queryFn: () => request<NoticeList>("GET", "/api/notifications"),
     refetchInterval: 60_000,
   });
 }
@@ -354,5 +357,40 @@ export function usePatchProfile() {
     mutationFn: (p: ProfilePatch) => request<null>("PATCH", "/api/me/profile", p),
     // Ad/foto her ekranda cozuldugu icin sozluk tazelenir.
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.meta }),
+  });
+}
+
+export function useMarkSeen() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => request<null>("POST", "/api/notifications/seen"),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.notifications }),
+  });
+}
+
+export function useNotifyPrefs() {
+  return useQuery({ queryKey: keys.notifyPrefs, queryFn: () => request<NotifyPrefs>("GET", "/api/me/notifications") });
+}
+
+function afterPrefs(qc: QueryClient, p: NotifyPrefs) {
+  qc.setQueryData(keys.notifyPrefs, p);
+  void qc.invalidateQueries({ queryKey: keys.notifications });
+}
+
+export function usePatchNotifyPrefs() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (p: { level?: NotifyLevel; quiet_start?: number | null; quiet_end?: number | null }) =>
+      request<NotifyPrefs>("PATCH", "/api/me/notifications", p),
+    onSuccess: (p) => afterPrefs(qc, p),
+  });
+}
+
+/** Sohbet/kayit icin ozel secim; `null` varsayilana doner. */
+export function useSetChatPref(chat: Uuid) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (mode: NotifyLevel | null) => request<NotifyPrefs>("PUT", `/api/chats/${chat}/prefs`, { mode }),
+    onSuccess: (p) => afterPrefs(qc, p),
   });
 }

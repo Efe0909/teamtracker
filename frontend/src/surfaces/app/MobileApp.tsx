@@ -96,13 +96,11 @@ export function TopBar({ title, back, right }: { title: string; back?: boolean; 
   );
 }
 
-const DAY = 86_400_000;
-
 function Tabs({ route }: { route: Route }) {
   const notes = useNotifications();
   const acts = useMyActions();
-  // Rozet: son 24 saatteki hareket (okundu bilgisi henuz yok, spec/20 §6).
-  const fresh = (notes.data ?? []).filter((n) => Date.now() - new Date(n.created_at).getTime() < DAY).length;
+  // Rozet: son "gordum"den beri okunmamis (sunucu sayar, tercihe gore suzulmus).
+  const fresh = notes.data?.unread ?? 0;
   const items: { r: Route; icon: IconName; label: string; on: boolean; badge?: number }[] = [
     { r: { name: "todo", done: false }, icon: "tasks", label: "Yapılacak", on: route.name === "todo" },
     { r: { name: "search", q: "" }, icon: "search", label: "Ara", on: route.name === "search" },

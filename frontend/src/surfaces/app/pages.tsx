@@ -1,7 +1,7 @@
 // Mobil liste sayfalari: yapilacaklar, arama, eylemlerim, bildirimler, yeni.
 
-import { useEffect, useState } from "react";
-import { useMyActions, useNotifications, useRecords } from "../../api/hooks";
+import { useEffect, useRef, useState } from "react";
+import { useMarkSeen, useMyActions, useNotifications, useRecords } from "../../api/hooks";
 import type { MyAction, RecordSummary } from "../../api/types";
 import { NewRecordForm } from "../../features/record/NewRecordForm";
 import { describe } from "../../lib/activity";
@@ -10,7 +10,7 @@ import { useLookup } from "../../lib/lookup";
 import { mentionsMe } from "../../lib/mentions";
 import { navigate } from "../../lib/router";
 import { Icon } from "../../ui/icons";
-import { Avatar, Due, Empty, KindTag, Link, Loading, PriorityTag, Segmented, Status, Tag, ui } from "../../ui/ui";
+import { Avatar, cx, Due, Empty, KindTag, Link, Loading, PriorityTag, Segmented, Status, Tag, ui } from "../../ui/ui";
 import s from "./app.module.css";
 import { TopBar } from "./MobileApp";
 import { href } from "./routes";
@@ -220,20 +220,32 @@ export function ActionsPage() {
 export function NotificationsPage() {
   const L = useLookup();
   const q = useNotifications();
+  const seen = useMarkSeen();
+  // Liste gorununce "gordum": rozet sifirlanir, satirlar bu yuklemede hala vurgulu kalir.
+  const loaded = q.data !== undefined && q.data.unread > 0;
+  // Ilk yuklemedeki okunmamislar: "gordum" sonrasi yeniden cekilince de vurgulu kalir.
+  const fresh = useRef<Set<string> | null>(null);
+  if (fresh.current === null && q.data !== undefined) {
+    fresh.current = new Set(q.data.items.filter((n) => n.unread).map((n) => n.id));
+  }
+  useEffect(() => {
+    if (loaded) seen.mutate();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded]);
   return (
     <>
       <TopBar title="Bildirimler" />
       <div className={s.pad}>
         {q.data === undefined ? (
           <Loading />
-        ) : q.data.length === 0 ? (
+        ) : q.data.items.length === 0 ? (
           <Empty title="Sessiz">Kayıtlarında ve takımlarında hareket olunca burada görünür.</Empty>
         ) : (
-          q.data.map((n) => {
+          q.data.items.map((n) => {
             const actor = L.user(n.actor_id);
             const to = n.record_id !== null ? href({ name: "record", id: n.record_id }) : href({ name: "team", id: n.team_id ?? "" });
             return (
-              <Link key={n.id} href={to} className={s.card}>
+              <Link key={n.id} href={to} className={cx(s.card, fresh.current?.has(n.id) === true && s.cardUnread)}>
                 <Avatar user={actor} size={34} />
                 <span className={s.cardBody}>
                   <span>

@@ -115,3 +115,10 @@ export function ago(t: IsoTime): string {
 export function clock(t: IsoTime): string {
   return timeFmt.format(new Date(t));
 }
+
+/** Bildirim kademesi: `label` ayar listesinde, `short` zil ipucunda. Sunucu: push.rs NOTIFY_LEVELS. */
+export const NOTIFY: Record<"all" | "mentions" | "none", { label: string; short: string }> = {
+  all: { label: "Her hareket", short: "her hareket" },
+  mentions: { label: "Yalnızca anıldığımda (@adım, @all, @here, @team)", short: "yalnız anmalar" },
+  none: { label: "Hiçbiri — sessize al", short: "sessiz" },
+};

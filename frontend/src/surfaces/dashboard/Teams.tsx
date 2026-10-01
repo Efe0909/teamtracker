@@ -8,6 +8,7 @@ import { ApiError, errorText } from "../../api/client";
 import { teamOps, useRecords, useTeam, useTeamMember, useTeams, useTeamWrite } from "../../api/hooks";
 import type { TeamRole, TeamView, Uuid } from "../../api/types";
 import { Chat } from "../../features/chat/Chat";
+import { ChatBell } from "../../features/chat/ChatBell";
 import { NewRecordForm } from "../../features/record/NewRecordForm";
 import { TEAM_COLORS } from "../../lib/colors";
 import { TEAM_ROLE } from "../../lib/labels";
@@ -369,6 +370,7 @@ export function TeamPage({ id }: { id: Uuid }) {
         <aside className={s.recordSide} aria-label="Takım duvarı">
           <div className={s.sideHead}>
             <Icon name="chat" size={16} /> Takım duvarı
+            <ChatBell chatId={team.chat_id} />
           </div>
           <div className={s.sideBody}>
             <Chat

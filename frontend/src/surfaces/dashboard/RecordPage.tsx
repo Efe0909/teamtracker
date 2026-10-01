@@ -7,6 +7,7 @@ import { ApiError } from "../../api/client";
 import { useRecord } from "../../api/hooks";
 import type { Uuid } from "../../api/types";
 import { Chat } from "../../features/chat/Chat";
+import { ChatBell } from "../../features/chat/ChatBell";
 import { Properties } from "../../features/record/fields";
 import { Cards } from "../../features/record/Cards";
 import { ActionList, BallLine, CollapsibleProps, QuickAction, ReadOnlyNote, RecordHead } from "../../features/record/parts";
@@ -67,6 +68,7 @@ export function RecordPage({ id }: { id: Uuid }) {
         <aside className={s.recordSide} aria-label="Sohbet">
           <div className={s.sideHead}>
             <Icon name="chat" size={16} /> Sohbet
+            <ChatBell chatId={d.record.chat_id} />
           </div>
           <div className={s.sideBody}>
             <Chat

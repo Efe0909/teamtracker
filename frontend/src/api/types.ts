@@ -263,10 +263,15 @@ export interface TeamView {
   open_records: number;
 }
 
+export type NotifyLevel = "all" | "mentions" | "none";
+
 export interface Notice {
   kind: "message" | "activity";
   id: Uuid;
   created_at: IsoTime;
+  chat_id: Uuid;
+  /** Son "gordum" damgasindan yeni mi (sunucu hesaplar). */
+  unread: boolean;
   actor_id: Uuid | null;
   verb: string | null;
   subject_label: string | null;
@@ -275,6 +280,20 @@ export interface Notice {
   record_id: Uuid | null;
   team_id: Uuid | null;
   title: string;
+}
+
+export interface NoticeList {
+  items: Notice[];
+  unread: number;
+}
+
+/** Iki katman: varsayilan (`level`) + sohbet basina ozel secim (`chats`). */
+export interface NotifyPrefs {
+  level: NotifyLevel;
+  /** Sessiz saat 0-23, ikisi birlikte; null = kapali. Yalniz push'u susturur. */
+  quiet_start: number | null;
+  quiet_end: number | null;
+  chats: Record<Uuid, NotifyLevel>;
 }
 
 // --- veri yonetimi (/api/nodes) ---------------------------------------------
