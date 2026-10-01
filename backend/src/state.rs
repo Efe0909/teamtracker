@@ -47,6 +47,8 @@ pub struct AppState {
     /// await boyunca tutulur. ponytail: tek surec (KNOW-85); yatayda
     /// veritabani kilidi gerekir.
     pub structure: Arc<tokio::sync::Mutex<()>>,
+    /// Yazilmamis istek sayaclari (kisi basina); dakikada bir `user_activity`ye akar.
+    pub pending_requests: Arc<Mutex<HashMap<Uuid, u32>>>,
     /// Web push anahtari; yoksa push KAPALI (liste calisir).
     pub vapid: Option<Arc<crate::webpush::Vapid>>,
 }
@@ -69,6 +71,7 @@ impl AppState {
         }
         Ok(AppState {
             vapid,
+            pending_requests: Arc::default(),
             pool,
             key: crate::auth::key_from(&cfg),
             cfg: Arc::new(cfg),

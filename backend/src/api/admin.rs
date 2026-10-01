@@ -419,3 +419,50 @@ pub async fn delete_role(
         Some(&name)).await;
     view(&st.pool, &me).await
 }
+
+// --- aktivite ----------------------------------------------------------------
+
+#[derive(Serialize)]
+pub struct DayUse {
+    day: chrono::NaiveDate,
+    requests: i32,
+    minutes: i32,
+}
+
+#[derive(sqlx::FromRow)]
+struct LoginRow {
+    id: Uuid,
+    last_login_at: Option<DateTime<Utc>>,
+    last_seen_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Serialize)]
+pub struct PersonUse {
+    user_id: Uuid,
+    last_login_at: Option<DateTime<Utc>>,
+    last_seen_at: Option<DateTime<Utc>>,
+    /// Son 120 gun, eskiden yeniye; kullanimsiz gunler yok.
+    days: Vec<DayUse>,
+}
+
+/// Kisi bazli kullanim: son giris, son hareket, gunluk istek/dakika.
+pub async fn activity(
+    State(st): State<AppState>, CurrentUser(me): CurrentUser,
+) -> Result<Json<Vec<PersonUse>>> {
+    can_manage(&st, &me).await?;
+    let people: Vec<LoginRow> = sqlx::query_as(
+        "select id, last_login_at, last_seen_at from users order by name")
+        .fetch_all(&st.pool).await?;
+    let rows: Vec<(Uuid, chrono::NaiveDate, i32, i32)> = sqlx::query_as(
+        "select user_id, day, requests, minutes from user_activity
+          where day > current_date - 120 order by day")
+        .fetch_all(&st.pool).await?;
+    let mut by: HashMap<Uuid, Vec<DayUse>> = HashMap::new();
+    for (u, day, requests, minutes) in rows {
+        by.entry(u).or_default().push(DayUse { day, requests, minutes });
+    }
+    Ok(Json(people.into_iter().map(|p| PersonUse {
+        days: by.remove(&p.id).unwrap_or_default(), user_id: p.id,
+        last_login_at: p.last_login_at, last_seen_at: p.last_seen_at,
+    }).collect()))
+}

@@ -80,6 +80,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/attachments/{id}/tags/{tag}", delete(attachments::remove_tag))
         .route("/api/tags", get(attachments::tags))
         .route("/api/admin", get(admin::get))
+        .route("/api/admin/activity", get(admin::activity))
         .route("/api/admin/users", post(admin::add_user))
         .route("/api/admin/users/{id}", patch(admin::patch_user))
         .route("/api/admin/roles", post(admin::create_role))
