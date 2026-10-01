@@ -464,3 +464,128 @@
     opacity: 1;
   }
 }
+
+/* --- oylama --------------------------------------------------------------- */
+.poll {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+.pollClosed {
+  color: var(--err-text);
+}
+.pollTabs {
+  display: flex;
+  gap: var(--s-3);
+  border-bottom: 1px solid var(--line);
+}
+.pollTabs button {
+  appearance: none;
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  padding: 4px 0;
+  font: inherit;
+  font-size: var(--fs-sm);
+  color: var(--dim);
+  cursor: pointer;
+}
+.pollTabs button[aria-selected="true"] {
+  color: var(--txt);
+  border-bottom-color: var(--acc);
+}
+.pollList,
+.pollOthers {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pollOthers li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pollOpt {
+  appearance: none;
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 8px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  background: var(--panel);
+  color: var(--txt);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.pollOpt:disabled {
+  cursor: default;
+}
+.pollOptOn {
+  border-color: var(--acc);
+}
+.pollBar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--acc-bg);
+  z-index: 0;
+  transition: width 0.2s;
+}
+.pollLabel,
+.pollCount,
+.pollImg {
+  position: relative;
+  z-index: 1;
+}
+.pollLabel {
+  flex: 1;
+}
+.pollCount {
+  font-family: var(--font-mono);
+  color: var(--dim);
+}
+.pollImg {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--r-sm);
+  object-fit: cover;
+}
+.pollEdit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  align-items: flex-start;
+}
+.pollEditRow {
+  display: flex;
+  gap: var(--s-2);
+  width: 100%;
+}
+.pollPhoto {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  background: var(--panel);
+  color: var(--dim);
+  font: inherit;
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+.pollPhoto img {
+  width: 24px;
+  height: 24px;
+  object-fit: cover;
+  border-radius: var(--r-sm);
+}

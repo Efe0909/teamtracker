@@ -6,7 +6,7 @@
 import type { SignupAnswer } from "../api/types";
 import type { IconName } from "../ui/icons";
 
-export type CardType = "media" | "meeting" | "pool";
+export type CardType = "media" | "meeting" | "pool" | "poll";
 
 export interface CardField {
   key: string;
@@ -51,6 +51,14 @@ export const CARD: Record<CardType, {
       { key: "detail", label: "Ne yapılacak", kind: "textarea", icon: "tasks", placeholder: "Gönüllünün yapacağı iş…" },
     ],
     answers: { yes: "Bu işi alıyorum" },
+  },
+  // Alanlari ozel (secenekler, "diger", foto, bitis): features/record/Poll.tsx.
+  poll: {
+    label: "Oylama",
+    icon: "bolt",
+    hint: "Soru sor, seçenekleri yaz; herkes oyunu verir. Süre koyabilirsin.",
+    fields: [],
+    answers: {},
   },
 };
 

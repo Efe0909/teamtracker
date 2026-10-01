@@ -150,6 +150,20 @@ export interface Attachment {
 
 export type SignupAnswer = "yes" | "maybe" | "no";
 
+export interface PollOption {
+  label: string;
+  /** Secenek fotografi (ek kimligi). */
+  attachment_id?: Uuid;
+}
+
+export interface PollVote {
+  user_id: Uuid;
+  /** Secenek sirasi; serbest cevapta null. */
+  option: number | null;
+  text: string | null;
+  at: IsoTime | null;
+}
+
 export interface CardView {
   id: Uuid;
   card_type: string;
@@ -158,6 +172,13 @@ export interface CardView {
   /** `title` + turun alanlari, hepsi metin. */
   data: Record<string, string | undefined>;
   signups: { user_id: Uuid; answer: SignupAnswer; note: string | null; at: IsoTime | null }[];
+  /** Yalniz oylamada (card_type "poll"). */
+  options: PollOption[];
+  allow_other: boolean;
+  /** "2026-10-02T18:00" (Turkiye saati) ya da null; `closed` sunucuda hesaplanir. */
+  closes_at: string | null;
+  closed: boolean;
+  votes: PollVote[];
   attachments: Attachment[];
 }
 

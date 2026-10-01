@@ -13,6 +13,7 @@ import { useStored } from "../../lib/stored";
 import { Icon } from "../../ui/icons";
 import { Avatar, Button, cx, Dialog, IconButton, Menu, MenuItem, ui, useToast } from "../../ui/ui";
 import { Attachments, ImagePicker } from "../media/Media";
+import { PollBody, PollForm } from "./Poll";
 import s from "./record.module.css";
 
 export function Cards({ d }: { d: RecordDetail }) {
@@ -112,12 +113,14 @@ function Card({ d, c }: { d: RecordDetail; c: CardView }) {
         {["description", "agenda", "detail"].map((k) => v(k) !== "" && <p key={k} className={s.desc}>{v(k)}</p>)}
         {Object.keys(c.data).length === 0 && <p className={s.hint}>{t.hint}</p>}
 
-        {c.card_type === "media" && <MediaBody d={d} c={c} />}
+        {c.card_type === "poll" && <PollBody c={c} />}
+      {c.card_type === "media" && <MediaBody d={d} c={c} />}
         {Object.keys(t.answers).length > 0 && <Signups c={c} answers={t.answers} />}
 
         </>
       )}
-      {editing && <CardForm c={c} type={c.card_type} onClose={() => setEditing(false)} />}
+      {editing && c.card_type === "poll" && <PollForm c={c} onClose={() => setEditing(false)} />}
+      {editing && c.card_type !== "poll" && <CardForm c={c} type={c.card_type} onClose={() => setEditing(false)} />}
     </div>
   );
 }
