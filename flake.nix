@@ -22,7 +22,7 @@
         pkgs.stdenvNoCC.mkDerivation {
           pname = "ekiptakip";
           version = r.tag;
-          src = pkgs.fetchurl { inherit (r) url hash; };
+          src = pkgs.fetchurl { inherit (r.${pkgs.system}) url hash; };
           sourceRoot = "."; # tarball'in tek ust dizini yok
           dontBuild = true;
           installPhase = "mkdir -p $out && cp -r bin share $out/";
@@ -30,11 +30,12 @@
         };
     in
     {
-      # Yalniz ilk release'ten SONRA (deploy/release.nix var) ve yalniz
-      # aarch64-linux: ikili o hedefe derleniyor.
-      packages = lib.optionalAttrs (builtins.pathExists ./deploy/release.nix) {
-        aarch64-linux.default = prebuilt nixpkgs.legacyPackages.aarch64-linux;
-      };
+      # Yalniz release'i olan Linux sistemleri (aarch64: Pi/VM, x86_64: VDS);
+      # release.nix'te girdisi olmayan sistem paketsiz kalir.
+      packages = lib.optionalAttrs (builtins.pathExists ./deploy/release.nix)
+        (lib.genAttrs
+          (lib.filter (s: (import ./deploy/release.nix) ? ${s}) [ "aarch64-linux" "x86_64-linux" ])
+          (s: { default = prebuilt nixpkgs.legacyPackages.${s}; }));
 
       # Mac'te derleme araclari: `nix develop`.
       devShells = eachSystem (pkgs: {
