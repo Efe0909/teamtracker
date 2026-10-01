@@ -1,6 +1,7 @@
 // Mobil liste sayfalari: yapilacaklar, arama, eylemlerim, bildirimler, yeni.
 
 import { useEffect, useRef, useState } from "react";
+import { NotifySettings } from "../../features/profile/NotifySettings";
 import { useMarkSeen, useMyActions, useNotifications, useRecords } from "../../api/hooks";
 import type { MyAction, RecordSummary } from "../../api/types";
 import { NewRecordForm } from "../../features/record/NewRecordForm";
@@ -221,6 +222,7 @@ export function NotificationsPage() {
   const L = useLookup();
   const q = useNotifications();
   const seen = useMarkSeen();
+  const [settings, setSettings] = useState(false);
   // Liste gorununce "gordum": rozet sifirlanir, satirlar bu yuklemede hala vurgulu kalir.
   const loaded = q.data !== undefined && q.data.unread > 0;
   // Ilk yuklemedeki okunmamislar: "gordum" sonrasi yeniden cekilince de vurgulu kalir.
@@ -235,7 +237,15 @@ export function NotificationsPage() {
   return (
     <>
       <TopBar title="Bildirimler" />
+      <NotifySettings open={settings} onClose={() => setSettings(false)} />
       <div className={s.pad}>
+        <button type="button" className={s.card} onClick={() => setSettings(true)}>
+          <Icon name="bell" size={18} />
+          <span className={s.cardBody}>
+            <span><b>Bildirim ayarları</b></span>
+            <span className={s.cardPath}>Ne zaman bildirim alacağını ve bu cihazda anlık bildirimi buradan seç.</span>
+          </span>
+        </button>
         {q.data === undefined ? (
           <Loading />
         ) : q.data.items.length === 0 ? (

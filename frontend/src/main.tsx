@@ -5,6 +5,9 @@ import "@fontsource-variable/inter";
 import "@fontsource-variable/jetbrains-mono";
 import "./tokens.css";
 import "./base.css";
+import { registerWorker } from "./lib/push";
+
+registerWorker();
 
 const root = document.getElementById("root");
 if (root === null) throw new Error("#root yok");
