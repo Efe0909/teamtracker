@@ -76,6 +76,76 @@
 }
 
 /* "top kimde" satiri (spec/17 I1) */
+.ballWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ballUpdates {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: var(--fs-sm);
+}
+.ballUpdates li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.propsPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.propsToggle,
+.ball {
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 2px 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.propsToggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--dim);
+}
+.propsSummary {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--txt);
+}
+.caret {
+  display: inline-grid;
+  transition: transform 0.12s;
+}
+.caretOpen {
+  transform: rotate(90deg);
+}
+.stack {
+  display: inline-flex;
+  align-items: center;
+}
+.stackItem + .stackItem {
+  margin-left: -6px;
+}
+.stackItem {
+  border: 2px solid var(--panel);
+  border-radius: 50%;
+  display: inline-flex;
+}
+.stackMore {
+  margin-left: 4px;
+  font-size: var(--fs-sm);
+  color: var(--dim);
+}
 .ball {
   display: flex;
   align-items: center;

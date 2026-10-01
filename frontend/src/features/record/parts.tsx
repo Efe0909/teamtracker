@@ -1,13 +1,14 @@
 // Kayit ekraninin baslik, "top kimde" satiri, salt okunur notu ve eylemleri.
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { errorText } from "../../api/client";
 import { useAddAction, usePatchAction, usePatchRecord } from "../../api/hooks";
 import type { Action, ActionPatch, RecordDetail } from "../../api/types";
 import { ACTION_STATUS, ACTION_STATUS_ORDER, ago, isDone } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
+import { useStored } from "../../lib/stored";
 import { Icon } from "../../ui/icons";
-import { Button, cx, Dialog, IconButton, KindTag, Picker, Status, ui, useToast, Who, type Option } from "../../ui/ui";
+import { Avatar, Button, cx, Dialog, IconButton, KindTag, Picker, PriorityTag, Status, ui, useToast, Who, type Option } from "../../ui/ui";
 import { DueField } from "./fields";
 import s from "./record.module.css";
 
@@ -27,6 +28,7 @@ export function RecordHead({ d, showPath = true }: { d: RecordDetail; showPath?:
       </div>
       <div className={s.byline}>
         <KindTag kind={r.kind} />
+        <ParticipantStack d={d} />
         {creator !== undefined && (
           <span>
             {creator.name} açtı · <time dateTime={r.created_at}>{ago(r.created_at)}</time>
@@ -92,28 +94,102 @@ function TextEdit({ d, field, onClose }: { d: RecordDetail; field: "title" | "de
 /** Acik eylem sahipleri + son hareket: admin'in "neden durdu" sorusu (spec/17 I1). */
 export function BallLine({ d }: { d: RecordDetail }) {
   const L = useLookup();
-  const open = d.actions.filter((a) => !isDone(a.status));
-  const owners = [...new Set(open.map((a) => a.owner_id))];
+  const [open, setOpen] = useState(false);
+  const openActs = d.actions.filter((a) => !isDone(a.status));
+  const owners = [...new Set(openActs.map((a) => a.owner_id))];
   if (isDone(d.record.status)) return null;
+  // Son guncellemeler: eylemlerin ve kaydin en yeni hareketleri (yeniden eskiye).
+  const updates = [
+    ...d.actions.map((a) => ({ key: a.id, text: a.title, at: a.resolved_at ?? a.created_at })),
+    { key: "record", text: "Kayıt güncellendi", at: d.record.updated_at },
+  ]
+    .sort((a, b) => b.at.localeCompare(a.at))
+    .slice(0, 5);
   return (
-    <div className={s.ball}>
-      <Icon name="user" size={14} />
-      {open.length === 0 ? (
-        <span>
-          Top <b>{L.user(d.record.owner_id)?.name ?? "kimsede değil"}</b>
-          {d.record.owner_id === null ? " — sorumlu atanmamış" : " (sorumlu)"}
+    <div className={s.ballWrap}>
+      <button type="button" className={s.ball} aria-expanded={open} onClick={() => setOpen(!open)}>
+        <Icon name="user" size={14} />
+        {openActs.length === 0 ? (
+          <span>
+            Top <b>{L.user(d.record.owner_id)?.name ?? "kimsede değil"}</b>
+            {d.record.owner_id === null ? " — sorumlu atanmamış" : " (sorumlu)"}
+          </span>
+        ) : (
+          <span>
+            Top: {owners.map((o, i) => (
+              <span key={o ?? "none"}>
+                {i > 0 && ", "}
+                <b>{o === null ? "havuzda" : (L.user(o)?.name ?? "?")}</b>
+              </span>
+            ))}
+          </span>
+        )}
+        <span className={s.muted}>· son hareket {ago(d.record.updated_at)}</span>
+        <span className={cx(s.caret, open && s.caretOpen)}>
+          <Icon name="chevron" size={14} />
         </span>
-      ) : (
-        <span>
-          Top: {owners.map((o, i) => (
-            <span key={o ?? "none"}>
-              {i > 0 && ", "}
-              <b>{o === null ? "havuzda" : (L.user(o)?.name ?? "?")}</b>
-            </span>
+      </button>
+      {open && (
+        <ul className={s.ballUpdates}>
+          {updates.map((u) => (
+            <li key={u.key}>
+              <span>{u.text}</span>
+              <time dateTime={u.at} className={s.muted}>{ago(u.at)}</time>
+            </li>
           ))}
-        </span>
+        </ul>
       )}
-      <span className={s.muted}>· son hareket {ago(d.record.updated_at)}</span>
+    </div>
+  );
+}
+
+/** Basliktaki katilimci avatarlari; 4'ten fazlasi +N olur. */
+export function ParticipantStack({ d }: { d: RecordDetail }) {
+  const L = useLookup();
+  const shown = d.participants.slice(0, 4);
+  const rest = d.participants.length - shown.length;
+  if (d.participants.length === 0) return null;
+  return (
+    <span className={s.stack} aria-label={`${d.participants.length} katılımcı`}>
+      {shown.map((id) => (
+        <span key={id} title={L.user(id)?.name} className={s.stackItem}>
+          <Avatar user={L.user(id)} size={24} />
+        </span>
+      ))}
+      {rest > 0 && <span className={s.stackMore}>+{rest}</span>}
+    </span>
+  );
+}
+
+// --- ozellik paneli: kapaliyken tek satir --------------------------------
+
+/** Kapali hali durum/oncelik ikonu, sorumlu, tarih ve pillar adini tek satirda
+ *  gosterir; acilinca tam alan listesi. Durum cihazda hatirlanir. */
+export function CollapsibleProps({ d, children }: { d: RecordDetail; children: ReactNode }) {
+  const L = useLookup();
+  const [open, setOpen] = useStored("record.props.open", true);
+  const r = d.record;
+  const owner = L.user(r.owner_id);
+  const pillar = L.pillar(r.pillar_id)?.name;
+  return (
+    <div className={s.propsPanel}>
+      <button type="button" className={s.propsToggle} aria-expanded={open} onClick={() => setOpen(!open)}>
+        <span className={cx(s.caret, open && s.caretOpen)}>
+          <Icon name="chevron" size={14} />
+        </span>
+        {open ? (
+          <span>Özellikler</span>
+        ) : (
+          <span className={s.propsSummary}>
+            <Status status={r.status} />
+            <PriorityTag priority={r.priority} bare />
+            <Who user={owner} empty="Sorumlusuz" size={18} />
+            <span className={s.muted}>{r.due_date ?? "Tarihsiz"}</span>
+            {pillar !== undefined && <span className={s.muted}>{pillar}</span>}
+          </span>
+        )}
+      </button>
+      {open && children}
     </div>
   );
 }

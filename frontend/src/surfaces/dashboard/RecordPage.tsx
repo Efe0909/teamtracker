@@ -9,7 +9,7 @@ import type { Uuid } from "../../api/types";
 import { Chat } from "../../features/chat/Chat";
 import { Properties } from "../../features/record/fields";
 import { Cards } from "../../features/record/Cards";
-import { ActionList, BallLine, QuickAction, ReadOnlyNote, RecordHead } from "../../features/record/parts";
+import { ActionList, BallLine, CollapsibleProps, QuickAction, ReadOnlyNote, RecordHead } from "../../features/record/parts";
 import { useLookup } from "../../lib/lookup";
 import { Icon } from "../../ui/icons";
 import { Link, Loading } from "../../ui/ui";
@@ -55,7 +55,9 @@ export function RecordPage({ id }: { id: Uuid }) {
             <RecordHead d={d} showPath={false} />
             <ReadOnlyNote d={d} />
             <div className={s.fieldsBlock}>
-              <Properties d={d} />
+              <CollapsibleProps d={d}>
+                <Properties d={d} />
+              </CollapsibleProps>
               <BallLine d={d} />
             </div>
             <ActionList d={d} />
