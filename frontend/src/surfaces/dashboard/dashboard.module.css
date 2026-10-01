@@ -1314,3 +1314,49 @@ a.row:hover {
 .scopeSet {
   margin: 0;
 }
+
+/* --- banner: takim/pillar sayfasinin ustu, 4:1 kirpilir ---------------------- */
+.banner {
+  position: relative;
+  aspect-ratio: 4 / 1;
+  max-height: 220px;
+  width: 100%;
+  margin-bottom: var(--s-4);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  background: var(--tint);
+}
+.bannerImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.bannerTools {
+  position: absolute;
+  right: var(--s-2);
+  bottom: var(--s-2);
+  display: flex;
+  gap: var(--s-2);
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.banner:hover .bannerTools,
+.banner:focus-within .bannerTools {
+  opacity: 1;
+}
+.bannerBtn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  background: var(--panel);
+  color: var(--txt);
+  font: inherit;
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}

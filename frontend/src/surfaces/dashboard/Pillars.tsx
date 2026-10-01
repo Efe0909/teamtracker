@@ -14,6 +14,7 @@ import { navigate } from "../../lib/router";
 import { Icon } from "../../ui/icons";
 import { Avatar, Button, Dialog, Empty, Link, Loading, Segmented, Tag, useToast } from "../../ui/ui";
 import { ErrorScreen } from "../errors/ErrorScreen";
+import { Banner } from "./Banner";
 import s from "./dashboard.module.css";
 import { href } from "./routes";
 import { RecordTable } from "./Tasks";
@@ -133,6 +134,7 @@ function PillarScreen({ p }: { p: MetaPillar }) {
       </nav>
       <div className={s.recordBody}>
         <div className={s.recordMain}>
+          <Banner team={team} can={can} />
           <div className={s.pageHead} style={{ marginBottom: 0, alignItems: "center" }}>
             <div className={s.teamHero} style={{ flex: 1, minWidth: 0 }}>
               <TeamMark name={p.name} color={p.color} square />
