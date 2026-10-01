@@ -10,6 +10,7 @@ import { Chat } from "../../features/chat/Chat";
 import { ChatBell } from "../../features/chat/ChatBell";
 import { Properties } from "../../features/record/fields";
 import { Cards } from "../../features/record/Cards";
+import { JoinBanner, RestrictedSkeleton } from "../../features/record/Join";
 import { ActionList, BallLine, CollapsibleProps, QuickAction, ReadOnlyNote, RecordHead } from "../../features/record/parts";
 import { useLookup } from "../../lib/lookup";
 import { Icon } from "../../ui/icons";
@@ -53,6 +54,7 @@ export function RecordPage({ id }: { id: Uuid }) {
       <div className={s.recordBody}>
         <div className={s.recordMain}>
           <div className={s.recordInner}>
+            <JoinBanner d={d} />
             <RecordHead d={d} showPath={false} />
             <ReadOnlyNote d={d} />
             <div className={s.fieldsBlock}>
@@ -61,8 +63,12 @@ export function RecordPage({ id }: { id: Uuid }) {
               </CollapsibleProps>
               <BallLine d={d} />
             </div>
-            <ActionList d={d} />
-            <Cards d={d} />
+            {d.membership.restricted ? <RestrictedSkeleton label="Eylemler ve kartlar" /> : (
+              <>
+                <ActionList d={d} />
+                <Cards d={d} />
+              </>
+            )}
           </div>
         </div>
         <aside className={s.recordSide} aria-label="Sohbet">
@@ -71,13 +77,15 @@ export function RecordPage({ id }: { id: Uuid }) {
             <ChatBell chatId={d.record.chat_id} />
           </div>
           <div className={s.sideBody}>
-            <Chat
-              chatId={d.record.chat_id}
-              canPost={d.access.can_edit}
-              lockedText="Bu kayıtta yazma yetkin yok."
-              empty="Henüz mesaj yok. İlk mesajı sen yaz."
-              tools={<QuickAction d={d} />}
-            />
+            {d.membership.restricted ? <RestrictedSkeleton label="Sohbet" /> : (
+              <Chat
+                chatId={d.record.chat_id}
+                canPost={d.access.can_edit}
+                lockedText="Bu kayıtta yazma yetkin yok."
+                empty="Henüz mesaj yok. İlk mesajı sen yaz."
+                tools={<QuickAction d={d} />}
+              />
+            )}
           </div>
         </aside>
       </div>

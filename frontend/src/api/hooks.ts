@@ -174,6 +174,25 @@ export function useCardOrder(recordId: Uuid) {
   });
 }
 
+/** Katil (public: aninda; request/private: istek) / istegi geri cek. */
+export function useJoin(recordId: Uuid) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (join: boolean) => request<RecordDetail>(join ? "POST" : "DELETE", `/api/records/${recordId}/join`),
+    onSuccess: (d) => afterRecordWrite(qc, d),
+  });
+}
+
+/** Sorumlu/acan/admin: istegi onayla ya da reddet. */
+export function useDecideJoin(recordId: Uuid) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (w: { user: Uuid; approve: boolean }) =>
+      request<RecordDetail>("POST", `/api/records/${recordId}/join-requests/${w.user}`, { approve: w.approve }),
+    onSuccess: (d) => afterRecordWrite(qc, d),
+  });
+}
+
 export function useAddAction(recordId: Uuid) {
   const qc = useQueryClient();
   return useMutation({

@@ -75,6 +75,12 @@ export function describe(item: FeedItem | Notice, L: Lookup): string {
         ? `“${item.subject_label ?? ""}” eylemini değiştirdi`
         : `“${item.subject_label ?? ""}” · ${FIELD[field] ?? field}: ${valueText(field, ch.from, L, true)} → ${valueText(field, ch.to, L, true)}`;
     // takim yazmalari (spec/22): subject = takim adi, target = dugum adi
+    case "joined":
+      return "kayda katıldı";
+    case "join_requested":
+      return "katılma isteği gönderdi";
+    case "join_approved":
+      return `${item.subject_label ?? ""} kişisinin katılma isteğini onayladı`;
     case "team_created":
       return `“${item.subject_label ?? ""}” takımını kurdu`;
     case "team_renamed":

@@ -8,6 +8,7 @@ import type { Uuid } from "../../api/types";
 import { Chat } from "../../features/chat/Chat";
 import { Properties } from "../../features/record/fields";
 import { Cards } from "../../features/record/Cards";
+import { JoinBanner, RestrictedSkeleton } from "../../features/record/Join";
 import { ActionList, BallLine, QuickAction, ReadOnlyNote, RecordHead } from "../../features/record/parts";
 import { TEAM_ROLE } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
@@ -87,21 +88,28 @@ export function RecordPage({ id }: { id: Uuid }) {
     <>
       <TopBar title="Kayıt" back />
       <div className={s.recordPad}>
+        <JoinBanner d={d} />
         <RecordHead d={d} />
         <ReadOnlyNote d={d} />
         <Properties d={d} />
         <BallLine d={d} />
-        <ActionList d={d} />
-        <Cards d={d} />
+        {d.membership.restricted ? <RestrictedSkeleton label="Eylemler, kartlar ve sohbet" /> : (
+          <>
+            <ActionList d={d} />
+            <Cards d={d} />
+          </>
+        )}
       </div>
-      <ChatSheet
-        chatId={d.record.chat_id}
-        title={d.record.title}
-        canPost={d.access.can_edit}
-        lockedText="Bu kayıtta yazma yetkin yok."
-        empty="Henüz mesaj yok."
-        tools={<QuickAction d={d} />}
-      />
+      {!d.membership.restricted && (
+        <ChatSheet
+          chatId={d.record.chat_id}
+          title={d.record.title}
+          canPost={d.access.can_edit}
+          lockedText="Bu kayıtta yazma yetkin yok."
+          empty="Henüz mesaj yok."
+          tools={<QuickAction d={d} />}
+        />
+      )}
     </>
   );
 }

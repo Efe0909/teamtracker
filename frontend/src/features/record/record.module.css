@@ -634,3 +634,54 @@
 .pinnedBtn svg {
   fill: currentColor;
 }
+
+/* --- erisim kipleri: katil bandi, iskelet ---------------------------------- */
+.joinBanner {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s-3);
+  padding: 10px 14px;
+  border: 1px solid var(--acc-soft);
+  border-radius: var(--r-lg);
+  background: var(--acc-bg);
+  font-size: var(--fs-md);
+}
+.joinText {
+  flex: 1;
+  min-width: 200px;
+}
+.joinList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+.joinList li {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  padding: var(--s-4);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--r-lg);
+}
+.skelLine,
+.skelBlock {
+  display: block;
+  border-radius: var(--r-sm);
+  background: var(--tint);
+}
+.skelLine {
+  height: 12px;
+}
+.skelBlock {
+  height: 56px;
+}

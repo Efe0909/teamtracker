@@ -133,6 +133,22 @@ export interface RecordDetail {
   access: { can_edit: boolean; can_edit_deadline: boolean };
   /** Bu kisi kaydi sabitlemis mi (Panolar widget'i). */
   pinned: boolean;
+  membership: Membership;
+}
+
+export type AccessMode = "public" | "request" | "private";
+
+/** Erisim kipi + bu kisinin kayitla iliskisi (Rust records.rs Membership). */
+export interface Membership {
+  mode: AccessMode;
+  /** Uye = yazma yetkisi olan her yol (admin, sorumlu, acan, katilimci, takim, dal). */
+  is_member: boolean;
+  /** private kayitta uye olmayan: eylem/kart/katilimci/sohbet gizli. */
+  restricted: boolean;
+  request: "pending" | "denied" | null;
+  /** Istekleri sorumlu, acan ve admin karara baglar. */
+  can_decide: boolean;
+  requests: { user_id: Uuid; created_at: IsoTime }[];
 }
 
 // --- ekler ve kartlar (Rust api/attachments.rs, api/cards.rs) ---------------
@@ -194,7 +210,8 @@ export type RecordPatch =
   | { field: "unit_id"; value: Uuid }
   | { field: "due_date"; value: IsoDate | null }
   | { field: "title"; value: string }
-  | { field: "description"; value: string | null };
+  | { field: "description"; value: string | null }
+  | { field: "access_mode"; value: AccessMode };
 
 export type ActionPatch =
   | { field: "status"; value: ActionStatus }
