@@ -358,6 +358,14 @@ export interface AdminPerson {
   scopes: AdminScopeRow[];
   role_ids: Uuid[];
   node_ids: Uuid[];
+  /** Bildirim ayari ozeti (yalniz gorunurluk). */
+  notify_level: NotifyLevel;
+  quiet_start: number | null;
+  quiet_end: number | null;
+  /** Anlik bildirim icin kayitli cihaz sayisi. */
+  push_devices: number;
+  /** Sohbet basina ozel bildirim secimi sayisi. */
+  chat_overrides: number;
 }
 
 export interface AdminRole {

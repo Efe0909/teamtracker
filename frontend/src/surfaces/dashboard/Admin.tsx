@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import { ApiError, errorText } from "../../api/client";
 import { adminOps, useAdmin, useAdminWrite } from "../../api/hooks";
 import type { AdminPerson, AdminRole, AdminView, UserOp } from "../../api/types";
-import { ago, SCOPE } from "../../lib/labels";
+import { ago, NOTIFY, SCOPE } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
 import { Icon } from "../../ui/icons";
 import { Button, Empty, Loading, Picker as UiPicker, Req, Segmented, Tag, ui, useToast, type Option } from "../../ui/ui";
@@ -32,6 +32,7 @@ function AdminScreen({ v }: { v: AdminView }) {
   const roleName = new Map(v.roles.map((r) => [r.id, r.name]));
   const [tab, setTab] = useState<"people" | "activity">("people");
   const [peopleOpen, setPeopleOpen] = useStored("admin.people.open", true);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   return (
     <div className={s.page} style={{ maxWidth: 960 }}>
       <div className={s.pageHead}>
@@ -54,11 +55,19 @@ function AdminScreen({ v }: { v: AdminView }) {
       {!peopleOpen ? null : v.people.length === 0 ? (
         <Empty title="Liste boş.">Yukarıdan ilk kullanıcıyı ekle.</Empty>
       ) : (
-        <ul className={`${s.surface} ${s.adminList}`}>
-          {v.people.map((p) => (
-            <PersonRow key={p.id} p={p} v={v} roleName={roleName} />
-          ))}
-        </ul>
+        <>
+          {selected.size > 0 && <BulkBar v={v} selected={selected} onClear={() => setSelected(new Set())} />}
+          <ul className={`${s.surface} ${s.adminList}`}>
+            {v.people.map((p) => (
+              <PersonRow key={p.id} p={p} v={v} roleName={roleName} checked={selected.has(p.id)}
+                onCheck={(on) => setSelected((prev) => {
+                  const next = new Set(prev);
+                  if (on) next.add(p.id); else next.delete(p.id);
+                  return next;
+                })} />
+            ))}
+          </ul>
+        </>
       )}
       <h2 className={s.sectionTitle}>
         Roller<span className={s.count}>{v.roles.length}</span>
@@ -118,7 +127,59 @@ function AddUser() {
   );
 }
 
-function PersonRow({ p, v, roleName }: { p: AdminPerson; v: AdminView; roleName: Map<string, string> }) {
+const hh = (h: number) => `${String(h).padStart(2, "0")}:00`;
+
+/** "Bildirim: yalnız anmalar · sessiz 22:00–07:00 · 2 cihaz · 1 sohbet özel" */
+function notifySummary(p: AdminPerson): string {
+  const parts = [`Bildirim: ${NOTIFY[p.notify_level].short}`];
+  if (p.quiet_start !== null && p.quiet_end !== null) parts.push(`sessiz ${hh(p.quiet_start)}–${hh(p.quiet_end)}`);
+  parts.push(p.push_devices === 0 ? "anlık bildirim cihazı yok" : `${p.push_devices} cihaz`);
+  if (p.chat_overrides > 0) parts.push(`${p.chat_overrides} sohbet özel`);
+  return parts.join(" · ");
+}
+
+/** Seçili kişilere toplu işlem: rol ver/al, hesabı kapat/aç. Sunucu her kişiyi
+ *  ayrı doğrular (son yönetici, yönetici kapatma kuralları); başarısızlar sayılır. */
+function BulkBar({ v, selected, onClear }: { v: AdminView; selected: Set<string>; onClear: () => void }) {
+  const m = useAdminWrite();
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const people = v.people.filter((p) => selected.has(p.id));
+  const apply = async (label: string, op: (p: AdminPerson) => UserOp | null) => {
+    setBusy(true);
+    let ok = 0, failed = 0;
+    for (const p of people) {
+      const o = op(p);
+      if (o === null) continue;
+      try {
+        await m.mutateAsync(adminOps.user(p.id, o));
+        ok += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+    setBusy(false);
+    toast({ text: `${label}: ${ok} kişi tamam${failed > 0 ? `, ${failed} kişide yapılamadı` : ""}.`, error: failed > 0 });
+  };
+  return (
+    <div className={s.bulkBar} role="region" aria-label="Toplu işlemler">
+      <b>{people.length} kişi seçili</b>
+      <Grant label="Rol ver" empty="Rol yok." options={v.roles.map((r) => ({ value: r.id, label: r.name }))}
+        onPick={(id) => void apply("Rol verildi", (p) => (p.role_ids.includes(id) ? null : { op: "grant_role", value: id }))} />
+      <Grant label="Rol al" empty="Rol yok." options={v.roles.map((r) => ({ value: r.id, label: r.name }))}
+        onPick={(id) => void apply("Rol alındı", (p) => (p.role_ids.includes(id) ? { op: "revoke_role", value: id } : null))} />
+      <Button size="sm" disabled={busy}
+        onClick={() => void apply("Hesap kapatıldı", (p) => (p.is_active ? { op: "active", value: false } : null))}>Hesapları kapat</Button>
+      <Button size="sm" disabled={busy}
+        onClick={() => void apply("Hesap açıldı", (p) => (p.is_active ? null : { op: "active", value: true }))}>Hesapları aç</Button>
+      <Button size="sm" variant="ghost" disabled={busy} onClick={onClear}>Seçimi temizle</Button>
+    </div>
+  );
+}
+
+function PersonRow({ p, v, roleName, checked, onCheck }: {
+  p: AdminPerson; v: AdminView; roleName: Map<string, string>; checked: boolean; onCheck: (on: boolean) => void;
+}) {
   const L = useLookup();
   const toast = useToast();
   const m = useAdminWrite();
@@ -132,6 +193,8 @@ function PersonRow({ p, v, roleName }: { p: AdminPerson; v: AdminView; roleName:
   return (
     <li className={s.person}>
       <div className={s.personHead}>
+        <input type="checkbox" checked={checked} onChange={(e) => onCheck(e.target.checked)}
+          aria-label={`${p.name} seç`} />
         {p.id === L.me.id
           ? <EditableAvatar user={L.me} size={32} />
           : <AdminAvatar user={L.user(p.id) ?? { ...L.me, id: p.id, name: p.name, color: p.color, avatar_id: null }} size={32}
@@ -141,6 +204,7 @@ function PersonRow({ p, v, roleName }: { p: AdminPerson; v: AdminView; roleName:
           <div className={s.dim}>
             {p.last_seen_at === null ? "hiç girmedi" : `son görülme ${ago(p.last_seen_at)}`}
           </div>
+          <div className={s.dim}>{notifySummary(p)}</div>
         </div>
         {p.is_admin && <Tag tone="info">Yönetici</Tag>}
         {!p.is_active && <Tag tone="critical">Kapalı</Tag>}

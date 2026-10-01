@@ -27,7 +27,7 @@ use crate::{
     audit,
     auth::CurrentUser,
     error::{AppError, Result},
-    models::user::{User, COLORS},
+    models::{enums::NotifyLevel, user::{User, COLORS}},
     state::AppState,
 };
 
@@ -67,6 +67,14 @@ struct Person {
     /// Dal izinleri (`user_node_scopes`). Python'da arayuzu yoktu: panelden
     /// verilen `edit_nodes` dalsiz ise yaramiyordu (yetenek + dal birlikte).
     node_ids: Vec<Uuid>,
+    /// Bildirim ayari ozeti (yalniz gorunurluk; kisi kendi ayarini kendi degistirir).
+    notify_level: NotifyLevel,
+    quiet_start: Option<i16>,
+    quiet_end: Option<i16>,
+    /// Anlik bildirim icin kayitli cihaz sayisi.
+    push_devices: i64,
+    /// Bu kisiye ozel sessize alinmis / ozel secimli sohbet sayisi.
+    chat_overrides: i64,
 }
 
 #[derive(Serialize)]
@@ -85,6 +93,11 @@ struct UserRow {
     is_admin: bool,
     is_active: bool,
     last_seen_at: Option<DateTime<Utc>>,
+    notify_level: NotifyLevel,
+    quiet_start: Option<i16>,
+    quiet_end: Option<i16>,
+    push_devices: i64,
+    chat_overrides: i64,
 }
 
 fn group<T>(rows: Vec<(Uuid, T)>) -> HashMap<Uuid, Vec<T>> {
@@ -108,7 +121,11 @@ async fn view(p: &PgPool, me: &User) -> Result<Json<AdminView>> {
     let nodes = group(sqlx::query_as::<_, (Uuid, Uuid)>(
         "select user_id, node_id from user_node_scopes").fetch_all(p).await?);
     let users: Vec<UserRow> = sqlx::query_as(
-        "select id, email, name, color, is_admin, is_active, last_seen_at from users order by name")
+        "select u.id, u.email, u.name, u.color, u.is_admin, u.is_active, u.last_seen_at,
+                u.notify_level, u.quiet_start, u.quiet_end,
+                (select count(*) from push_subscriptions p where p.user_id = u.id) as push_devices,
+                (select count(*) from chat_prefs c where c.user_id = u.id) as chat_overrides
+           from users u order by u.name")
         .fetch_all(p).await?;
 
     let people = users.into_iter().map(|u| {
@@ -129,6 +146,8 @@ async fn view(p: &PgPool, me: &User) -> Result<Json<AdminView>> {
             node_ids: nodes.get(&u.id).cloned().unwrap_or_default(),
             id: u.id, email: u.email, name: u.name, color: u.color,
             is_admin: u.is_admin, is_active: u.is_active, last_seen_at: u.last_seen_at,
+            notify_level: u.notify_level, quiet_start: u.quiet_start, quiet_end: u.quiet_end,
+            push_devices: u.push_devices, chat_overrides: u.chat_overrides,
         }
     }).collect();
 

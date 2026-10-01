@@ -12,6 +12,7 @@ import { Admin } from "./Admin";
 const person = (id: string, name: string, is_admin: boolean): AdminView["people"][number] => ({
   id, name, email: `${name}@x`, color: null, is_admin, is_active: true, last_seen_at: null,
   scopes: [], role_ids: [], node_ids: [],
+  notify_level: "all", quiet_start: null, quiet_end: null, push_devices: 0, chat_overrides: 0,
 });
 
 afterEach(() => {
