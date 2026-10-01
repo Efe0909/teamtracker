@@ -694,7 +694,25 @@ a.row:hover {
   border-bottom: 1px solid var(--line);
   white-space: nowrap;
 }
+.table th {
+  overflow: hidden;
+  white-space: nowrap;
+}
+.colGrip {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 8px;
+  height: 100%;
+  cursor: col-resize;
+  touch-action: none;
+}
+.colGrip:hover {
+  background: var(--acc-soft);
+}
 .table td {
+  overflow: hidden;
+  text-overflow: ellipsis;
   padding: 0 12px;
   height: 42px;
   border-bottom: 1px solid var(--line);
@@ -1576,5 +1594,9 @@ a.row:hover {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-width: 0;
+}
+
+.table .rowTitle {
   min-width: 0;
 }
