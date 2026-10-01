@@ -66,15 +66,34 @@ const OPTION_MAX: usize = 100;
 /// Bitis zamani duvar saati girer (datetime-local); Turkiye UTC+3 sabit.
 const LOCAL_OFFSET_SECS: i64 = 3 * 3600;
 
+/// Oylamanin opt-in ozellikleri (medya, sayac/sure, coklu secim): yalniz kart
+/// OLUSTURULURKEN acilir, sonra degismez — coklu secim sonradan kapansa
+/// verilmis coklu oylar tek secimli kurala aykiri kalirdi.
+#[derive(Clone, Copy, Default)]
+struct PollFeatures {
+    media: bool,
+    timer: bool,
+    multiple: bool,
+}
+
+impl PollFeatures {
+    fn of(m: &Map<String, Value>) -> Self {
+        let on = |k: &str| m.get(k).and_then(Value::as_bool) == Some(true);
+        Self { media: on("media_enabled"), timer: on("timer_enabled"), multiple: on("multiple_choice") }
+    }
+}
+
 /// Oylama ayarlari: secenekler (+ foto kimligi), `allow_other`, `closes_at`.
-fn clean_poll(data: &Map<String, Value>, out: &mut Map<String, Value>, fixed: PollFeatures) -> Result<()> {
-    let flag = |k: &str| data.get(k).and_then(Value::as_bool) == Some(true);
-    let (media, timer) = fixed.unwrap_or_else(|| (flag("media_enabled"), flag("timer_enabled")));
+fn clean_poll(data: &Map<String, Value>, out: &mut Map<String, Value>, fixed: Option<PollFeatures>) -> Result<()> {
+    let PollFeatures { media, timer, multiple } = fixed.unwrap_or_else(|| PollFeatures::of(data));
     if media {
         out.insert("media_enabled".into(), json!(true));
     }
     if timer {
         out.insert("timer_enabled".into(), json!(true));
+    }
+    if multiple {
+        out.insert("multiple_choice".into(), json!(true));
     }
     let raw = data.get("options").and_then(Value::as_array).cloned().unwrap_or_default();
     let mut options = Vec::new();
@@ -114,6 +133,15 @@ fn clean_poll(data: &Map<String, Value>, out: &mut Map<String, Value>, fixed: Po
     Ok(())
 }
 
+/// Bir oyun secenekleri: `options` dizisi; coklu secimden onceki oylar tek
+/// `option` sayisiyla yazilmisti, o da okunur.
+fn vote_options(v: &Value) -> Vec<usize> {
+    match v.get("options").and_then(Value::as_array) {
+        Some(a) => a.iter().filter_map(Value::as_u64).map(|n| n as usize).collect(),
+        None => v.get("option").and_then(Value::as_u64).map(|n| n as usize).into_iter().collect(),
+    }
+}
+
 /// Bitis gectiyse true.
 fn poll_closed(closes_at: Option<&str>) -> bool {
     closes_at
@@ -129,11 +157,8 @@ const FIELD_MAX: usize = 4000;
 
 /// Beyaz liste + dogrulama. `when` "2026-09-20T14:30" (datetime-local),
 /// `link` yalniz http(s) — `javascript:` bir baglanti olarak cizilmesin.
-/// Oylamanin opt-in ozellikleri (medya, sayac/sure): yalniz kart OLUSTURULURKEN
-/// acilir, sonra degismez. `fixed`: duzenlemede kartin mevcut hali.
-type PollFeatures = Option<(bool, bool)>;
-
-fn clean(t: &CardType, title: Option<String>, data: &Map<String, Value>, fixed: PollFeatures) -> Result<Value> {
+/// `fixed`: duzenlemede kartin mevcut opt-in ozellikleri (degistirilemez).
+fn clean(t: &CardType, title: Option<String>, data: &Map<String, Value>, fixed: Option<PollFeatures>) -> Result<Value> {
     let mut out = Map::new();
     if let Some(title) = common::text(title, 200, "invalid_title")? {
         out.insert("title".into(), json!(title));
@@ -171,8 +196,9 @@ pub struct Signup {
 #[derive(Serialize)]
 pub struct Vote {
     user_id: Uuid,
-    /// Secenek sirasi; serbest cevapta None.
-    option: Option<usize>,
+    /// Secilen secenek siralari (artan). Tek secimlide en fazla bir;
+    /// yalniz serbest cevapta bos.
+    options: Vec<usize>,
     /// Serbest cevap metni ("diger").
     text: Option<String>,
     at: Option<String>,
@@ -193,6 +219,8 @@ pub struct CardView {
     /// Olusturulurken acilan opt-in ozellikler; sonradan degismez.
     media_enabled: bool,
     timer_enabled: bool,
+    /// Kisi birden cok secenek isaretleyebilir (opt-in, olusturulurken).
+    multiple_choice: bool,
     closes_at: Option<String>,
     closed: bool,
     votes: Vec<Vote>,
@@ -241,12 +269,14 @@ pub async fn of_record(st: &AppState, me: &User, rec: &Record) -> Result<Vec<Car
             .and_then(|v| v.as_bool()).unwrap_or(false);
         let timer_enabled = data.as_object_mut().and_then(|o| o.remove("timer_enabled"))
             .and_then(|v| v.as_bool()).unwrap_or(false);
+        let multiple_choice = data.as_object_mut().and_then(|o| o.remove("multiple_choice"))
+            .and_then(|v| v.as_bool()).unwrap_or(false);
         let closes_at = data.as_object_mut().and_then(|o| o.remove("closes_at"))
             .and_then(|v| v.as_str().map(str::to_string));
         let mut votes: Vec<Vote> = votes.and_then(|s| s.as_object().cloned()).unwrap_or_default()
             .into_iter().filter_map(|(uid, v)| Some(Vote {
                 user_id: uid.parse().ok()?,
-                option: v.get("option").and_then(Value::as_u64).map(|n| n as usize),
+                options: vote_options(&v),
                 text: v.get("text").and_then(Value::as_str).map(str::to_string),
                 at: v.get("at").and_then(Value::as_str).map(str::to_string),
             })).collect();
@@ -263,7 +293,8 @@ pub async fn of_record(st: &AppState, me: &User, rec: &Record) -> Result<Vec<Car
             known: kind(&card_type).is_some(),
             attachments: media.remove(&id).unwrap_or_default(),
             closed: poll_closed(closes_at.as_deref()),
-            id, card_type, data, signups, options, allow_other, media_enabled, timer_enabled, closes_at, votes,
+            id, card_type, data, signups, options, allow_other, media_enabled, timer_enabled, multiple_choice,
+            closes_at, votes,
         }
     }).collect())
 }
@@ -360,9 +391,8 @@ pub async fn patch(
     records::require_edit(&st, &me, &rec).await?;
     let existing: Value = sqlx::query_scalar("select data from cards where id = $1")
         .bind(id).fetch_one(&st.pool).await?;
-    let on = |k: &str| existing.get(k).and_then(Value::as_bool) == Some(true);
     let data = clean(t.ok_or(AppError::BadRequest("invalid_card_type"))?, b.title, &b.data,
-        Some((on("media_enabled"), on("timer_enabled"))))?;
+        Some(existing.as_object().map_or_else(PollFeatures::default, PollFeatures::of)))?;
     let mut tx = st.pool.begin().await?;
     sqlx::query(
         "update cards set data = jsonb_strip_nulls(
@@ -430,11 +460,23 @@ pub async fn signup(
 
 #[derive(Deserialize)]
 pub struct VoteIn {
-    /// Secenek sirasi; `option` ve `other` ikisi de yoksa oy geri cekilir.
+    /// Kisinin TUM secimi (coklu secimde isaretli secenekler). Secenek ve
+    /// `other` ikisi de bossa oy geri cekilir.
+    #[serde(default)]
+    options: Vec<usize>,
+    /// Tek secenek (coklu secimden onceki istemci; onbellekteki eski PWA kabugu).
     #[serde(default)]
     option: Option<usize>,
     #[serde(default)]
     other: Option<String>,
+}
+
+/// Secenekler mevcut, serbest cevap yalniz `allow_other` ile; tek secimlide
+/// secenek ve serbest cevap TOPLAM en fazla bir (eski kural).
+fn valid_ballot(picked: &[usize], other: bool, n: usize, allow_other: bool, multiple: bool) -> bool {
+    picked.iter().all(|&i| i < n)
+        && (allow_other || !other)
+        && (multiple || picked.len() + usize::from(other) <= 1)
 }
 
 /// Oturumu olan herkes kendi adina oy verir (katilim gibi duzenleme degil).
@@ -453,7 +495,11 @@ pub async fn vote(
         .bind(id).fetch_one(&st.pool).await?;
     let key = me.id.to_string();
     let other = common::text(b.other, 200, "invalid_body")?;
-    if b.option.is_none() && other.is_none() {
+    let mut picked = b.options;
+    picked.extend(b.option);
+    picked.sort_unstable();
+    picked.dedup();
+    if picked.is_empty() && other.is_none() {
         sqlx::query("update cards set data = data #- array['votes', $2] where id = $1")
             .bind(id).bind(&key).execute(&st.pool).await?;
         return Ok(Json(records::detail_of(&st, &me, rec).await?));
@@ -463,11 +509,14 @@ pub async fn vote(
     }
     let n = data.get("options").and_then(Value::as_array).map_or(0, Vec::len);
     let allow_other = data.get("allow_other").and_then(Value::as_bool) == Some(true);
-    let entry = match (b.option, other) {
-        (Some(i), None) if i < n => json!({ "option": i, "at": chrono::Utc::now().to_rfc3339() }),
-        (None, Some(text)) if allow_other => json!({ "text": text, "at": chrono::Utc::now().to_rfc3339() }),
-        _ => return Err(AppError::BadRequest("invalid_vote")),
-    };
+    let multiple = data.as_object().is_some_and(|m| PollFeatures::of(m).multiple);
+    if !valid_ballot(&picked, other.is_some(), n, allow_other, multiple) {
+        return Err(AppError::BadRequest("invalid_vote"));
+    }
+    let mut entry = json!({ "options": picked, "at": chrono::Utc::now().to_rfc3339() });
+    if let (Some(text), Some(o)) = (other, entry.as_object_mut()) {
+        o.insert("text".into(), json!(text));
+    }
     sqlx::query(
         "update cards set data = jsonb_set(
            case when data ? 'votes' then data else data || '{\"votes\": {}}' end,
@@ -533,8 +582,23 @@ mod tests {
         let off = kind("poll").map(|p| clean(p, None, &obj(json!({
             "options": [{ "label": "A", "attachment_id": "6f9619ff-8b86-d011-b42d-00cf4fc964ff" }],
             "closes_at": "2026-10-02T18:00", "timer_enabled": true, "media_enabled": true,
-        })), Some((false, false))));
+        })), Some(PollFeatures::default())));
         assert_eq!(off.and_then(Result::ok), Some(json!({ "options": [{ "label": "A" }] })));
+        // Coklu secim opt-in'i olustururken yazilir; oy kurali ona gore.
+        let multi = kind("poll").map(|p| clean(p, None, &obj(json!({
+            "options": ["A", "B"], "multiple_choice": true,
+        })), None));
+        assert_eq!(multi.and_then(Result::ok), Some(json!({
+            "multiple_choice": true, "options": [{ "label": "A" }, { "label": "B" }],
+        })));
+        assert!(valid_ballot(&[0], false, 2, false, false));
+        assert!(!valid_ballot(&[0, 1], false, 2, false, false), "tek secimlide iki secenek olmaz");
+        assert!(!valid_ballot(&[0], true, 2, true, false), "tek secimlide secenek + diger olmaz");
+        assert!(valid_ballot(&[0, 1], true, 2, true, true));
+        assert!(!valid_ballot(&[2], false, 2, false, true), "olmayan secenek");
+        assert!(!valid_ballot(&[], true, 2, false, true), "diger kapali");
+        assert_eq!(vote_options(&json!({ "option": 1 })), vec![1], "eski tek secenekli oy okunur");
+        assert_eq!(vote_options(&json!({ "options": [0, 2] })), vec![0, 2]);
         assert!(poll_closed(Some("2000-01-01T00:00")) && !poll_closed(Some("2999-01-01T00:00")) && !poll_closed(None));
         assert!(kind("survey").is_none(), "taninmayan tur BOZUK cizilir, eklenemez");
     }

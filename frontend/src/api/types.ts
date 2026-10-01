@@ -176,8 +176,8 @@ export interface PollOption {
 
 export interface PollVote {
   user_id: Uuid;
-  /** Secenek sirasi; serbest cevapta null. */
-  option: number | null;
+  /** Secilen secenek siralari; tek secimlide en fazla bir, yalniz serbest cevapta bos. */
+  options: number[];
   text: string | null;
   at: IsoTime | null;
 }
@@ -196,6 +196,8 @@ export interface CardView {
   /** Olusturulurken acilan opt-in ozellikler (secenek fotosu, sayac/sure); sonradan degismez. */
   media_enabled: boolean;
   timer_enabled: boolean;
+  /** Kisi birden cok secenek isaretleyebilir (opt-in, olusturulurken). */
+  multiple_choice: boolean;
   /** "2026-10-02T18:00" (Turkiye saati) ya da null; `closed` sunucuda hesaplanir. */
   closes_at: string | null;
   closed: boolean;

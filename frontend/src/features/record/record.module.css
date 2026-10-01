@@ -547,6 +547,23 @@
 .pollLabel {
   flex: 1;
 }
+/* coklu secimde isaret kutusu: secim cubugun ustunde okunur kalsin */
+.pollCheck {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--acc);
+}
+.pollOptOn .pollCheck {
+  border-color: var(--acc);
+}
 .pollCount {
   font-family: var(--font-mono);
   color: var(--dim);

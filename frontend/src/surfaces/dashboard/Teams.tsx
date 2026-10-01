@@ -19,6 +19,7 @@ import { Avatar, Button, Dialog, Empty, IconButton, Link, Loading, Picker, Segme
 import { ErrorScreen } from "../errors/ErrorScreen";
 import { Banner } from "./Banner";
 import { UnitPicker } from "./UnitPicker";
+import { ArrangeButton, useRowLimit, useWidgetOrder, Widget, type WidgetMove } from "./Widget";
 import s from "./dashboard.module.css";
 import { href } from "./routes";
 import { RecordTable } from "./Tasks";
@@ -189,28 +190,38 @@ function ColorSwatches({ value, onChange }: { value: string | null; onChange: (c
 const ROLES: TeamRole[] = ["lead", "mentor", "member"];
 const ROLE_OPTS = ROLES.map((r) => ({ value: r, label: TEAM_ROLE[r] }));
 
-/** Uyeler (R4-F09): `manage_teams` ya da admin ekler, rol degistirir, cikarir.
- *  Uc ayrica kontrol ediyor; bu bayrak yalniz kontrolleri gostermek icin. */
-export function Members({ team, chat }: { team: TeamView; chat: Uuid }) {
+/** Uyeler widget'i (R4-F09): `manage_teams` ya da admin ekler, rol degistirir,
+ *  cikarir — yalniz duzenleme modunda. Uc ayrica kontrol ediyor; bayrak yalniz
+ *  kontrolleri gostermek icin. */
+export function MembersWidget({ team, chat, move }: { team: TeamView; chat: Uuid; move: WidgetMove | undefined }) {
+  const can = useCanManageTeams();
+  return (
+    <Widget id="members" title="Üyeler" count={team.members.length} canEdit={can} move={move}>
+      {(editing) => <MemberRows team={team} chat={chat} editing={editing} />}
+    </Widget>
+  );
+}
+
+function MemberRows({ team, chat, editing }: { team: TeamView; chat: Uuid; editing: boolean }) {
   const L = useLookup();
   const toast = useToast();
   const m = useTeamMember(team.id, chat);
   const [pick, setPick] = useState<string | null>(null);
   const [role, setRole] = useState<TeamRole>("member");
-  const can = useCanManageTeams();
+  const rows = useRowLimit(team.members, editing);
   const write = (user_id: Uuid, r: TeamRole | null) =>
     m.mutate({ user_id, role: r }, { onError: (e) => toast({ text: errorText(e), error: true }) });
   const outside = L.meta.users.filter((u) => !team.members.some((x) => x.user_id === u.id));
 
   return (
-    <section className={s.surface} aria-labelledby="members-h">
-      <div className={s.surfaceHead}>
-        <span id="members-h">Üyeler</span>
-        <span className={s.count}>{team.members.length}</span>
-      </div>
-      {team.members.length === 0 && <p className={s.dim} style={{ padding: "12px 16px", margin: 0 }}>Henüz üye yok.</p>}
+    <>
+      {team.members.length === 0 && (
+        <p className={s.dim} style={{ padding: "12px 16px", margin: 0 }}>
+          Henüz üye yok.{editing ? "" : " Eklemek için kalem simgesi."}
+        </p>
+      )}
       <ul className={s.members}>
-        {team.members.map((x) => {
+        {rows.shown.map((x) => {
           // Her satirin denetimi kisinin adini tasir: ekran okuyucuda on tane
           // ayni "Rol" / "Takımdan çıkar" duyulmasin.
           const who = L.user(x.user_id)?.name ?? "?";
@@ -218,7 +229,7 @@ export function Members({ team, chat }: { team: TeamView; chat: Uuid }) {
             <li key={x.user_id}>
               <Avatar user={L.user(x.user_id)} size={24} />
               <span>{who}</span>
-              {can ? (
+              {editing ? (
                 <>
                   <Picker look="bare" label={`${who} — rol`} value={x.role} options={ROLE_OPTS} align="end"
                     onChange={(r) => write(x.user_id, r)}>
@@ -233,7 +244,8 @@ export function Members({ team, chat }: { team: TeamView; chat: Uuid }) {
           );
         })}
       </ul>
-      {can && outside.length > 0 && (
+      {rows.more}
+      {editing && outside.length > 0 && (
         <div className={s.memberAdd}>
           <Picker label="Eklenecek kişi" value={pick} placeholder="Kişi ekle…" onChange={setPick}
             options={outside.map((u) => ({ value: u.id as string | null, label: u.name, render: <Who user={u} /> }))} />
@@ -243,32 +255,39 @@ export function Members({ team, chat }: { team: TeamView; chat: Uuid }) {
           </Button>
         </div>
       )}
-    </section>
+    </>
   );
 }
 
-/** Calistigi birimler: team_nodes (N:M). Bag kopunca kayitlar etkilenmez. */
-function TeamNodes({ teamId }: { teamId: Uuid }) {
+/** Calistigi birimler: team_nodes (N:M). Bag kopunca kayitlar etkilenmez.
+ *  Bagla/kopar yalniz duzenleme modunda. */
+function NodesWidget({ teamId, move }: { teamId: Uuid; move: WidgetMove | undefined }) {
+  const L = useLookup();
+  const can = useCanManageTeams();
+  return (
+    <Widget id="nodes" title="Çalıştığı birimler" count={L.team(teamId)?.node_ids.length ?? 0} canEdit={can} move={move}>
+      {(editing) => <NodeRows teamId={teamId} editing={editing} />}
+    </Widget>
+  );
+}
+
+function NodeRows({ teamId, editing }: { teamId: Uuid; editing: boolean }) {
   const L = useLookup();
   const toast = useToast();
   const m = useTeamWrite();
-  const can = useCanManageTeams();
   const linked = L.team(teamId)?.node_ids ?? [];
+  const rows = useRowLimit(linked, editing);
   const fail = (e: unknown) => toast({ text: errorText(e), error: true });
 
   return (
-    <section className={s.surface} aria-labelledby="nodes-h">
-      <div className={s.surfaceHead}>
-        <span id="nodes-h">Çalıştığı birimler</span>
-        <span className={s.count}>{linked.length}</span>
-      </div>
+    <>
       {linked.length === 0 ? (
         <p className={s.dim} style={{ padding: "12px 16px", margin: 0 }}>
-          Ağaçta hiçbir birime bağlı değil.{can ? " Aşağıdan bağla — bir takım birden çok birimde çalışabilir." : ""}
+          Ağaçta hiçbir birime bağlı değil.{editing ? " Aşağıdan bağla — bir takım birden çok birimde çalışabilir." : ""}
         </p>
       ) : (
         <ul className={s.members}>
-          {linked.map((id) => {
+          {rows.shown.map((id) => {
             const path = L.path(id);
             return (
               <li key={id}>
@@ -277,7 +296,7 @@ function TeamNodes({ teamId }: { teamId: Uuid }) {
                   <Link href={href({ name: "tasks", query: { node: id } })}>{path[path.length - 1] ?? "?"}</Link>
                   {path.length > 1 && <span className={s.dim}> · {path.slice(0, -1).join(" › ")}</span>}
                 </span>
-                {can && (
+                {editing && (
                   <IconButton icon="x" label={`${path[path.length - 1] ?? "?"} bağını kopar`}
                     onClick={() => m.mutate(teamOps.unlink(teamId, id), { onError: fail })} />
                 )}
@@ -286,13 +305,33 @@ function TeamNodes({ teamId }: { teamId: Uuid }) {
           })}
         </ul>
       )}
-      {can && (
+      {rows.more}
+      {editing && (
         <UnitPicker units={L.units} linked={linked} disabled={m.isPending}
           onLink={(n) => m.mutate(teamOps.link(teamId, n), { onError: fail })} />
       )}
-    </section>
+    </>
   );
 }
+
+/** Takim ve pillar sayfasinin "Kayıtlar" widget'i: Açık/Kapanan + tablo. */
+export function RecordsWidget({ query, showTeam, move }: {
+  query: { team: Uuid } | { pillar: Uuid }; showTeam: boolean; move: WidgetMove | undefined;
+}) {
+  const [done, setDone] = useState<"false" | "true">("false");
+  const rows = useRecords({ ...query, done });
+  return (
+    <Widget id="records" title="Kayıtlar" count={rows.data?.length} move={move}
+      actions={
+        <Segmented label="Kayıt durumu" value={done} onChange={setDone}
+          options={[{ value: "false", label: "Açık" }, { value: "true", label: "Kapanan" }]} />
+      }>
+      {() => (rows.data === undefined ? <Loading /> : <RecordTable rows={rows.data} showTeam={showTeam} />)}
+    </Widget>
+  );
+}
+
+const TEAM_WIDGETS = ["members", "nodes", "records"] as const;
 
 export function TeamPage({ id }: { id: Uuid }) {
   const L = useLookup();
@@ -300,10 +339,10 @@ export function TeamPage({ id }: { id: Uuid }) {
   const can = useCanManageTeams();
   const toast = useToast();
   const del = useTeamWrite();
-  const [done, setDone] = useState<"false" | "true">("false");
-  const rows = useRecords({ team: id, done });
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [arranging, setArranging] = useState(false);
+  const W = useWidgetOrder("team", TEAM_WIDGETS, arranging);
   const team = L.team(id);
   useEffect(() => {
     if (team !== undefined) document.title = `${team.name} — EkipTakip`;
@@ -345,6 +384,7 @@ export function TeamPage({ id }: { id: Uuid }) {
                 {team.description !== null && <p className={s.pageSub}>{team.description}</p>}
               </div>
             </div>
+            <ArrangeButton on={arranging} onChange={setArranging} />
             {can && (
               <Button onClick={() => setEditing(true)}>
                 <Icon name="edit" size={15} /> Düzenle
@@ -355,17 +395,11 @@ export function TeamPage({ id }: { id: Uuid }) {
             </Button>
           </div>
 
-          <Members team={q.data} chat={team.chat_id} />
-          <TeamNodes teamId={id} />
-
-          <section aria-labelledby="recs-h">
-            <div className={s.pageHead} style={{ marginBottom: 10, alignItems: "center" }}>
-              <h2 id="recs-h" className={s.sectionTitle} style={{ flex: 1, margin: 0 }}>Kayıtlar</h2>
-              <Segmented label="Kayıt durumu" value={done} onChange={setDone}
-                options={[{ value: "false", label: "Açık" }, { value: "true", label: "Kapanan" }]} />
-            </div>
-            {rows.data === undefined ? <Loading /> : <RecordTable rows={rows.data} showTeam={false} />}
-          </section>
+          {W.order.map((w) =>
+            w === "members" ? <MembersWidget key={w} team={q.data} chat={team.chat_id} move={W.moveOf(w)} />
+            : w === "nodes" ? <NodesWidget key={w} teamId={id} move={W.moveOf(w)} />
+            : <RecordsWidget key={w} query={{ team: id }} showTeam={false} move={W.moveOf(w)} />,
+          )}
         </div>
         <aside className={s.recordSide} aria-label="Takım duvarı">
           <div className={s.sideHead}>

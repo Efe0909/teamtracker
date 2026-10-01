@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, expect, it, vi } from "vitest";
 import type { CardView, Meta } from "../../api/types";
 import { LookupProvider } from "../../lib/lookup";
 import { ToastProvider } from "../../ui/ui";
@@ -24,7 +24,8 @@ const META: Meta = {
 const poll: CardView = {
   id: "c", card_type: "poll", known: true, data: { title: "Yemek?" }, signups: [], attachments: [],
   options: [{ label: "Pide" }, { label: "Lahmacun" }], allow_other: true, media_enabled: false, timer_enabled: false, closes_at: null, closed: false,
-  votes: [{ user_id: "b", option: null, text: "Kebap", at: null }, { user_id: "a", option: 1, text: null, at: null }],
+  multiple_choice: false,
+  votes: [{ user_id: "b", options: [], text: "Kebap", at: null }, { user_id: "a", options: [1], text: null, at: null }],
 };
 
 it("diger cevaplar ayri sekmede", () => {
@@ -39,4 +40,22 @@ it("diger cevaplar ayri sekmede", () => {
   expect(screen.queryByText("Kebap")).toBeNull();
   fireEvent.click(screen.getByRole("tab", { name: /Diğer cevaplar · 1/ }));
   expect(screen.getByText("Kebap")).toBeTruthy();
+});
+
+it("coklu secimde isaretliler korunur, digeri eklenir", async () => {
+  const fetch = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
+  vi.stubGlobal("fetch", fetch);
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <ToastProvider>
+        <LookupProvider meta={META}><PollBody c={{ ...poll, multiple_choice: true }} /></LookupProvider>
+      </ToastProvider>
+    </QueryClientProvider>,
+  );
+  expect(screen.getByText("Birden çok seçenek işaretleyebilirsin.")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: /Pide/ }));
+  await waitFor(() => expect(fetch).toHaveBeenCalled());
+  const init = fetch.mock.calls[0]?.[1] as RequestInit;
+  expect(JSON.parse(String(init.body))).toEqual({ options: [1, 0] });
+  vi.unstubAllGlobals();
 });

@@ -11,7 +11,7 @@ import { Cards } from "./Cards";
 afterEach(cleanup);
 
 const card = (over: Partial<CardView>): CardView => ({
-  id: "c", card_type: "meeting", known: true, data: {}, signups: [], options: [], allow_other: false, media_enabled: false, timer_enabled: false, closes_at: null, closed: false, votes: [], attachments: [], ...over,
+  id: "c", card_type: "meeting", known: true, data: {}, signups: [], options: [], allow_other: false, media_enabled: false, timer_enabled: false, multiple_choice: false, closes_at: null, closed: false, votes: [], attachments: [], ...over,
 });
 
 it("bilinmeyen tur bozuk, toplanti alanlari ve cevaplari cizilir", () => {

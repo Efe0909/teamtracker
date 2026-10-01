@@ -461,6 +461,78 @@
 .surfaceHead > a:hover {
   color: var(--txt);
 }
+/* widget: katlanir baslik, uzerine gelince kalem (Widget.tsx) */
+.widget[data-folded] > .surfaceHead {
+  border-bottom: 0;
+}
+.widgetToggle {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.widgetToggle .count {
+  margin-left: 2px;
+}
+.caret {
+  display: inline-grid;
+  color: var(--dim);
+  transition: transform 0.12s;
+}
+.caretOpen {
+  transform: rotate(90deg);
+}
+.widgetActs {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 400;
+}
+.widgetEdit {
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.widget:hover .widgetEdit,
+.widgetEdit:focus-visible {
+  opacity: 1;
+}
+@media (pointer: coarse) {
+  .widgetEdit {
+    opacity: 1;
+  }
+}
+.widgetMore {
+  appearance: none;
+  display: block;
+  width: 100%;
+  padding: 8px 16px;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: none;
+  font: inherit;
+  font-size: var(--fs-sm);
+  color: var(--dim);
+  cursor: pointer;
+  text-align: left;
+}
+.widgetMore:hover {
+  color: var(--txt);
+  background: var(--tint);
+}
+/* Kayit tablosu widget icinde: kutu ustune kutu yok. */
+.widget .tableWrap {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
 .sectionTitle {
   margin: 0 0 var(--s-3);
   font-size: var(--fs-lg);
@@ -820,6 +892,12 @@ a.row:hover {
   gap: 28px;
   min-width: 0;
   overflow: auto;
+}
+/* Sutun sabit yukseklikte kayar; cocuklar SIKISMAZ. Yoksa overflow:hidden
+   .surface'ler ekran yuksekligine buzulup kirpilir (kucuk ekranda/%100
+   zoom'da Uyeler ve birim agaci kesiliyordu). */
+.recordMain > * {
+  flex-shrink: 0;
 }
 .recordInner {
   width: 100%;
