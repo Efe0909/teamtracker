@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { errorText } from "../../api/client";
-import { useAddAction, useParticipant, usePatchAction, usePatchRecord } from "../../api/hooks";
+import { useAddAction, useParticipant, usePin, usePatchAction, usePatchRecord } from "../../api/hooks";
 import type { Action, ActionPatch, RecordDetail } from "../../api/types";
 import { ACTION_STATUS, ACTION_STATUS_ORDER, ago, isDone } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
@@ -19,12 +19,15 @@ export function RecordHead({ d, showPath = true }: { d: RecordDetail; showPath?:
   const r = d.record;
   const creator = L.user(r.created_by);
   const [edit, setEdit] = useState<"title" | "description" | null>(null);
+  const pin = usePin(r.id);
   return (
     <div className={s.head}>
       {showPath && <div className={s.path}>{L.path(r.unit_id).join(" › ")}</div>}
       <div className={s.titleRow}>
         <h1 className={s.title}>{r.title}</h1>
         {d.access.can_edit && <IconButton icon="edit" label="Başlığı düzenle" onClick={() => setEdit("title")} />}
+        <IconButton icon="star" className={d.pinned ? s.pinnedBtn : ""} label={d.pinned ? "Sabitlemeyi kaldır" : "Panolara sabitle"}
+          disabled={pin.isPending} onClick={() => pin.mutate(!d.pinned)} />
       </div>
       <div className={s.byline}>
         <KindTag kind={r.kind} />

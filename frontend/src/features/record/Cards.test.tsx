@@ -22,6 +22,7 @@ it("bilinmeyen tur bozuk, toplanti alanlari ve cevaplari cizilir", () => {
       card({ id: "b", data: { title: "Planlama", place: "Kulüp odası" } }),
     ],
     access: { can_edit: false, can_edit_deadline: false },
+    pinned: false,
   } as unknown as RecordDetail;
   const meta: Meta = { me: { id: "u", is_admin: false, scopes: [], team_ids: [], profile_complete: true }, users: [], teams: [], pillars: [], nodes: [] };
   render(

@@ -131,6 +131,8 @@ export interface RecordDetail {
   participants: Uuid[];
   cards: CardView[];
   access: { can_edit: boolean; can_edit_deadline: boolean };
+  /** Bu kisi kaydi sabitlemis mi (Panolar widget'i). */
+  pinned: boolean;
 }
 
 // --- ekler ve kartlar (Rust api/attachments.rs, api/cards.rs) ---------------

@@ -67,6 +67,8 @@ export interface RecordQuery {
   quick?: string;
   sort?: string;
   done?: "true" | "false";
+  /** Yalniz benim sabitlediklerim. */
+  pinned?: "true";
 }
 
 // --- okumalar --------------------------------------------------------------
@@ -151,6 +153,24 @@ export function useParticipant(recordId: Uuid) {
     mutationFn: (w: { user: Uuid; on: boolean }) =>
       request<RecordDetail>(w.on ? "PUT" : "DELETE", `/api/records/${recordId}/participants/${w.user}`),
     onSuccess: (d) => afterRecordWrite(qc, d),
+  });
+}
+
+/** Sabitle (PUT) / kaldir (DELETE). */
+export function usePin(recordId: Uuid) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (on: boolean) => request<RecordDetail>(on ? "PUT" : "DELETE", `/api/records/${recordId}/pin`),
+    onSuccess: (d) => afterRecordWrite(qc, d),
+  });
+}
+
+/** Bu kayittaki kart sirasi (yalniz benim gorunumum, sunucuda). */
+export function useCardOrder(recordId: Uuid) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: Uuid[]) => request<RecordDetail>("PUT", `/api/records/${recordId}/card-order`, { ids }),
+    onSuccess: (d) => qc.setQueryData(keys.record(d.record.id), d),
   });
 }
 

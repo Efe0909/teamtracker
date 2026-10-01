@@ -627,3 +627,10 @@
 .people li {
   padding: 3px 0;
 }
+
+.pinnedBtn {
+  color: var(--warn);
+}
+.pinnedBtn svg {
+  fill: currentColor;
+}

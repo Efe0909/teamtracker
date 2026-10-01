@@ -5,7 +5,7 @@
 
 import { useState } from "react";
 import { errorText, upload } from "../../api/client";
-import { useCardWrite } from "../../api/hooks";
+import { useCardOrder, useCardWrite } from "../../api/hooks";
 import type { Attachment, CardView, RecordDetail, SignupAnswer } from "../../api/types";
 import { CARD, CARD_TYPES, type CardType, isCardType, whenLabel } from "../../lib/cards";
 import { useLookup } from "../../lib/lookup";
@@ -19,7 +19,18 @@ import s from "./record.module.css";
 export function Cards({ d }: { d: RecordDetail }) {
   const w = useCardWrite();
   const toast = useToast();
+  const order = useCardOrder(d.record.id);
   if (d.cards.length === 0 && !d.access.can_edit) return null;
+  // Sira kisiye ozel (sunucuda): komsuyla yer degistirip tum sirayi gonder.
+  const move = (i: number, dir: -1 | 1) => {
+    const ids = d.cards.map((c) => c.id);
+    const j = i + dir;
+    const a = ids[i], b = ids[j];
+    if (a === undefined || b === undefined) return;
+    ids[i] = b;
+    ids[j] = a;
+    order.mutate(ids, { onError: (e) => toast({ text: errorText(e), error: true }) });
+  };
   const add = (t: CardType) =>
     w.mutate({ method: "POST", path: `/api/records/${d.record.id}/cards`, body: { card_type: t } },
       { onError: (e) => toast({ text: errorText(e), error: true }) });
@@ -44,7 +55,10 @@ export function Cards({ d }: { d: RecordDetail }) {
           </span>
         )}
       </div>
-      {d.cards.map((c) => <Card key={c.id} d={d} c={c} />)}
+      {d.cards.map((c, i) => (
+        <Card key={c.id} d={d} c={c} first={i === 0} last={i === d.cards.length - 1} busy={order.isPending}
+          onMove={(dir) => move(i, dir)} />
+      ))}
       {d.cards.length === 0 && (
         <div className={s.box}>
           <span className={s.boxEmpty}>Kart yok. Toplantı, görsel ya da gönüllü havuzu gerekiyorsa “Kart ekle”.</span>
@@ -54,7 +68,9 @@ export function Cards({ d }: { d: RecordDetail }) {
   );
 }
 
-function Card({ d, c }: { d: RecordDetail; c: CardView }) {
+function Card({ d, c, first, last, busy, onMove }: {
+  d: RecordDetail; c: CardView; first: boolean; last: boolean; busy: boolean; onMove: (dir: -1 | 1) => void;
+}) {
   // Kapali kartlar cihazda hatirlanir (kayit/kart gezintisinde ayni kalir).
   const [collapsed, setCollapsed] = useStored<string[]>("cards.collapsed", []);
   const w = useCardWrite();
@@ -90,12 +106,12 @@ function Card({ d, c }: { d: RecordDetail; c: CardView }) {
           <b>{v("title") !== "" ? v("title") : t.label}</b>
           {v("title") !== "" && <span className={s.hint}>{t.label}</span>}
         </button>
-        {d.access.can_edit && (
-          <span className={s.cardActs}>
-            <IconButton icon="edit" label="Kartı düzenle" onClick={() => setEditing(true)} />
-            <IconButton icon="trash" label="Kartı sil" onClick={remove} />
-          </span>
-        )}
+        <span className={s.cardActs}>
+          <IconButton icon="up" label="Yukarı taşı" disabled={first || busy} onClick={() => onMove(-1)} />
+          <IconButton icon="down" label="Aşağı taşı" disabled={last || busy} onClick={() => onMove(1)} />
+          {d.access.can_edit && <IconButton icon="edit" label="Kartı düzenle" onClick={() => setEditing(true)} />}
+          {d.access.can_edit && <IconButton icon="trash" label="Kartı sil" onClick={remove} />}
+        </span>
       </div>
 
       {!folded && (
