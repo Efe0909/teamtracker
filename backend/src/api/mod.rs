@@ -13,6 +13,7 @@ mod common;
 mod home;
 mod meta;
 mod nodes;
+mod notify;
 mod profile;
 mod records;
 mod teams;
@@ -60,7 +61,11 @@ pub fn router() -> Router<AppState> {
         .route("/api/pillars/{id}", patch(teams::patch_pillar).delete(teams::delete_pillar))
         .route("/api/teams/{id}/members", post(home::set_member))
         .route("/api/teams/{id}/members/{user}", delete(home::drop_member))
-        .route("/api/notifications", get(home::notifications))
+        .route("/api/notifications", get(notify::list))
+        .route("/api/notifications/seen", post(notify::seen))
+        .route("/api/me/notifications", get(notify::prefs).patch(notify::patch_prefs))
+        .route("/api/chats/{id}/prefs", put(notify::set_chat))
+        .route("/api/push/subscriptions", post(notify::subscribe).delete(notify::unsubscribe))
         .route("/api/nodes", get(nodes::tree).post(nodes::create))
         .route("/api/nodes/{id}", patch(nodes::patch).delete(nodes::delete))
         // Govde siniri yalniz yuklemede genis (axum varsayilani 2 MB); nginx
