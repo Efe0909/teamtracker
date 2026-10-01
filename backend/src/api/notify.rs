@@ -25,7 +25,7 @@ use crate::{
     models::enums::NotifyLevel,
     push,
     state::AppState,
-    webpush::{self, Outcome, Target},
+    channel::{Address, Channel, Message, Outcome},
 };
 
 /// Beni ilgilendiren sohbetlerdeki son hareketler, benimkiler haric; tercihime
@@ -241,6 +241,7 @@ pub async fn fanout(st: AppState, chat: Uuid, author: Uuid, body: String) {
 
 async fn fanout_inner(st: &AppState, chat: Uuid, author: Uuid, body: &str) -> Result<()> {
     let Some(vapid) = st.vapid.as_ref() else { return Ok(()) };
+    let push_channel = Channel::Push(vapid.clone());
     // Sohbetin sahibi ve izleyicileri: kayit ya da takim duvari.
     let rec: Option<(Uuid, String, Vec<Uuid>)> = sqlx::query_as(
         "select r.id, r.title, array(
@@ -276,12 +277,12 @@ async fn fanout_inner(st: &AppState, chat: Uuid, author: Uuid, body: &str) -> Re
             continue;
         }
         let text = if mentioned { format!("{author_name} seni andı") } else { format!("{author_name} yeni mesaj yazdı") };
-        let payload = serde_json::json!({ "title": title, "body": text, "url": url, "tag": chat }).to_string();
+        let msg = Message { title: title.clone(), body: text, url: url.clone(), tag: chat.to_string() };
         let subs: Vec<(Uuid, String, String, String)> = sqlx::query_as(
             "select id, endpoint, p256dh, auth from push_subscriptions where user_id = $1")
             .bind(uid).fetch_all(&st.pool).await?;
         for (id, endpoint, p256dh, auth) in subs {
-            match webpush::send(vapid, &Target { endpoint: &endpoint, p256dh: &p256dh, auth: &auth }, payload.as_bytes()).await {
+            match push_channel.deliver(&Address::Push { endpoint: &endpoint, p256dh: &p256dh, auth: &auth }, &msg).await {
                 Outcome::Sent => {
                     sqlx::query("update push_subscriptions set last_ok_at = now(), fail_count = 0 where id = $1")
                         .bind(id).execute(&st.pool).await?;
@@ -290,7 +291,7 @@ async fn fanout_inner(st: &AppState, chat: Uuid, author: Uuid, body: &str) -> Re
                 Outcome::Gone => {
                     sqlx::query("delete from push_subscriptions where id = $1").bind(id).execute(&st.pool).await?;
                 }
-                Outcome::Failed => {
+                Outcome::Retry | Outcome::Rejected => {
                     sqlx::query("update push_subscriptions set fail_count = fail_count + 1 where id = $1")
                         .bind(id).execute(&st.pool).await?;
                     sqlx::query("delete from push_subscriptions where id = $1 and fail_count >= 5")

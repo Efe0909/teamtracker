@@ -103,13 +103,7 @@ pub fn encrypt(payload: &[u8], p256dh: &str, auth: &str) -> Option<Vec<u8>> {
     Some(body)
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub enum Outcome {
-    Sent,
-    /// 404/410: abonelik olu, satir silinmeli.
-    Gone,
-    Failed,
-}
+pub use crate::channel::Outcome;
 
 pub struct Target<'a> {
     pub endpoint: &'a str,
@@ -129,7 +123,7 @@ pub async fn send(vapid: &Vapid, t: &Target<'_>, payload: &[u8]) -> Outcome {
     let (Some(body), Some(authz)) =
         (encrypt(payload, t.p256dh, t.auth), vapid.authorization(t.endpoint, chrono::Utc::now().timestamp()))
     else {
-        return Outcome::Failed;
+        return Outcome::Rejected;
     };
     let res = client().post(t.endpoint)
         .header("Authorization", authz)
@@ -143,11 +137,11 @@ pub async fn send(vapid: &Vapid, t: &Target<'_>, payload: &[u8]) -> Outcome {
         Ok(r) if matches!(r.status().as_u16(), 404 | 410) => Outcome::Gone,
         Ok(r) => {
             tracing::warn!(status = %r.status(), "push reddedildi");
-            Outcome::Failed
+            if r.status().as_u16() == 429 || r.status().is_server_error() { Outcome::Retry } else { Outcome::Rejected }
         }
         Err(e) => {
             tracing::warn!("push gonderilemedi: {e}");
-            Outcome::Failed
+            Outcome::Retry
         }
     }
 }
