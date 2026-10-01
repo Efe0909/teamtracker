@@ -19,6 +19,7 @@ const PAGES: { label: string; icon: IconName; route: Route; keys: string[] }[] =
   { label: "Geciken kayıtlar", icon: "alert", route: { name: "tasks", query: { quick: "overdue" } }, keys: ["gecikme"] },
   { label: "Açık eylemlerim", icon: "bolt", route: { name: "tasks", query: { quick: "my_actions" } }, keys: ["benim"] },
   { label: "Takımlar", icon: "teams", route: { name: "teams" }, keys: ["ekip"] },
+  { label: "Ekip", icon: "user", route: { name: "people" }, keys: ["kişi", "profil", "telefon", "doğum günü"] },
   { label: "Pillar'lar", icon: "pin", route: { name: "pillars" }, keys: ["pillar", "alan"] },
   { label: "Veri yönetimi", icon: "tree", route: { name: "tree" }, keys: ["ağaç", "düğüm", "birim"] },
 ];

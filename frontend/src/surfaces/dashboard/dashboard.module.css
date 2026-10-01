@@ -1557,3 +1557,24 @@ a.row:hover {
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+
+/* --- ekip sayfasi ---------------------------------------------------------- */
+.peopleGrid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--s-4);
+}
+.personCard {
+  display: flex;
+  gap: var(--s-3);
+  padding: var(--s-4);
+}
+.personInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}

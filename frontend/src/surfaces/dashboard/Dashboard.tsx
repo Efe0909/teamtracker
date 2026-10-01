@@ -18,6 +18,7 @@ import { Admin } from "./Admin";
 import s from "./dashboard.module.css";
 import { DataTree } from "./DataTree";
 import { Home } from "./Home";
+import { People } from "./People";
 import { Palette } from "./Palette";
 import { PillarPage, Pillars } from "./Pillars";
 import { RecordPage } from "./RecordPage";
@@ -88,6 +89,8 @@ function Page({ route }: { route: Route }) {
       return <PillarPage id={route.id} />;
     case "tree":
       return <DataTree />;
+    case "people":
+      return <People />;
     case "admin":
       return <Admin />;
     case "notFound":
@@ -117,6 +120,7 @@ const NAV: NavItem[] = [
   { route: { name: "home" }, icon: "home", label: "Panolar", match: ["home"] },
   { route: { name: "tasks", query: {} }, icon: "tasks", label: "Görevler", match: ["tasks", "record"] },
   { route: { name: "teams" }, icon: "teams", label: "Takımlar", match: ["teams"] },
+  { route: { name: "people" }, icon: "user", label: "Ekip", match: ["people"] },
   { route: { name: "pillars" }, icon: "pin", label: "Pillar'lar", match: ["pillars"] },
   { route: { name: "tree" }, icon: "tree", label: "Veri yönetimi", match: ["tree"] },
 ];

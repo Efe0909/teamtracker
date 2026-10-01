@@ -11,6 +11,7 @@ import { ago, SCOPE } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
 import { Icon } from "../../ui/icons";
 import { Avatar, Button, Empty, Loading, Picker as UiPicker, Req, Segmented, Tag, ui, useToast, type Option } from "../../ui/ui";
+import { EditableAvatar } from "../../features/profile/EditableAvatar";
 import { useStored } from "../../lib/stored";
 import { AdminActivity } from "./AdminActivity";
 import { ErrorScreen } from "../errors/ErrorScreen";
@@ -131,7 +132,9 @@ function PersonRow({ p, v, roleName }: { p: AdminPerson; v: AdminView; roleName:
   return (
     <li className={s.person}>
       <div className={s.personHead}>
-        <Avatar user={{ name: p.name, color: p.color, last_seen_at: p.last_seen_at }} size={32} />
+        {L.user(p.id) !== undefined && p.id === L.me.id
+          ? <EditableAvatar user={L.me} size={32} />
+          : <Avatar user={{ name: p.name, color: p.color, last_seen_at: p.last_seen_at }} size={32} />}
         <div>
           <b>{p.name}</b> <span className={s.dim}>{p.email}</span>
           <div className={s.dim}>
