@@ -111,6 +111,26 @@
   color: var(--dim);
   letter-spacing: 0.01em;
 }
+.navHeadBtn {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  color: var(--dim);
+  cursor: pointer;
+}
+.navHeadBtn svg {
+  transition: transform 0.12s;
+}
+.navHeadBtn[aria-expanded="true"] svg {
+  transform: rotate(90deg);
+}
 .nav {
   display: flex;
   align-items: center;

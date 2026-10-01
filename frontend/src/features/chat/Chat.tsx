@@ -88,7 +88,12 @@ export function Chat(props: {
               <div className={cx(s.msg, mine && s.mine)} id={`event-${it.id}`}>
                 {!mine && <Avatar user={actor} size={28} />}
                 <div className={s.bub}>
-                  {!mine && <div className={s.name}>{actor?.name ?? "silinmiş kişi"}</div>}
+                  {!mine && (
+                    <div className={s.name}>
+                      {actor?.name ?? "silinmiş kişi"}
+                      {actor?.nickname != null && <span className={s.nick}>{actor.nickname}</span>}
+                    </div>
+                  )}
                   {q !== undefined && (
                     <a
                       className={s.quote}

@@ -36,6 +36,12 @@ export function LookupProvider({ meta, children }: { meta: Meta; children: React
       color: null,
       is_admin: meta.me.is_admin,
       last_seen_at: null,
+      nickname: null,
+      phone: null,
+      avatar_id: null,
+      birth_day: null,
+      birth_month: null,
+      birth_year: null,
     };
     const path = (id: Uuid): string[] => {
       const out: string[] = [];

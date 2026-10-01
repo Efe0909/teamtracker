@@ -24,6 +24,14 @@ export interface MetaUser {
   color: string | null;
   is_admin: boolean;
   last_seen_at: IsoTime | null;
+  /** Istege bagli takma ad; sohbette adin altinda gorunur. */
+  nickname: string | null;
+  phone: string | null;
+  /** Profil fotografi (ek kimligi); yoksa bas harf. */
+  avatar_id: Uuid | null;
+  birth_day: number | null;
+  birth_month: number | null;
+  birth_year: number | null;
 }
 
 export interface MetaTeam {
@@ -36,6 +44,8 @@ export interface MetaTeam {
   node_ids: Uuid[];
   /** Bu takim bir pillar'in OZEL takimiysa o pillar; sıradan takimda null. */
   pillar_id: Uuid | null;
+  /** Banner fotografi (ek kimligi); pillar sayfasi ozel takiminkini gosterir. */
+  banner_id: Uuid | null;
 }
 
 /** Pillar: ozel takimi (`team_id`) uyeleri ve sohbeti tasir (spec/22). */
@@ -59,7 +69,7 @@ export interface MetaNode {
 }
 
 export interface Meta {
-  me: { id: Uuid; is_admin: boolean; scopes: string[]; team_ids: Uuid[] };
+  me: { id: Uuid; is_admin: boolean; scopes: string[]; team_ids: Uuid[]; profile_complete: boolean };
   users: MetaUser[];
   teams: MetaTeam[];
   /** sort_order, sonra ad; pasifler de gelir. */
@@ -323,6 +333,8 @@ export interface NewTeam {
 /** Verilmeyen alan degismez; null = sil. */
 export interface TeamPatch {
   name?: string;
+  /** Yuklenmis ek kimligi; null = banner'i kaldir. */
+  banner_id?: Uuid | null;
   description?: string | null;
   color?: string | null;
 }
@@ -346,4 +358,14 @@ export interface NodePatch {
   description?: string | null;
   parent_id?: Uuid | null;
   is_active?: boolean;
+}
+
+/** Kisinin kendi profili; verilmeyen alan degismez, null = sil. */
+export interface ProfilePatch {
+  nickname?: string | null;
+  phone?: string | null;
+  birth_day?: number | null;
+  birth_month?: number | null;
+  birth_year?: number | null;
+  avatar_id?: Uuid | null;
 }

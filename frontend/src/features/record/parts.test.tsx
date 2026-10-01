@@ -9,8 +9,8 @@ import { LookupProvider } from "../../lib/lookup";
 import { RecordHead } from "./parts";
 
 const META: Meta = {
-  me: { id: "u-me", is_admin: false, scopes: [], team_ids: [] },
-  users: [{ id: "u-selin", name: "Selin", color: null, is_admin: false, last_seen_at: null }],
+  me: { id: "u-me", is_admin: false, scopes: [], team_ids: [], profile_complete: true },
+  users: [{ id: "u-selin", name: "Selin", color: null, is_admin: false, last_seen_at: null, nickname: null, phone: null, avatar_id: null, birth_day: null, birth_month: null, birth_year: null }],
   teams: [],
   pillars: [],
   nodes: [],

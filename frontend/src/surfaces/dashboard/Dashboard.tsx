@@ -4,8 +4,10 @@
 // Mobil yuze BAGLANTI YOK — bilincli ayrim (KNOW-153).
 
 import { useEffect, useState } from "react";
+import { ProfileDialog } from "../../features/profile/ProfileDialog";
 import { useLookup } from "../../lib/lookup";
 import { useLocation } from "../../lib/router";
+import { useStored } from "../../lib/stored";
 import { setTheme, useTheme, type Theme } from "../../lib/theme";
 import { Icon, type IconName } from "../../ui/icons";
 import { Avatar, cx, IconButton, Kbd, Link, Menu, MenuItem, MenuLabel, MenuRadio, MenuSep } from "../../ui/ui";
@@ -126,6 +128,8 @@ function Sidebar({ route, onSearch }: { route: Route; onSearch: () => void }) {
   const admin = L.meta.me.is_admin || L.can("manage_users");
   const mine = new Set(L.meta.me.team_ids);
   const teams = [...L.plainTeams].sort((a, b) => Number(mine.has(b.id)) - Number(mine.has(a.id)) || a.name.localeCompare(b.name, "tr"));
+  const [profileOpen, setProfileOpen] = useState(!L.meta.me.profile_complete);
+  const [teamsOpen, setTeamsOpen] = useStored("nav.teams.open", true);
   const current = route.name === "team" || route.name === "pillar" ? route.id : null;
 
   const item = (n: NavItem) => {
@@ -180,8 +184,11 @@ function Sidebar({ route, onSearch }: { route: Route; onSearch: () => void }) {
 
       {teams.length > 0 && (
         <div className={s.navGroup}>
-          <span className={s.navHead}>Takımlar</span>
-          {teams.map((t) => (
+          <button type="button" className={s.navHeadBtn} aria-expanded={teamsOpen} onClick={() => setTeamsOpen(!teamsOpen)}>
+            <span>Takımlar</span>
+            <Icon name="chevron" size={12} />
+          </button>
+          {teamsOpen && teams.map((t) => (
             <Link
               key={t.id}
               href={href({ name: "team", id: t.id })}
@@ -211,6 +218,10 @@ function Sidebar({ route, onSearch }: { route: Route; onSearch: () => void }) {
           </button>
         }
       >
+        <MenuItem icon="user" onSelect={() => setProfileOpen(true)}>
+          Profilim
+        </MenuItem>
+        <MenuSep />
         <MenuLabel>Tema</MenuLabel>
         <MenuRadio value={theme} onChange={setTheme} options={THEME_OPTS} />
         <MenuSep />
@@ -218,6 +229,7 @@ function Sidebar({ route, onSearch }: { route: Route; onSearch: () => void }) {
           Çıkış yap
         </MenuItem>
       </Menu>
+      <ProfileDialog open={profileOpen} onClose={() => setProfileOpen(false)} />
     </nav>
   );
 }

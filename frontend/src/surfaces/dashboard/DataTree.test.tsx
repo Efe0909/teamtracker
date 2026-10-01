@@ -51,9 +51,9 @@ function stubFetch(tree: TreeView, onWrite?: (method: string, url: string, body:
 }
 
 const META: Meta = {
-  me: { id: "u1", is_admin: false, scopes: [], team_ids: [] },
+  me: { id: "u1", is_admin: false, scopes: [], team_ids: [], profile_complete: true },
   users: [],
-  teams: [{ id: "t1", name: "Maliye", description: null, color: null, chat_id: "c1", node_ids: ["n1"], pillar_id: null }],
+  teams: [{ id: "t1", name: "Maliye", description: null, color: null, chat_id: "c1", node_ids: ["n1"], pillar_id: null, banner_id: null }],
   pillars: [],
   nodes: [],
 };

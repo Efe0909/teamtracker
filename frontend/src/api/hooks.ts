@@ -24,6 +24,7 @@ import type {
   RecordDetail,
   RecordPatch,
   RecordSummary,
+  ProfilePatch,
   TeamPatch,
   TeamRole,
   TeamView,
@@ -342,5 +343,16 @@ export function useDeleteNode() {
   return useMutation({
     mutationFn: (id: Uuid) => request<TreeView>("DELETE", `/api/nodes/${id}`),
     onSuccess: (t) => afterTreeWrite(qc, t),
+  });
+}
+
+// --- profil -----------------------------------------------------------------
+
+export function usePatchProfile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (p: ProfilePatch) => request<null>("PATCH", "/api/me/profile", p),
+    // Ad/foto her ekranda cozuldugu icin sozluk tazelenir.
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.meta }),
   });
 }
