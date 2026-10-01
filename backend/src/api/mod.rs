@@ -43,6 +43,8 @@ pub fn router() -> Router<AppState> {
         .route("/api/records", get(records::list).post(records::create))
         .route("/api/records/{id}", get(records::get).patch(records::patch))
         .route("/api/records/{id}/participants/{user}", put(records::add_participant).delete(records::remove_participant))
+        .route("/api/records/{id}/join", post(records::join).delete(records::cancel_join))
+        .route("/api/records/{id}/join-requests/{user}", post(records::decide_join))
         .route("/api/records/{id}/pin", put(records::pin).delete(records::unpin))
         .route("/api/records/{id}/card-order", put(records::set_card_order))
         .route("/api/records/{id}/actions", post(records::add_action))

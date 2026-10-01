@@ -103,6 +103,34 @@ pub struct Detail {
     access: Access,
     /// Bu kisi kaydi sabitlemis mi.
     pinned: bool,
+    membership: Membership,
+}
+
+/// Erisim kipi ve bu kisinin kayitla iliskisi (spec: kayit erisim kipleri).
+#[derive(Serialize)]
+pub struct Membership {
+    /// public | request | private
+    mode: String,
+    /// Uye = yazma yetkisi olan her yol (admin, sorumlu, acan, katilimci, takim, dal).
+    is_member: bool,
+    /// private kayitta uye olmayan: eylem/kart/katilimci/sohbet gizli.
+    restricted: bool,
+    /// Benim istegim: pending | denied | null.
+    request: Option<String>,
+    /// Istekleri karara baglayabilir mi (sorumlu, acan, admin).
+    can_decide: bool,
+    /// Bekleyen istekler; yalniz karar verenler icin dolu.
+    requests: Vec<JoinRequest>,
+}
+
+#[derive(Serialize, sqlx::FromRow)]
+pub struct JoinRequest {
+    user_id: Uuid,
+    created_at: chrono::DateTime<chrono::Utc>,
+}
+
+fn decider(me: &User, rec: &Record) -> bool {
+    me.is_admin || rec.owner_id == Some(me.id) || rec.created_by == me.id
 }
 
 #[derive(Serialize)]
@@ -128,6 +156,33 @@ pub(crate) async fn load(pool: &PgPool, id: Uuid) -> Result<Record> {
 }
 
 pub(crate) async fn detail_of(st: &AppState, me: &User, rec: Record) -> Result<Detail> {
+    let can_edit = scope::can_edit_record(&st.pool, me, &rec, &st.tree).await?;
+    let mode: String = sqlx::query_scalar("select access_mode from records where id = $1")
+        .bind(rec.id).fetch_one(&st.pool).await?;
+    let restricted = mode == "private" && !can_edit;
+    let can_decide = decider(me, &rec);
+    let request: Option<String> = sqlx::query_scalar(
+        "select status from record_join_requests where record_id = $1 and user_id = $2")
+        .bind(rec.id).bind(me.id).fetch_optional(&st.pool).await?;
+    let requests: Vec<JoinRequest> = if can_decide {
+        sqlx::query_as(
+            "select user_id, created_at from record_join_requests
+              where record_id = $1 and status = 'pending' order by created_at")
+            .bind(rec.id).fetch_all(&st.pool).await?
+    } else {
+        Vec::new()
+    };
+    let membership = Membership { mode, is_member: can_edit, restricted, request, can_decide, requests };
+    let pinned: bool = sqlx::query_scalar(
+        "select exists(select 1 from record_pins where user_id = $1 and record_id = $2)")
+        .bind(me.id).bind(rec.id).fetch_one(&st.pool).await?;
+    // Gizli kayit, uye degil: yalniz kayit satiri (baslik, aciklama, durum...) acik.
+    if restricted {
+        return Ok(Detail {
+            record: rec, actions: Vec::new(), participants: Vec::new(), cards: Vec::new(),
+            access: Access { can_edit: false, can_edit_deadline: false }, pinned, membership,
+        });
+    }
     let actions = sqlx::query_as(
         "select id, title, status, owner_id, due_date, created_at, resolved_at
            from actions where record_id = $1
@@ -136,7 +191,6 @@ pub(crate) async fn detail_of(st: &AppState, me: &User, rec: Record) -> Result<D
     let participants = sqlx::query_scalar(
         "select user_id from record_participants where record_id = $1 order by added_at")
         .bind(rec.id).fetch_all(&st.pool).await?;
-    let can_edit = scope::can_edit_record(&st.pool, me, &rec, &st.tree).await?;
     let can_edit_deadline = can_edit && common::has_scope(st, me, "edit_deadline").await?;
     let mut cards = cards::of_record(st, me, &rec).await?;
     // Kisiye ozel sira; listede olmayan kart (yeni) sona, kendi sirasiyla.
@@ -146,10 +200,10 @@ pub(crate) async fn detail_of(st: &AppState, me: &User, rec: Record) -> Result<D
     if let Some(order) = order {
         cards.sort_by_key(|c| order.iter().position(|id| *id == c.id()).unwrap_or(usize::MAX));
     }
-    let pinned: bool = sqlx::query_scalar(
-        "select exists(select 1 from record_pins where user_id = $1 and record_id = $2)")
-        .bind(me.id).bind(rec.id).fetch_one(&st.pool).await?;
-    Ok(Detail { record: rec, actions, participants, cards, access: Access { can_edit, can_edit_deadline }, pinned })
+    Ok(Detail {
+        record: rec, actions, participants, cards,
+        access: Access { can_edit, can_edit_deadline }, pinned, membership,
+    })
 }
 
 /// Okuma herkese acik (giris yapmis her aktif kullanici): yetki DEGISTIRMEYI
@@ -299,6 +353,7 @@ pub enum RecordPatch {
     DueDate(Option<NaiveDate>),
     Title(String),
     Description(Option<String>),
+    AccessMode(String),
 }
 
 pub async fn patch(
@@ -357,6 +412,18 @@ pub async fn patch(
             ("due_date", "update records set due_date = $2 where id = $1",
              serde_json::to_value(rec.due_date).unwrap_or_default(),
              serde_json::to_value(v).unwrap_or_default())
+        }
+        RecordPatch::AccessMode(v) => {
+            // Kipi yalniz karar verenler (sorumlu, acan, admin) degistirir.
+            if !decider(&me, &rec) {
+                return Err(AppError::Forbidden);
+            }
+            if !matches!(v.as_str(), "public" | "request" | "private") {
+                return Err(AppError::BadRequest("invalid_access_mode"));
+            }
+            let old: String = sqlx::query_scalar("select access_mode from records where id = $1")
+                .bind(rec.id).fetch_one(&st.pool).await?;
+            ("access_mode", "update records set access_mode = $2 where id = $1", old.into(), v.into())
         }
         RecordPatch::Title(v) => {
             let v = common::text(Some(v), TITLE_MAX, "invalid_title")?
@@ -626,4 +693,97 @@ pub async fn set_card_order(
          on conflict (user_id, record_id) do update set card_ids = excluded.card_ids")
         .bind(me.id).bind(rec.id).bind(&b.ids).execute(&st.pool).await?;
     Ok(Json(detail_of(&st, &me, rec).await?))
+}
+
+// --- katilma (erisim kipleri) ----------------------------------------------
+
+/// `public`: aninda katilir. `request`/`private`: istek acar, sorumlu onaylar.
+/// Zaten uyeysen bir sey yapmaz (IDEMPOTENT).
+pub async fn join(
+    State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>,
+) -> Result<Json<Detail>> {
+    let rec = load(&st.pool, common::id(&raw)?).await?;
+    if scope::can_edit_record(&st.pool, &me, &rec, &st.tree).await? {
+        return Ok(Json(detail_of(&st, &me, rec).await?));
+    }
+    let mode: String = sqlx::query_scalar("select access_mode from records where id = $1")
+        .bind(rec.id).fetch_one(&st.pool).await?;
+    let mut tx = st.pool.begin().await?;
+    if mode == "public" {
+        sqlx::query(
+            "insert into record_participants (record_id, user_id, added_by) values ($1, $2, $2)
+             on conflict do nothing")
+            .bind(rec.id).bind(me.id).execute(&mut *tx).await?;
+        log(&mut tx, rec.chat_id, me.id, "joined", &rec.title, None, None).await?;
+        touch(&mut tx, rec.id).await?;
+    } else {
+        // Reddedilmis istek yeniden acilabilir; bekleyen zaten bekliyor.
+        let changed = sqlx::query(
+            "insert into record_join_requests (record_id, user_id) values ($1, $2)
+             on conflict (record_id, user_id) do update
+               set status = 'pending', created_at = now(), decided_by = null
+             where record_join_requests.status = 'denied'")
+            .bind(rec.id).bind(me.id).execute(&mut *tx).await?.rows_affected();
+        if changed > 0 {
+            log(&mut tx, rec.chat_id, me.id, "join_requested", &rec.title, None, None).await?;
+        }
+    }
+    tx.commit().await?;
+    Ok(Json(detail_of(&st, &me, rec).await?))
+}
+
+/// Kendi bekleyen istegimi geri cek.
+pub async fn cancel_join(
+    State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>,
+) -> Result<Json<Detail>> {
+    let rec = load(&st.pool, common::id(&raw)?).await?;
+    sqlx::query("delete from record_join_requests where record_id = $1 and user_id = $2")
+        .bind(rec.id).bind(me.id).execute(&st.pool).await?;
+    Ok(Json(detail_of(&st, &me, rec).await?))
+}
+
+#[derive(Deserialize)]
+pub struct Decision {
+    approve: bool,
+}
+
+/// Karar: sorumlu, kaydi acan ya da admin. Onay kisiyi katilimci yapar.
+pub async fn decide_join(
+    State(st): State<AppState>, CurrentUser(me): CurrentUser,
+    Path((raw, user)): Path<(String, String)>, Body(b): Body<Decision>,
+) -> Result<Json<Detail>> {
+    let rec = load(&st.pool, common::id(&raw)?).await?;
+    if !decider(&me, &rec) {
+        return Err(AppError::Forbidden);
+    }
+    let uid = common::id(&user)?;
+    let name: String = sqlx::query_scalar(
+        "select u.name from record_join_requests r join users u on u.id = r.user_id
+          where r.record_id = $1 and r.user_id = $2 and r.status = 'pending'")
+        .bind(rec.id).bind(uid).fetch_optional(&st.pool).await?.ok_or(AppError::NotFound)?;
+    let mut tx = st.pool.begin().await?;
+    if b.approve {
+        sqlx::query("delete from record_join_requests where record_id = $1 and user_id = $2")
+            .bind(rec.id).bind(uid).execute(&mut *tx).await?;
+        sqlx::query(
+            "insert into record_participants (record_id, user_id, added_by) values ($1, $2, $3)
+             on conflict do nothing")
+            .bind(rec.id).bind(uid).bind(me.id).execute(&mut *tx).await?;
+        log(&mut tx, rec.chat_id, me.id, "join_approved", &name, None, None).await?;
+        touch(&mut tx, rec.id).await?;
+    } else {
+        sqlx::query(
+            "update record_join_requests set status = 'denied', decided_by = $3
+              where record_id = $1 and user_id = $2")
+            .bind(rec.id).bind(uid).bind(me.id).execute(&mut *tx).await?;
+    }
+    tx.commit().await?;
+    Ok(Json(detail_of(&st, &me, rec).await?))
+}
+
+/// Gizli kayit mi ve ben uye degil miyim: sohbet/kart/oy gibi uc noktalar bunu sorar.
+pub(crate) async fn is_restricted(st: &AppState, me: &User, rec: &Record) -> Result<bool> {
+    let mode: String = sqlx::query_scalar("select access_mode from records where id = $1")
+        .bind(rec.id).fetch_one(&st.pool).await?;
+    Ok(mode == "private" && !scope::can_edit_record(&st.pool, me, rec, &st.tree).await?)
 }

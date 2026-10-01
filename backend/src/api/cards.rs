@@ -379,6 +379,9 @@ pub async fn signup(
     Body(b): Body<SignupIn>,
 ) -> Result<Json<Detail>> {
     let (id, t, rec) = load(&st, &raw).await?;
+    if records::is_restricted(&st, &me, &rec).await? {
+        return Err(AppError::Forbidden);
+    }
     let t = t.ok_or(AppError::BadRequest("invalid_card_type"))?;
     let key = me.id.to_string();
     match b.answer {
@@ -417,6 +420,9 @@ pub async fn vote(
     Body(b): Body<VoteIn>,
 ) -> Result<Json<Detail>> {
     let (id, t, rec) = load(&st, &raw).await?;
+    if records::is_restricted(&st, &me, &rec).await? {
+        return Err(AppError::Forbidden);
+    }
     if !t.is_some_and(|t| t.poll) {
         return Err(AppError::BadRequest("invalid_card_type"));
     }
