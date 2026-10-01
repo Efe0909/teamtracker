@@ -203,6 +203,8 @@ pub enum UserOp {
     RevokeRole(Uuid),
     GrantNode(Uuid),
     RevokeNode(Uuid),
+    /// Baskasi adina profil fotografi (yonetici yukler); null kaldirir.
+    Avatar(Option<Uuid>),
 }
 
 pub async fn patch_user(
@@ -296,6 +298,21 @@ pub async fn patch_user(
                  on conflict do nothing")
                 .bind(id).bind(node).bind(me.id).execute(&mut *tx).await?.rows_affected();
             (n > 0).then_some(("scope_granted", Some(format!("dal: {name}"))))
+        }
+        UserOp::Avatar(photo) => {
+            // Ek benim yukledigim, silinmemis olmali. Guvenlik olayi degil: kayit yok.
+            if let Some(a) = photo {
+                let ok: bool = sqlx::query_scalar(
+                    "select exists(select 1 from attachments
+                                    where id = $1 and uploader_id = $2 and deleted_at is null)")
+                    .bind(a).bind(me.id).fetch_one(&mut *tx).await?;
+                if !ok {
+                    return Err(AppError::BadRequest("invalid_avatar"));
+                }
+            }
+            sqlx::query("update users set avatar_id = $2 where id = $1")
+                .bind(id).bind(photo).execute(&mut *tx).await?;
+            None
         }
         UserOp::RevokeNode(node) => {
             let name = node_name(&st, node)?;

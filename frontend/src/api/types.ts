@@ -375,7 +375,8 @@ export interface AdminView {
 export type UserOp =
   | { op: "active" | "admin"; value: boolean }
   | { op: "grant_scope" | "revoke_scope"; value: string }
-  | { op: "grant_role" | "revoke_role" | "grant_node" | "revoke_node"; value: Uuid };
+  | { op: "grant_role" | "revoke_role" | "grant_node" | "revoke_node"; value: Uuid }
+  | { op: "avatar"; value: Uuid | null };
 
 export interface TreeView {
   can_add_root: boolean;

@@ -10,8 +10,8 @@ import type { AdminPerson, AdminRole, AdminView, UserOp } from "../../api/types"
 import { ago, SCOPE } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
 import { Icon } from "../../ui/icons";
-import { Avatar, Button, Empty, Loading, Picker as UiPicker, Req, Segmented, Tag, ui, useToast, type Option } from "../../ui/ui";
-import { EditableAvatar } from "../../features/profile/EditableAvatar";
+import { Button, Empty, Loading, Picker as UiPicker, Req, Segmented, Tag, ui, useToast, type Option } from "../../ui/ui";
+import { AdminAvatar, EditableAvatar } from "../../features/profile/EditableAvatar";
 import { useStored } from "../../lib/stored";
 import { AdminActivity } from "./AdminActivity";
 import { ErrorScreen } from "../errors/ErrorScreen";
@@ -132,9 +132,10 @@ function PersonRow({ p, v, roleName }: { p: AdminPerson; v: AdminView; roleName:
   return (
     <li className={s.person}>
       <div className={s.personHead}>
-        {L.user(p.id) !== undefined && p.id === L.me.id
+        {p.id === L.me.id
           ? <EditableAvatar user={L.me} size={32} />
-          : <Avatar user={{ name: p.name, color: p.color, last_seen_at: p.last_seen_at }} size={32} />}
+          : <AdminAvatar user={L.user(p.id) ?? { ...L.me, id: p.id, name: p.name, color: p.color, avatar_id: null }} size={32}
+              busy={m.isPending} onPick={(a) => run({ op: "avatar", value: a })} />}
         <div>
           <b>{p.name}</b> <span className={s.dim}>{p.email}</span>
           <div className={s.dim}>
