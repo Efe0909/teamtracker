@@ -45,6 +45,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/records/{id}/cards", post(cards::create))
         .route("/api/cards/{id}", patch(cards::patch).delete(cards::delete))
         .route("/api/cards/{id}/signup", put(cards::signup))
+        .route("/api/cards/{id}/vote", put(cards::vote))
         .route("/api/cards/{id}/attachments", post(cards::attach))
         .route("/api/actions/mine", get(records::my_actions))
         .route("/api/actions/{id}", patch(records::patch_action))
