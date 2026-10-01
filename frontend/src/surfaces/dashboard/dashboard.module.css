@@ -556,6 +556,19 @@ a.row:hover {
   font-size: var(--fs-sm);
   color: var(--dim);
 }
+/* Sag sutunlar sabit genisliktir: avatar+ad ve zaman satirlar arasi hizali kalir. */
+.rowWho {
+  flex: none;
+  width: 132px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.rowTime {
+  width: 72px;
+  text-align: right;
+}
 .soonList {
   display: flex;
   flex-wrap: wrap;

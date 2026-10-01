@@ -128,8 +128,10 @@ export function Home() {
                       <b>{r.title}</b>
                       <span>{L.path(r.unit_id).join(" › ")}</span>
                     </span>
-                    <Who user={L.user(r.owner_id)} empty="Sorumlusuz" />
-                    <span className={s.rowMeta}>{ago(r.updated_at)}</span>
+                    <span className={s.rowWho}>
+                      <Who user={L.user(r.owner_id)} empty="Sorumlusuz" />
+                    </span>
+                    <span className={`${s.rowMeta} ${s.rowTime}`}>{ago(r.updated_at)}</span>
                   </Link>
                 </li>
               ))}
