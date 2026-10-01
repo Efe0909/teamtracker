@@ -526,3 +526,45 @@ pub async fn my_actions(
           order by a.due_date nulls last, a.created_at")
         .bind(me.id).fetch_all(&st.pool).await?))
 }
+
+// --- katilimcilar ----------------------------------------------------------
+
+/// Kayda kisi ekle (IDEMPOTENT). Yazma yetkisi ister; pasif kullanici eklenmez.
+pub async fn add_participant(
+    State(st): State<AppState>, CurrentUser(me): CurrentUser,
+    Path((raw, user)): Path<(String, String)>,
+) -> Result<Json<Detail>> {
+    let rec = load(&st.pool, common::id(&raw)?).await?;
+    require_edit(&st, &me, &rec).await?;
+    let uid = common::id(&user)?;
+    check_user(&st.pool, Some(uid)).await?;
+    let mut tx = st.pool.begin().await?;
+    let added = sqlx::query(
+        "insert into record_participants (record_id, user_id, added_by) values ($1, $2, $3)
+         on conflict do nothing")
+        .bind(rec.id).bind(uid).bind(me.id).execute(&mut *tx).await?.rows_affected();
+    if added > 0 {
+        touch(&mut tx, rec.id).await?;
+    }
+    tx.commit().await?;
+    Ok(Json(detail_of(&st, &me, rec).await?))
+}
+
+/// Kayittan cikar (IDEMPOTENT). Sorumlu/acan kisi katilimci listesinden
+/// cikarilsa da kayitla iliskisi kalir.
+pub async fn remove_participant(
+    State(st): State<AppState>, CurrentUser(me): CurrentUser,
+    Path((raw, user)): Path<(String, String)>,
+) -> Result<Json<Detail>> {
+    let rec = load(&st.pool, common::id(&raw)?).await?;
+    require_edit(&st, &me, &rec).await?;
+    let uid = common::id(&user)?;
+    let mut tx = st.pool.begin().await?;
+    let gone = sqlx::query("delete from record_participants where record_id = $1 and user_id = $2")
+        .bind(rec.id).bind(uid).execute(&mut *tx).await?.rows_affected();
+    if gone > 0 {
+        touch(&mut tx, rec.id).await?;
+    }
+    tx.commit().await?;
+    Ok(Json(detail_of(&st, &me, rec).await?))
+}
