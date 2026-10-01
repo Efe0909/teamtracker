@@ -2,13 +2,13 @@
 
 import { useState, type ReactNode } from "react";
 import { errorText } from "../../api/client";
-import { useAddAction, usePatchAction, usePatchRecord } from "../../api/hooks";
+import { useAddAction, useParticipant, usePatchAction, usePatchRecord } from "../../api/hooks";
 import type { Action, ActionPatch, RecordDetail } from "../../api/types";
 import { ACTION_STATUS, ACTION_STATUS_ORDER, ago, isDone } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
 import { useStored } from "../../lib/stored";
 import { Icon } from "../../ui/icons";
-import { Avatar, Button, cx, Dialog, IconButton, KindTag, Picker, PriorityTag, Status, ui, useToast, Who, type Option } from "../../ui/ui";
+import { Avatar, Button, cx, Dialog, IconButton, KindTag, Picker, Popover, PriorityTag, Status, ui, useToast, Who, type Option } from "../../ui/ui";
 import { DueField } from "./fields";
 import s from "./record.module.css";
 
@@ -143,13 +143,17 @@ export function BallLine({ d }: { d: RecordDetail }) {
   );
 }
 
-/** Basliktaki katilimci avatarlari; 4'ten fazlasi +N olur. */
+/** Basliktaki katilimci avatarlari; 4'ten fazlasi +N. Yazma yetkisi varsa
+ *  tiklaninca kisi ekle/cikar listesi acilir. */
 export function ParticipantStack({ d }: { d: RecordDetail }) {
   const L = useLookup();
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const m = useParticipant(d.record.id);
+  const toast = useToast();
   const shown = d.participants.slice(0, 4);
   const rest = d.participants.length - shown.length;
-  if (d.participants.length === 0) return null;
-  return (
+  const stack = (
     <span className={s.stack} aria-label={`${d.participants.length} katılımcı`}>
       {shown.map((id) => (
         <span key={id} title={L.user(id)?.name} className={s.stackItem}>
@@ -157,7 +161,31 @@ export function ParticipantStack({ d }: { d: RecordDetail }) {
         </span>
       ))}
       {rest > 0 && <span className={s.stackMore}>+{rest}</span>}
+      {d.access.can_edit && <span className={s.stackAdd}><Icon name="plus" size={12} /></span>}
     </span>
+  );
+  if (!d.access.can_edit) return d.participants.length === 0 ? null : stack;
+  const inRecord = new Set(d.participants);
+  const people = L.meta.users.filter((u) => u.name.toLocaleLowerCase("tr").includes(q.trim().toLocaleLowerCase("tr")));
+  return (
+    <Popover open={open} onOpenChange={setOpen}
+      trigger={<button type="button" className={s.stackBtn} aria-label="Katılımcıları düzenle">{stack}</button>}>
+      <div className={s.people}>
+        <input className={ui.input} placeholder="Kişi ara…" aria-label="Kişi ara" value={q} onChange={(e) => setQ(e.target.value)} />
+        <ul>
+          {people.map((u) => (
+            <li key={u.id}>
+              <label className={ui.check}>
+                <input type="checkbox" checked={inRecord.has(u.id)} disabled={m.isPending}
+                  onChange={(e) => m.mutate({ user: u.id, on: e.target.checked },
+                    { onError: (x) => toast({ text: errorText(x), error: true }) })} />
+                <Avatar user={u} size={20} /> {u.name}
+              </label>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </Popover>
   );
 }
 

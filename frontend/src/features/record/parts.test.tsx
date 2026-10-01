@@ -2,10 +2,12 @@
 // yalniz masaustundeydi; RecordHead iki yuzde de kullanildigi icin burada da
 // gorunur olmasi kullanici karariydi (spec/90-geri-tasima.md).
 
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import type { Meta, RecordDetail } from "../../api/types";
 import { LookupProvider } from "../../lib/lookup";
+import { ToastProvider } from "../../ui/ui";
 import { RecordHead } from "./parts";
 
 const META: Meta = {
@@ -44,9 +46,13 @@ function detail(createdBy: string): RecordDetail {
 
 function renderHead(createdBy: string) {
   return render(
-    <LookupProvider meta={META}>
-      <RecordHead d={detail(createdBy)} />
-    </LookupProvider>,
+    <QueryClientProvider client={new QueryClient()}>
+      <ToastProvider>
+        <LookupProvider meta={META}>
+          <RecordHead d={detail(createdBy)} />
+        </LookupProvider>
+      </ToastProvider>
+    </QueryClientProvider>,
   );
 }
 

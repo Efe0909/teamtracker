@@ -144,6 +144,16 @@ export function usePatchRecord(id: Uuid) {
   });
 }
 
+/** Katilimci ekle (PUT) / cikar (DELETE); yanit guncel kayittir. */
+export function useParticipant(recordId: Uuid) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (w: { user: Uuid; on: boolean }) =>
+      request<RecordDetail>(w.on ? "PUT" : "DELETE", `/api/records/${recordId}/participants/${w.user}`),
+    onSuccess: (d) => afterRecordWrite(qc, d),
+  });
+}
+
 export function useAddAction(recordId: Uuid) {
   const qc = useQueryClient();
   return useMutation({
