@@ -5,12 +5,13 @@
 import { useState } from "react";
 import { errorText } from "../../api/client";
 import { useCreateRecord } from "../../api/hooks";
-import type { Priority, RecordKind, Uuid } from "../../api/types";
+import type { AccessMode, Priority, RecordKind, Uuid } from "../../api/types";
 import { CARD, CARD_TYPES, type CardType } from "../../lib/cards";
 import { KIND, PRIORITY, PRIORITY_ORDER } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
 import { Icon } from "../../ui/icons";
 import { Button, Picker, PriorityTag, TeamName, ui, Who } from "../../ui/ui";
+import { ACCESS } from "./Join";
 import s from "./form.module.css";
 
 export function NewRecordForm(props: {
@@ -31,6 +32,7 @@ export function NewRecordForm(props: {
   const [owner, setOwner] = useState<string | null>(L.me.id);
   const [priority, setPriority] = useState<Priority>("medium");
   const [desc, setDesc] = useState("");
+  const [access, setAccess] = useState<AccessMode>("public");
 
   return (
     <form
@@ -49,6 +51,7 @@ export function NewRecordForm(props: {
             owner_id: owner,
             priority,
             card_types: cards,
+            access_mode: access,
           },
           { onSuccess: (r) => props.onCreated(r.id), onError: (x) => setErr(errorText(x)) },
         );
@@ -91,6 +94,10 @@ export function NewRecordForm(props: {
             ...L.plainTeams.map((t) => ({ value: t.id as string | null, label: t.name, render: <TeamName team={t} /> })),
           ]}>
           {team === null ? <><Icon name="plus" size={13} /> Takım</> : <TeamName team={L.team(team)} />}
+        </Picker>
+        <Picker look="chip" active={access !== "public"} label="Erişim" value={access} onChange={setAccess}
+          options={(Object.keys(ACCESS) as AccessMode[]).map((v) => ({ value: v, label: ACCESS[v].label, hint: ACCESS[v].hint }))}>
+          <Icon name="lock" size={13} /> {ACCESS[access].label}
         </Picker>
         {/* Pillar ORTOGONAL (KNOW-261): kaydin atasi olmak zorunda degil, ayri secilir. */}
         {L.pillars.length > 0 && (

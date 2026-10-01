@@ -233,6 +233,8 @@ export interface NewRecord {
   priority: Priority;
   /** Acilista bos kart bloklari (kart secici). */
   card_types: string[];
+  /** Erisim kipi; kayit sayfasindan sonra da degisir. */
+  access_mode: AccessMode;
 }
 
 export interface NewAction {

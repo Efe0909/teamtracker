@@ -294,6 +294,9 @@ pub struct NewRecord {
     /// Acilista bos kart bloklari (R4-F12); doldurmasi kayit sayfasinda.
     #[serde(default)]
     card_types: Vec<String>,
+    /// public | request | private; bos = public.
+    #[serde(default)]
+    access_mode: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -316,17 +319,21 @@ pub async fn create(
     check_pillar(&st.pool, b.pillar_id).await?;
     check_team(&st.pool, b.team_id).await?;
     check_user(&st.pool, b.owner_id).await?;
+    let access_mode = b.access_mode.as_deref().unwrap_or("public");
+    if !matches!(access_mode, "public" | "request" | "private") {
+        return Err(AppError::BadRequest("invalid_access_mode"));
+    }
 
     let mut tx = st.pool.begin().await?;
     let chat_id: Uuid = sqlx::query_scalar("insert into chats default values returning id")
         .fetch_one(&mut *tx).await?;
     let id: Uuid = sqlx::query_scalar(
         "insert into records (unit_id, pillar_id, team_id, chat_id, kind, title, description,
-                              priority, owner_id, created_by)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) returning id")
+                              priority, owner_id, created_by, access_mode)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) returning id")
         .bind(b.unit_id).bind(b.pillar_id).bind(b.team_id).bind(chat_id).bind(b.kind)
         .bind(&title).bind(description).bind(b.priority.unwrap_or(Priority::Medium))
-        .bind(b.owner_id).bind(me.id)
+        .bind(b.owner_id).bind(me.id).bind(access_mode)
         .fetch_one(&mut *tx).await?;
     log(&mut tx, chat_id, me.id, "created", &title, None,
         change(serde_json::Value::Null, b.owner_id)).await?;
