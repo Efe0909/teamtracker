@@ -115,6 +115,17 @@ impl Config {
         })
     }
 
+    /// Davet postasindaki baglantilar: yapilandirilmis host'lar, yoksa yerel gelistirme.
+    pub fn app_url(&self) -> String {
+        self.url_of(&self.host_app, "app.localhost:5173")
+    }
+    pub fn dashboard_url(&self) -> String {
+        self.url_of(&self.host_dashboard, "dashboard.localhost:5173")
+    }
+    fn url_of(&self, host: &str, dev: &str) -> String {
+        if host.is_empty() { format!("http://{dev}") } else { format!("https://{host}") }
+    }
+
     pub fn in_production(&self) -> bool { self.env == Env::Production }
     pub fn fake_identity(&self) -> bool { self.auth_mode == AuthMode::Fake }
 

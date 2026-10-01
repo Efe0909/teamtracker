@@ -116,7 +116,7 @@ export function clock(t: IsoTime): string {
   return timeFmt.format(new Date(t));
 }
 
-/** Bildirim kademesi: `label` ayar listesinde, `short` zil ipucunda. Sunucu: push.rs NOTIFY_LEVELS. */
+/** Bildirim kademesi: `label` ayar listesinde, `short` zil ipucunda. Karar sunucuda: backend push.rs `decide`. */
 export const NOTIFY: Record<"all" | "mentions" | "none", { label: string; short: string }> = {
   all: { label: "Her hareket", short: "her hareket" },
   mentions: { label: "Yalnızca anıldığımda (@adım, @all, @here, @team)", short: "yalnız anmalar" },

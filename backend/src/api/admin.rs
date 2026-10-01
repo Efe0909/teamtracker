@@ -185,6 +185,9 @@ pub async fn add_user(
     if added == 0 {
         return Err(AppError::Conflict("user_exists"));
     }
+    // Otomatik davet postasi (kuyruga; gonderici henuz yok).
+    let mail = crate::mail::invite(&name, &email, &st.cfg.app_url(), &st.cfg.dashboard_url());
+    crate::mail::enqueue(&st.pool, "invite", &mail).await?;
     view(&st.pool, &me).await
 }
 

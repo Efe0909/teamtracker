@@ -1,13 +1,5 @@
-//! Web push. TEK KAPI: bildirim karari burada, `users.notify_level` burada
-//! okunur. Kademeler gonderim aninda uygulanir — abonelik durur, gonderim
-//! durur.
-
-/// Ekranda gorunen kademe etiketleri. Anahtar Ingilizce, etiket Turkce.
-pub const NOTIFY_LEVELS: &[(&str, &str)] = &[
-    ("all", "Her hareket — kartlarımdaki her şey"),
-    ("mentions", "Yalnızca anıldığımda (@adım, @all, @here, @team)"),
-    ("none", "Hiçbiri — bildirim gönderme"),
-];
+//! Bildirim karari. TEK KAPI: `decide` hem uygulama ici listeyi hem push'u
+//! belirler; kademe etiketleri on yuzde (`lib/labels.ts` NOTIFY).
 
 use crate::models::enums::NotifyLevel;
 
