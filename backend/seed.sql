@@ -1,7 +1,7 @@
 -- OTOMATIK URETILDI: tools/gen_seed.py. ELLE DUZENLEME — kaynak
 -- shared/seed.py (Python tarafi). VAROLAN VERIYI SILER.
 
-truncate users, nodes, teams, team_members, chats, records,
+truncate users, nodes, teams, team_members, team_nodes, pillars, chats, records,
          record_participants, actions, cards, messages, activity
   restart identity cascade;
 
@@ -45,6 +45,24 @@ insert into team_members (team_id,user_id,role) values ('b7d5cc5f-ef59-594b-a67a
 insert into team_members (team_id,user_id,role) values ('fc8b1cd5-7c9f-53c6-a2cc-978a9bec79a5','7a995bfb-9114-538d-b999-14fa104f12a6','member');
 insert into team_members (team_id,user_id,role) values ('fc8b1cd5-7c9f-53c6-a2cc-978a9bec79a5','075deca4-2769-59ea-ace4-039eed00ca23','member');
 
+-- === takim <-> agac baglari (team_nodes, spec/22) ===
+insert into team_nodes (team_id,node_id) values ('b7d5cc5f-ef59-594b-a67a-6a356fd372f3','57494550-15de-5aa6-9802-a5252f8f1e4a');
+insert into team_nodes (team_id,node_id) values ('fc8b1cd5-7c9f-53c6-a2cc-978a9bec79a5','dd5ed529-e44d-54f6-afba-b218e4cbfaf8');
+insert into team_nodes (team_id,node_id) values ('fc8b1cd5-7c9f-53c6-a2cc-978a9bec79a5','06bae0c1-8cee-56db-bcfa-bdd35369822b');
+insert into team_nodes (team_id,node_id) values ('2ebfe4f2-d0cc-5e82-9579-059601fe9275','3db083eb-480d-5074-a404-3ccaef898c23');
+
+-- === pillar'lar (her birinin OZEL takimi + sohbeti) ===
+insert into chats (id) values ('e06edac5-43c7-54fe-bb16-709e29993e6c');
+insert into teams (id,name,description,chat_id,color) values ('d615f71d-4e38-5eb1-b9ec-fa10341c9d16','Güvenlik','İş güvenliği pillar''ı.','e06edac5-43c7-54fe-bb16-709e29993e6c','#d13350');
+insert into pillars (id,name,description,color,team_id,sort_order) values ('d8f95951-d7a9-51a0-9010-0aa28a8115c8','Güvenlik','İş güvenliği pillar''ı.','#d13350','d615f71d-4e38-5eb1-b9ec-fa10341c9d16',0);
+insert into chats (id) values ('f8d3a04f-804f-5813-85bc-6bdd53c0f89b');
+insert into teams (id,name,description,chat_id,color) values ('5aaca90a-6a2c-5366-8b7d-4af9b8039dc2','Kalite','Kalite pillar''ı.','f8d3a04f-804f-5813-85bc-6bdd53c0f89b','#2c74ad');
+insert into pillars (id,name,description,color,team_id,sort_order) values ('b3ee4ed6-ec9c-52ff-8cd4-326d0d6e31dc','Kalite','Kalite pillar''ı.','#2c74ad','5aaca90a-6a2c-5366-8b7d-4af9b8039dc2',1);
+insert into team_members (team_id,user_id,role) values ('d615f71d-4e38-5eb1-b9ec-fa10341c9d16','7a995bfb-9114-538d-b999-14fa104f12a6','lead');
+insert into team_members (team_id,user_id,role) values ('d615f71d-4e38-5eb1-b9ec-fa10341c9d16','4f5c8d98-3962-5a7d-b38f-c4a7b023d676','member');
+insert into team_members (team_id,user_id,role) values ('5aaca90a-6a2c-5366-8b7d-4af9b8039dc2','075deca4-2769-59ea-ace4-039eed00ca23','lead');
+insert into team_members (team_id,user_id,role) values ('5aaca90a-6a2c-5366-8b7d-4af9b8039dc2','7a995bfb-9114-538d-b999-14fa104f12a6','mentor');
+
 -- === kayitlar ===
 -- records.chat_id NOT NULL: sohbet kayitla AYNI islemde dogar.
 insert into chats (id) values ('fb54605c-bdd8-5c5b-9415-a1b83d9eedd8');
@@ -66,6 +84,11 @@ insert into record_participants (record_id,user_id) values ('f78ab92f-f2a8-5002-
 insert into chats (id) values ('77a5053c-6b77-58a0-a6f8-4d890a9787ff');
 insert into records (id,unit_id,team_id,chat_id,kind,title,description,status,priority,owner_id,created_by,due_date,created_at,updated_at) values ('2e1b1635-e910-5381-94c7-6779396b5de0','dd5ed529-e44d-54f6-afba-b218e4cbfaf8','fc8b1cd5-7c9f-53c6-a2cc-978a9bec79a5','77a5053c-6b77-58a0-a6f8-4d890a9787ff','issue','Tedarikçi teklifleri karşılaştırılamıyor','Üç teklif farklı formatta geldi; kıyas tablosu çıkarılamıyor.','open','medium','075deca4-2769-59ea-ace4-039eed00ca23','075deca4-2769-59ea-ace4-039eed00ca23',null,timestamptz '2026-09-13T04:31:03.408447+00:00',timestamptz '2026-09-18T04:31:03.408448+00:00');
 insert into record_participants (record_id,user_id) values ('2e1b1635-e910-5381-94c7-6779396b5de0','075deca4-2769-59ea-ace4-039eed00ca23');
+
+-- === kayit <-> pillar (ortogonal) ===
+update records set pillar_id = 'd8f95951-d7a9-51a0-9010-0aa28a8115c8' where id = '9305276f-2d38-518a-adb9-ef4cbca5051b';
+update records set pillar_id = 'b3ee4ed6-ec9c-52ff-8cd4-326d0d6e31dc' where id = 'e7819ffb-890e-57cf-a535-a34db36d5af3';
+update records set pillar_id = 'b3ee4ed6-ec9c-52ff-8cd4-326d0d6e31dc' where id = '2e1b1635-e910-5381-94c7-6779396b5de0';
 
 -- === eylemler ===
 insert into actions (record_id,title,owner_id,created_by,status,due_date,created_at) values ('556094c3-7ade-5964-988d-a848ac5778ef','CFO vekalet onayını IT üzerinden tamamlat','7a995bfb-9114-538d-b999-14fa104f12a6','4f5c8d98-3962-5a7d-b38f-c4a7b023d676','open',date '2026-09-22',timestamptz '2026-09-09T04:31:03.408452+00:00');

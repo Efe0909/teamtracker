@@ -47,12 +47,12 @@ sql_enum!(
 );
 
 sql_enum!(
-    /// `nodes.node_type`. `UNIT_TYPES` = bu kumeden `Team` ve `Pillar` cikarilmis
-    /// hali — kayit onlara `unit_id` ile baglanmaz (spec/21-sema-v2.md §10).
+    /// `nodes.node_type`. Takim ve pillar agactan CIKTI (spec/22): agac yalniz
+    /// yapi, her aktif dugum birimdir.
     /// Buradaki `Task`, `RecordKind::Task` ile AYNI SEY DEGIL: biri agacta
     /// yapisal bir seviye, digeri kaydin turu.
     NodeType {
-        Cell => "cell", Machine => "machine", Pillar => "pillar", Team => "team",
+        Cell => "cell", Machine => "machine",
         Task => "task", Step => "step", Operational => "operational", Generic => "generic",
     }
 );
@@ -64,8 +64,6 @@ impl NodeType {
         match self {
             NodeType::Cell => "Cell",               // IWS hucresi / operasyonel birim
             NodeType::Machine => "Makine",          // atomik fonksiyonel birim
-            NodeType::Pillar => "Pillar",           // IWS pillar'i
-            NodeType::Team => "Takım",              // Takimlar sayfasinda kart uretir
             NodeType::Task => "Görev",
             NodeType::Step => "Adım",
             NodeType::Operational => "Operational", // davranis YOK — IWS kabi
@@ -74,7 +72,7 @@ impl NodeType {
     }
 
     pub const ALL: &'static [NodeType] = &[
-        NodeType::Cell, NodeType::Machine, NodeType::Pillar, NodeType::Team,
+        NodeType::Cell, NodeType::Machine,
         NodeType::Task, NodeType::Step, NodeType::Operational, NodeType::Generic,
     ];
 
@@ -84,13 +82,6 @@ impl NodeType {
 
     /// Yalniz KOKTE durabilen turler.
     pub const ROOT_ONLY: &'static [NodeType] = &[NodeType::Cell];
-
-    /// `records.unit_id` bunlardan birini gosterebilir. Takim ve pillar HARIC:
-    /// kayit onlara ayri alanlarla (`team_id`, `pillar_id`) baglanir, birim
-    /// listesinde gorunmeleri kullaniciya "buraya da atayabilirim" dedirtir.
-    pub fn is_unit(self) -> bool {
-        !matches!(self, NodeType::Team | NodeType::Pillar)
-    }
 }
 
 sql_enum!(

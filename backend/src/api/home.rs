@@ -138,7 +138,7 @@ pub struct MemberIn {
     role: TeamRole,
 }
 
-async fn manage_teams(st: &AppState, me: &crate::models::user::User) -> Result<()> {
+pub(super) async fn manage_teams(st: &AppState, me: &crate::models::user::User) -> Result<()> {
     if me.is_admin || common::has_scope(st, me, "manage_teams").await? {
         Ok(())
     } else {

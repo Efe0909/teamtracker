@@ -48,7 +48,7 @@ def uid(kind, key):
 P = print
 P("-- OTOMATIK URETILDI: tools/gen_seed.py. ELLE DUZENLEME — kaynak")
 P("-- shared/seed.py (Python tarafi). VAROLAN VERIYI SILER.\n")
-P("truncate users, nodes, teams, team_members, chats, records,")
+P("truncate users, nodes, teams, team_members, team_nodes, pillars, chats, records,")
 P("         record_participants, actions, cards, messages, activity")
 P("  restart identity cascade;\n")
 
@@ -85,6 +85,31 @@ for team, user, role in ns["TEAM_MEMBERS"]:
     P(f"insert into team_members (team_id,user_id,role) values "
       f"({q(uid('t', team))},{q(uid('u', user))},{q(role)});")
 
+# spec/22: takim <-> agac N:M ve pillar'lar v1 tohumunda YOKTU; burada sabit.
+P("\n-- === takim <-> agac baglari (team_nodes, spec/22) ===")
+_team_by_name = {t[1]: t[0] for t in ns["TEAMS"]}
+for team_name, node_name in [("Maliye", "Bütçe Onayı"), ("Satın Alım", "Tedarikçi Seçimi"),
+                             ("Satın Alım", "Sevkiyat & Teslim"),
+                             ("Tasarım", "İletişim & Tanıtım")]:
+    P(f"insert into team_nodes (team_id,node_id) values "
+      f"({q(uid('t', _team_by_name[team_name]))},{q(uid('n', _by_name[node_name]))});")
+
+P("\n-- === pillar'lar (her birinin OZEL takimi + sohbeti) ===")
+PILLARS = [("guv", "Güvenlik", "İş güvenliği pillar'ı.", "#d13350", 0,
+            [("deniz", "lead"), ("selin", "member")]),
+           ("kal", "Kalite", "Kalite pillar'ı.", "#2c74ad", 1,
+            [("efe", "lead"), ("deniz", "mentor")])]
+for key, name, desc, color, order, _m in PILLARS:
+    P(f"insert into chats (id) values ({q(uid('c-team', 'p-' + key))});")
+    P(f"insert into teams (id,name,description,chat_id,color) values "
+      f"({q(uid('t', 'p-' + key))},{q(name)},{q(desc)},{q(uid('c-team', 'p-' + key))},{q(color)});")
+    P(f"insert into pillars (id,name,description,color,team_id,sort_order) values "
+      f"({q(uid('p', key))},{q(name)},{q(desc)},{q(color)},{q(uid('t', 'p-' + key))},{order});")
+for key, _n, _d, _c, _o, members in PILLARS:
+    for user, role in members:
+        P(f"insert into team_members (team_id,user_id,role) values "
+          f"({q(uid('t', 'p-' + key))},{q(uid('u', user))},{q(role)});")
+
 P("\n-- === kayitlar ===")
 P("-- records.chat_id NOT NULL: sohbet kayitla AYNI islemde dogar.")
 for it in ns["ITEMS"]:
@@ -103,6 +128,15 @@ for it in ns["ITEMS"]:
     for p in it.get("parts", []):
         P(f"insert into record_participants (record_id,user_id) values "
           f"({q(uid('r', k))},{q(uid('u', p))});")
+
+P("\n-- === kayit <-> pillar (ortogonal) ===")
+_pillar_of = {"Sevkiyat tarihi etkinlikten sonraya düşüyor": "guv",
+              "Kapak Ünitesi — tekrar eden kayıp": "kal",
+              "Tedarikçi teklifleri karşılaştırılamıyor": "kal"}
+for it in ns["ITEMS"]:
+    if it["title"] in _pillar_of:
+        P(f"update records set pillar_id = {q(uid('p', _pillar_of[it['title']]))} "
+          f"where id = {q(uid('r', it['key']))};")
 
 P("\n-- === eylemler ===")
 for rec, title, owner, status, due, by, created in ns["ACTIONS"]:

@@ -25,7 +25,7 @@ use crate::{
     db::{filters::Filters, scope},
     error::{AppError, Result},
     models::{
-        enums::{ActionStatus, NodeType, Priority, RecordKind, RecordStatus},
+        enums::{ActionStatus, Priority, RecordKind, RecordStatus},
         record::Record,
         user::User,
     },
@@ -168,24 +168,22 @@ async fn check_team(pool: &PgPool, id: Option<Uuid>) -> Result<()> {
     ok.map(|_| ()).ok_or(AppError::BadRequest("unknown_team"))
 }
 
-/// Birim: aktif, `team`/`pillar` OLMAYAN dugum (spec/21 §10).
+/// Birim: aktif dugum (agac yalniz yapi, spec/22).
 fn check_unit(st: &AppState, id: Uuid) -> Result<()> {
     let tree = common::tree(st);
     match tree.get(id) {
-        Some(n) if n.is_active && n.node_type.is_unit() => Ok(()),
+        Some(n) if n.is_active => Ok(()),
         _ => Err(AppError::BadRequest("invalid_unit")),
     }
 }
 
-/// Pillar ORTOGONAL: kaydin atasi olmak zorunda degil, ama `pillar` tipli
-/// bir dugum OLMAK zorunda.
-fn check_pillar(st: &AppState, id: Option<Uuid>) -> Result<()> {
+/// Pillar ORTOGONAL: kaydin atasi olmak zorunda degil, ama var ve aktif
+/// bir `pillars` satiri olmali.
+async fn check_pillar(pool: &PgPool, id: Option<Uuid>) -> Result<()> {
     let Some(id) = id else { return Ok(()) };
-    let tree = common::tree(st);
-    match tree.get(id) {
-        Some(n) if n.node_type == NodeType::Pillar => Ok(()),
-        _ => Err(AppError::BadRequest("invalid_pillar")),
-    }
+    let ok: Option<i32> = sqlx::query_scalar("select 1 from pillars where id = $1 and is_active")
+        .bind(id).fetch_optional(pool).await?;
+    ok.map(|_| ()).ok_or(AppError::BadRequest("invalid_pillar"))
 }
 
 async fn log(
@@ -244,7 +242,7 @@ pub async fn create(
         .ok_or(AppError::BadRequest("invalid_title"))?;
     let description = common::text(b.description, TEXT_MAX, "invalid_description")?;
     check_unit(&st, b.unit_id)?;
-    check_pillar(&st, b.pillar_id)?;
+    check_pillar(&st.pool, b.pillar_id).await?;
     check_team(&st.pool, b.team_id).await?;
     check_user(&st.pool, b.owner_id).await?;
 
@@ -324,7 +322,7 @@ pub async fn patch(
              serde_json::to_value(v).unwrap_or_default())
         }
         RecordPatch::PillarId(v) => {
-            check_pillar(&st, v)?;
+            check_pillar(&st.pool, v).await?;
             ("pillar_id", "update records set pillar_id = $2 where id = $1",
              serde_json::to_value(rec.pillar_id).unwrap_or_default(),
              serde_json::to_value(v).unwrap_or_default())

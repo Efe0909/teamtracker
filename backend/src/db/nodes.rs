@@ -1,11 +1,9 @@
-//! Dugum bagimliliklari — silme ve tur kilidi yuklemleri.
+//! Dugum bagimliliklari — silme yuklemi.
 //!
-//! IKI AYRI YUKLEM, birbirinin yerine gecmez (KNOW-246):
-//!   is_virgin      -> hicbir bagimlilik yok; silmek hicbir gecmisi goturmez
-//!   has_projection -> bu dugume PK'siyle bagli projeksiyon satiri var (teams)
+//!   is_virgin -> hicbir bagimlilik yok; silmek hicbir gecmisi goturmez
 //!
-//! `is_virgin` genis, `has_projection` dar: bir cocuk, ustunun turu degisince
-//! sahipsiz KALMAZ — sahipsiz kalan, o dugume bagli projeksiyon satiridir.
+//! Takim baglari (`team_nodes`) sayilir ama bagimlilik DEGIL: baglanti silmeyi
+//! engellemez, cascade ile gider (spec/22). Onay ekrani yalniz sayiyi gosterir.
 
 use std::collections::HashMap;
 
@@ -22,7 +20,7 @@ pub struct Deps {
 
 impl Deps {
     pub fn any(&self) -> bool {
-        self.children + self.records + self.teams + self.permissions > 0
+        self.children + self.records + self.permissions > 0
     }
 }
 
@@ -37,7 +35,7 @@ pub async fn deps_by_node(pool: &PgPool) -> Result<HashMap<Uuid, Deps>, sqlx::Er
     let rows: Vec<(Uuid, String)> = sqlx::query_as(
         "  select parent_id, 'children'    from nodes where parent_id is not null
          union all select unit_id, 'records'     from records
-         union all select node_id, 'teams'       from teams where node_id is not null
+         union all select node_id, 'teams'       from team_nodes
          union all select node_id, 'permissions' from user_node_scopes")
         .fetch_all(pool)
         .await?;
@@ -57,9 +55,4 @@ pub async fn deps_by_node(pool: &PgPool) -> Result<HashMap<Uuid, Deps>, sqlx::Er
 
 pub fn is_virgin(deps: &HashMap<Uuid, Deps>, id: Uuid) -> bool {
     !deps.get(&id).map(|d| d.any()).unwrap_or(false)
-}
-
-/// Tur kilidi: projeksiyon satiri olan dugumun turu DEGISMEZ.
-pub fn has_projection(deps: &HashMap<Uuid, Deps>, id: Uuid) -> bool {
-    deps.get(&id).map(|d| d.teams > 0).unwrap_or(false)
 }
