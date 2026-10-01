@@ -1360,3 +1360,88 @@ a.row:hover {
   font-size: var(--fs-sm);
   cursor: pointer;
 }
+
+/* --- birim secici (favoriler cihazda) ---------------------------------------- */
+.unitPicker {
+  border-top: 1px solid var(--line);
+  padding: var(--s-2) var(--s-4) var(--s-3);
+}
+.unitBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  padding: var(--s-1) 0;
+}
+.favFilter,
+.unitCaret,
+.unitName,
+.star {
+  appearance: none;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--dim);
+  cursor: pointer;
+}
+.favFilter {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  font-size: var(--fs-sm);
+}
+.favFilterOn {
+  background: var(--acc-bg);
+  color: var(--acc-strong);
+}
+.unitList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 260px;
+  overflow: auto;
+}
+.unitRow {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 28px;
+}
+.unitCaret {
+  width: 18px;
+  display: inline-grid;
+  place-items: center;
+}
+.unitCaret svg {
+  transition: transform 0.12s;
+}
+.unitCaret[aria-expanded="true"] svg {
+  transform: rotate(90deg);
+}
+.unitName {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  text-align: left;
+  color: var(--txt);
+  font-size: var(--fs-md);
+}
+.unitName:hover:not(:disabled) {
+  color: var(--acc-strong);
+}
+.unitOn {
+  font-weight: 600;
+  color: var(--acc-strong);
+  cursor: default;
+}
+.starOn {
+  color: var(--warn);
+}
+.starOn svg {
+  fill: currentColor;
+}

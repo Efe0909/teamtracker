@@ -17,6 +17,7 @@ import { Icon } from "../../ui/icons";
 import { Avatar, Button, Dialog, Empty, IconButton, Link, Loading, Picker, Segmented, ui, useToast, Who } from "../../ui/ui";
 import { ErrorScreen } from "../errors/ErrorScreen";
 import { Banner } from "./Banner";
+import { UnitPicker } from "./UnitPicker";
 import s from "./dashboard.module.css";
 import { href } from "./routes";
 import { RecordTable } from "./Tasks";
@@ -253,7 +254,6 @@ function TeamNodes({ teamId }: { teamId: Uuid }) {
   const can = useCanManageTeams();
   const linked = L.team(teamId)?.node_ids ?? [];
   const fail = (e: unknown) => toast({ text: errorText(e), error: true });
-  const free = L.units.filter((n) => !linked.includes(n.id));
 
   return (
     <section className={s.surface} aria-labelledby="nodes-h">
@@ -285,12 +285,9 @@ function TeamNodes({ teamId }: { teamId: Uuid }) {
           })}
         </ul>
       )}
-      {can && free.length > 0 && (
-        <div className={s.memberAdd}>
-          <Picker label="Bağlanacak birim" value={null as string | null} placeholder="Birime bağla…" search
-            options={free.map((n) => ({ value: n.id as string | null, label: n.name, depth: n.depth }))}
-            onChange={(v) => { if (v !== null) m.mutate(teamOps.link(teamId, v), { onError: fail }); }} />
-        </div>
+      {can && (
+        <UnitPicker units={L.units} linked={linked} disabled={m.isPending}
+          onLink={(n) => m.mutate(teamOps.link(teamId, n), { onError: fail })} />
       )}
     </section>
   );
