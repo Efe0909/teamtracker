@@ -1,7 +1,8 @@
 // API hata kodu -> Turkce ileti. TEK sozluk (spec/16 §3.6).
 //
-// `satisfies Record<ApiErrorCode, string>`: Rust'a yeni kod eklenip buraya
-// yazilmazsa ApiErrorCode birligine eklendigi an derleme duser.
+// `satisfies Record<ApiErrorCode, string>`: birlige eklenen her kodun iletisi
+// olmak zorunda. Rust'a eklenip buraya hic yazilmayan kodu derleyici GORMEZ;
+// onu errors.test.ts yakalar (backend kaynagini tarar).
 
 export type ApiErrorCode =
   | "unauthorized"
@@ -46,6 +47,19 @@ export type ApiErrorCode =
   | "invalid_node"
   | "name_taken"
   | "team_is_pillar"
+  | "invalid_phone"
+  | "invalid_nickname"
+  | "invalid_birthday"
+  | "invalid_avatar"
+  | "invalid_banner"
+  | "invalid_access_mode"
+  | "invalid_options"
+  | "invalid_vote"
+  | "poll_closed"
+  | "invalid_quiet_hours"
+  | "invalid_subscription"
+  | "invalid_host"
+  | "invalid_config"
   | "network";
 
 export const ERRORS = {
@@ -91,6 +105,19 @@ export const ERRORS = {
   invalid_node: "Seçilen düğüm bulunamadı ya da pasif.",
   name_taken: "Bu adla bir takım ya da pillar zaten var.",
   team_is_pillar: "Bu takım bir pillar'ın özel takımı; adı ve silinmesi pillar sayfasından yönetilir.",
+  invalid_phone: "Telefon numarası geçersiz. Örnek: 0532 000 00 00",
+  invalid_nickname: "Takma ad en fazla 40 karakter olabilir.",
+  invalid_birthday:"Doğum günü geçersiz. Gün ve ay birlikte girilmeli.",
+  invalid_avatar: "Bu fotoğraf profil resmi olarak kullanılamaz.",
+  invalid_banner: "Bu görsel kapak olarak kullanılamaz.",
+  invalid_access_mode: "Erişim türü geçersiz.",
+  invalid_options: "Seçenekler geçersiz. Boş ya da çok uzun seçenek olamaz.",
+  invalid_vote: "Oy geçersiz. Seçimini kontrol et.",
+  poll_closed: "Oylama kapandı.",
+  invalid_quiet_hours: "Sessiz saatler geçersiz. Başlangıç ve bitiş birlikte girilmeli.",
+  invalid_subscription: "Bildirim aboneliği kurulamadı. Sayfayı yenileyip tekrar dene.",
+  invalid_host: "Bu adresten giriş yapılamıyor.",
+  invalid_config: "Giriş ayarları eksik. Yöneticiye haber ver.",
   network: "Sunucuya ulaşılamadı. Bağlantını kontrol et.",
 } satisfies Record<ApiErrorCode, string>;
 

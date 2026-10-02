@@ -10,7 +10,17 @@ import { Icon } from "../../ui/icons";
 import { Avatar, Button, Dialog, Req, ui, useToast } from "../../ui/ui";
 import s from "./profile.module.css";
 
-const MONTHS = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
+/** Yazarken telefon: yalniz rakam, basta hep 0, `0532 000 00 00` gruplari.
+ *  Kullanicinin bosluk/tire yazmasi yok sayilir; `+90` ile yapistirilan da 0'a doner. */
+export function formatPhone(v: string): string {
+  let d = v.replace(/\D/g, "");
+  if (v.trimStart().startsWith("+90")) d = d.slice(2);
+  d = `0${d.replace(/^0+/, "")}`.slice(0, 11);
+  return [d.slice(0, 4), d.slice(4, 7), d.slice(7, 9), d.slice(9, 11)].filter(Boolean).join(" ");
+}
+const PHONE_PATTERN = "0\\d{3} \\d{3} \\d{2} \\d{2}";
+
+const MONTHS =["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
 
 export function ProfileDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const L = useLookup();
@@ -31,7 +41,7 @@ function ProfileForm({ onDone }: { onDone: () => void }) {
   const toast = useToast();
   const file = useRef<HTMLInputElement>(null);
   const [nickname, setNickname] = useState(me.nickname ?? "");
-  const [phone, setPhone] = useState(me.phone ?? "");
+  const [phone, setPhone] = useState(me.phone ?? "0");
   const [day, setDay] = useState(me.birth_day?.toString() ?? "");
   const [month, setMonth] = useState(me.birth_month?.toString() ?? "");
   const [year, setYear] = useState(me.birth_year?.toString() ?? "");
@@ -86,7 +96,9 @@ function ProfileForm({ onDone }: { onDone: () => void }) {
       </label>
       <label className={ui.field}>
         <span>Telefon<Req /></span>
-        <input className={ui.input} type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} required
+        {/* Kayitli eski bicimli numara dokunulmadikca kaydi engellemez. */}
+        <input className={ui.input} type="tel" inputMode="numeric" value={phone} onChange={(e) => setPhone(formatPhone(e.target.value))}
+          required pattern={phone === me.phone ? undefined : PHONE_PATTERN} title="0532 000 00 00 biçiminde 11 hane"
           placeholder="0532 000 00 00" autoComplete="tel" />
       </label>
       <fieldset className={ui.field}>
