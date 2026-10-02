@@ -210,6 +210,10 @@ pub async fn link_node(
         sqlx::query_scalar("select name from nodes where id = $1 and is_active")
             .bind(node).fetch_optional(&mut *tx).await?
             .ok_or(AppError::BadRequest("invalid_node"))?;
+    // Takim yalniz birime baglanir (spec/74 §4.7).
+    if !crate::refdata::under(&common::tree(&st), node, crate::refdata::UNITS) {
+        return Err(AppError::BadRequest("unit_outside_units"));
+    }
     let inserted = sqlx::query(
         "insert into team_nodes (team_id, node_id, linked_by) values ($1, $2, $3)
          on conflict do nothing")

@@ -14,7 +14,7 @@ use crate::{
     auth::CurrentUser,
     db,
     error::Result,
-    models::enums::NodeType,
+    models::enums::{NodeType, Shape},
     state::AppState,
 };
 
@@ -38,6 +38,8 @@ struct MeInfo {
     team_ids: Vec<Uuid>,
     /// Telefon zorunlu: bos ise on yuz profil penceresini acar.
     profile_complete: bool,
+    /// Secicilerdeki favori dugumler (spec/74 §6), eklenme sirasinda.
+    favorite_nodes: Vec<Uuid>,
 }
 
 #[derive(Serialize, sqlx::FromRow)]
@@ -88,6 +90,12 @@ struct NodeOut {
     node_type: NodeType,
     is_active: bool,
     depth: u32,
+    /// Yalniz kokte (spec/74).
+    key: Option<String>,
+    /// Kokunun key'i: seciciler kok basina suzer (units, event_types, event_locations).
+    root_key: Option<String>,
+    shape: Shape,
+    attrs: serde_json::Value,
 }
 
 pub async fn meta(State(st): State<AppState>, CurrentUser(me): CurrentUser) -> Result<Json<Meta>> {
@@ -120,11 +128,16 @@ pub async fn meta(State(st): State<AppState>, CurrentUser(me): CurrentUser) -> R
         tree.order().iter().filter_map(|id| tree.get(*id)).map(|n| NodeOut {
             id: n.id, parent_id: n.parent_id, name: n.name.clone(),
             node_type: n.node_type, is_active: n.is_active, depth: n.depth,
+            key: n.key.clone(), root_key: tree.root_key(n.id).map(String::from),
+            shape: n.shape, attrs: n.attrs.clone(),
         }).collect()
     };
+    let favorite_nodes = sqlx::query_scalar(
+        "select node_id from node_favorites where user_id = $1 order by created_at")
+        .bind(me.id).fetch_all(&st.pool).await?;
 
     Ok(Json(Meta {
-        me: MeInfo { id: me.id, is_admin: me.is_admin, scopes, team_ids, profile_complete },
+        me: MeInfo { id: me.id, is_admin: me.is_admin, scopes, team_ids, profile_complete, favorite_nodes },
         users, teams, pillars, nodes,
     }))
 }

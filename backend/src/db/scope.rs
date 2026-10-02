@@ -100,6 +100,8 @@ pub struct NodeAccess {
     edit: bool,
     hard_delete: bool,
     permitted: Vec<Uuid>,
+    /// Etkin yetenekler (scope'lu kokler icin, `node`).
+    scopes: Vec<String>,
 }
 
 #[derive(Clone, Copy)]
@@ -117,7 +119,18 @@ impl NodeAccess {
             edit: has("edit_nodes"),
             hard_delete: has("hard_delete_nodes"),
             permitted: permitted_nodes(pool, user).await?,
+            scopes,
         })
+    }
+
+    /// Kok semasina gore (spec/74): Birimler `edit_nodes` + dal izni (`on`),
+    /// diger kokler dal izni olmadan tek scope (refdata::editor). Sert silme
+    /// scope'lu koklerde ayni scope'tur; bagli kayit FK ile korunur.
+    pub fn node(&self, tree: &TreeIndex, node: Uuid, scope: NodeScope) -> bool {
+        match crate::refdata::editor(tree.root_key(node)) {
+            crate::refdata::Editor::Branch => self.on(tree, node, scope),
+            crate::refdata::Editor::Scope(s) => self.admin || self.scopes.iter().any(|x| x == s),
+        }
     }
 
     pub fn on(&self, tree: &TreeIndex, node: Uuid, scope: NodeScope) -> bool {
@@ -129,13 +142,6 @@ impl NodeAccess {
             NodeScope::HardDelete => self.hard_delete,
         };
         has && self.permitted.iter().any(|p| tree.is_descendant(node, *p))
-    }
-
-    /// Kok eklemek / koke tasimak YALNIZ admin: dugum izni bir DALI kapsar,
-    /// kok hicbir dala girmez. Aksi halde bir dala izinli kisi agacin yanina
-    /// kendi agacini kurabilirdi (Python `can_do_root_operation`).
-    pub fn root(&self) -> bool {
-        self.admin
     }
 }
 
@@ -152,12 +158,13 @@ mod tests {
         let n = |id: u8, parent: Option<u8>| NodeRow {
             id: u(id), parent_id: parent.map(u), name: id.to_string(),
             node_type: NodeType::Generic, sort_order: 0, is_active: true,
+            key: None, shape: crate::models::enums::Shape::Tree, attrs: serde_json::json!({}),
         };
         TreeIndex::build(vec![n(1, None), n(2, Some(1)), n(3, Some(1)), n(4, Some(2))])
     }
 
     fn access(edit: bool, hard_delete: bool, permitted: &[u8]) -> NodeAccess {
-        NodeAccess { admin: false, edit, hard_delete, permitted: permitted.iter().map(|i| u(*i)).collect() }
+        NodeAccess { admin: false, edit, hard_delete, permitted: permitted.iter().map(|i| u(*i)).collect(), scopes: vec![] }
     }
 
     #[test]
@@ -172,13 +179,12 @@ mod tests {
         assert!(!access(true, false, &[]).on(&t, u(2), NodeScope::Edit), "izinsiz yetenek yetmez");
         assert!(!a.on(&t, u(4), NodeScope::HardDelete), "kalici silme ayri yetenek");
         assert!(access(true, true, &[2]).on(&t, u(4), NodeScope::HardDelete));
-        assert!(!access(true, true, &[1]).root(), "kok islemi dal izniyle olmaz");
     }
 
     #[test]
     fn admin_hepsini_atlar() {
-        let a = NodeAccess { admin: true, edit: false, hard_delete: false, permitted: vec![] };
+        let a = NodeAccess { admin: true, edit: false, hard_delete: false, permitted: vec![], scopes: vec![] };
         assert!(a.on(&tree(), u(3), NodeScope::HardDelete));
-        assert!(a.root());
+        assert!(a.node(&tree(), u(3), NodeScope::Edit));
     }
 }

@@ -95,6 +95,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/push/subscriptions", post(notify::subscribe).delete(notify::unsubscribe))
         .route("/api/nodes", get(nodes::tree).post(nodes::create))
         .route("/api/nodes/{id}", patch(nodes::patch).delete(nodes::delete))
+        .route("/api/nodes/{id}/favorite", put(nodes::favorite).delete(nodes::unfavorite))
         // Govde siniri yalniz yuklemede genis (axum varsayilani 2 MB); nginx
         // 12m, uygulama 10 MB — sinir asan istek nginx'ten degil buradan
         // anlasilir kodla doner.

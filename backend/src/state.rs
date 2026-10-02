@@ -105,7 +105,7 @@ impl AppState {
 
 async fn load_tree(pool: &PgPool) -> Result<TreeIndex, sqlx::Error> {
     let rows: Vec<NodeRow> = sqlx::query_as(
-        "select id, parent_id, name, node_type, sort_order, is_active from nodes",
+        "select id, parent_id, name, node_type, sort_order, is_active, key, shape, attrs from nodes",
     )
     .fetch_all(pool)
     .await?;

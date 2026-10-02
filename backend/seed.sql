@@ -3,9 +3,15 @@
 -- kaynak artik BU DOSYA (elle duzenlenir). Testler basliklara bakiyor
 -- ("Bütçe onayı 6 gündür bekliyor") — var olan satirlarin metnini degistirme.
 
-truncate users, nodes, teams, team_members, team_nodes, pillars, chats, records,
+-- Kokler (Birimler, Etkinlik Turleri, Etkinlik Yerleri) GOCUN (spec/74):
+-- tohum yalniz Birimler'in ICINI yeniden kurar; etkinlik turleri/yerleri kalir.
+-- `users` TRUNCATE edilmez: cascade `nodes`'u da (created_by FK) bosaltip
+-- kokleri silerdi. Kullanicilar DELETE ile (FK kurallari: created_by null olur).
+truncate teams, team_members, team_nodes, pillars, chats, records,
          record_participants, actions, cards, messages, activity
   restart identity cascade;
+delete from users;
+delete from nodes where parent_id = (select id from nodes where key = 'units');
 
 -- === kullanicilar ===
 insert into users (id,email,name,color,is_admin,created_at) values ('075deca4-2769-59ea-ace4-039eed00ca23','efe@ekiptakip.local','Efe','#5b8cff',false,now() - interval '10 day');
@@ -27,7 +33,7 @@ update users set phone = v.phone from (values
 ) as v(id, phone) where users.id = v.id;
 
 -- === agac ===
-insert into nodes (id,parent_id,name,node_type,sort_order) values ('a9394863-062f-5089-abd3-2a8c418fb542',null,'Yıllık Bayi Toplantısı 2026','operational',0);
+insert into nodes (id,parent_id,name,node_type,sort_order) values ('a9394863-062f-5089-abd3-2a8c418fb542',(select id from nodes where key = 'units'),'Yıllık Bayi Toplantısı 2026','generic',0);
 insert into nodes (id,parent_id,name,node_type,sort_order) values ('bbaee7a5-07f1-5b7d-875a-59fc6942a231','a9394863-062f-5089-abd3-2a8c418fb542','Malzeme Temini','generic',1);
 insert into nodes (id,parent_id,name,node_type,sort_order) values ('57494550-15de-5aa6-9802-a5252f8f1e4a','bbaee7a5-07f1-5b7d-875a-59fc6942a231','Bütçe Onayı','step',2);
 insert into nodes (id,parent_id,name,node_type,sort_order) values ('dd5ed529-e44d-54f6-afba-b218e4cbfaf8','bbaee7a5-07f1-5b7d-875a-59fc6942a231','Tedarikçi Seçimi','step',3);
@@ -36,7 +42,7 @@ insert into nodes (id,parent_id,name,node_type,sort_order) values ('5827deb7-728
 insert into nodes (id,parent_id,name,node_type,sort_order) values ('41eee365-69dd-5754-aa3f-56db46389a7b','5827deb7-728d-5db6-9f39-14c104a85839','Salon Sözleşmesi','step',6);
 insert into nodes (id,parent_id,name,node_type,sort_order) values ('8faf733b-1edf-5a47-ae49-21ae9e0aff78','5827deb7-728d-5db6-9f39-14c104a85839','Ulaşım & Konaklama','step',7);
 insert into nodes (id,parent_id,name,node_type,sort_order) values ('3db083eb-480d-5074-a404-3ccaef898c23','a9394863-062f-5089-abd3-2a8c418fb542','İletişim & Tanıtım','generic',8);
-insert into nodes (id,parent_id,name,node_type,sort_order) values ('e808326b-48df-5fb9-8fe5-91e41393c264',null,'Üretim Hattı A','cell',9);
+insert into nodes (id,parent_id,name,node_type,sort_order) values ('e808326b-48df-5fb9-8fe5-91e41393c264',(select id from nodes where key = 'units'),'Üretim Hattı A','cell',9);
 insert into nodes (id,parent_id,name,node_type,sort_order) values ('cb696ac4-63d5-5367-910e-029cc36793ef','e808326b-48df-5fb9-8fe5-91e41393c264','Dolum Makinesi','machine',10);
 insert into nodes (id,parent_id,name,node_type,sort_order) values ('dfdd0adf-007d-5313-8641-4d93eab19700','cb696ac4-63d5-5367-910e-029cc36793ef','Kapak Ünitesi','machine',11);
 insert into nodes (id,parent_id,name,node_type,sort_order) values ('47faa240-5071-59ad-95c3-4660ae2ff476','cb696ac4-63d5-5367-910e-029cc36793ef','Etiketleme Ünitesi','machine',12);
