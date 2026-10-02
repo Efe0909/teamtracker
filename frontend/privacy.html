@@ -1,0 +1,214 @@
+<!doctype html>
+<!-- Gizlilik politikasi (polonyum.com/privacy). STATIK: Google marka
+     dogrulamasi ham HTML'i okur. Metin koda bakilarak yazildi — yeni veri
+     toplanirsa (yeni sutun, yeni ucuncu taraf) burasi da degisir:
+     Google: backend/src/api/auth.rs (yalniz sub + e-posta, openid email profile)
+     Profil: migrations/003 · Etkinlik: migrations/006 · Guvenlik kaydi: 001 -->
+<html lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#6e56cf" />
+    <meta name="description" content="EkipTakip gizlilik politikası: hangi veriyi neden topladığımız, kimlerle paylaştığımız ve nasıl sildirebileceğin." />
+    <link rel="icon" type="image/png" href="/icon-192.png" />
+    <title>Gizlilik politikası — EkipTakip</title>
+    <link rel="stylesheet" href="/src/surfaces/welcome/static.css" />
+  </head>
+  <body>
+    <div class="welcome">
+      <header class="topbar">
+        <a href="/" class="brand-link">
+          <span class="brand">
+            <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+              <rect width="32" height="32" rx="9" />
+              <path d="M9 11h9M9 16h14M9 21h6" />
+              <path class="tick" d="m19 21 2 2 4-5" />
+            </svg>
+            EkipTakip
+          </span>
+        </a>
+      </header>
+
+      <main class="legal">
+        <article aria-labelledby="tr-title">
+          <h1 id="tr-title">Gizlilik politikası</h1>
+          <p class="muted">Son güncelleme: 1 Ekim 2026 · <a href="#en">English version below</a></p>
+
+          <p>
+            EkipTakip (<a href="https://polonyum.com/">polonyum.com</a>), davetli ekip üyelerinin iş kayıtlarını,
+            eylemlerini ve kayıt içi sohbetlerini tuttuğu bir iş takip uygulamasıdır. Bu sayfa hangi veriyi
+            topladığımızı, neden topladığımızı, kimlerle paylaştığımızı ve verini nasıl sildirebileceğini anlatır.
+          </p>
+
+          <h2>1. Google hesabından aldıklarımız</h2>
+          <p>
+            “Google ile devam et” yalnızca <code>openid email profile</code> izinlerini ister. Google'dan gelen
+            bilgilerden yalnızca şunları saklarız:
+          </p>
+          <ul>
+            <li><strong>E-posta adresin</strong> — davetli listesinde olup olmadığını kontrol etmek (listede olmayan adres giremez) ve sana bildirim göndermek için.</li>
+            <li><strong>Google hesap kimliğin</strong> (<code>sub</code>) — e-postan değişse de hesabını tanımak için.</li>
+          </ul>
+          <p>
+            Google'dan gelen adın ve profil fotoğrafın saklanmaz. Takvim, Drive, Gmail, kişiler gibi başka hiçbir
+            Google verisine erişmeyiz. Google verisini reklam için kullanmayız, satmayız, yapay zekâ modeli eğitmek
+            için kullanmayız ve hizmeti sunmak dışında hiçbir amaçla başkasına aktarmayız. Google API'lerinden alınan
+            bilgilerin kullanımı ve başka uygulamalara aktarımı,
+            <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>
+            ve buradaki Limited Use şartlarına uyar.
+          </p>
+
+          <h2>2. Senin girdiğin profil bilgileri</h2>
+          <ul>
+            <li><strong>Ad</strong> — yöneticin seni davet ederken girer; ekipte bu adla görünürsün.</li>
+            <li><strong>Telefon numarası</strong> (zorunlu) — ekip arkadaşlarının sana ulaşabilmesi için; yalnız ekip üyeleri görür.</li>
+            <li><strong>Takma ad, doğum günü</strong> (isteğe bağlı) — sohbette adının altında ve ekip sayfasında gösterilir. Doğum yılı da isteğe bağlıdır.</li>
+            <li><strong>Profil fotoğrafı</strong> (isteğe bağlı) — kendin yüklersen.</li>
+          </ul>
+
+          <h2>3. Uygulamayı kullanırken oluşan veriler</h2>
+          <ul>
+            <li><strong>İçerik</strong> — girdiğin kayıtlar, eylemler, kartlar, oylar, sohbet mesajları ve yüklediğin dosyalar.</li>
+            <li><strong>Bildirim ayarların</strong> ve, telefonda bildirimi açtıysan, tarayıcının push aboneliği (bir adres ve şifreleme anahtarı).</li>
+            <li><strong>Etkinlik özeti</strong> — gün başına kaç istek yaptığın, kaç dakika aktif olduğun ve en son ne zaman görüldüğün. Yöneticinin ekibin uygulamayı kullanıp kullanmadığını görmesi içindir; hangi sayfaya baktığın tek tek tutulmaz.</li>
+            <li><strong>Güvenlik kaydı</strong> — giriş denemeleri ve yetki hataları için IP adresi, e-posta ve zaman. Kötüye kullanımı görmek ve giriş hız sınırı için tutulur.</li>
+          </ul>
+
+          <h2>4. Çerezler</h2>
+          <p>
+            Yalnızca oturumunu açık tutan imzalı bir oturum çerezi ve form güvenliği (CSRF) için bir belirteç
+            kullanırız. Görünüm tercihlerin (tema, katlanan bölümler) yalnızca kendi tarayıcında saklanır. Reklam,
+            analitik ya da izleme çerezi yoktur.
+          </p>
+
+          <h2>5. Kimler görür, kimlerle paylaşılır</h2>
+          <p>
+            Uygulama herkese açık değildir; içerikleri yalnızca yetkili ekip üyeleri ve yöneticiler görür. Verin
+            satılmaz ve reklam için kullanılmaz. Hizmeti çalıştırmak için yalnızca şu aracılardan geçer:
+          </p>
+          <ul>
+            <li><strong>Cloudflare</strong> — siteye gelen trafiği sunucumuza taşır.</li>
+            <li><strong>Resend</strong> — e-posta bildirimlerini ve davet e-postasını iletir (alıcı adresi ve mesaj).</li>
+            <li><strong>Tarayıcının push servisi</strong> (Apple, Google ya da Mozilla) — telefon bildirimlerini iletir; bildirim içeriği şifreli gider.</li>
+          </ul>
+          <p>Veriler kendi sunucumuzda tutulur; yasal zorunluluk dışında kimseyle paylaşılmaz.</p>
+
+          <h2>6. Saklama ve silme</h2>
+          <p>
+            Veriler hesabın açık olduğu sürece tutulur. Hesabının kapatılmasını ya da verilerinin silinmesini
+            ekibinin yöneticisinden ya da aşağıdaki adresten isteyebilirsin. Google hesabının bu uygulamaya erişimini
+            istediğin an <a href="https://myaccount.google.com/permissions">Google hesap izinleri</a> sayfasından
+            kaldırabilirsin.
+          </p>
+
+          <h2>7. Güvenlik</h2>
+          <p>
+            Bağlantı şifrelidir (HTTPS). Oturum çerezi imzalıdır, formlar CSRF'e karşı korunur, giriş denemeleri hız
+            sınırına tabidir ve her kullanıcı yalnızca yetkili olduğu içeriği görür.
+          </p>
+
+          <h2>8. İletişim</h2>
+          <p>
+            Gizlilikle ilgili her soru ve silme talebi için:
+            <a href="mailto:yonetici@polonyum.com">yonetici@polonyum.com</a>
+          </p>
+
+          <h2>9. Değişiklikler</h2>
+          <p>Bu politika değişirse güncel hali bu adreste yayınlanır ve tarih yukarıda güncellenir.</p>
+        </article>
+
+        <article id="en" class="lang-sep" lang="en" aria-labelledby="en-title">
+          <h1 id="en-title">Privacy policy</h1>
+          <p class="muted">Last updated: 1 October 2026</p>
+
+          <p>
+            EkipTakip (<a href="https://polonyum.com/">polonyum.com</a>) is a work-tracking app in which invited team
+            members keep their records, actions and per-record conversations. This page explains what data we
+            collect, why, who it is shared with, and how you can have it deleted.
+          </p>
+
+          <h2>1. Data we receive from your Google account</h2>
+          <p>
+            “Continue with Google” requests only the <code>openid email profile</code> scopes. Of the information
+            Google returns, we store only:
+          </p>
+          <ul>
+            <li><strong>Your email address</strong> — to check that you are on the invite list (addresses not on the list cannot sign in) and to send you notifications.</li>
+            <li><strong>Your Google account ID</strong> (<code>sub</code>) — to recognise your account even if your email address changes.</li>
+          </ul>
+          <p>
+            We do not store the name or profile picture provided by Google, and we do not access any other Google
+            data (Calendar, Drive, Gmail, contacts, etc.). We do not use Google user data for advertising, do not sell
+            it, do not use it to train AI models, and do not transfer it to anyone except as needed to provide the
+            service. EkipTakip's use and transfer to any other app of information received from Google APIs will
+            adhere to the
+            <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>,
+            including the Limited Use requirements.
+          </p>
+
+          <h2>2. Profile information you provide</h2>
+          <ul>
+            <li><strong>Name</strong> — entered by your administrator when inviting you; it is how the team sees you.</li>
+            <li><strong>Phone number</strong> (required) — so teammates can reach you; visible only to team members.</li>
+            <li><strong>Nickname and birthday</strong> (optional) — shown under your name in chat and on the team page. The birth year is optional.</li>
+            <li><strong>Profile photo</strong> (optional) — only if you upload one.</li>
+          </ul>
+
+          <h2>3. Data created while you use the app</h2>
+          <ul>
+            <li><strong>Content</strong> — the records, actions, cards, votes, chat messages and files you add.</li>
+            <li><strong>Notification settings</strong> and, if you turn on phone notifications, your browser's push subscription (an endpoint and encryption keys).</li>
+            <li><strong>Activity summary</strong> — the number of requests and active minutes per day, and when you were last seen. This lets administrators see whether the team is using the app; individual page views are not recorded.</li>
+            <li><strong>Security log</strong> — IP address, email and time for sign-in attempts and authorization errors, used to detect abuse and rate-limit sign-ins.</li>
+          </ul>
+
+          <h2>4. Cookies</h2>
+          <p>
+            We use only a signed session cookie that keeps you signed in and a CSRF token for form security. Display
+            preferences (theme, collapsed sections) are stored only in your own browser. There are no advertising,
+            analytics or tracking cookies.
+          </p>
+
+          <h2>5. Who can see your data and who it is shared with</h2>
+          <p>
+            The app is not public; content is visible only to authorised team members and administrators. Your data
+            is not sold and not used for advertising. To run the service it passes only through these processors:
+          </p>
+          <ul>
+            <li><strong>Cloudflare</strong> — carries traffic to our server.</li>
+            <li><strong>Resend</strong> — delivers notification and invitation emails (recipient address and message).</li>
+            <li><strong>Your browser's push service</strong> (Apple, Google or Mozilla) — delivers phone notifications; the payload is encrypted.</li>
+          </ul>
+          <p>Data is stored on our own server and is not shared with anyone else unless required by law.</p>
+
+          <h2>6. Retention and deletion</h2>
+          <p>
+            Data is kept while your account is active. You can ask your team administrator, or write to the address
+            below, to close your account or delete your data. You can revoke this app's access to your Google
+            account at any time at <a href="https://myaccount.google.com/permissions">Google account permissions</a>.
+          </p>
+
+          <h2>7. Security</h2>
+          <p>
+            Connections are encrypted (HTTPS). The session cookie is signed, forms are protected against CSRF,
+            sign-in attempts are rate-limited, and every user sees only the content they are authorised to see.
+          </p>
+
+          <h2>8. Contact</h2>
+          <p>
+            For any privacy question or deletion request:
+            <a href="mailto:yonetici@polonyum.com">yonetici@polonyum.com</a>
+          </p>
+
+          <h2>9. Changes</h2>
+          <p>If this policy changes, the current version is published at this address and the date above is updated.</p>
+        </article>
+      </main>
+
+      <footer class="foot">
+        EkipTakip · <a href="/">Ana sayfa / Home</a> · <a href="/terms">Koşullar / Terms</a> ·
+        <a href="mailto:yonetici@polonyum.com">yonetici@polonyum.com</a>
+      </footer>
+    </div>
+  </body>
+</html>

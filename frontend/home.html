@@ -1,0 +1,90 @@
+<!doctype html>
+<!-- Apex ana sayfasi (polonyum.com/). STATIK: JS yok, giris duvari yok —
+     Google OAuth marka dogrulamasi uygulamanin ne oldugunu bu ham HTML'den
+     okur. Uygulama adi OAuth onay ekranindakiyle BIREBIR: "EkipTakip".
+     nginx yalniz apex'te `/`'yu buraya verir (~/nix modules/nginx). -->
+<html lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#6e56cf" />
+    <meta name="description" content="EkipTakip, davetli bir ekibin iş kayıtlarını, eylemlerini ve kayıt içi sohbetini tek yerde tuttuğu iş takip uygulamasıdır." />
+    <link rel="icon" type="image/png" href="/icon-192.png" />
+    <link rel="apple-touch-icon" href="/icon-180.png" />
+    <title>EkipTakip — ekip içi iş takibi</title>
+    <link rel="stylesheet" href="/src/surfaces/welcome/static.css" />
+  </head>
+  <body>
+    <div class="welcome">
+      <header class="topbar">
+        <a href="/" class="brand-link">
+          <span class="brand">
+            <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+              <rect width="32" height="32" rx="9" />
+              <path d="M9 11h9M9 16h14M9 21h6" />
+              <path class="tick" d="m19 21 2 2 4-5" />
+            </svg>
+            EkipTakip
+          </span>
+        </a>
+      </header>
+
+      <main class="legal">
+        <section class="static-hero" aria-labelledby="hero-title">
+          <p class="eyebrow">Ekip içi iş takibi</p>
+          <h1 id="hero-title">EkipTakip</h1>
+          <p class="lede">
+            EkipTakip, davetli bir ekibin işini tek yerde toplayan bir iş takip uygulamasıdır: kim neyle uğraşıyor,
+            ne gecikti, hangi karar nerede konuşuldu.
+          </p>
+          <div class="static-actions">
+            <a class="static-btn" href="/welcome">Giriş yap</a>
+            <a class="static-btn ghost" href="/privacy">Gizlilik politikası</a>
+          </div>
+        </section>
+
+        <h2>Ne işe yarar?</h2>
+        <ul>
+          <li><strong>Kayıtlar</strong> — görev ya da hata, her iş bir kayıt olur; durumu, önceliği, sorumlusu ve son tarihi vardır.</li>
+          <li><strong>Eylemler</strong> — kaydın içindeki küçük adımlar; her birinin bir sahibi olur, böylece “top kimde” hep görünür.</li>
+          <li><strong>Kayıt içi sohbet</strong> — konuşma işin yanında durur; karar ve gerekçe kaybolmaz.</li>
+          <li><strong>Takımlar ve birimler</strong> — ekip yapısı ve sorumluluk alanları tek ağaçta; her takımın kendi duvarı vardır.</li>
+          <li><strong>Kartlar</strong> — toplantı planı, gönüllü havuzu, görsel ve oylama gibi kayda eklenen kutular.</li>
+          <li><strong>Bildirimler</strong> — masaüstünde panel, telefonda ana ekrana eklenen uygulama ve anında bildirim.</li>
+        </ul>
+
+        <h2>Kimler kullanır?</h2>
+        <p>
+          Yalnızca yöneticinin davet ettiği ekip üyeleri. Herkese açık kayıt yoktur: davetli listesinde olmayan bir
+          e-posta adresi giriş yapamaz. Giriş “Google ile devam et” ile yapılır; Google hesabından yalnızca e-posta
+          adresin ve hesap kimliğin, seni davetli listesinde tanımak için alınır. Ayrıntı:
+          <a href="/privacy">gizlilik politikası</a>.
+        </p>
+
+        <h2>İletişim</h2>
+        <p><a href="mailto:yonetici@polonyum.com">yonetici@polonyum.com</a></p>
+
+        <section class="lang-sep" lang="en" aria-labelledby="en-title">
+          <h2 id="en-title">About EkipTakip (English)</h2>
+          <p>
+            EkipTakip is a work-tracking app for an invited team. It keeps the team's records (tasks and issues),
+            the actions inside them, and the conversation about each record in one place, on a desktop
+            dashboard and as a phone app with push notifications.
+          </p>
+          <p>
+            Only people invited by an administrator can use it; there is no public sign-up. Users sign in with
+            “Continue with Google”, which is used only to confirm that their email address is on the invite list.
+            The app requests the <code>openid email profile</code> scopes and stores only the email address and the
+            Google account ID. See the <a href="/privacy">privacy policy</a> and <a href="/terms">terms of use</a>.
+          </p>
+          <p>Contact: <a href="mailto:yonetici@polonyum.com">yonetici@polonyum.com</a></p>
+        </section>
+      </main>
+
+      <footer class="foot">
+        EkipTakip · alpha 0.2 · <a href="/privacy">Gizlilik / Privacy</a> · <a href="/terms">Koşullar / Terms</a> ·
+        <a href="mailto:yonetici@polonyum.com">yonetici@polonyum.com</a>
+      </footer>
+    </div>
+  </body>
+</html>
