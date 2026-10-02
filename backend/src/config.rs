@@ -127,7 +127,7 @@ impl Config {
                 .unwrap_or_else(|| "mailto:yonetici@polonyum.com".into()),
             bootstrap_admins_file: Some(var("EKIPTAKIP_BOOTSTRAP_ADMINS_FILE")).filter(|s| !s.is_empty()),
             club_name: Some(var("EKIPTAKIP_CLUB_NAME")).filter(|s| !s.is_empty())
-                .unwrap_or_else(|| "ÖzüMaker".into()),
+                .unwrap_or_else(|| "ÖzÜ Maker Kulübü".into()),
             club_code: Some(var("EKIPTAKIP_CLUB_CODE")).filter(|s| !s.is_empty())
                 .unwrap_or_else(|| "OZUMAKER".into()),
             env,
