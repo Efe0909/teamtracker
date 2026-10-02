@@ -101,3 +101,30 @@ sql_enum!(
     /// Havuz kartinda yalniz `Yes` anlamli — `Maybe`/`No` cizilmez.
     SignupAnswer { Yes => "yes", Maybe => "maybe", No => "no" }
 );
+
+sql_enum!(
+    /// `events.kind` (spec/73). Tur, yeni etkinlige yuklenecek sablonu secer.
+    EventKind {
+        Meeting => "meeting", Training => "training", Social => "social",
+        Visit => "visit", Conference => "conference",
+    }
+);
+
+sql_enum!(
+    /// `events.status`. Kesin/yapildi tarih ister (sema check'i).
+    EventStatus {
+        Idea => "idea", Planning => "planning", Confirmed => "confirmed",
+        Done => "done", Cancelled => "cancelled",
+    }
+);
+
+sql_enum!(
+    /// `event_widgets.widget_type`. Yalniz alanlari TANIMLI turler; yeni tur =
+    /// kendi tablosu + bilesen + buraya bir satir, ayni gocte.
+    WidgetType { Supplies => "supplies", Record => "record", Otf => "otf" }
+);
+
+sql_enum!(
+    /// `materials.type`. Hizmet de satin alimdir (lazer kesim gibi).
+    MaterialType { Consumable => "consumable", Equipment => "equipment", Service => "service" }
+);

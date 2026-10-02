@@ -18,7 +18,7 @@ const detail = (m: Partial<Membership>): RecordDetail => ({
   record: { id: "r", unit_id: "n", pillar_id: null, team_id: null, chat_id: "c", kind: "task", title: "T", description: null,
     status: "open", priority: "medium", owner_id: null, created_by: "o", due_date: null, created_at: "2026-01-01T00:00:00Z",
     updated_at: "2026-01-01T00:00:00Z" },
-  actions: [], participants: [], cards: [], access: { can_edit: false, can_edit_deadline: false }, pinned: false,
+  actions: [], participants: [], cards: [], access: { can_edit: false, can_edit_deadline: false }, pinned: false, event_id: null,
   membership: { mode: "public", is_member: false, restricted: false, request: null, can_decide: false, requests: [], ...m },
 });
 const view = (d: RecordDetail) => render(

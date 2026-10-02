@@ -60,6 +60,27 @@ export type ApiErrorCode =
   | "invalid_subscription"
   | "invalid_host"
   | "invalid_config"
+  | "event_needs_date"
+  | "invalid_time"
+  | "invalid_place"
+  | "invalid_attendees"
+  | "invalid_role"
+  | "invalid_label"
+  | "checkpoint_state"
+  | "own_record"
+  | "unknown_record"
+  | "invalid_record"
+  | "invalid_notes"
+  | "invalid_state"
+  | "invalid_contact"
+  | "invalid_price"
+  | "invalid_otf_item"
+  | "invalid_quantity"
+  | "too_many_contacts"
+  | "otf_template"
+  | "otf_no_source"
+  | "otf_review_needs_edit"
+  | "otf_unreviewed"
   | "network";
 
 export const ERRORS = {
@@ -118,6 +139,27 @@ export const ERRORS = {
   invalid_subscription: "Bildirim aboneliği kurulamadı. Sayfayı yenileyip tekrar dene.",
   invalid_host: "Bu adresten giriş yapılamıyor.",
   invalid_config: "Giriş ayarları eksik. Yöneticiye haber ver.",
+  event_needs_date: "Kesinleşmiş ya da yapılmış etkinliğin tarihi olmalı; saat de tarihsiz girilemez.",
+  invalid_time: "Saat geçersiz. Örnek: 14:30",
+  invalid_place: "Yer en fazla 200 karakter olabilir.",
+  invalid_attendees: "Katılımcı sayısı geçersiz.",
+  invalid_role: "Rol en fazla 60 karakter olabilir.",
+  invalid_label: "Checkpoint adı boş olamaz ve 120 karakteri aşamaz.",
+  checkpoint_state: "Adım zaten bu durumda; onay istenecek bir şey yok.",
+  own_record: "Etkinliğin kendi kaydı widget olarak bağlanamaz.",
+  unknown_record: "Seçilen kayıt bulunamadı.",
+  invalid_record: "Kayıt widget'ı için bir kayıt seçilmeli.",
+  invalid_notes: "Not çok uzun.",
+  invalid_state: "Süreç adımı geçersiz.",
+  invalid_contact: "Tedarikçi boş olamaz ve 300 karakteri aşamaz.",
+  invalid_price: "Fiyat geçersiz.",
+  invalid_otf_item: "Formda olmayan bir kalem seçildi. Sayfayı yenile.",
+  invalid_quantity: "Adet 1 ile 10000 arasında olmalı.",
+  too_many_contacts: "Formda en çok 3 etkinlik sorumlusu yer alır.",
+  otf_template: "Form şablonu okunamadı. Yöneticiye haber ver.",
+  otf_no_source: "Kopyalanacak başka bir OTF formu yok.",
+  otf_review_needs_edit: "Kopyalanan formda en az bir alanı bu etkinliğe göre güncellemeden gözden geçirildi işaretlenemez.",
+  otf_unreviewed: "Form başka bir etkinlikten kopyalandı; indirmeden önce gözden geçirip işaretle.",
   network: "Sunucuya ulaşılamadı. Bağlantını kontrol et.",
 } satisfies Record<ApiErrorCode, string>;
 

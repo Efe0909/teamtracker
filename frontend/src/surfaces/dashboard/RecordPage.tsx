@@ -19,14 +19,11 @@ import { Link, Loading } from "../../ui/ui";
 import { ErrorScreen } from "../errors/ErrorScreen";
 import s from "./dashboard.module.css";
 import { EventSwitch } from "./EventPage";
-import { useEventOfRecord } from "./eventModel";
 import { href } from "./routes";
 
 export function RecordPage({ id }: { id: Uuid }) {
   const L = useLookup();
   const q = useRecord(id);
-  // Etkinligin kendi kaydiysa baslikta Etkinlik | Kayıt anahtari (spec/73 §3a).
-  const ev = useEventOfRecord(id);
   // `?mention=<ad>`: etkinlik kisilerinden "yaz" (DM yok — ikizin sohbetine anmayla
   // gelinir). Bir kez okunur, adresten silinir; yalniz bu kayda uygulanir.
   const loc = useLocation();
@@ -71,7 +68,7 @@ export function RecordPage({ id }: { id: Uuid }) {
           <div className={s.recordInner}>
             <JoinBanner d={d} />
             <RecordHead d={d} showPath={false}
-              titleExtra={ev !== undefined && <EventSwitch eventId={ev.id} recordId={id} at="record" />} />
+              titleExtra={d.event_id !== null && <EventSwitch eventId={d.event_id} recordId={id} at="record" />} />
             <ReadOnlyNote d={d} />
             <div className={s.fieldsBlock}>
               <CollapsibleProps d={d}>

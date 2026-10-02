@@ -95,6 +95,8 @@ export interface RecordSummary {
   open_actions: number;
   action_overdue: boolean;
   messages: number;
+  /** Etkinligin ikiz kaydiysa etkinlik (spec/73 §3a). */
+  event_id: Uuid | null;
 }
 
 export interface RecordFull {
@@ -134,6 +136,176 @@ export interface RecordDetail {
   /** Bu kisi kaydi sabitlemis mi (Panolar widget'i). */
   pinned: boolean;
   membership: Membership;
+  /** Etkinligin ikiz kaydiysa etkinlik: Etkinlik | Kayit anahtari buradan. */
+  event_id: Uuid | null;
+}
+
+// --- etkinlikler (Rust api/events.rs, spec/73) --------------------------------
+
+export type EventKind = "meeting" | "training" | "social" | "visit" | "conference";
+export type EventStatus = "idea" | "planning" | "confirmed" | "done" | "cancelled";
+/** Yalniz alanlari TANIMLI widget turleri. `record` tek kayitlik, digerleri tekil. */
+export type WidgetType = "supplies" | "record" | "otf";
+export type MaterialType = "consumable" | "equipment" | "service";
+
+/** Liste ve ayrintinin ortak satiri. `record_ids` = kayit widget'larinin kayitlari (ikiz haric). */
+export interface EventSummary {
+  id: Uuid;
+  /** Ikiz kayit: sohbet + arsiv. */
+  record_id: Uuid;
+  title: string;
+  kind: EventKind;
+  status: EventStatus;
+  priority: Priority;
+  owner_id: Uuid | null;
+  date: IsoDate | null;
+  /** "HH:MM" */
+  start_time: string | null;
+  place: string | null;
+  attendees: number | null;
+  description: string | null;
+  created_by: Uuid | null;
+  created_at: IsoTime;
+  updated_at: IsoTime;
+  record_ids: Uuid[];
+}
+
+export interface EventWidget {
+  id: Uuid;
+  type: WidgetType;
+  record_id: Uuid | null;
+}
+
+export interface Checkpoint {
+  id: Uuid;
+  label: string;
+  date: IsoDate | null;
+  done: boolean;
+}
+
+export type CheckpointAction = "done" | "undone" | "delete";
+
+/** Bekleyen onay istegi (onaylayici olmayan duzenleyen ister). */
+export interface CheckpointRequest {
+  id: Uuid;
+  checkpoint_id: Uuid;
+  user_id: Uuid;
+  action: CheckpointAction;
+  created_at: IsoTime;
+}
+
+export interface MaterialProvider {
+  id: Uuid;
+  contact: string;
+  price: number | null;
+  arrival_date: IsoDate | null;
+}
+
+export interface Material {
+  id: Uuid;
+  name: string;
+  notes: string | null;
+  type: MaterialType;
+  priority: Priority;
+  /** Tamamlanan adim sayisi. */
+  state: number;
+  has_sponsor: boolean;
+  /** "Zaten var": surece girmez. */
+  owned: boolean;
+  updated_at: IsoTime;
+  providers: MaterialProvider[];
+}
+
+export interface EventDetail extends EventSummary {
+  participants: { user_id: Uuid; role: string | null }[];
+  team_ids: Uuid[];
+  checkpoints: Checkpoint[];
+  widgets: EventWidget[];
+  materials: Material[];
+  /** Ikiz kaydi duzenleyebilir ya da `manage_events`. Diger scope'lar meta'dan. */
+  can_edit: boolean;
+  /** `manage_events`: checkpoint ekle/son tarih. */
+  can_manage: boolean;
+  /** Etkinlik sorumlusu ya da `manage_events`: adimi dogrudan isaretler/kaldirir, istekleri yanitlar. */
+  can_approve: boolean;
+  /** Bekleyen istekler: onaylayiciya hepsi, digerine yalniz kendisininki. */
+  requests: CheckpointRequest[];
+}
+
+export interface NewEvent {
+  title: string;
+  kind: EventKind;
+  unit_id: Uuid;
+  date?: IsoDate;
+  priority?: Priority;
+}
+
+export type EventPatch =
+  | { field: "title"; value: string }
+  | { field: "status"; value: EventStatus }
+  | { field: "priority"; value: Priority }
+  | { field: "owner_id"; value: Uuid | null }
+  | { field: "date"; value: IsoDate | null }
+  | { field: "start_time"; value: string | null }
+  | { field: "place"; value: string | null }
+  | { field: "attendees"; value: number | null }
+  | { field: "description"; value: string | null };
+
+/** OTF (FORM.GN.05) formu — Rust api/otf.rs. Etkinlikten gelenler (ad, tarih,
+ *  baslangic saati, yer, katilimci sayisi) burada yok: dosyada etkinlikten okunur. */
+export interface OtfFields {
+  purpose: string | null;
+  /** "HH:MM" */
+  end_time: string | null;
+  advisor: string | null;
+  age_group: string | null;
+  outcomes: string | null;
+  layout_notes: string | null;
+  av_notes: string | null;
+  tech_notes: string | null;
+  host_notes: string | null;
+  care_notes: string | null;
+  other_notes: string | null;
+}
+
+export interface OtfItem {
+  item: string;
+  /** Doluysa bolum aciklamasina "Etiket+N" olarak yazilir (universite kurali: "+" ve adet). */
+  quantity: number | null;
+}
+
+export interface OtfInput extends OtfFields {
+  items: OtfItem[];
+  /** En cok 3 etkinlik sorumlusu, formdaki sirayla; telefon profilden. */
+  contacts: Uuid[];
+  /** "Formu gozden gecirdim" — yalniz PUT'ta; kopyayla dolan formun kilidini acar. */
+  reviewed?: boolean;
+}
+
+export interface OtfView extends OtfInput {
+  /** Kutu katalogu (tek kaynak Rust otf::SECTIONS). `key` bolumun aciklama alanini secer: `${key}_notes`. */
+  catalog: { key: "layout" | "av" | "tech" | "host" | "care" | "other"; label: string; items: { key: string; label: string }[] }[];
+  club_name: string;
+  file_name: string;
+  subject: string;
+  /** Etkinlikten 3 is gunu once; tarihsiz etkinlikte null. */
+  deadline: IsoDate | null;
+  late: boolean;
+  /** Otomatik doldurmanin kaynagi: en son kaydedilen, gozden gecirilmis baska form. */
+  autofill_source: { event_id: Uuid; title: string; updated_at: IsoTime } | null;
+  /** Form kopyayla dolduysa. `needs_review` iken Word indirilemez; "gozden
+   *  gecirdim" ancak `edited` (kopyadan sonra en az bir alan degisti) ise. */
+  review: { copied_from: Uuid | null; copied_title: string | null; needs_review: boolean; edited: boolean } | null;
+}
+
+export interface MaterialPatch {
+  name?: string;
+  notes?: string | null;
+  type?: MaterialType;
+  priority?: Priority;
+  state?: number;
+  has_sponsor?: boolean;
+  owned?: boolean;
 }
 
 export type AccessMode = "public" | "request" | "private";

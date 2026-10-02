@@ -37,6 +37,11 @@ pub struct Config {
     pub mail_from: String,
     pub mail_api_url: String,
 
+    /// OTF formundaki kulup adi ve dosya/konu adindaki kisa ad
+    /// (KULUPADI_25EKIM_OTF.docx, kulubun duyurusu).
+    pub club_name: String,
+    pub club_code: String,
+
     /// Ilk yonetici listesinin DOSYA yolu (KNOW-320): satir basina bir
     /// e-posta. Icerik degil yol: liste agenix sirri, ortamda gorunmesin.
     pub bootstrap_admins_file: Option<String>,
@@ -121,6 +126,10 @@ impl Config {
             vapid_sub: Some(var("VAPID_SUB")).filter(|s| !s.is_empty())
                 .unwrap_or_else(|| "mailto:yonetici@polonyum.com".into()),
             bootstrap_admins_file: Some(var("EKIPTAKIP_BOOTSTRAP_ADMINS_FILE")).filter(|s| !s.is_empty()),
+            club_name: Some(var("EKIPTAKIP_CLUB_NAME")).filter(|s| !s.is_empty())
+                .unwrap_or_else(|| "ÖzÜ Maker Kulübü".into()),
+            club_code: Some(var("EKIPTAKIP_CLUB_CODE")).filter(|s| !s.is_empty())
+                .unwrap_or_else(|| "OZUMAKER".into()),
             env,
         })
     }

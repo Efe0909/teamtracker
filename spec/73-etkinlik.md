@@ -1,9 +1,9 @@
 # 73 — Etkinlik planlama modülü
 
-**Durum: tasarım.** Ön yüz taslağı sahte veriyle duruyor
-(`frontend/src/surfaces/dashboard/Events.tsx`, `EventPage.tsx`, `eventModel.ts`);
-Rust tarafı ve göç **yok**. Bu belge göç yazılırken kaynak alınır; taslaktaki
-sahte veri ile çelişirse bu belge kazanır.
+**Durum: uygulandı.** Göç `backend/migrations/010_events.sql`, uçlar
+`backend/src/api/events.rs`, ön yüz `frontend/src/surfaces/dashboard/Events.tsx`,
+`EventPage.tsx`, `Purchases.tsx`. Kod ile bu belge çelişirse önce hangisinin
+yanlış olduğuna bakılır, ikisi birlikte düzeltilir.
 
 Yalnız `dashboard.` yüzü. Mobil karşılığı şimdilik yok.
 
@@ -91,7 +91,8 @@ create table event_checkpoints (
   id        uuid primary key default gen_random_uuid(),
   event_id  uuid not null references events(id) on delete cascade,
   label     text not null,
-  due_date  date,                   -- etkinlik tarihsizse null
+  offset_days smallint,             -- şablondan: etkinlik tarihine göre (§6)
+  due_date  date,                   -- elle eklenen: mutlak; ikisi birden dolu olamaz
   done_at   timestamptz,            -- elle işaretlenir; tarih geçti diye kendiliğinden dolmaz
   position  smallint not null
 );
@@ -104,7 +105,7 @@ create table event_widgets (
   id          uuid primary key default gen_random_uuid(),
   event_id    uuid not null references events(id) on delete cascade,
   widget_type text not null check (widget_type in
-              ('supplies','record')),
+              ('supplies','record','otf')),
   record_id   uuid references records(id) on delete cascade,
   position    smallint not null,
   check ((widget_type = 'record') = (record_id is not null))
@@ -180,7 +181,7 @@ seçer**, yaşam döngüsü ayırmaz; tek tablo doğru. Veri ise türün tablosu
 - **Widget kaldırmak veriyi silmez.** Yuva gider, `materials` satırları etkinlikte
   kalır; widget geri eklenince aynı liste görünür. Veriyi silmek ayrı, açık bir eylem.
 - Kayıt dışındaki türlerden etkinlikte en çok bir widget (kısmi `unique`).
-- **Yalnız alanları tanımlı türler var**: bugün `supplies` (satın alımlar, §5) ve
+- **Yalnız alanları tanımlı türler var**: bugün `supplies` (satın alımlar, §5), `otf` (§5b) ve
   `record`. Yarım (iskelet) widget yayına girmez. Yeni tür = kendi tablosu +
   bileşeni + `widget_type` check'ine bir değer, **aynı göçte**. Aday türler
   (mekan, gündem, ulaşım, bütçe, duyuru) alanları tasarlanınca bu belgeye eklenir.
@@ -216,13 +217,19 @@ Yeni etkinlikte widget yuvaları ve checkpoint'ler **etkinlik türünün
 şablonundan kopyalanır**; sonra elle eklenir/silinir. Şablon kodda (Rust'ta bir
 sabit, ön yüzde `EVENT_TEMPLATE` onizlemesi) — kullanıcı tanımlı şablon yok.
 
-| Tür | Widget'lar | Checkpoint'ler (gün farkı, 0 = etkinlik günü) |
+**Kural:** bütün hazırlık etkinlikten **en geç 7 gün önce** biter (Rust
+`DEADLINE_DAYS`, testle zorlanır). Şablonda bundan geç checkpoint yok; elle
+tarihsiz eklenen checkpoint de etkinlikten 7 gün önceye düşer. Farklı tarih ve
+checkpoint ekleme `manage_events` ister; işaretlemek/silmek onaylayıcıya, diğer
+düzenleyene onay isteği (§6).
+
+| Tür | Widget'lar | Checkpoint'ler (etkinlikten gün farkı) |
 |---|---|---|
-| Toplantı | — | gündem toplandı −7, davet −5, toplantı 0, notlar +2 |
-| Eğitim | satın alımlar | eğitmen −21, mekan −14, malzeme hazır −3, eğitim 0, geri bildirim +3 |
-| Sosyal | — | bütçe onayı −21, mekan −14, duyuru −7, etkinlik 0 |
-| Saha ziyareti | — | ziyaret onayı −21, ulaşım −7, ziyaret 0, rapor +5 |
-| Konferans | satın alımlar | başvuru −45, stand −30, tanıtım −10, malzeme −3, etkinlik 0, değerlendirme +7 |
+| Toplantı | — | gündem toplandı −10, davet −7 |
+| Eğitim | satın alımlar | eğitmen −21, mekan −14, malzeme hazır −7 |
+| Sosyal | — | bütçe onayı −21, mekan −14, duyuru −7 |
+| Saha ziyareti | — | ziyaret onayı −21, ulaşım −7 |
+| Konferans | satın alımlar | başvuru −45, stand −30, tanıtım −10, malzeme −7 |
 
 Yeni widget türü tanımlandıkça ilgili türlerin şablonuna eklenir.
 
@@ -284,15 +291,97 @@ ister**: yeni `manage_purchases`. Okumak etkinliği görebilen herkese açık;
 yetkisiz görünüm salt okunur (adım noktaları tıklanmaz, ekleme formu yerine
 yetki notu). Ön yüz yalnız gösterir; karar Rust'ta (`spec/70-guvenlik.md`).
 
-Yeni scope'lar (göçte `scopes`'a eklenecek): `manage_event_widgets`,
+Yeni scope'lar (`010_events.sql`): `manage_events`, `manage_event_widgets`,
 `manage_purchases`. Ekrandaki adları `frontend/src/lib/labels.ts` `SCOPE`'ta.
 
 ---
 
-## 6. Açık sorular
+## 5b. OTF widget'ı — üniversitenin etkinlik talep formu
 
-- **Etkinliği kim düzenler?** Kayıtlardaki gibi katılımcı/takım mı, yoksa yeni bir
-  `manage_events` scope'u mu? Karar verilmedi.
+Kampüste yapılan etkinlik için üniversite **FORM.GN.05 "Organizasyon ve Etkinlik
+Talep Formu"** (OTF) ister. Gönderim kuralları (kulübe gelen duyuru, 2026):
+kulüp mail adresinden, Word (.docx), etkinlikten **en geç 3 iş günü önce**,
+dosya adı `KULÜPADI_25EKİM_OTF.docx`, mail konusu `KULÜP ADI ETKİNLİK TARİHİ OTF`.
+Eski formatta, geç ya da kurala uymayan OTF işleme alınmaz.
+
+- **Şablon:** üniversitenin taslağı `backend/tools/otf_template.py` ile bir kez
+  işlenir. 56 içerik denetiminin her birine, önündeki yazı doğrulanarak `w:tag`
+  eklenir; metin alanlarına `{{anahtar}}` konur. Çıktı `backend/assets/otf.docx`
+  dosyasıdır ve binary'ye gömülür. Rust (`backend/src/otf.rs`) yalnız iki işlem
+  yapar: `{{anahtar}}` → değer, işaretli kutu → ☒. Yayında Python yok.
+  Üniversite yeni sürüm yayınlarsa araç yeniden koşar; etiket eşleşmezse durur.
+  `otf.rs` testleri her anahtarın şablonda olduğunu doğrular.
+- **Veri:** `event_otf` (amaç, bitiş saati, danışman, yaş grubu, kazanımlar,
+  altı bölüm açıklaması), `event_otf_items` (işaretli kutu + isteğe bağlı adet),
+  `event_otf_contacts` (en çok 3 sorumlu; telefon profilden). Etkinlikten
+  gelenler (ad, tarih, başlangıç saati, yer, katılımcı sayısı) **tekrar tutulmaz**,
+  dosya üretilirken okunur.
+- **Adetler:** yeni taslak adetleri kutuda değil bölümün AÇIKLAMA'sında istiyor;
+  gönderim kuralı "ekipmanın yanına `+` (ya da EVET) ve adet" (Aralık 2025
+  duyurusu). Adet girilen kalem açıklamaya `Projeksiyon+2` olarak yazılır —
+  gerçek formlardaki `SANDALYE+60` ile aynı biçim.
+- **Uçlar:** `GET/PUT /api/events/{id}/otf` (form bütün olarak kaydedilir; yazmak
+  etkinliği düzenleyebilene), `GET /api/events/{id}/otf.docx` (dosya adı kurala
+  uygun). Cevap dosya adını, mail konusunu, son günü (3 iş günü önce; hafta sonu
+  sayılmaz, resmi tatil bilinmiyor) ve geç kalındı mı bilgisini taşır.
+- Kulüp adı ve dosya adındaki kısa ad yapılandırmadan gelir:
+  `EKIPTAKIP_CLUB_NAME`, `EKIPTAKIP_CLUB_CODE`.
+- Şablonda toplantı, eğitim ve sosyal etkinlik OTF widget'ı ve "OTF gönderildi"
+  checkpoint'iyle (−7) açılır. Saha ziyareti ve konferans kampüs dışı sayılır.
+- **Otomatik doldur:** etkinlikten gelmeyen bütün alanlar (alanlar, kutular +
+  adetler, sorumlular) **en son kaydedilen, gözden geçirilmiş** başka formdan
+  sunucuda kopyalanır (`POST /api/events/{id}/otf/autofill`; var olan formun
+  üzerine yazar, onay sorulur). Kopyalanan form `needs_review` olur: Word
+  indirilemez (`409 otf_unreviewed`), "Formu gözden geçirdim" kutusu Word
+  indir'in yanında çıkar ve ancak kopyadan sonra **en az bir alan değişince**
+  işaretlenir (`409 otf_review_needs_edit`). Kopya bekleyen form başkasına
+  kaynak olmaz. Durum `event_otf.copied_from / needs_review / edited`.
+- **Mail gönderilmez:** dosya kulüp adresinden elle gönderilir; uygulama dosyayı,
+  adı ve konuyu hazırlar.
+
+## 6. Uygulama kararları
+
+- **Etkinliği kim düzenler?** (Efe, 2026-10-02) Kayıtların mekanizması: ikiz
+  kaydını düzenleyebilen (sorumlu, açan, katılımcı, takım, dal izni) **ya da**
+  ayrı `manage_events` scope'u olan — o her etkinliği düzenler ve checkpoint
+  yapısını (ekle, sil, son tarih) yalnız o değiştirir. Etkinliğe kişi eklemek ikizin katılımcısı da yapar (sohbet bildirimi + yetki),
+  çıkarmak ikisinden de çıkarır.
+- **Checkpoint tarihi göreli.** Şablondan gelen checkpoint `offset_days` tutar
+  (`due_date` boş); tarih okunurken `events.date + offset_days`. Havuzdaki
+  etkinliğe tarih verilince checkpoint'ler kendiliğinden dolar, tarih kayınca
+  bekleyenler kayar. Tamamlanmış göreli checkpoint tarih değişmeden önce eski
+  tarihine sabitlenir (`offset_days` → `due_date`). Elle eklenen checkpoint mutlak.
+- **Checkpoint sırası (sunucuda, `detail_of`):** tamamlananlar üstte
+  (`done_at` sırasıyla), sonra açık olanlar tarihe göre (tarihsiz sonda), sonra
+  `position`. Tamamlanan adım en üste çıkar, geri alınırsa tarihindeki yerine döner.
+  Ön yüz sunucu sırasını çizer; "sıradaki" halka ilk açık adımdır.
+- **Onay akışı:** onaylayıcı = etkinlik sorumlusu (`events.owner_id`) **ya da**
+  `manage_events`. Onaylayıcı adımı doğrudan işaretler / geri alır / kaldırır
+  (`PATCH`/`DELETE /api/event-checkpoints/{id}`; başkasına 403). Etkinliği
+  düzenleyen ama onaylayıcı olmayan kişi aynı düğmelere basınca **istek** açar:
+  `POST /api/event-checkpoints/{id}/requests` `{action: done|undone|delete}`
+  (`event_checkpoint_requests`, aynı kişi+adım+eylem tek satır). İstek ikizin
+  sohbetine `checkpoint_requested` (konu = adım adı, hedef = eylem) yazar.
+  Onaylayıcı `POST /api/checkpoint-requests/{id}` `{approve}` ile yanıtlar:
+  onay eylemi yapar (`checkpoint_approved`), ret yapmaz (`checkpoint_denied`);
+  ikisinde de istek silinir. Ayrıntı cevabı `can_approve` ve `requests` taşır
+  (onaylayıcıya hepsi, diğerine yalnız kendisininki). Tarih değiştirme ve ekleme
+  `manage_events`'te kalır.
+- **Arşiv:** etkinlik alan değişiklikleri ikizin akışına `verb = event_changed`
+  (`target_label` = alan, detay `{from,to}`) olarak yazılır; başlık değişikliği
+  kayıtla ortak `field_changed`.
+- **Etkinlik silme yok.** Kayıtların da silme ucu yok; vazgeçilen etkinlik
+  `cancelled` olur.
+- Uçlar: `GET/POST /api/events`, `GET/PATCH /api/events/{id}` (tek alan,
+  `{field, value}`), `PUT/DELETE …/participants/{user}` (`{role}`),
+  `PUT/DELETE …/teams/{team}`, `POST …/checkpoints|widgets|materials`,
+  `PATCH/DELETE /api/event-checkpoints/{id}`, `POST /api/event-checkpoints/{id}/requests`,
+  `POST /api/checkpoint-requests/{id}`, `DELETE /api/event-widgets/{id}`,
+  `PATCH/DELETE /api/materials/{id}`, `POST /api/materials/{id}/providers`,
+  `DELETE /api/material-providers/{id}`. Yazma uçları güncel ayrıntıyı döner.
+
+## 6a. Açık sorular
+
 - **Bütçe kaynağı** (sponsor / üniversite): bugün yalnız `has_sponsor`. Maliye
   sayfası gelince `funding_source` enum'una dönebilir — o sayfa yazılırken karar verilir.
 - **Satın alma tarihi, fatura eki**: Maliye sayfasının işi; `materials`'a o zaman eklenir.

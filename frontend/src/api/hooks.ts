@@ -10,6 +10,17 @@ import type {
   ActionPatch,
   AdminView,
   Attachment,
+  CheckpointAction,
+  EventDetail,
+  EventPatch,
+  EventSummary,
+  IsoDate,
+  MaterialPatch,
+  MaterialProvider,
+  NewEvent,
+  OtfInput,
+  OtfView,
+  WidgetType,
   Feed,
   Home,
   Meta,
@@ -52,6 +63,9 @@ export const keys = {
   nodes: ["nodes"] as const,
   admin: ["admin"] as const,
   tags: ["tags"] as const,
+  events: ["events"] as const,
+  event: (id: Uuid) => ["event", id] as const,
+  otf: (id: Uuid) => ["otf", id] as const,
 };
 
 /** Rust `db/filters.rs` sozlesmesi. Gecersiz deger sunucuda sessizce duser. */
@@ -209,6 +223,101 @@ export function usePatchAction() {
     onSuccess: (d) => afterRecordWrite(qc, d),
   });
 }
+
+// --- etkinlikler (spec/73) ---------------------------------------------------------
+
+export function useEvents() {
+  return useQuery({ queryKey: keys.events, queryFn: () => request<EventSummary[]>("GET", "/api/events") });
+}
+
+export function useEvent(id: Uuid) {
+  return useQuery({ queryKey: keys.event(id), queryFn: () => request<EventDetail>("GET", `/api/events/${id}`) });
+}
+
+export function useCreateEvent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (e: NewEvent) => request<{ id: Uuid; record_id: Uuid }>("POST", "/api/events", e),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.events });
+      void qc.invalidateQueries({ queryKey: keys.recordsAll });
+    },
+  });
+}
+
+/** Etkinlige yazan her uc guncel ayrintiyi doner. Yollar burada (`eventOps`),
+ *  bilesen yol yazmaz. */
+export type EventOp = { method: "POST" | "PATCH" | "PUT" | "DELETE"; path: string; body?: unknown };
+
+export const eventOps = {
+  patch: (id: Uuid, p: EventPatch): EventOp => ({ method: "PATCH", path: `/api/events/${id}`, body: p }),
+  participant: (id: Uuid, user: Uuid, on: boolean, role: string | null = null): EventOp =>
+    on ? { method: "PUT", path: `/api/events/${id}/participants/${user}`, body: { role } }
+      : { method: "DELETE", path: `/api/events/${id}/participants/${user}` },
+  team: (id: Uuid, team: Uuid, on: boolean): EventOp => ({ method: on ? "PUT" : "DELETE", path: `/api/events/${id}/teams/${team}` }),
+  addCheckpoint: (id: Uuid, label: string, date: IsoDate | null): EventOp =>
+    ({ method: "POST", path: `/api/events/${id}/checkpoints`, body: { label, date } }),
+  checkpoint: (cid: Uuid, done: boolean): EventOp => ({ method: "PATCH", path: `/api/event-checkpoints/${cid}`, body: { done } }),
+  /** `manage_events`. null = varsayilan son tarih (etkinlikten 7 gun once). */
+  checkpointDate: (cid: Uuid, date: IsoDate | null): EventOp =>
+    ({ method: "PATCH", path: `/api/event-checkpoints/${cid}`, body: { date } }),
+  dropCheckpoint: (cid: Uuid): EventOp => ({ method: "DELETE", path: `/api/event-checkpoints/${cid}` }),
+  /** Onaylayici olmayan duzenleyen dogrudan degistiremez: ister. */
+  requestCheckpoint: (cid: Uuid, action: CheckpointAction): EventOp =>
+    ({ method: "POST", path: `/api/event-checkpoints/${cid}/requests`, body: { action } }),
+  /** Onaylayici: istegi onayla (eylemi yapar) ya da reddet. */
+  resolveRequest: (rid: Uuid, approve: boolean): EventOp =>
+    ({ method: "POST", path: `/api/checkpoint-requests/${rid}`, body: { approve } }),
+  addWidget: (id: Uuid, type: WidgetType, record_id: Uuid | null = null): EventOp =>
+    ({ method: "POST", path: `/api/events/${id}/widgets`, body: { type, record_id } }),
+  dropWidget: (wid: Uuid): EventOp => ({ method: "DELETE", path: `/api/event-widgets/${wid}` }),
+  addMaterial: (id: Uuid, name: string): EventOp => ({ method: "POST", path: `/api/events/${id}/materials`, body: { name } }),
+  material: (mid: Uuid, p: MaterialPatch): EventOp => ({ method: "PATCH", path: `/api/materials/${mid}`, body: p }),
+  dropMaterial: (mid: Uuid): EventOp => ({ method: "DELETE", path: `/api/materials/${mid}` }),
+  addProvider: (mid: Uuid, p: Omit<MaterialProvider, "id">): EventOp =>
+    ({ method: "POST", path: `/api/materials/${mid}/providers`, body: p }),
+  dropProvider: (pid: Uuid): EventOp => ({ method: "DELETE", path: `/api/material-providers/${pid}` }),
+};
+
+export function useEventWrite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (op: EventOp) => request<EventDetail>(op.method, op.path, op.body),
+    onSuccess: (d) => {
+      qc.setQueryData(keys.event(d.id), d);
+      void qc.invalidateQueries({ queryKey: keys.events });
+      // Baslik ve kisiler ikize de yazilir; baglanan kayit "en cok baglanan"i degistirir.
+      void qc.invalidateQueries({ queryKey: keys.recordsAll });
+      void qc.invalidateQueries({ queryKey: keys.record(d.record_id) });
+    },
+  });
+}
+
+export function useOtf(eventId: Uuid) {
+  return useQuery({ queryKey: keys.otf(eventId), queryFn: () => request<OtfView>("GET", `/api/events/${eventId}/otf`) });
+}
+
+/** Formun tamami tek PUT (form gibi kaydedilir). */
+export function useSaveOtf(eventId: Uuid) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (f: OtfInput) => request<OtfView>("PUT", `/api/events/${eventId}/otf`, f),
+    onSuccess: (v) => qc.setQueryData(keys.otf(eventId), v),
+  });
+}
+
+/** Otomatik doldur: en son kaydedilen baska formdan kopyalar (sunucuda); form
+ *  gozden gecirilene kadar Word kilitli. */
+export function useAutofillOtf(eventId: Uuid) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => request<OtfView>("POST", `/api/events/${eventId}/otf/autofill`),
+    onSuccess: (v) => qc.setQueryData(keys.otf(eventId), v),
+  });
+}
+
+/** Doldurulmus Word dosyasi (Content-Disposition dosya adini tasir). */
+export const otfDocxUrl = (eventId: Uuid) => `/api/events/${eventId}/otf.docx`;
 
 export function useCreateRecord() {
   const qc = useQueryClient();

@@ -59,6 +59,8 @@ pub struct RecordSummary {
     /// "geciken" sayilir (filters.rs `overdue` ile ayni tanim).
     action_overdue: bool,
     messages: i64,
+    /// Bu kayit bir etkinligin ikiziyse etkinlik (spec/73 §3a: ters yon sorgudan, saklanmaz).
+    event_id: Option<Uuid>,
 }
 
 pub async fn list(
@@ -77,7 +79,8 @@ pub async fn list(
                 exists(select 1 from actions a
                   where a.record_id = r.id and a.status in ('open','in_progress')
                     and a.due_date < current_date) as action_overdue,
-                (select count(*) from messages m where m.chat_id = r.chat_id) as messages
+                (select count(*) from messages m where m.chat_id = r.chat_id) as messages,
+                (select e.id from events e where e.record_id = r.id) as event_id
            from records r");
     {
         let tree = common::tree(&st);
@@ -104,6 +107,8 @@ pub struct Detail {
     /// Bu kisi kaydi sabitlemis mi.
     pinned: bool,
     membership: Membership,
+    /// Bu kayit bir etkinligin ikiziyse etkinlik; anahtar (Etkinlik | Kayit) buradan.
+    event_id: Option<Uuid>,
 }
 
 /// Erisim kipi ve bu kisinin kayitla iliskisi (spec: kayit erisim kipleri).
@@ -160,6 +165,8 @@ pub(crate) async fn detail_of(st: &AppState, me: &User, rec: Record) -> Result<D
     let mode: String = sqlx::query_scalar("select access_mode from records where id = $1")
         .bind(rec.id).fetch_one(&st.pool).await?;
     let restricted = mode == "private" && !can_edit;
+    let event_id: Option<Uuid> = sqlx::query_scalar("select id from events where record_id = $1")
+        .bind(rec.id).fetch_optional(&st.pool).await?;
     let can_decide = decider(me, &rec);
     let request: Option<String> = sqlx::query_scalar(
         "select status from record_join_requests where record_id = $1 and user_id = $2")
@@ -180,7 +187,7 @@ pub(crate) async fn detail_of(st: &AppState, me: &User, rec: Record) -> Result<D
     if restricted {
         return Ok(Detail {
             record: rec, actions: Vec::new(), participants: Vec::new(), cards: Vec::new(),
-            access: Access { can_edit: false, can_edit_deadline: false }, pinned, membership,
+            access: Access { can_edit: false, can_edit_deadline: false }, pinned, membership, event_id,
         });
     }
     let actions = sqlx::query_as(
@@ -202,7 +209,7 @@ pub(crate) async fn detail_of(st: &AppState, me: &User, rec: Record) -> Result<D
     }
     Ok(Detail {
         record: rec, actions, participants, cards,
-        access: Access { can_edit, can_edit_deadline }, pinned, membership,
+        access: Access { can_edit, can_edit_deadline }, pinned, membership, event_id,
     })
 }
 
@@ -225,14 +232,14 @@ pub(crate) async fn require_edit(st: &AppState, me: &User, rec: &Record) -> Resu
 
 // --- dogrulama yardimcilari -------------------------------------------------
 
-async fn check_user(pool: &PgPool, id: Option<Uuid>) -> Result<()> {
+pub(crate) async fn check_user(pool: &PgPool, id: Option<Uuid>) -> Result<()> {
     let Some(id) = id else { return Ok(()) };
     let ok: Option<i32> = sqlx::query_scalar("select 1 from users where id = $1 and is_active")
         .bind(id).fetch_optional(pool).await?;
     ok.map(|_| ()).ok_or(AppError::BadRequest("unknown_user"))
 }
 
-async fn check_team(pool: &PgPool, id: Option<Uuid>) -> Result<()> {
+pub(crate) async fn check_team(pool: &PgPool, id: Option<Uuid>) -> Result<()> {
     let Some(id) = id else { return Ok(()) };
     let ok: Option<i32> = sqlx::query_scalar("select 1 from teams where id = $1")
         .bind(id).fetch_optional(pool).await?;
@@ -240,7 +247,7 @@ async fn check_team(pool: &PgPool, id: Option<Uuid>) -> Result<()> {
 }
 
 /// Birim: aktif dugum (agac yalniz yapi, spec/22).
-fn check_unit(st: &AppState, id: Uuid) -> Result<()> {
+pub(crate) fn check_unit(st: &AppState, id: Uuid) -> Result<()> {
     let tree = common::tree(st);
     match tree.get(id) {
         Some(n) if n.is_active => Ok(()),
@@ -257,7 +264,7 @@ async fn check_pillar(pool: &PgPool, id: Option<Uuid>) -> Result<()> {
     ok.map(|_| ()).ok_or(AppError::BadRequest("invalid_pillar"))
 }
 
-async fn log(
+pub(crate) async fn log(
     tx: &mut sqlx::Transaction<'_, Postgres>, chat_id: Uuid, actor: Uuid,
     verb: &str, subject: &str, target: Option<&str>, detail: Option<String>,
 ) -> Result<()> {
@@ -269,7 +276,7 @@ async fn log(
     Ok(())
 }
 
-fn change(from: impl Serialize, to: impl Serialize) -> Option<String> {
+pub(crate) fn change(from: impl Serialize, to: impl Serialize) -> Option<String> {
     Some(serde_json::json!({ "from": from, "to": to }).to_string())
 }
 
@@ -451,6 +458,17 @@ pub async fn patch(
             .execute(&mut *tx).await?;
         log(&mut tx, rec.chat_id, me.id, "field_changed", &rec.title, Some(field),
             change(&from, &to)).await?;
+        // Ikizin basligi, onemi ve sorumlusu etkinlige de yazilir: iki yuz ayni
+        // (spec/73 §3a). SQL sabit; deger yine sutun tipine baglanir.
+        let synced = match field {
+            "title" => Some("update events set title = $2, updated_at = now() where record_id = $1"),
+            "priority" => Some("update events set priority = $2, updated_at = now() where record_id = $1"),
+            "owner_id" => Some("update events set owner_id = $2, updated_at = now() where record_id = $1"),
+            _ => None,
+        };
+        if let Some(sql) = synced {
+            bind_value(sqlx::query(sql).bind(rec.id), field, &to)?.execute(&mut *tx).await?;
+        }
         tx.commit().await?;
     }
     let rec = load(&st.pool, rec.id).await?;

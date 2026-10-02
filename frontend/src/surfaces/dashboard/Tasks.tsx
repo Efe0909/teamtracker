@@ -18,7 +18,6 @@ import {
 } from "../../ui/ui";
 import { NewRecordForm } from "../../features/record/NewRecordForm";
 import s from "./dashboard.module.css";
-import { useMockEvents } from "./eventModel";
 import { href } from "./routes";
 
 const QUICK = [
@@ -178,9 +177,6 @@ const DEFAULTS = Object.fromEntries(COLS.map((c) => [c.key, c.width])) as Record
 
 export function RecordTable({ rows, showTeam = true }: { rows: RecordSummary[]; showTeam?: boolean }) {
   const L = useLookup();
-  // ponytail: sahte etkinliklerden ters arama — API gelince RecordSummary.event_id.
-  const events = useMockEvents();
-  const eventOf = new Map(events.flatMap((e) => (e.record_id === null ? [] : [[e.record_id, e.id] as const])));
   const [saved, setSaved] = useStored<Record<string, number>>("table.cols", {});
   const widths = resolveWidths(DEFAULTS, saved);
   const drag = useRef<{ key: ColKey; x: number; w: number } | null>(null);
@@ -234,8 +230,8 @@ export function RecordTable({ rows, showTeam = true }: { rows: RecordSummary[]; 
                     <Link href={to}>{r.title}</Link>
                     <KindTag kind={r.kind} />
                     {/* Etkinligin ikiziyse etiket etkinlige goturur (spec/73 §3a). */}
-                    {eventOf.get(r.id) !== undefined && (
-                      <Link href={href({ name: "event", id: eventOf.get(r.id)! })} className={s.evTag} title="Bu kayıt bir etkinliğin kaydı — etkinliğe git">
+                    {r.event_id !== null && (
+                      <Link href={href({ name: "event", id: r.event_id })} className={s.evTag} title="Bu kayıt bir etkinliğin kaydı — etkinliğe git">
                         <Tag tone="neutral"><Icon name="calendar" size={12} /> Etkinlik</Tag>
                       </Link>
                     )}

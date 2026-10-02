@@ -10,10 +10,12 @@ mod auth;
 mod cards;
 mod chats;
 mod common;
+mod events;
 mod home;
 mod meta;
 mod nodes;
 mod notify;
+mod otf;
 mod profile;
 mod records;
 mod teams;
@@ -55,6 +57,25 @@ pub fn router() -> Router<AppState> {
         .route("/api/cards/{id}/attachments", post(cards::attach))
         .route("/api/actions/mine", get(records::my_actions))
         .route("/api/actions/{id}", patch(records::patch_action))
+        .route("/api/events", get(events::list).post(events::create))
+        .route("/api/events/{id}", get(events::get).patch(events::patch))
+        .route("/api/events/{id}/participants/{user}",
+            put(events::put_participant).delete(events::remove_participant))
+        .route("/api/events/{id}/teams/{team}", put(events::put_team).delete(events::remove_team))
+        .route("/api/events/{id}/checkpoints", post(events::add_checkpoint))
+        .route("/api/events/{id}/widgets", post(events::add_widget))
+        .route("/api/events/{id}/materials", post(events::add_material))
+        .route("/api/events/{id}/otf", get(otf::get).put(otf::put))
+        .route("/api/events/{id}/otf/autofill", post(otf::autofill))
+        .route("/api/events/{id}/otf.docx", get(otf::docx))
+        .route("/api/event-checkpoints/{id}",
+            patch(events::patch_checkpoint).delete(events::delete_checkpoint))
+        .route("/api/event-checkpoints/{id}/requests", post(events::request_checkpoint))
+        .route("/api/checkpoint-requests/{id}", post(events::resolve_request))
+        .route("/api/event-widgets/{id}", delete(events::delete_widget))
+        .route("/api/materials/{id}", patch(events::patch_material).delete(events::delete_material))
+        .route("/api/materials/{id}/providers", post(events::add_provider))
+        .route("/api/material-providers/{id}", delete(events::delete_provider))
         .route("/api/chats/{id}/feed", get(chats::feed))
         .route("/api/chats/{id}/messages", post(chats::post))
         .route("/api/teams", get(home::teams).post(teams::create_team))

@@ -2,24 +2,26 @@
 // tablo; filtreler URL'de (KNOW-234). Sagda daraltilir ray: ay takvimi +
 // aylara gore yaklasan etkinlikler.
 //
-// ponytail: veri SAHTE (eventModel.ts) ve suzme istemcide — /api/events
-// gelince suzme sunucuya.
+// Veri /api/events'ten; suzme istemcide, liste kucuk.
 
 import { useEffect, useState } from "react";
-import type { IsoDate, RecordSummary, Uuid } from "../../api/types";
+import { errorText } from "../../api/client";
+import { useCreateEvent, useEvents, useRecords } from "../../api/hooks";
+import type { EventKind, EventSummary, IsoDate, RecordSummary, Uuid } from "../../api/types";
 import { daysFromToday, parseDay, PRIORITY, PRIORITY_ORDER, toIsoDay } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
 import { navigate } from "../../lib/router";
 import { useStored } from "../../lib/stored";
 import { Icon } from "../../ui/icons";
 import {
-  Button, cx, Dialog, Empty, IconButton, KindTag, Link, Picker, PriorityTag, Segmented, Status, Tag, ui, Who, type Option,
+  Button, cx, Dialog, Empty, IconButton, KindTag, Link, Loading, Picker, PriorityTag, Segmented, Status, Tag, ui, Who, type Option,
 } from "../../ui/ui";
 import s from "./dashboard.module.css";
-import { EVENT_KIND, EVENT_STATUS, EVENT_TEMPLATE, useMockEvents, useMockRecords, WIDGET, type EventItem, type EventKind } from "./eventModel";
+import { EVENT_KIND, EVENT_STATUS, EVENT_TEMPLATE, WIDGET } from "./eventModel";
 import { href, type EventQuery } from "./routes";
+import { ErrorScreen } from "../errors/ErrorScreen";
 
-type EventSummary = EventItem;
+const NO_RECORDS: RecordSummary[] = [];
 
 const TABS = [
   { value: "past", label: "Geçmiş" },
@@ -41,8 +43,8 @@ function tabOf(e: EventSummary): Tab {
 
 export function Events({ query }: { query: EventQuery }) {
   const L = useLookup();
-  const records = useMockRecords();
-  const events = useMockEvents();
+  const records = useRecords({}).data ?? NO_RECORDS;
+  const q = useEvents();
   const [creating, setCreating] = useState(false);
   const [search, setSearch] = useState(query.search ?? "");
   const [rail, setRail] = useStored("events.rail", true);
@@ -64,6 +66,8 @@ export function Events({ query }: { query: EventQuery }) {
     navigate(href({ name: "events", query: next as EventQuery }), { replace: true });
   }
 
+  if (q.data === undefined) return q.error !== null ? <ErrorScreen code="network" /> : <Loading />;
+  const events = q.data;
   const counts = { past: 0, planned: 0, pool: 0 };
   for (const e of events) counts[tabOf(e)]++;
 
@@ -216,7 +220,7 @@ function EventTable({ rows }: { rows: EventSummary[] }) {
               <td><Tag tone={EVENT_STATUS[e.status].tone}>{EVENT_STATUS[e.status].label}</Tag></td>
               <td><PriorityTag priority={e.priority} bare /></td>
               <td><Who user={L.user(e.owner_id)} /></td>
-              <td className={s.evNum}>{e.attendees > 0 ? e.attendees : <span className={s.dim}>—</span>}</td>
+              <td className={s.evNum}>{(e.attendees ?? 0) > 0 ? e.attendees : <span className={s.dim}>—</span>}</td>
             </tr>
           ))}
         </tbody>
@@ -231,7 +235,7 @@ function TopLinked({ events, records }: { events: EventSummary[]; records: Recor
   const n = new Map<Uuid, number>();
   for (const e of events) for (const id of e.record_ids) n.set(id, (n.get(id) ?? 0) + 1);
   // Ikiz kayitlar sayilmaz: etkinligin kendisi, "bagli kayit" degil (spec/73 §3a).
-  const twins = new Set(events.flatMap((e) => (e.record_id === null ? [] : [e.record_id])));
+  const twins = new Set(events.map((e) => e.record_id));
   const top = records
     .filter((r) => n.has(r.id) && !twins.has(r.id))
     .sort((a, b) => (n.get(b.id) ?? 0) - (n.get(a.id) ?? 0))
@@ -350,7 +354,7 @@ function CalendarRail({ events, onClose }: { events: EventSummary[]; onClose: ()
                   </span>
                   <span className={s.evItemText}>
                     <Link href={href({ name: "event", id: e.id })}>{e.title}</Link>
-                    <span className={s.dim}>{[e.start, e.place].filter(Boolean).join(" · ")}</span>
+                    <span className={s.dim}>{[e.start_time, e.place].filter(Boolean).join(" · ")}</span>
                   </span>
                 </li>
               ))}
@@ -365,16 +369,29 @@ function CalendarRail({ events, onClose }: { events: EventSummary[]; onClose: ()
 // --- yeni etkinlik ---------------------------------------------------------------
 
 /** Tur secilince sablonun yukleyecegi widget ve checkpoint'ler onizlenir.
- *  ponytail: kaydetme yok — /api/events gelince mutate + detaya git. */
+ *  Olusunca etkinligin detayina gidilir. */
 function NewEventForm({ onCancel }: { onCancel: () => void }) {
   const L = useLookup();
+  const create = useCreateEvent();
+  const [title, setTitle] = useState("");
   const [kind, setKind] = useState<EventKind>("meeting");
+  const [unit, setUnit] = useState("");
+  const [date, setDate] = useState("");
   const tpl = EVENT_TEMPLATE[kind];
+  const ready = title.trim() !== "" && unit !== "";
   return (
-    <form className={ui.formStack} onSubmit={(e) => e.preventDefault()}>
+    <form className={ui.formStack} onSubmit={(e) => {
+      e.preventDefault();
+      if (!ready || create.isPending) return;
+      create.mutate(
+        { title: title.trim(), kind, unit_id: unit, ...(date === "" ? {} : { date }) },
+        { onSuccess: (r) => navigate(href({ name: "event", id: r.id })) },
+      );
+    }}>
       <label className={ui.field}>
         <span>Ad</span>
-        <input className={ui.input} required maxLength={200} autoFocus placeholder="Örn. DC araba atölyesi" />
+        <input className={ui.input} required maxLength={200} autoFocus placeholder="Örn. DC araba atölyesi"
+          value={title} onChange={(e) => setTitle(e.target.value)} />
       </label>
       <label className={ui.field}>
         <span>Tür</span>
@@ -385,14 +402,14 @@ function NewEventForm({ onCancel }: { onCancel: () => void }) {
       {/* Etkinligin kaydi ayni islemde acilir; kayit bir birimde durur (spec/73 §3a). */}
       <label className={ui.field}>
         <span>Birim <span className={ui.fieldHint}>— etkinliğin kaydı (sohbet + arşiv) burada açılır</span></span>
-        <select className={ui.input} required defaultValue="">
+        <select className={ui.input} required value={unit} onChange={(e) => setUnit(e.target.value)}>
           <option value="" disabled>Birim seç</option>
           {L.meta.nodes.map((n) => <option key={n.id} value={n.id}>{"  ".repeat(n.depth)}{n.name}</option>)}
         </select>
       </label>
       <label className={ui.field}>
         <span>Tarih <span className={ui.fieldHint}>— boş bırakılırsa havuza düşer</span></span>
-        <input className={ui.input} type="date" />
+        <input className={ui.input} type="date" value={date} onChange={(e) => setDate(e.target.value)} />
       </label>
       <div className={s.evTemplate}>
         <span className={s.dim}>{EVENT_KIND[kind]} şablonu otomatik yükler:</span>
@@ -412,10 +429,10 @@ function NewEventForm({ onCancel }: { onCancel: () => void }) {
           ))}
         </ol>
       </div>
-      <p className={s.dim}>Tasarım önizlemesi: etkinlik API'si gelince kaydedilecek.</p>
+      {create.isError && <p className={ui.error} role="alert">{errorText(create.error)}</p>}
       <div className={ui.dact}>
         <Button onClick={onCancel}>Vazgeç</Button>
-        <Button type="submit" variant="primary" disabled>Oluştur</Button>
+        <Button type="submit" variant="primary" disabled={!ready || create.isPending}>Oluştur</Button>
       </div>
     </form>
   );

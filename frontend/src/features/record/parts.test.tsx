@@ -40,6 +40,7 @@ function detail(createdBy: string): RecordDetail {
     actions: [],
     participants: [],
     pinned: false,
+    event_id: null,
     membership: { mode: "public", is_member: true, restricted: false, request: null, can_decide: false, requests: [] },
     cards: [],
     access: { can_edit: false, can_edit_deadline: false },
