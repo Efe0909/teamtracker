@@ -2551,6 +2551,18 @@ li[data-state="todo"] > .evStep > span:first-child {
   gap: 4px;
   color: var(--warn-text);
 }
+/* "Formu gozden gecirdim": Word indir'in yaninda, kopyadan sonra */
+.otfReview {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+.otfReview:has(input:disabled) {
+  color: var(--dim);
+  cursor: not-allowed;
+}
 .otfBody {
   display: flex;
   flex-direction: column;

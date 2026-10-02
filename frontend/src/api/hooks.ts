@@ -306,6 +306,16 @@ export function useSaveOtf(eventId: Uuid) {
   });
 }
 
+/** Otomatik doldur: en son kaydedilen baska formdan kopyalar (sunucuda); form
+ *  gozden gecirilene kadar Word kilitli. */
+export function useAutofillOtf(eventId: Uuid) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => request<OtfView>("POST", `/api/events/${eventId}/otf/autofill`),
+    onSuccess: (v) => qc.setQueryData(keys.otf(eventId), v),
+  });
+}
+
 /** Doldurulmus Word dosyasi (Content-Disposition dosya adini tasir). */
 export const otfDocxUrl = (eventId: Uuid) => `/api/events/${eventId}/otf.docx`;
 

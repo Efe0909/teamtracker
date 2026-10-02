@@ -78,6 +78,9 @@ export type ApiErrorCode =
   | "invalid_quantity"
   | "too_many_contacts"
   | "otf_template"
+  | "otf_no_source"
+  | "otf_review_needs_edit"
+  | "otf_unreviewed"
   | "network";
 
 export const ERRORS = {
@@ -154,6 +157,9 @@ export const ERRORS = {
   invalid_quantity: "Adet 1 ile 10000 arasında olmalı.",
   too_many_contacts: "Formda en çok 3 etkinlik sorumlusu yer alır.",
   otf_template: "Form şablonu okunamadı. Yöneticiye haber ver.",
+  otf_no_source: "Kopyalanacak başka bir OTF formu yok.",
+  otf_review_needs_edit: "Kopyalanan formda en az bir alanı bu etkinliğe göre güncellemeden gözden geçirildi işaretlenemez.",
+  otf_unreviewed: "Form başka bir etkinlikten kopyalandı; indirmeden önce gözden geçirip işaretle.",
   network: "Sunucuya ulaşılamadı. Bağlantını kontrol et.",
 } satisfies Record<ApiErrorCode, string>;
 

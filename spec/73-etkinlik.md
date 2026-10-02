@@ -328,6 +328,14 @@ Eski formatta, geç ya da kurala uymayan OTF işleme alınmaz.
   `EKIPTAKIP_CLUB_NAME`, `EKIPTAKIP_CLUB_CODE`.
 - Şablonda toplantı, eğitim ve sosyal etkinlik OTF widget'ı ve "OTF gönderildi"
   checkpoint'iyle (−7) açılır. Saha ziyareti ve konferans kampüs dışı sayılır.
+- **Otomatik doldur:** etkinlikten gelmeyen bütün alanlar (alanlar, kutular +
+  adetler, sorumlular) **en son kaydedilen, gözden geçirilmiş** başka formdan
+  sunucuda kopyalanır (`POST /api/events/{id}/otf/autofill`; var olan formun
+  üzerine yazar, onay sorulur). Kopyalanan form `needs_review` olur: Word
+  indirilemez (`409 otf_unreviewed`), "Formu gözden geçirdim" kutusu Word
+  indir'in yanında çıkar ve ancak kopyadan sonra **en az bir alan değişince**
+  işaretlenir (`409 otf_review_needs_edit`). Kopya bekleyen form başkasına
+  kaynak olmaz. Durum `event_otf.copied_from / needs_review / edited`.
 - **Mail gönderilmez:** dosya kulüp adresinden elle gönderilir; uygulama dosyayı,
   adı ve konuyu hazırlar.
 

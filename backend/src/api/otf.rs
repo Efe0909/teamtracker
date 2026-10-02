@@ -98,6 +98,54 @@ pub struct View {
     deadline: Option<NaiveDate>,
     /// Bugun son gunu gecti mi.
     late: bool,
+    /// Otomatik doldurmanin kaynagi olacak form (en son kaydedilen, gozden
+    /// gecirilmis baska etkinligin formu); yoksa null.
+    autofill_source: Option<Source>,
+    /// Bu form kopyayla dolduysa: kaynak ve gozden gecirme durumu.
+    review: Option<Review>,
+}
+
+#[derive(Serialize, sqlx::FromRow)]
+pub struct Source {
+    event_id: Uuid,
+    title: String,
+    updated_at: chrono::DateTime<chrono::Utc>,
+}
+
+#[derive(Serialize, sqlx::FromRow)]
+pub struct Review {
+    /// Kaynak etkinlik silindiyse null.
+    copied_from: Option<Uuid>,
+    copied_title: Option<String>,
+    /// true iken Word indirilemez.
+    needs_review: bool,
+    /// Kopyadan sonra en az bir alan degisti mi ("gozden gecirdim" icin sart).
+    edited: bool,
+}
+
+async fn load_review(pool: &PgPool, id: Uuid) -> Result<Option<Review>> {
+    Ok(sqlx::query_as(
+        "select o.copied_from, e.title as copied_title, o.needs_review, o.edited
+           from event_otf o left join events e on e.id = o.copied_from
+          where o.event_id = $1 and (o.copied_from is not null or o.needs_review)")
+        .bind(id).fetch_optional(pool).await?)
+}
+
+/// En son kaydedilmis, gozden gecirilmis (kopya bekleyen degil) baska form.
+async fn source_of(pool: &PgPool, id: Uuid) -> Result<Option<Source>> {
+    Ok(sqlx::query_as(
+        "select o.event_id, e.title, o.updated_at
+           from event_otf o join events e on e.id = o.event_id
+          where o.event_id <> $1 and not o.needs_review
+          order by o.updated_at desc limit 1")
+        .bind(id).fetch_optional(pool).await?)
+}
+
+/// Formun icerigi (alanlar + kutular + sorumlular), karsilastirma icin.
+async fn snapshot(pool: &PgPool, id: Uuid) -> Result<serde_json::Value> {
+    let mut items = load_items(pool, id).await?;
+    items.sort_by(|a, b| a.item.cmp(&b.item));
+    Ok(serde_json::json!([load_fields(pool, id).await?, items, load_contacts(pool, id).await?]))
 }
 
 #[derive(sqlx::FromRow)]
@@ -159,11 +207,14 @@ fn file_name(code: &str, date: Option<NaiveDate>) -> String {
     }
 }
 
-fn view(st: &AppState, ev: &EventInfo, fields: Fields, items: Vec<Item>, contacts: Vec<Uuid>) -> View {
+fn view(
+    st: &AppState, ev: &EventInfo, fields: Fields, items: Vec<Item>, contacts: Vec<Uuid>,
+    autofill_source: Option<Source>, review: Option<Review>,
+) -> View {
     let cfg = &st.cfg;
     let deadline = ev.date.map(deadline);
     View {
-        fields, items, contacts,
+        fields, items, contacts, autofill_source, review,
         catalog: otf::SECTIONS.iter().map(|s| CatalogSection {
             key: s.key, label: s.label,
             items: s.items.iter().map(|(key, label)| CatalogItem { key, label }).collect(),
@@ -182,11 +233,13 @@ fn view(st: &AppState, ev: &EventInfo, fields: Fields, items: Vec<Item>, contact
 pub async fn get(
     State(st): State<AppState>, CurrentUser(_me): CurrentUser, Path(raw): Path<String>,
 ) -> Result<Json<View>> {
-    let id = common::id(&raw)?;
+    reply(&st, common::id(&raw)?).await
+}
+
+async fn reply(st: &AppState, id: Uuid) -> Result<Json<View>> {
     let ev = event_info(&st.pool, id).await?;
-    let v = view(&st, &ev, load_fields(&st.pool, id).await?, load_items(&st.pool, id).await?,
-        load_contacts(&st.pool, id).await?);
-    Ok(Json(v))
+    Ok(Json(view(st, &ev, load_fields(&st.pool, id).await?, load_items(&st.pool, id).await?,
+        load_contacts(&st.pool, id).await?, source_of(&st.pool, id).await?, load_review(&st.pool, id).await?)))
 }
 
 #[derive(Deserialize)]
@@ -197,6 +250,47 @@ pub struct Input {
     items: Vec<Item>,
     #[serde(default)]
     contacts: Vec<Uuid>,
+    /// "Formu gozden gecirdim": kopyayla dolan formun kilidini acar. Kopyadan
+    /// sonra en az bir alan degismediyse 409 `otf_review_needs_edit`.
+    #[serde(default)]
+    reviewed: bool,
+}
+
+/// Otomatik doldur: etkinlikten GELMEYEN butun alanlar (alanlar, kutular,
+/// sorumlular) en son kaydedilmis baska formdan kopyalanir; form "gozden
+/// gecirilmeli" olur ve o sure Word indirilemez. Var olan form uzerine yazilir.
+pub async fn autofill(
+    State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>,
+) -> Result<Json<View>> {
+    let id = common::id(&raw)?;
+    events::editable(&st, &me, id).await?;
+    let src = source_of(&st.pool, id).await?.ok_or(AppError::Conflict("otf_no_source"))?.event_id;
+    let mut tx = st.pool.begin().await?;
+    sqlx::query(
+        "insert into event_otf (event_id, purpose, end_time, advisor, age_group, outcomes,
+                                layout_notes, av_notes, tech_notes, host_notes, care_notes, other_notes,
+                                copied_from, needs_review, edited)
+         select $1, purpose, end_time, advisor, age_group, outcomes,
+                layout_notes, av_notes, tech_notes, host_notes, care_notes, other_notes, $2, true, false
+           from event_otf where event_id = $2
+         on conflict (event_id) do update set
+           purpose = excluded.purpose, end_time = excluded.end_time, advisor = excluded.advisor,
+           age_group = excluded.age_group, outcomes = excluded.outcomes,
+           layout_notes = excluded.layout_notes, av_notes = excluded.av_notes,
+           tech_notes = excluded.tech_notes, host_notes = excluded.host_notes,
+           care_notes = excluded.care_notes, other_notes = excluded.other_notes,
+           copied_from = excluded.copied_from, needs_review = true, edited = false, updated_at = now()")
+        .bind(id).bind(src).execute(&mut *tx).await?;
+    sqlx::query("delete from event_otf_items where event_id = $1").bind(id).execute(&mut *tx).await?;
+    sqlx::query("insert into event_otf_items (event_id, item, quantity)
+                 select $1, item, quantity from event_otf_items where event_id = $2")
+        .bind(id).bind(src).execute(&mut *tx).await?;
+    sqlx::query("delete from event_otf_contacts where event_id = $1").bind(id).execute(&mut *tx).await?;
+    sqlx::query("insert into event_otf_contacts (event_id, user_id, position)
+                 select $1, user_id, position from event_otf_contacts where event_id = $2")
+        .bind(id).bind(src).execute(&mut *tx).await?;
+    tx.commit().await?;
+    reply(&st, id).await
 }
 
 fn clean(v: Option<String>, max: usize, code: &'static str) -> Result<Option<String>> {
@@ -231,6 +325,7 @@ pub async fn put(
         crate::api::records::check_user(&st.pool, Some(*c)).await?;
     }
 
+    let before = snapshot(&st.pool, id).await?;
     let mut tx = st.pool.begin().await?;
     sqlx::query(
         "insert into event_otf (event_id, purpose, end_time, advisor, age_group, outcomes,
@@ -260,7 +355,19 @@ pub async fn put(
             .bind(id).bind(c).bind(i as i16).execute(&mut *tx).await?;
     }
     tx.commit().await?;
-    get(State(st), CurrentUser(me), Path(raw)).await
+
+    // Kopya bekleyen form: icerik degistiyse "duzenlendi"; "gozden gecirdim"
+    // ancak duzenlenmis formda kilidi acar.
+    let review = load_review(&st.pool, id).await?;
+    if let Some(r) = review.filter(|r| r.needs_review) {
+        let edited = r.edited || snapshot(&st.pool, id).await? != before;
+        if b.reviewed && !edited {
+            return Err(AppError::Conflict("otf_review_needs_edit"));
+        }
+        sqlx::query("update event_otf set edited = $2, needs_review = not $3 where event_id = $1")
+            .bind(id).bind(edited).bind(b.reviewed).execute(&st.pool).await?;
+    }
+    reply(&st, id).await
 }
 
 #[derive(sqlx::FromRow)]
@@ -275,6 +382,10 @@ pub async fn docx(
 ) -> Result<Response> {
     let id = common::id(&raw)?;
     let ev = event_info(&st.pool, id).await?;
+    // Kopyayla dolup gozden gecirilmemis form gonderilmesin.
+    if load_review(&st.pool, id).await?.is_some_and(|r| r.needs_review) {
+        return Err(AppError::Conflict("otf_unreviewed"));
+    }
     let f = load_fields(&st.pool, id).await?;
     let items = load_items(&st.pool, id).await?;
     let contacts: Vec<Contact> = sqlx::query_as(

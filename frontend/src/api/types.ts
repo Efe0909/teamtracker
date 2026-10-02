@@ -278,6 +278,8 @@ export interface OtfInput extends OtfFields {
   items: OtfItem[];
   /** En cok 3 etkinlik sorumlusu, formdaki sirayla; telefon profilden. */
   contacts: Uuid[];
+  /** "Formu gozden gecirdim" — yalniz PUT'ta; kopyayla dolan formun kilidini acar. */
+  reviewed?: boolean;
 }
 
 export interface OtfView extends OtfInput {
@@ -289,6 +291,11 @@ export interface OtfView extends OtfInput {
   /** Etkinlikten 3 is gunu once; tarihsiz etkinlikte null. */
   deadline: IsoDate | null;
   late: boolean;
+  /** Otomatik doldurmanin kaynagi: en son kaydedilen, gozden gecirilmis baska form. */
+  autofill_source: { event_id: Uuid; title: string; updated_at: IsoTime } | null;
+  /** Form kopyayla dolduysa. `needs_review` iken Word indirilemez; "gozden
+   *  gecirdim" ancak `edited` (kopyadan sonra en az bir alan degisti) ise. */
+  review: { copied_from: Uuid | null; copied_title: string | null; needs_review: boolean; edited: boolean } | null;
 }
 
 export interface MaterialPatch {

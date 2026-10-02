@@ -6,7 +6,7 @@
 
 import { useState } from "react";
 import { errorText } from "../../api/client";
-import { otfDocxUrl, useOtf, useSaveOtf } from "../../api/hooks";
+import { otfDocxUrl, useAutofillOtf, useOtf, useSaveOtf } from "../../api/hooks";
 import type { EventDetail, OtfFields, OtfInput, OtfView, Uuid } from "../../api/types";
 import r from "../../features/record/record.module.css";
 import { formatDay } from "../../lib/labels";
@@ -99,10 +99,26 @@ function Form({ eventId, event, canEdit, view }: { eventId: Uuid; event: EventDe
       () => toast({ text: "Kopyalanamadı", error: true }),
     );
   };
-  const onSave = () => save.mutate(draft, {
-    onSuccess: (v) => { setDraft(toInput(v)); toast({ text: "Kaydedildi", error: false }); },
+  const onSave = (reviewed = false) => save.mutate({ ...draft, reviewed }, {
+    onSuccess: (v) => { setDraft(toInput(v)); toast({ text: reviewed ? "Gözden geçirildi — Word açıldı" : "Kaydedildi", error: false }); },
     onError: (e) => toast({ text: errorText(e), error: true }),
   });
+  // Otomatik doldur: etkinlikten gelmeyen her alan en son kaydedilen baska formdan
+  // (sunucuda kopyalanir). Kopyadan sonra Word kilitli; "gozden gecirdim" ancak
+  // en az bir alan degisince isaretlenir (sunucu da zorlar).
+  const autofill = useAutofillOtf(eventId);
+  const src = view.autofill_source;
+  const hasContent = Object.values(toInput(view)).some((v) => (Array.isArray(v) ? v.length > 0 : v !== null));
+  const onAutofill = () => {
+    if (src === null) return;
+    if (hasContent && !window.confirm(`Bu form “${src.title}” etkinliğinin formuyla değiştirilecek. Devam edilsin mi?`)) return;
+    autofill.mutate(undefined, {
+      onSuccess: (v) => { setDraft(toInput(v)); setOpen(true); toast({ text: `“${src.title}” formundan dolduruldu — gözden geçir`, error: false }); },
+      onError: (e) => toast({ text: errorText(e), error: true }),
+    });
+  };
+  const locked = view.review?.needs_review === true;
+  const canTick = locked && !ro && (view.review?.edited === true || dirty);
 
   const text = (k: keyof OtfFields, label: string, long = false) => (
     <label className={ui.field}>
@@ -118,12 +134,38 @@ function Form({ eventId, event, canEdit, view }: { eventId: Uuid; event: EventDe
   return (
     <>
       <div className={s.otfDownload}>
-        <a className={cx(ui.btn, ui["v-primary"], ui["z-sm"])} href={otfDocxUrl(eventId)} download>
-          <Icon name="download" size={14} /> Word indir
-        </a>
+        {locked ? (
+          <Button size="sm" variant="primary" disabled title="Kopyalanan form gözden geçirilmeden indirilemez">
+            <Icon name="lock" size={14} /> Word indir
+          </Button>
+        ) : (
+          <a className={cx(ui.btn, ui["v-primary"], ui["z-sm"])} href={otfDocxUrl(eventId)} download>
+            <Icon name="download" size={14} /> Word indir
+          </a>
+        )}
+        {locked && (
+          <label className={s.otfReview} title={canTick ? undefined : "Önce bu etkinliğe göre en az bir alanı güncelle"}>
+            <input type="checkbox" checked={false} disabled={!canTick || save.isPending} onChange={() => onSave(true)} />
+            Formu gözden geçirdim
+          </label>
+        )}
+        {canEdit && src !== null && (
+          <Button size="sm" disabled={autofill.isPending} onClick={onAutofill}
+            title={`Etkinlikten gelmeyen alanları “${src.title}” formundan kopyalar`}>
+            <Icon name="restore" size={14} /> Otomatik doldur
+          </Button>
+        )}
+        {locked && (
+          <span className={s.otfWarn}>
+            <Icon name="alert" size={13} />
+            {view.review?.copied_title !== null && view.review?.copied_title !== undefined
+              ? `“${view.review.copied_title}” formundan kopyalandı. `
+              : "Başka bir formdan kopyalandı. "}
+            Bu etkinliğe göre en az bir alanı güncelleyip gözden geçirdiğini işaretle.
+          </span>
+        )}
         <span className={s.otfCopy}>
           <span className={r.muted}>Dosya adı</span> <code>{view.file_name}</code>
-          {/* Ikon setinde kopyala simgesi yok: metinli kucuk dugme. */}
           <IconButton icon="copy" size={14} label="Dosya adını kopyala" onClick={() => copy(view.file_name)} />
         </span>
         <span className={s.otfCopy}>
@@ -208,7 +250,7 @@ function Form({ eventId, event, canEdit, view }: { eventId: Uuid; event: EventDe
 
           {canEdit && (
             <div className={s.otfActs}>
-              <Button variant="primary" size="sm" disabled={!dirty || save.isPending} onClick={onSave}>Kaydet</Button>
+              <Button variant="primary" size="sm" disabled={!dirty || save.isPending} onClick={() => onSave()}>Kaydet</Button>
               {dirty && <Button variant="ghost" size="sm" disabled={save.isPending} onClick={() => setDraft(toInput(view))}>Vazgeç</Button>}
             </div>
           )}

@@ -131,6 +131,12 @@ create table event_otf (
   host_notes   text,
   care_notes   text,
   other_notes  text,
+  -- Otomatik doldurma: baska etkinligin formundan kopyalandiysa kaynak ve
+  -- gozden gecirme durumu. needs_review iken .docx verilmez; "gozden gecirdim"
+  -- ancak kopyadan sonra en az bir alan degistiyse (edited) isaretlenir.
+  copied_from  uuid references events(id) on delete set null,
+  needs_review boolean not null default false,
+  edited       boolean not null default false,
   updated_at   timestamptz not null default now()
 );
 
