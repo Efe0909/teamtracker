@@ -1627,10 +1627,52 @@ a.row:hover {
   background: var(--tint);
 }
 .lv0 { background: var(--tint); }
-.lv1 { background: color-mix(in srgb, var(--acc) 25%, var(--tint)); }
-.lv2 { background: color-mix(in srgb, var(--acc) 50%, var(--tint)); }
-.lv3 { background: color-mix(in srgb, var(--acc) 75%, var(--tint)); }
-.lv4 { background: var(--acc); }
+.lv1 { background: var(--heat-1); }
+.lv2 { background: var(--heat-2); }
+.lv3 { background: var(--heat-3); }
+.lv4 { background: var(--heat-4); }
+
+/* matris + yaninda kisi istatistikleri */
+.usageBody {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--s-6);
+}
+.usageStats {
+  flex: 1;
+  min-width: 260px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: var(--s-3);
+  margin: 0;
+}
+.usageStats > div {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+.usageStats dt {
+  font-size: var(--fs-xs);
+  color: var(--dim);
+}
+.usageStats dd {
+  margin: 0;
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.matrixLegend {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: var(--s-2);
+  font-size: var(--fs-xs);
+  color: var(--dim);
+}
 
 /* --- KPI iskeleti ---------------------------------------------------------- */
 .kpiGrid {
