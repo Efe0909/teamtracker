@@ -18,7 +18,8 @@
 | `70-guvenlik.md` | tehdit modeli, kimlik, yetki, CSRF, sırlar, denetim izi |
 | `71-yonetim-paneli.md` | admin ekranı: kullanıcı/scope/rol yönetimi, kilitlenme koruması |
 | `72-node-turleri.md` | node_type enum + tür projeksiyonları (teams/pillar), yaşam döngüsü — **tasarım** |
-| `73-etkinlik.md` | etkinlik planlama: liste + etkinlik sayfası, ilişkisel widget'lar, tür şablonu, satın alımlar — **tasarım** (ön yüz taslağı var, Rust yok) |
+| `73-etkinlik.md` | etkinlik planlama: liste + etkinlik sayfası, ilişkisel widget'lar, tür şablonu, satın alımlar, OTF — **uygulandı** |
+| `74-referans-veri.md` | operational kökler (`key`), shape (leaf/list/tree), attrs, kök başına slot şeması, etkinlik türleri düğüm olarak, paylaşılan tree seçici — **tasarım** (72'nin kök kurallarını geçersiz kılar) |
 | `60-kaynak-uyarlama.md` | kaynak panoların çözümlemesi: veri hattı, ekran ekran uyarlama, alınmayacaklar |
 | `61-arastirma-sentezi.md` | IWS ve ekip araçları kaynak taraması — bizim ölçeğe uyan/uymayan pratikler |
 | `referans/` | kaynak arayüz dosyaları (`spec/referans/layout-a.html`) |
@@ -39,7 +40,7 @@ Kaynak sistemden uyarlanacak ekranlar. Sıra, `app.py` içindeki `MODULES` kayd�
 | | Kazanım Ağacı | `kazanim-agaci` | var (git'te değil) | `60-kaynak-uyarlama.md` 2.6 | | bekliyor |
 | | Pivot & Veri Analizi | `pivot` | var (git'te değil) | `60-kaynak-uyarlama.md` 2.3 | | bekliyor |
 | | Takvim | `takvim` | | | | bekliyor |
-| 73 | Etkinlik Planlama | `/events` | eskiz (git'te değil) | `73-etkinlik.md` | — | **tasarım** — ön yüz sahte veriyle |
+| 73 | Etkinlik Planlama | `/events` | eskiz (git'te değil) | `73-etkinlik.md` | — | **yazıldı** — PR bekliyor (`claude/events-backend`) |
 | | Görev Tanımları & Şemalar | `tanimlar` | | `60-kaynak-uyarlama.md` 2.8 | | bekliyor |
 | | Ekip Arşivi | `arsiv` | | | | bekliyor |
 | | Dosyalar / NAS | `dosyalar` | var (git'te değil) | `60-kaynak-uyarlama.md` 2.7 | | bekliyor — karar verildi (`20-sema.md` §3b), modül henüz yazılmadı |
