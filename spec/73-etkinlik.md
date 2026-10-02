@@ -1,9 +1,9 @@
 # 73 — Etkinlik planlama modülü
 
-**Durum: tasarım.** Ön yüz taslağı sahte veriyle duruyor
-(`frontend/src/surfaces/dashboard/Events.tsx`, `EventPage.tsx`, `eventModel.ts`);
-Rust tarafı ve göç **yok**. Bu belge göç yazılırken kaynak alınır; taslaktaki
-sahte veri ile çelişirse bu belge kazanır.
+**Durum: uygulandı.** Göç `backend/migrations/010_events.sql`, uçlar
+`backend/src/api/events.rs`, ön yüz `frontend/src/surfaces/dashboard/Events.tsx`,
+`EventPage.tsx`, `Purchases.tsx`. Kod ile bu belge çelişirse önce hangisinin
+yanlış olduğuna bakılır, ikisi birlikte düzeltilir.
 
 Yalnız `dashboard.` yüzü. Mobil karşılığı şimdilik yok.
 
@@ -91,7 +91,8 @@ create table event_checkpoints (
   id        uuid primary key default gen_random_uuid(),
   event_id  uuid not null references events(id) on delete cascade,
   label     text not null,
-  due_date  date,                   -- etkinlik tarihsizse null
+  offset_days smallint,             -- şablondan: etkinlik tarihine göre (§6)
+  due_date  date,                   -- elle eklenen: mutlak; ikisi birden dolu olamaz
   done_at   timestamptz,            -- elle işaretlenir; tarih geçti diye kendiliğinden dolmaz
   position  smallint not null
 );
@@ -289,10 +290,32 @@ Yeni scope'lar (göçte `scopes`'a eklenecek): `manage_event_widgets`,
 
 ---
 
-## 6. Açık sorular
+## 6. Uygulama kararları
 
-- **Etkinliği kim düzenler?** Kayıtlardaki gibi katılımcı/takım mı, yoksa yeni bir
-  `manage_events` scope'u mu? Karar verilmedi.
+- **Etkinliği kim düzenler?** İkiz kaydını düzenleyebilen (kayıt yetki yolları
+  aynen: sorumlu, açan, katılımcı, takım, dal izni). Yeni `manage_events` scope'u
+  yok: her etkinliğin kaydı zaten var, ikinci bir yetki sistemi ayrışırdı.
+  Etkinliğe kişi eklemek ikizin katılımcısı da yapar (sohbet bildirimi + yetki),
+  çıkarmak ikisinden de çıkarır.
+- **Checkpoint tarihi göreli.** Şablondan gelen checkpoint `offset_days` tutar
+  (`due_date` boş); tarih okunurken `events.date + offset_days`. Havuzdaki
+  etkinliğe tarih verilince checkpoint'ler kendiliğinden dolar, tarih kayınca
+  bekleyenler kayar. Tamamlanmış göreli checkpoint tarih değişmeden önce eski
+  tarihine sabitlenir (`offset_days` → `due_date`). Elle eklenen checkpoint mutlak.
+- **Arşiv:** etkinlik alan değişiklikleri ikizin akışına `verb = event_changed`
+  (`target_label` = alan, detay `{from,to}`) olarak yazılır; başlık değişikliği
+  kayıtla ortak `field_changed`.
+- **Etkinlik silme yok.** Kayıtların da silme ucu yok; vazgeçilen etkinlik
+  `cancelled` olur.
+- Uçlar: `GET/POST /api/events`, `GET/PATCH /api/events/{id}` (tek alan,
+  `{field, value}`), `PUT/DELETE …/participants/{user}` (`{role}`),
+  `PUT/DELETE …/teams/{team}`, `POST …/checkpoints|widgets|materials`,
+  `PATCH/DELETE /api/event-checkpoints/{id}`, `DELETE /api/event-widgets/{id}`,
+  `PATCH/DELETE /api/materials/{id}`, `POST /api/materials/{id}/providers`,
+  `DELETE /api/material-providers/{id}`. Yazma uçları güncel ayrıntıyı döner.
+
+## 6a. Açık sorular
+
 - **Bütçe kaynağı** (sponsor / üniversite): bugün yalnız `has_sponsor`. Maliye
   sayfası gelince `funding_source` enum'una dönebilir — o sayfa yazılırken karar verilir.
 - **Satın alma tarihi, fatura eki**: Maliye sayfasının işi; `materials`'a o zaman eklenir.
