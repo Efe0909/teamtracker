@@ -13,7 +13,14 @@ export type RecordStatus = "open" | "in_progress" | "pending" | "closed" | "canc
 export type ActionStatus = "open" | "in_progress" | "closed" | "cancelled";
 export type Priority = "critical" | "high" | "medium" | "low";
 /** Agac yalniz YAPI: takim ve pillar ayri tablolar (spec/22). */
-export type NodeType = "cell" | "machine" | "task" | "step" | "operational" | "generic";
+/** Hangi turun nerede olabilecegini kok semasi soyler (Rust refdata.rs, spec/74). */
+export type NodeType =
+  | "cell" | "machine" | "task" | "step" | "operational" | "generic"
+  | "option" | "checkpoint" | "widget" | "location";
+/** Cocuklara izin: leaf = cocuk yok; list = butun cocuklar ayni turde; tree = serbest. */
+export type Shape = "leaf" | "list" | "tree";
+/** Gocle dogan koklerin sabit anahtarlari: kod koku adla degil bununla bulur. */
+export type RootKey = "units" | "event_types" | "event_locations";
 export type TeamRole = "lead" | "mentor" | "member";
 
 // --- /api/meta -------------------------------------------------------------
@@ -66,10 +73,21 @@ export interface MetaNode {
   node_type: NodeType;
   is_active: boolean;
   depth: number;
+  /** Yalniz kokte. */
+  key: RootKey | null;
+  /** Kokunun key'i: seciciler kok basina suzer. */
+  root_key: RootKey | null;
+  shape: Shape;
+  /** checkpoint: {offset_days}, widget: {widget}, slot: {slot: "steps"|"widgets"}. */
+  attrs: { offset_days?: number; widget?: WidgetType; slot?: "steps" | "widgets" };
 }
 
 export interface Meta {
-  me: { id: Uuid; is_admin: boolean; scopes: string[]; team_ids: Uuid[]; profile_complete: boolean };
+  me: {
+    id: Uuid; is_admin: boolean; scopes: string[]; team_ids: Uuid[]; profile_complete: boolean;
+    /** Secicilerdeki favori dugumler (spec/74 §6). */
+    favorite_nodes: Uuid[];
+  };
   users: MetaUser[];
   teams: MetaTeam[];
   /** sort_order, sonra ad; pasifler de gelir. */
@@ -142,7 +160,6 @@ export interface RecordDetail {
 
 // --- etkinlikler (Rust api/events.rs, spec/73) --------------------------------
 
-export type EventKind = "meeting" | "training" | "social" | "visit" | "conference";
 export type EventStatus = "idea" | "planning" | "confirmed" | "done" | "cancelled";
 /** Yalniz alanlari TANIMLI widget turleri. `record` tek kayitlik, digerleri tekil. */
 export type WidgetType = "supplies" | "record" | "otf";
@@ -154,13 +171,16 @@ export interface EventSummary {
   /** Ikiz kayit: sohbet + arsiv. */
   record_id: Uuid;
   title: string;
-  kind: EventKind;
+  /** Etkinlik Turleri'ndeki `option` dugumu (adi meta.nodes'tan). */
+  kind_id: Uuid;
   status: EventStatus;
   priority: Priority;
   owner_id: Uuid | null;
   date: IsoDate | null;
   /** "HH:MM" */
   start_time: string | null;
+  /** Etkinlik Yerleri'ndeki `location`; yoksa `place` metni (kampus disi / tek seferlik). */
+  location_id: Uuid | null;
   place: string | null;
   attendees: number | null;
   description: string | null;
@@ -234,7 +254,7 @@ export interface EventDetail extends EventSummary {
 
 export interface NewEvent {
   title: string;
-  kind: EventKind;
+  kind_id: Uuid;
   unit_id: Uuid;
   date?: IsoDate;
   priority?: Priority;
@@ -247,6 +267,9 @@ export type EventPatch =
   | { field: "owner_id"; value: Uuid | null }
   | { field: "date"; value: IsoDate | null }
   | { field: "start_time"; value: string | null }
+  /** Listeden yer; secilince metin yer temizlenir. */
+  | { field: "location_id"; value: Uuid | null }
+  /** Serbest metin yer ("Diger…"); yazilinca liste yeri temizlenir. */
   | { field: "place"; value: string | null }
   | { field: "attendees"; value: number | null }
   | { field: "description"; value: string | null };
@@ -501,13 +524,24 @@ export interface TreeNode {
   parent_id: Uuid | null;
   name: string;
   node_type: NodeType;
+  key: RootKey | null;
+  root_key: RootKey | null;
+  shape: Shape;
+  attrs: MetaNode["attrs"];
   description: string | null;
   is_active: boolean;
   depth: number;
   child_count: number;
+  /** root = kok (yalniz ad/aciklama), operational = kod slotu (yalniz ad/aciklama). */
+  locked: "root" | "operational" | null;
   can_edit: boolean;
-  can_retype: boolean;
+  /** Altina eklenebilecek turler (bos = eklenemez). `child_fixed`: tur ve shape
+   *  sunucudan, formda tur secimi yok. */
+  child_types: NodeType[];
+  child_fixed: boolean;
   can_hard_delete: boolean;
+  /** Reddetmeyen isaretler: missing_slot, late_checkpoint, unknown_widget, unknown_slot, invalid_attrs. */
+  warnings: string[];
   /** `teams`: kopacak takim baglari (team_nodes). Silmeyi engellemez. */
   delete_counts: { children: number; records: number; permissions: number; teams: number };
 }
@@ -562,11 +596,8 @@ export type UserOp =
   | { op: "grant_role" | "revoke_role" | "grant_node" | "revoke_node"; value: Uuid }
   | { op: "avatar"; value: Uuid | null };
 
+/** Kokler yalniz gocle dogar; yerlesim kurali dugum basina (`child_types`). */
 export interface TreeView {
-  can_add_root: boolean;
-  /** Yerlesim kurali sunucuda (KNOW-241): form tur listesini buradan alir. */
-  root_types: NodeType[];
-  child_types: NodeType[];
   nodes: TreeNode[];
 }
 
@@ -591,20 +622,25 @@ export interface PillarPatch extends TeamPatch {
   sort_order?: number;
 }
 
+/** Kok yaratilmaz (yalniz goc). `child_fixed` ebeveynde tur/shape verilmez. */
 export interface NewNode {
   name: string;
-  node_type: NodeType;
-  parent_id: Uuid | null;
+  node_type?: NodeType;
+  parent_id: Uuid;
   description: string | null;
+  shape?: Shape;
+  attrs?: MetaNode["attrs"];
 }
 
-/** Verilmeyen alan degismez; `description`/`parent_id` null = sil / koke. */
+/** Verilmeyen alan degismez; `description` null = sil. Kok ve slotta yalniz ad/aciklama. */
 export interface NodePatch {
   name?: string;
   node_type?: NodeType;
   description?: string | null;
-  parent_id?: Uuid | null;
+  parent_id?: Uuid;
   is_active?: boolean;
+  shape?: Shape;
+  attrs?: MetaNode["attrs"];
 }
 
 /** Kisinin kendi profili; verilmeyen alan degismez, null = sil. */

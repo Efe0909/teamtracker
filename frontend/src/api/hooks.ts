@@ -138,6 +138,17 @@ export function useMyActions() {
   return useQuery({ queryKey: keys.myActions, queryFn: () => request<MyAction[]>("GET", "/api/actions/mine") });
 }
 
+/** Secicilerde favori dugum (PUT ekler, DELETE cikarir); cevap guncel liste,
+ *  meta onbellegine yazilir (seciciler `meta.me.favorite_nodes` okur). */
+export function useNodeFavorite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, on }: { id: Uuid; on: boolean }) =>
+      request<Uuid[]>(on ? "PUT" : "DELETE", `/api/nodes/${id}/favorite`),
+    onSuccess: (ids) => qc.setQueryData<Meta>(keys.meta, (m) => (m === undefined ? m : { ...m, me: { ...m.me, favorite_nodes: ids } })),
+  });
+}
+
 export function useNodeTree() {
   return useQuery({ queryKey: keys.nodes, queryFn: () => request<TreeView>("GET", "/api/nodes") });
 }
