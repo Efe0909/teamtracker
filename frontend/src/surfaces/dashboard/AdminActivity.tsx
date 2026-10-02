@@ -1,85 +1,107 @@
-// Yonetim > Aktivite: kisi basina ozet (son giris, son hareket, 30 gunde aktif
-// gun, son 7 gunun suresi) ve secilen kisinin katki matrisi + istatistikleri.
-// Veri: user_activity (sunucu dakikada bir yazar). Sure yaklasiktir: istek
-// atilan dakika sayisi — bildirim yoklamasi yuzunden sekmenin ACIK kaldigi sure.
+// Yonetim > Aktivite: kisi listesi (basliga tikla: azalan, tekrar: artan) ve
+// secilen kisinin katki matrisi + satir satir istatistikleri. Olculerin anlami
+// lib/usage.ts basinda: KATKI "ne yapti", SURE "sekme ne kadar acik kaldi".
 
 import { useState } from "react";
 import { useAdminActivity } from "../../api/hooks";
 import type { PersonUse } from "../../api/types";
-import { ago } from "../../lib/labels";
+import { ago, formatDay } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
-import { matrix, minutesSince, stats, STREAK_MIN, totals30 } from "../../lib/usage";
-import { Avatar, cx, Empty, Loading, Segmented } from "../../ui/ui";
+import {
+  matrix, personRow, sortPeople, stats, STREAK_MIN, WINDOW_DAYS, type SortDir, type SortKey,
+} from "../../lib/usage";
+import { Icon } from "../../ui/icons";
+import { Avatar, cx, Empty, Loading } from "../../ui/ui";
 import s from "./dashboard.module.css";
 
-type Sort = "seen" | "week";
-
 const hm = (m: number) => (m >= 60 ? `${Math.floor(m / 60)} sa ${m % 60} dk` : `${m} dk`);
+
+const COLS: { key: SortKey; label: string; title?: string }[] = [
+  { key: "name", label: "Kişi" },
+  { key: "login", label: "Son giriş" },
+  { key: "seen", label: "Son hareket" },
+  { key: "activeDays30", label: "Aktif gün", title: "Son 30 günde uğradığı gün" },
+  { key: "minutes7", label: "Süre · 7 gün", title: "Son 7 günde sekmenin açık kaldığı süre" },
+  { key: "contrib30", label: "Katkı · 30 gün", title: "Son 30 günde gönderilen mesaj + kayıt, alan, eylem değişikliği" },
+];
 
 export function AdminActivity() {
   const L = useLookup();
   const q = useAdminActivity();
-  const [sort, setSort] = useState<Sort>("seen");
+  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "seen", dir: "desc" });
   const [search, setSearch] = useState("");
   const [picked, setPicked] = useState<string | null>(null);
   if (q.data === undefined) return <Loading />;
 
   const today = new Date();
-  const rows = q.data
-    .map((u) => ({ u, days: totals30(u, today).activeDays, week: minutesSince(u, today, 7), name: L.user(u.user_id)?.name ?? "?" }))
-    .filter((r) => r.name.toLocaleLowerCase("tr").includes(search.trim().toLocaleLowerCase("tr")))
-    .sort((a, b) =>
-      sort === "week" ? b.week - a.week : (b.u.last_seen_at ?? "").localeCompare(a.u.last_seen_at ?? ""));
-  const sel: PersonUse | undefined = q.data.find((u) => u.user_id === (picked ?? rows[0]?.u.user_id));
+  const needle = search.trim().toLocaleLowerCase("tr");
+  const rows = sortPeople(
+    q.data.map((u) => personRow(u, L.user(u.user_id)?.name ?? "?", today))
+      .filter((r) => r.name.toLocaleLowerCase("tr").includes(needle)),
+    sort.key, sort.dir);
+  const sel: PersonUse | undefined = q.data.find((u) => u.user_id === (picked ?? rows[0]?.id));
+  // Ayni basliga tekrar: yon doner; yeni baslik: azalan baslar.
+  const by = (key: SortKey) => setSort(sort.key === key ? { key, dir: sort.dir === "desc" ? "asc" : "desc" } : { key, dir: "desc" });
 
   return (
     <div>
       <div className={s.activityBar}>
         <input className={s.activitySearch} placeholder="Kişi ara…" aria-label="Kişi ara" value={search}
           onChange={(e) => setSearch(e.target.value)} />
-        <Segmented<Sort> label="Sırala" value={sort} onChange={setSort}
-          options={[{ value: "seen", label: "Son hareket" }, { value: "week", label: "Bu hafta" }]} />
       </div>
       {rows.length === 0 ? (
         <Empty title="Kimse yok">Aramana uyan kişi bulunamadı.</Empty>
       ) : (
         <table className={cx(s.surface, s.activityTable)}>
           <thead>
-            <tr><th>Kişi</th><th>Son giriş</th><th>Son hareket</th><th>30 gün: gün</th><th>Bu hafta</th></tr>
+            <tr>
+              {COLS.map((c) => {
+                const on = sort.key === c.key;
+                return (
+                  <th key={c.key} aria-sort={on ? (sort.dir === "desc" ? "descending" : "ascending") : "none"}>
+                    <button type="button" className={s.sortBtn} data-on={on} title={c.title} onClick={() => by(c.key)}>
+                      {c.label}
+                      <Icon name={on && sort.dir === "asc" ? "up" : "down"} size={12} />
+                    </button>
+                  </th>
+                );
+              })}
+            </tr>
           </thead>
           <tbody>
-            {rows.map(({ u, days, week, name }) => (
-              <tr key={u.user_id} aria-selected={sel?.user_id === u.user_id} onClick={() => setPicked(u.user_id)}>
-                <td><span className={s.activityWho}><Avatar user={L.user(u.user_id)} size={20} /> {name}</span></td>
-                <td>{u.last_login_at === null ? "—" : ago(u.last_login_at)}</td>
-                <td>{u.last_seen_at === null ? "—" : ago(u.last_seen_at)}</td>
-                <td>{days}</td>
-                <td title="Son 7 gün">{hm(week)}</td>
+            {rows.map((r) => (
+              <tr key={r.id} aria-selected={sel?.user_id === r.id} onClick={() => setPicked(r.id)}>
+                <td><span className={s.activityWho}><Avatar user={L.user(r.id)} size={20} /> {r.name}</span></td>
+                <td>{r.login === null ? "—" : ago(r.login)}</td>
+                <td>{r.seen === null ? "—" : ago(r.seen)}</td>
+                <td>{r.activeDays30}</td>
+                <td>{hm(r.minutes7)}</td>
+                <td>{r.contrib30}</td>
               </tr>
             ))}
           </tbody>
         </table>
       )}
-      {sel !== undefined && <Matrix u={sel} name={L.user(sel.user_id)?.name ?? "?"} today={today} />}
+      {sel !== undefined && <Person u={sel} name={L.user(sel.user_id)?.name ?? "?"} today={today} />}
     </div>
   );
 }
 
-function Matrix({ u, name, today }: { u: PersonUse; name: string; today: Date }) {
+function Person({ u, name, today }: { u: PersonUse; name: string; today: Date }) {
   const weeks = matrix(u, today);
   const st = stats(u, today);
-  const gun = (n: number) => `${n} gün`;
   return (
-    <section className={s.surface} style={{ padding: 16, marginTop: 16 }} aria-label={`${name} katkı matrisi`}>
-      <div className={s.matrixHead}><b>{name}</b> <span className={s.dim}>· son 17 hafta, gün başına süre</span></div>
+    <section className={s.surface} style={{ padding: 16, marginTop: 16 }} aria-label={`${name} aktivitesi`}>
+      <div className={s.matrixHead}><b>{name}</b> <span className={s.dim}>· son 17 hafta, gün başına katkı</span></div>
       <div className={s.usageBody}>
         <div>
-          <div className={s.matrix} role="img" aria-label={`${name} için günlük süre matrisi`}>
+          <div className={s.matrix} role="img" aria-label={`${name} için günlük katkı matrisi`}>
             {weeks.map((col, i) => (
               <div key={i} className={s.matrixCol}>
                 {col.map((c, j) => c === null
                   ? <span key={j} className={s.matrixGap} />
-                  : <span key={j} className={cx(s.matrixCell, s[`lv${c.level}`])} title={`${c.day}: ${hm(c.minutes)}`} />)}
+                  : <span key={j} className={cx(s.matrixCell, s[`lv${c.level}`])}
+                      title={`${formatDay(c.day)}: ${c.contrib} katkı · ${hm(c.minutes)}`} />)}
               </div>
             ))}
           </div>
@@ -89,15 +111,31 @@ function Matrix({ u, name, today }: { u: PersonUse; name: string; today: Date })
             Çok
           </div>
         </div>
-        <dl className={s.usageStats}>
-          <div><dt>Bugün</dt><dd>{hm(st.today)}</dd></div>
-          <div><dt>Son 7 gün</dt><dd>{hm(st.week)}</dd></div>
-          <div><dt>Son 30 gün</dt><dd>{hm(st.month)}</dd></div>
-          <div><dt>Aktif gün başına</dt><dd>{hm(st.perActiveDay)}</dd></div>
-          <div title={`Ardışık gün, günde ${STREAK_MIN} dakikadan fazla`}><dt>Şimdiki seri</dt><dd>{gun(st.current)}</dd></div>
-          <div title={`Son 120 günde; ardışık gün, günde ${STREAK_MIN} dakikadan fazla`}><dt>En uzun seri</dt><dd>{gun(st.longest)}</dd></div>
-        </dl>
+        <div className={s.usageLines}>
+          <dl>
+            <Line k="Katkı · 30 gün" v={String(st.contrib30)} />
+            <Line k="Mesaj / değişiklik" v={`${st.messages30} / ${st.changes30}`} />
+            <Line k="Katkı · 7 gün" v={String(st.contrib7)} />
+            <Line k="En katkılı gün" v={st.bestDay === null ? "—" : `${formatDay(st.bestDay.day)} (${st.bestDay.contrib})`} />
+            <Line k="Aktif gün" v={`${st.activeDays30}/30`} />
+          </dl>
+          <dl>
+            <Line k="Süre · bugün" v={hm(st.minutesToday)} />
+            <Line k="Süre · 7 / 30 gün" v={`${hm(st.minutes7)} / ${hm(st.minutes30)}`} />
+            <Line k="Aktif gün başına" v={hm(st.perActiveDay)} />
+            <Line k="Şimdiki seri" v={`${st.current} gün`} />
+            <Line k="En uzun seri" v={`${st.longest} gün`} />
+          </dl>
+          <p className={s.usageNote}>
+            Katkı: gönderilen mesaj + kayıt, alan, eylem ve takım değişiklikleri. Süre: sekmenin açık kaldığı
+            dakika. Seri: günde {STREAK_MIN} dakikadan fazla açık kalınan ardışık günler (son {WINDOW_DAYS} gün).
+          </p>
+        </div>
       </div>
     </section>
   );
+}
+
+function Line({ k, v }: { k: string; v: string }) {
+  return <div><dt>{k}</dt><dd>{v}</dd></div>;
 }

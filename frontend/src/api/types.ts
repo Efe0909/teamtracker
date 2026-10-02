@@ -451,5 +451,7 @@ export interface PersonUse {
   last_login_at: IsoTime | null;
   last_seen_at: IsoTime | null;
   /** Son 120 gun, eskiden yeniye; kullanimsiz gunler yok. `day` = "2026-10-01". */
-  days: { day: string; requests: number; minutes: number }[];
+  /** `messages`/`changes` KATKI: gonderilen mesaj ve yazilan olay (kayit, alan,
+   *  eylem, katilma, takim). `minutes` sekmenin acik kaldigi dakika. */
+  days: { day: string; requests: number; minutes: number; messages: number; changes: number }[];
 }

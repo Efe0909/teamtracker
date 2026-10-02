@@ -1639,31 +1639,70 @@ a.row:hover {
   align-items: flex-start;
   gap: var(--s-6);
 }
-.usageStats {
+/* istatistikler satir satir, iki sutun: "Etiket  deger" */
+.usageLines {
   flex: 1;
-  min-width: 260px;
+  min-width: 280px;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-  gap: var(--s-3);
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  column-gap: var(--s-6);
+  row-gap: var(--s-2);
+  align-content: start;
+}
+.usageLines dl {
   margin: 0;
-}
-.usageStats > div {
   display: flex;
-  flex-direction: column-reverse;
-  gap: 2px;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-md);
+  flex-direction: column;
+  gap: 6px;
 }
-.usageStats dt {
+.usageLines dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s-3);
+  font-size: var(--fs-md);
+  line-height: 1.4;
+}
+.usageLines dt {
+  color: var(--dim);
+}
+.usageLines dd {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--acc-strong);
+  white-space: nowrap;
+}
+.usageNote {
+  grid-column: 1 / -1;
+  margin: var(--s-2) 0 0;
   font-size: var(--fs-xs);
   color: var(--dim);
 }
-.usageStats dd {
-  margin: 0;
-  font-size: var(--fs-lg);
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
+/* siralanir sutun basligi */
+.sortBtn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.sortBtn > svg {
+  opacity: 0;
+}
+.sortBtn:hover > svg {
+  opacity: 0.5;
+}
+.sortBtn[data-on="true"] {
+  color: var(--txt);
+}
+.sortBtn[data-on="true"] > svg {
+  opacity: 1;
 }
 .matrixLegend {
   display: flex;

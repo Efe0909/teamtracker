@@ -458,11 +458,16 @@ pub async fn delete_role(
 
 // --- aktivite ----------------------------------------------------------------
 
+/// Gunluk kullanim. `requests`/`minutes` varlik sayaclari (user_activity);
+/// `messages`/`changes` KATKI: o gun gonderilen mesaj ve yazdigi olay
+/// (kayit acma, alan degisikligi, eylem, katilma, takim isleri — `activity`).
 #[derive(Serialize)]
 pub struct DayUse {
     day: chrono::NaiveDate,
     requests: i32,
     minutes: i32,
+    messages: i32,
+    changes: i32,
 }
 
 #[derive(sqlx::FromRow)]
@@ -489,13 +494,27 @@ pub async fn activity(
     let people: Vec<LoginRow> = sqlx::query_as(
         "select id, last_login_at, last_seen_at from users order by name")
         .fetch_all(&st.pool).await?;
-    let rows: Vec<(Uuid, chrono::NaiveDate, i32, i32)> = sqlx::query_as(
-        "select user_id, day, requests, minutes from user_activity
-          where day > current_date - 120 order by day")
+    // Uc kaynak gun gun birlesir: varlik sayaclari + yazilan mesaj + yazilan olay.
+    // `created_at::date` oturum saat diliminde — `current_date` ile ayni gun siniri.
+    // ponytail: messages/activity'de (yazar, tarih) indeksi yok, 120 gunluk tarama;
+    // satir sayisi buyurse `(author_id, created_at)` / `(actor_id, created_at)` indeksi.
+    let rows: Vec<(Uuid, chrono::NaiveDate, i32, i32, i32, i32)> = sqlx::query_as(
+        "select user_id, day, sum(requests)::int, sum(minutes)::int, sum(messages)::int, sum(changes)::int
+           from (
+             select user_id, day, requests, minutes, 0 as messages, 0 as changes
+               from user_activity where day > current_date - 120
+             union all
+             select author_id, created_at::date, 0, 0, 1, 0
+               from messages where author_id is not null and created_at::date > current_date - 120
+             union all
+             select actor_id, created_at::date, 0, 0, 0, 1
+               from activity where actor_id is not null and created_at::date > current_date - 120
+           ) t
+          group by user_id, day order by day")
         .fetch_all(&st.pool).await?;
     let mut by: HashMap<Uuid, Vec<DayUse>> = HashMap::new();
-    for (u, day, requests, minutes) in rows {
-        by.entry(u).or_default().push(DayUse { day, requests, minutes });
+    for (u, day, requests, minutes, messages, changes) in rows {
+        by.entry(u).or_default().push(DayUse { day, requests, minutes, messages, changes });
     }
     Ok(Json(people.into_iter().map(|p| PersonUse {
         days: by.remove(&p.id).unwrap_or_default(), user_id: p.id,
