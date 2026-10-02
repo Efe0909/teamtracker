@@ -317,7 +317,9 @@ Eski formatta, geç ya da kurala uymayan OTF işleme alınmaz.
   gelenler (ad, tarih, başlangıç saati, yer, katılımcı sayısı) **tekrar tutulmaz**,
   dosya üretilirken okunur.
 - **Adetler:** yeni taslak adetleri kutuda değil bölümün AÇIKLAMA'sında istiyor;
-  adet girilen kalem açıklamaya `Projeksiyon: 2 adet` olarak yazılır.
+  gönderim kuralı "ekipmanın yanına `+` (ya da EVET) ve adet" (Aralık 2025
+  duyurusu). Adet girilen kalem açıklamaya `Projeksiyon+2` olarak yazılır —
+  gerçek formlardaki `SANDALYE+60` ile aynı biçim.
 - **Uçlar:** `GET/PUT /api/events/{id}/otf` (form bütün olarak kaydedilir; yazmak
   etkinliği düzenleyebilene), `GET /api/events/{id}/otf.docx` (dosya adı kurala
   uygun). Cevap dosya adını, mail konusunu, son günü (3 iş günü önce; hafta sonu

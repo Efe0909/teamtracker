@@ -270,7 +270,7 @@ export interface OtfFields {
 
 export interface OtfItem {
   item: string;
-  /** Doluysa bolum aciklamasina "Etiket: N adet" olarak yazilir. */
+  /** Doluysa bolum aciklamasina "Etiket+N" olarak yazilir (universite kurali: "+" ve adet). */
   quantity: number | null;
 }
 

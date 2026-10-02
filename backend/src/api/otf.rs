@@ -300,12 +300,14 @@ pub async fn docx(
         ("age_group", f.age_group.clone().unwrap_or_default()),
         ("outcomes", f.outcomes.clone().unwrap_or_default()),
     ];
-    // Bolum aciklamasi: once adetli kalemler ("Projeksiyon: 2 adet"), sonra serbest not.
+    // Bolum aciklamasi: once adetli kalemler, sonra serbest not. Bicim universitenin
+    // gonderim kuralindan: ekipmanin yanina "+" ve adet ("Projeksiyon+2"; gercek
+    // formlarda "SANDALYE+60").
     let notes = [&f.layout_notes, &f.av_notes, &f.tech_notes, &f.host_notes, &f.care_notes, &f.other_notes];
     for (s, note) in otf::SECTIONS.iter().zip(notes) {
         let mut lines: Vec<String> = s.items.iter()
             .filter_map(|(k, label)| items.iter().find(|i| i.item == *k)
-                .and_then(|i| i.quantity).map(|q| format!("{label}: {q} adet")))
+                .and_then(|i| i.quantity).map(|q| format!("{label}+{q}")))
             .collect();
         lines.extend(note.clone());
         text.push((s.notes, lines.join("\n")));
