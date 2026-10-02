@@ -17,6 +17,8 @@ import { signOut } from "../Session";
 import { Admin } from "./Admin";
 import s from "./dashboard.module.css";
 import { DataTree } from "./DataTree";
+import { EventPage } from "./EventPage";
+import { Events } from "./Events";
 import { Home } from "./Home";
 import { People } from "./People";
 import { Palette } from "./Palette";
@@ -79,6 +81,10 @@ function Page({ route }: { route: Route }) {
       return <Tasks query={route.query} />;
     case "record":
       return <RecordPage id={route.id} />;
+    case "events":
+      return <Events query={route.query} />;
+    case "event":
+      return <EventPage id={route.id} />;
     case "teams":
       return <Teams />;
     case "team":
@@ -119,6 +125,7 @@ type NavItem = { route: Route; icon: IconName; label: string; match: Route["name
 const NAV: NavItem[] = [
   { route: { name: "home" }, icon: "home", label: "Panolar", match: ["home"] },
   { route: { name: "tasks", query: {} }, icon: "tasks", label: "Görevler", match: ["tasks", "record"] },
+  { route: { name: "events", query: {} }, icon: "calendar", label: "Etkinlikler", match: ["events", "event"] },
   { route: { name: "teams" }, icon: "teams", label: "Takımlar", match: ["teams"] },
   { route: { name: "people" }, icon: "user", label: "Ekip", match: ["people"] },
   { route: { name: "pillars" }, icon: "pin", label: "Pillar'lar", match: ["pillars"] },

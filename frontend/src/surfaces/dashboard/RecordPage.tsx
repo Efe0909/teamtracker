@@ -2,7 +2,7 @@
 // sutun sohbet (spec/60 2.4). Admin ile uye AYNI ekran; fark yetkiden
 // (spec/17 etki 1).
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { ApiError } from "../../api/client";
 import { useRecord } from "../../api/hooks";
 import type { Uuid } from "../../api/types";
@@ -13,15 +13,30 @@ import { Cards } from "../../features/record/Cards";
 import { JoinBanner, RestrictedSkeleton } from "../../features/record/Join";
 import { ActionList, BallLine, CollapsibleProps, QuickAction, ReadOnlyNote, RecordHead } from "../../features/record/parts";
 import { useLookup } from "../../lib/lookup";
+import { navigate, useLocation } from "../../lib/router";
 import { Icon } from "../../ui/icons";
 import { Link, Loading } from "../../ui/ui";
 import { ErrorScreen } from "../errors/ErrorScreen";
 import s from "./dashboard.module.css";
+import { EventSwitch } from "./EventPage";
+import { useEventOfRecord } from "./eventModel";
 import { href } from "./routes";
 
 export function RecordPage({ id }: { id: Uuid }) {
   const L = useLookup();
   const q = useRecord(id);
+  // Etkinligin kendi kaydiysa baslikta Etkinlik | Kayıt anahtari (spec/73 §3a).
+  const ev = useEventOfRecord(id);
+  // `?mention=<ad>`: etkinlik kisilerinden "yaz" (DM yok — ikizin sohbetine anmayla
+  // gelinir). Bir kez okunur, adresten silinir; yalniz bu kayda uygulanir.
+  const loc = useLocation();
+  const [pre] = useState(() => {
+    const m = loc.searchParams.get("mention");
+    return { id, text: m !== null && /^[a-z0-9-]+$/.test(m) ? `@${m} ` : undefined };
+  });
+  useEffect(() => {
+    if (loc.searchParams.has("mention")) navigate(href({ name: "record", id }), { replace: true });
+  }, []);
   const title = q.data?.record.title;
   useEffect(() => {
     if (title !== undefined) document.title = `${title} — EkipTakip`;
@@ -55,7 +70,8 @@ export function RecordPage({ id }: { id: Uuid }) {
         <div className={s.recordMain}>
           <div className={s.recordInner}>
             <JoinBanner d={d} />
-            <RecordHead d={d} showPath={false} />
+            <RecordHead d={d} showPath={false}
+              titleExtra={ev !== undefined && <EventSwitch eventId={ev.id} recordId={id} at="record" />} />
             <ReadOnlyNote d={d} />
             <div className={s.fieldsBlock}>
               <CollapsibleProps d={d}>
@@ -84,6 +100,7 @@ export function RecordPage({ id }: { id: Uuid }) {
                 lockedText="Bu kayıtta yazma yetkin yok."
                 empty="Henüz mesaj yok. İlk mesajı sen yaz."
                 tools={<QuickAction d={d} />}
+                prefill={pre.id === id ? pre.text : undefined}
               />
             )}
           </div>
