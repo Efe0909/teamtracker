@@ -43,6 +43,8 @@ export function Chat(props: {
   empty: string;
   /** Kompozerin ustunde kucuk araclar (kayitta ⚡ hizli eylem). Sohbet alani bilmez. */
   tools?: ReactNode;
+  /** Disaridan hazir metin (ornek "@efe "): taslagin basina eklenir, odak kutuya. */
+  prefill?: string | undefined;
 }) {
   const L = useLookup();
   const feed = useFeed(props.chatId);
@@ -129,7 +131,7 @@ export function Chat(props: {
         <>
           {/* Kompozerin FORMU DISINDA: arac kendi formunu (dialog) acabilir. */}
           {props.tools !== undefined && <div className={s.tools}>{props.tools}</div>}
-          <Composer chatId={props.chatId} reply={reply} onClearReply={() => setReply(null)} />
+          <Composer chatId={props.chatId} reply={reply} onClearReply={() => setReply(null)} prefill={props.prefill} />
         </>
       ) : (
         <div className={s.comp}>
@@ -168,7 +170,7 @@ function partialMention(text: string, caret: number): string | null {
 /** Mesaj basina en fazla bu kadar gorsel (Rust chats.rs ATTACH_MAX). */
 const ATTACH_MAX = 4;
 
-function Composer(props: { chatId: Uuid; reply: FeedItem | null; onClearReply: () => void }) {
+function Composer(props: { chatId: Uuid; reply: FeedItem | null; onClearReply: () => void; prefill?: string | undefined }) {
   const L = useLookup();
   const toast = useToast();
   const m = usePostMessage(props.chatId);
@@ -195,6 +197,17 @@ function Composer(props: { chatId: Uuid; reply: FeedItem | null; onClearReply: (
   };
 
   useEffect(() => writeDraft(props.chatId, text), [props.chatId, text]);
+  // Hazir metin: taslak zaten onunla basliyorsa (yenileme) ikinci kez eklenmez.
+  useEffect(() => {
+    const p = props.prefill;
+    if (p === undefined) return;
+    setText((t) => (t.startsWith(p) ? t : p + t));
+    requestAnimationFrame(() => {
+      box.current?.focus();
+      box.current?.setSelectionRange(p.length, p.length);
+      setCaret(p.length);
+    });
+  }, [props.prefill]);
   useEffect(() => {
     if (props.reply !== null) box.current?.focus();
   }, [props.reply]);

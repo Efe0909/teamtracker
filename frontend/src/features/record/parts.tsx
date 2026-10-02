@@ -4,7 +4,7 @@ import { useState, type ReactNode } from "react";
 import { errorText } from "../../api/client";
 import { useAddAction, useParticipant, usePin, usePatchAction, usePatchRecord } from "../../api/hooks";
 import type { Action, ActionPatch, RecordDetail } from "../../api/types";
-import { ACTION_STATUS, ACTION_STATUS_ORDER, ago, isDone } from "../../lib/labels";
+import { ACTION_STATUS, ACTION_STATUS_ORDER, ago, formatDay, isDone } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
 import { useStored } from "../../lib/stored";
 import { Icon } from "../../ui/icons";
@@ -14,7 +14,9 @@ import s from "./record.module.css";
 
 // --- baslik ----------------------------------------------------------------
 
-export function RecordHead({ d, showPath = true }: { d: RecordDetail; showPath?: boolean }) {
+/** `titleExtra`: baslik satirinin EN SAGINA yuzun ekledigi oge (dashboard: etkinlik
+ *  anahtari) — en sagda ki etkinlik sayfasindakiyle ayni yerde dursun. */
+export function RecordHead({ d, showPath = true, titleExtra }: { d: RecordDetail; showPath?: boolean; titleExtra?: ReactNode }) {
   const L = useLookup();
   const r = d.record;
   const creator = L.user(r.created_by);
@@ -28,6 +30,7 @@ export function RecordHead({ d, showPath = true }: { d: RecordDetail; showPath?:
         {d.access.can_edit && <IconButton icon="edit" label="Başlığı düzenle" onClick={() => setEdit("title")} />}
         <IconButton icon="star" className={d.pinned ? s.pinnedBtn : ""} label={d.pinned ? "Sabitlemeyi kaldır" : "Panolara sabitle"}
           disabled={pin.isPending} onClick={() => pin.mutate(!d.pinned)} />
+        {titleExtra}
       </div>
       <div className={s.byline}>
         <KindTag kind={r.kind} />
@@ -211,13 +214,15 @@ export function CollapsibleProps({ d, children }: { d: RecordDetail; children: R
         {open ? (
           <span>Özellikler</span>
         ) : (
+          // Sira etkinlik sayfasiyla ortak: oncelik, sorumlu, tarih once; durum EN SONDA —
+          // ikiz kayit ile etkinlik arasinda gidip gelirken ortak oge yerinde kalsin.
           <span className={s.propsSummary}>
-            <Status status={r.status} />
-            <KindTag kind={r.kind} />
             <PriorityTag priority={r.priority} bare />
             <Who user={owner} empty="Sorumlusuz" size={18} />
-            <span className={s.muted}>{r.due_date ?? "Tarihsiz"}</span>
+            <span className={s.muted}>{r.due_date === null ? "Tarihsiz" : formatDay(r.due_date)}</span>
             {pillar !== undefined && <span className={s.muted}>{pillar}</span>}
+            <KindTag kind={r.kind} />
+            <Status status={r.status} />
           </span>
         )}
       </button>

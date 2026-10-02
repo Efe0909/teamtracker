@@ -926,6 +926,19 @@ textarea.input {
 .segBtn:hover {
   color: var(--txt);
 }
+/* Segment TEK baglanti olarak da kullanilir (etkinlik/kayit anahtari): neresine
+   basilsa obur yuze gecer; secili parca data-on. */
+a.seg {
+  text-decoration: none;
+}
+a.seg:hover .segBtn {
+  color: var(--txt);
+}
+.seg[aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.segBtn[data-on="true"],
 .segBtn[aria-selected="true"] {
   background: var(--panel);
   color: var(--txt);

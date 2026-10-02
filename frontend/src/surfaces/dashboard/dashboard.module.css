@@ -1691,3 +1691,696 @@ a.row:hover {
   border-radius: var(--r-lg);
   background: var(--acc-bg);
 }
+
+/* --- Etkinlik Planlama (Events.tsx): tablo + sag ray (takvim, ajanda) --- */
+.evLayout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: var(--s-6);
+  align-items: start;
+}
+.evLayout[data-rail="false"] {
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (max-width: 1100px) {
+  .evLayout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.evMain {
+  min-width: 0;
+}
+.evClear {
+  appearance: none;
+  border: 0;
+  background: none;
+  color: var(--dim);
+  font: inherit;
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+.evClear:hover {
+  color: var(--txt);
+}
+.table td.evCell {
+  height: 52px;
+}
+/* baslik | tur | bagli kayit: sabit sutunlar, etiketler satirlar arasi hizali */
+.evTitleRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 104px 36px;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.evKindCol,
+.evLinksCol {
+  display: flex;
+  min-width: 0;
+}
+.evTitle {
+  min-width: 0;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.evPlace {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+  font-size: var(--fs-sm);
+  color: var(--dim);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.evWhen {
+  font-variant-numeric: tabular-nums;
+}
+.evNum {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+}
+.evLinked {
+  margin-top: var(--s-6);
+}
+.evLinkedList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.evLinkedList > li {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: 10px 16px;
+  border-top: 1px solid var(--line);
+  font-size: var(--fs-md);
+}
+.evLinkedList > li:first-child {
+  border-top: 0;
+}
+.evLinkedList .rowTitle {
+  flex: 1;
+  min-width: 0;
+}
+.evLinkedCount {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  color: var(--dim);
+  white-space: nowrap;
+}
+
+.evRail {
+  position: sticky;
+  top: var(--s-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+.evCal {
+  padding: var(--s-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--panel);
+  box-shadow: var(--sh);
+}
+.evCalHead {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-bottom: var(--s-2);
+}
+.evCalHead > strong {
+  flex: 1;
+  margin-left: 4px;
+  font-size: var(--fs-md);
+  text-transform: capitalize;
+}
+.evGrid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  text-align: center;
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+}
+.evWd {
+  padding: 4px 0;
+  font-size: var(--fs-xs);
+  color: var(--dim);
+}
+.evDay {
+  position: relative;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  border-radius: var(--r-sm);
+}
+.evDay[data-has="true"] {
+  font-weight: 600;
+}
+/* Gunun tamami en onemli etkinlige gider; noktalar ustte, her biri kendi etkinligine. */
+.evDayLink {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding-bottom: 4px;
+  border-radius: inherit;
+  color: inherit;
+  text-decoration: none;
+}
+.evDayLink:hover {
+  background: var(--tint);
+}
+.evDots {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+.evCalDot {
+  display: grid;
+  place-items: center;
+  width: 10px;
+  height: 10px;
+  pointer-events: auto;
+}
+.evCalDot > span {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--acc);
+  transition: scale 0.1s var(--ease);
+}
+.evCalDot > span[data-p="critical"] {
+  background: var(--err);
+}
+.evCalDot > span[data-p="high"] {
+  background: var(--warn);
+}
+.evCalDot:hover > span,
+.evCalDot:focus-visible > span {
+  scale: 1.75;
+}
+.evDay[data-today="true"] {
+  outline: 1.5px solid var(--acc);
+  color: var(--acc-strong);
+  background: var(--acc-bg);
+}
+.evAgenda {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+.evAgenda ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.evMonth {
+  margin: 0 0 6px;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--dim);
+  text-transform: capitalize;
+}
+.evItem {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-3);
+  padding: 6px 8px;
+  border-radius: var(--r-md);
+}
+.evItem:hover {
+  background: var(--tint);
+}
+.evDate {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 28px;
+  flex: none;
+  line-height: 1.15;
+}
+.evDate > b {
+  font-size: var(--fs-lg);
+  font-variant-numeric: tabular-nums;
+}
+.evDate > span {
+  font-size: var(--fs-xs);
+  color: var(--dim);
+}
+.evItemText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-size: var(--fs-md);
+}
+.evItemText > span,
+.evItemText > a {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.evItemText > a,
+a.evTitle {
+  color: var(--txt);
+  text-decoration: none;
+}
+.evItemText > a:hover,
+a.evTitle:hover {
+  text-decoration: underline;
+}
+
+/* yeni etkinlik: tur sablonu onizlemesi */
+.evTemplate {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  padding: var(--s-3);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--r-md);
+  font-size: var(--fs-md);
+}
+.evTemplateRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.evChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: var(--r-sm);
+  background: var(--tint);
+  font-size: var(--fs-sm);
+}
+.evTemplateSteps {
+  margin: 0;
+  padding-left: 18px;
+  font-size: var(--fs-sm);
+}
+.evTemplateSteps > li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s-2);
+}
+
+/* --- Etkinlik sayfasi (EventPage.tsx): kayit iskeleti + widget izgarasi --- */
+.evWidgets {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--s-3);
+  align-items: start;
+}
+/* Gorevler tablosunda ikiz kaydin "Etkinlik" etiketi (baglanti) */
+a.evTag {
+  flex: none;
+  display: inline-flex;
+  text-decoration: none;
+}
+a.evTag > span {
+  gap: 4px;
+}
+a.evTag:hover > span {
+  color: var(--txt);
+}
+
+/* Etkinlik | Kayit anahtari: basligin yaninda, iki sayfada ayni yerde */
+.evSwitch {
+  flex: none;
+}
+
+/* genis widget (satin alimlar) izgarada tam satir */
+.evWide {
+  grid-column: 1 / -1;
+}
+
+/* kayit widget'i: secilmeden once kesikli cerceve + iki secenek */
+.evPending {
+  border-style: dashed;
+  box-shadow: none;
+}
+.evChoice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+}
+.evPick {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+a.evRecTitle {
+  min-width: 0;
+  font-weight: 600;
+  color: var(--txt);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+a.evRecTitle:hover {
+  text-decoration: underline;
+}
+.evActs {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: var(--fs-md);
+}
+.evActs > li {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-width: 0;
+}
+.evActs > li[data-done="true"] .evActTitle {
+  color: var(--dim);
+}
+.evActTitle {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+a.evMore {
+  font-size: var(--fs-sm);
+  color: var(--dim);
+  text-decoration: none;
+}
+a.evMore:hover {
+  color: var(--txt);
+}
+
+/* --- Satin alimlar widget'i (Purchases.tsx) --- */
+.mHealth {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-sm);
+  color: var(--dim);
+}
+.mHealthDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--line-strong);
+}
+.mHealth[data-health="ok"] .mHealthDot {
+  background: var(--ok);
+}
+.mHealth[data-health="warn"] .mHealthDot {
+  background: var(--warn);
+}
+.mHealth[data-health="err"] .mHealthDot {
+  background: var(--err);
+}
+.mList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.mRow {
+  border-top: 1px solid var(--line);
+}
+.mRow:first-child {
+  border-top: 0;
+}
+.mRow[data-owned="true"] {
+  opacity: 0.6;
+}
+.mLine {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 96px 64px 28px;
+  align-items: center;
+  gap: var(--s-3);
+  padding: 6px 0;
+  font-size: var(--fs-md);
+}
+.mToggle {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.mPrio {
+  display: inline-flex;
+  color: var(--dim);
+}
+.mPrio[data-p="critical"] {
+  color: var(--err-text);
+}
+.mPrio[data-p="high"] {
+  color: var(--warn-text);
+}
+.mName {
+  min-width: 0;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mType {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: var(--r-sm);
+  background: var(--tint);
+  font-size: var(--fs-xs);
+  color: var(--dim);
+  white-space: nowrap;
+}
+.mOwned {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--fs-sm);
+  color: var(--ok-text);
+}
+/* surec: nokta + aradaki cizgi; tamam olan dolu ve cizgisi duz */
+.mPipe {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+}
+.mStep {
+  appearance: none;
+  position: relative;
+  width: 12px;
+  height: 12px;
+  padding: 0;
+  border: 2px solid var(--line-strong);
+  border-radius: 50%;
+  background: var(--panel);
+  cursor: pointer;
+}
+.mStep:disabled {
+  cursor: default;
+}
+.mStep:not(:disabled):hover {
+  border-color: var(--acc);
+}
+.mStep + .mStep::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: calc(100% + 2px);
+  width: 14px;
+  border-top: 2px dashed var(--line-strong);
+  translate: 0 -50%;
+}
+.mStep[data-done="true"] {
+  border-color: var(--acc);
+  background: var(--acc);
+}
+.mStep[data-done="true"]::before {
+  border-top-style: solid;
+  border-color: var(--acc);
+}
+.mPrice {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  text-align: right;
+  white-space: nowrap;
+}
+.mDate {
+  font-size: var(--fs-sm);
+  color: var(--dim);
+  white-space: nowrap;
+}
+.mMoreGap {
+  width: 28px;
+}
+.mDetail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  padding: 2px 0 12px 28px;
+}
+.mProv {
+  border-collapse: collapse;
+  font-size: var(--fs-sm);
+}
+.mProv th {
+  padding: 0 16px 4px 0;
+  text-align: left;
+  font-weight: 500;
+  color: var(--dim);
+}
+.mProv td {
+  padding: 3px 16px 3px 0;
+}
+.mProv tr[data-best="true"] td:nth-child(2) {
+  font-weight: 600;
+  color: var(--ok-text);
+}
+.mProvAdd {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 6px;
+}
+.mAdd {
+  display: flex;
+  gap: var(--s-2);
+}
+.mAdd input {
+  flex: 1;
+}
+@media (max-width: 640px) {
+  .mLine {
+    grid-template-columns: minmax(0, 1fr) auto 28px;
+  }
+  .mPrice,
+  .mDate {
+    display: none;
+  }
+  .mProvAdd {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.evSide {
+  overflow: auto;
+}
+.evSideSec {
+  padding: var(--s-4);
+  border-bottom: 1px solid var(--line);
+}
+.evSideHead {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin: 0 0 var(--s-3);
+  font-size: var(--fs-md);
+  font-weight: 600;
+}
+.evSideHead > :last-child:not(svg) {
+  margin-left: auto;
+}
+.evSideList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+.evSideList > li {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+/* kendi satirinda sohbet dugmesi yok; yer tutucu hizayi korur */
+.evSideGap {
+  width: 28px;
+  flex: none;
+}
+.evSideName {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  font-size: var(--fs-md);
+  line-height: 1.3;
+}
+
+/* zaman cizelgesi: nokta + dikey cizgi; gelecegin cizgisi kesikli */
+.evTimeline {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.evTimeline > li {
+  position: relative;
+  display: flex;
+  gap: var(--s-3);
+  padding-bottom: var(--s-4);
+}
+.evTimeline > li:last-child {
+  padding-bottom: 0;
+}
+.evTimeline > li::before {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 14px;
+  bottom: -2px;
+  border-left: 2px solid var(--acc);
+}
+.evTimeline > li[data-state="next"]::before,
+.evTimeline > li[data-state="todo"]::before {
+  border-left: 2px dashed var(--line-strong);
+}
+.evTimeline > li:last-child::before {
+  display: none;
+}
+.evDot {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  margin-top: 3px;
+  border-radius: 50%;
+  border: 2px solid var(--line-strong);
+  background: var(--panel);
+}
+li[data-state="done"] > .evDot {
+  border-color: var(--acc);
+  background: var(--acc);
+}
+li[data-state="next"] > .evDot {
+  border-color: var(--acc);
+  box-shadow: 0 0 0 3px var(--acc-bg);
+}
+.evStep {
+  display: flex;
+  flex-direction: column;
+  font-size: var(--fs-md);
+  line-height: 1.3;
+}
+li[data-state="todo"] > .evStep > span:first-child {
+  color: var(--dim);
+}
