@@ -1606,16 +1606,26 @@ a.row:hover {
   gap: 8px;
 }
 .matrixHead {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   margin-bottom: var(--s-3);
 }
+/* sutun sirali: ilk sutun gun etiketleri, sonra her hafta [ay, 7 gun] */
 .matrix {
-  display: flex;
+  display: grid;
+  grid-template-rows: auto repeat(7, 13px);
+  grid-template-columns: auto;
+  grid-auto-columns: 13px;
+  grid-auto-flow: column;
   gap: 3px;
 }
-.matrixCol {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
+.matrixAxis {
+  font-size: var(--fs-xs);
+  line-height: 13px;
+  color: var(--dim);
+  white-space: nowrap;
+  padding-right: 4px;
 }
 .matrixCell,
 .matrixGap {
@@ -1639,10 +1649,11 @@ a.row:hover {
   align-items: flex-start;
   gap: var(--s-6);
 }
-/* istatistikler satir satir, iki sutun: "Etiket  deger" */
+/* istatistikler satir satir, iki sutun: "Etiket  deger". Matrisin yaninda iki
+   sutuna yer yoksa matrisin ALTINA iner (tek sutunda matristen uzun kalmasin). */
 .usageLines {
   flex: 1;
-  min-width: 280px;
+  min-width: min(100%, 464px);
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   column-gap: var(--s-6);
@@ -1671,12 +1682,6 @@ a.row:hover {
   font-variant-numeric: tabular-nums;
   color: var(--acc-strong);
   white-space: nowrap;
-}
-.usageNote {
-  grid-column: 1 / -1;
-  margin: var(--s-2) 0 0;
-  font-size: var(--fs-xs);
-  color: var(--dim);
 }
 /* siralanir sutun basligi */
 .sortBtn {

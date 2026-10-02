@@ -143,6 +143,7 @@
   font-size: var(--fs-sm);
   font-weight: 500;
   box-shadow: var(--sh-lg);
+  max-width: 320px;
   animation: fade 0.12s var(--ease);
 }
 

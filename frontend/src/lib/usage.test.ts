@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import type { PersonUse } from "../api/types";
-import { matrix, MATRIX_WEEKS, sortPeople, stats, type PersonRow } from "./usage";
+import { matrix, MATRIX_WEEKS, monthLabels, sortPeople, stats, type PersonRow } from "./usage";
 
 const day = (d: string, minutes: number, messages = 0, changes = 0) => ({ day: d, requests: 0, minutes, messages, changes });
 const today = new Date(2026, 9, 1); // 1 Ekim 2026, Persembe
@@ -14,6 +14,10 @@ it("matris: hafta sutunlari, gelecek bos, kademe en KATKILI gune gore", () => {
   const last = m[MATRIX_WEEKS - 1] ?? [];
   expect(last[3]).toMatchObject({ day: "2026-10-01", contrib: 4, level: 2 }); // Per = satir 3; 4/8
   expect(last[4]).toBeNull(); // Cuma henuz yok
+  // ilk sutun 8 Haz haftasi, Tem etiketi 6 Tem sutununda (indeks 4) → ilk sutuna yer var
+  const labels = monthLabels(m);
+  expect(labels.filter((l) => l !== null)).toEqual(["Jun", "Jul", "Aug", "Sep"]);
+  expect(labels[0]).toBe("Jun");
 });
 
 it("istatistik: katki kirilimi, en katkili gun, seri (5 dk'dan fazlasi, bugun dolmadiysa dunden)", () => {

@@ -161,3 +161,13 @@ export function matrix(u: PersonUse, today: Date): (Cell | null)[][] {
   }
   return weeks;
 }
+
+/** Sutun basina ay etiketi (GitHub gibi, Ingilizce kisa ad): ay degisen sutunda.
+ *  Ilk sutun, sonraki etiketle cakisacak kadar yakinsa (< 3 sutun) bos kalir. */
+export function monthLabels(weeks: (Cell | null)[][]): (string | null)[] {
+  const month = (col: (Cell | null)[]) => col[0]?.day.slice(0, 7) ?? "";
+  const name = (ym: string) => new Date(`${ym}-01T00:00`).toLocaleString("en", { month: "short" });
+  const out = weeks.map((col, i) => (i > 0 && month(col) !== month(weeks[i - 1] ?? []) ? name(month(col)) : null));
+  if (weeks.length > 0 && out.slice(1, 3).every((l) => l === null)) out[0] = name(month(weeks[0] ?? []));
+  return out;
+}

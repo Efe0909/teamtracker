@@ -8,10 +8,10 @@ import type { PersonUse } from "../../api/types";
 import { ago, formatDay } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
 import {
-  matrix, personRow, sortPeople, stats, STREAK_MIN, WINDOW_DAYS, type SortDir, type SortKey,
+  matrix, MATRIX_WEEKS, monthLabels, personRow, sortPeople, stats, STREAK_MIN, WINDOW_DAYS, type SortDir, type SortKey,
 } from "../../lib/usage";
 import { Icon } from "../../ui/icons";
-import { Avatar, cx, Empty, Loading } from "../../ui/ui";
+import { Avatar, cx, Empty, IconButton, Loading } from "../../ui/ui";
 import s from "./dashboard.module.css";
 
 const hm = (m: number) => (m >= 60 ? `${Math.floor(m / 60)} sa ${m % 60} dk` : `${m} dk`);
@@ -89,21 +89,29 @@ export function AdminActivity() {
 
 function Person({ u, name, today }: { u: PersonUse; name: string; today: Date }) {
   const weeks = matrix(u, today);
+  const months = monthLabels(weeks);
   const st = stats(u, today);
   return (
     <section className={s.surface} style={{ padding: 16, marginTop: 16 }} aria-label={`${name} aktivitesi`}>
-      <div className={s.matrixHead}><b>{name}</b> <span className={s.dim}>· son 17 hafta, gün başına katkı</span></div>
+      <div className={s.matrixHead}>
+        <b>{name}</b> <span className={s.dim}>· son {MATRIX_WEEKS} hafta, gün başına katkı</span>
+        <IconButton icon="info" size={14} label={
+          `Katkı: gönderilen mesaj + kayıt, alan, eylem ve takım değişiklikleri. Süre: sekmenin açık kaldığı ` +
+          `dakika. Seri: günde ${STREAK_MIN} dakikadan fazla açık kalınan ardışık günler (son ${WINDOW_DAYS} gün).`} />
+      </div>
       <div className={s.usageBody}>
         <div>
+          {/* Sutun sirali izgara: once gun etiketleri, sonra her hafta [ay, Pzt..Paz].
+              Ay/gun adlari bilerek Ingilizce (GitHub gibi; Turkce kisaltmalar sikisik duruyor). */}
           <div className={s.matrix} role="img" aria-label={`${name} için günlük katkı matrisi`}>
-            {weeks.map((col, i) => (
-              <div key={i} className={s.matrixCol}>
-                {col.map((c, j) => c === null
-                  ? <span key={j} className={s.matrixGap} />
-                  : <span key={j} className={cx(s.matrixCell, s[`lv${c.level}`])}
-                      title={`${formatDay(c.day)}: ${c.contrib} katkı · ${hm(c.minutes)}`} />)}
-              </div>
-            ))}
+            {["", "Mon", "", "Wed", "", "Fri", "", ""].map((d, i) => <span key={`d${i}`} className={s.matrixAxis}>{d}</span>)}
+            {weeks.map((col, i) => [
+              <span key={`m${i}`} className={s.matrixAxis}>{months[i]}</span>,
+              ...col.map((c, j) => c === null
+                ? <span key={`${i}-${j}`} className={s.matrixGap} />
+                : <span key={`${i}-${j}`} className={cx(s.matrixCell, s[`lv${c.level}`])}
+                    title={`${formatDay(c.day)}: ${c.contrib} katkı · ${hm(c.minutes)}`} />),
+            ])}
           </div>
           <div className={s.matrixLegend} aria-hidden="true">
             Az
@@ -126,10 +134,6 @@ function Person({ u, name, today }: { u: PersonUse; name: string; today: Date })
             <Line k="Şimdiki seri" v={`${st.current} gün`} />
             <Line k="En uzun seri" v={`${st.longest} gün`} />
           </dl>
-          <p className={s.usageNote}>
-            Katkı: gönderilen mesaj + kayıt, alan, eylem ve takım değişiklikleri. Süre: sekmenin açık kaldığı
-            dakika. Seri: günde {STREAK_MIN} dakikadan fazla açık kalınan ardışık günler (son {WINDOW_DAYS} gün).
-          </p>
         </div>
       </div>
     </section>
