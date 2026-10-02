@@ -12,7 +12,7 @@ import r from "../../features/record/record.module.css";
 import { formatDay } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
 import { Icon } from "../../ui/icons";
-import { Button, cx, IconButton, Loading, Picker, ui, useToast, Who } from "../../ui/ui";
+import { Button, cx, Dialog, IconButton, Loading, Picker, ui, useToast, Who } from "../../ui/ui";
 import s from "./dashboard.module.css";
 
 const CONTACTS_MAX = 3;
@@ -108,15 +108,23 @@ function Form({ eventId, event, canEdit, view }: { eventId: Uuid; event: EventDe
   // en az bir alan degisince isaretlenir (sunucu da zorlar).
   const autofill = useAutofillOtf(eventId);
   const src = view.autofill_source;
-  const hasContent = Object.values(toInput(view)).some((v) => (Array.isArray(v) ? v.length > 0 : v !== null));
-  const onAutofill = () => {
+  // Formda kayitli ya da kaydedilmemis bir sey varsa (gozden gecirilmis olsa da)
+  // once onay: kopya hepsinin uzerine yazar.
+  const hasContent = dirty || Object.values(toInput(view)).some((v) => (Array.isArray(v) ? v.length > 0 : v !== null));
+  const [confirming, setConfirming] = useState(false);
+  const runAutofill = () => {
     if (src === null) return;
-    if (hasContent && !window.confirm(`Bu form “${src.title}” etkinliğinin formuyla değiştirilecek. Devam edilsin mi?`)) return;
     autofill.mutate(undefined, {
-      onSuccess: (v) => { setDraft(toInput(v)); setOpen(true); toast({ text: `“${src.title}” formundan dolduruldu — gözden geçir`, error: false }); },
+      onSuccess: (v) => {
+        setConfirming(false);
+        setDraft(toInput(v));
+        setOpen(true);
+        toast({ text: `“${src.title}” formundan dolduruldu — gözden geçir`, error: false });
+      },
       onError: (e) => toast({ text: errorText(e), error: true }),
     });
   };
+  const onAutofill = () => (hasContent ? setConfirming(true) : runAutofill());
   const locked = view.review?.needs_review === true;
   const canTick = locked && !ro && (view.review?.edited === true || dirty);
 
@@ -154,6 +162,19 @@ function Form({ eventId, event, canEdit, view }: { eventId: Uuid; event: EventDe
             title={`Etkinlikten gelmeyen alanları “${src.title}” formundan kopyalar`}>
             <Icon name="restore" size={14} /> Otomatik doldur
           </Button>
+        )}
+        {src !== null && (
+          <Dialog open={confirming} onClose={() => setConfirming(false)} title="Otomatik doldurulsun mu?">
+            <p>
+              “{src.title}” etkinliğinin formu bu formun üzerine kopyalanacak.{" "}
+              <b>Bu formdaki düzenlemeleriniz{dirty ? " (kaydedilmemişler dahil)" : ""} silinecek</b> ve form yeniden
+              gözden geçirilene kadar Word indirilemeyecek.
+            </p>
+            <div className={ui.dact}>
+              <Button onClick={() => setConfirming(false)}>Vazgeç</Button>
+              <Button variant="danger" disabled={autofill.isPending} onClick={runAutofill}>Düzenlemeleri sil ve doldur</Button>
+            </div>
+          </Dialog>
         )}
         {locked && (
           <span className={s.otfWarn}>
