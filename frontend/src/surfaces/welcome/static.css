@@ -1,0 +1,47 @@
+/* Apex'in JS'siz statik sayfalari (home.html, privacy.html, terms.html).
+   Google'in marka dogrulamasi ham HTML'i okur: icerik React'e degil, sayfanin
+   kendisine yazili. Gorunus karsilamayla ayni — ayni token + taban + sinif. */
+@import "@fontsource-variable/inter";
+@import "../../tokens.css";
+@import "../../base.css";
+@import "./welcome.css";
+
+.static-hero {
+  max-width: 68ch;
+  padding: 8px 0 8px;
+}
+.static-hero h1 {
+  font-size: clamp(2.2rem, 7vw, 3.4rem);
+  letter-spacing: -0.035em;
+  line-height: 1.05;
+  margin: 0 0 12px;
+}
+.static-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 20px 0 8px;
+}
+.legal .static-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 18px;
+  border-radius: var(--r-md);
+  background: var(--acc-fill);
+  color: var(--on-acc);
+  font-weight: 600;
+  text-decoration: none;
+}
+.legal .static-btn:hover {
+  background: var(--acc-fill-hover);
+}
+.legal .static-btn.ghost {
+  background: var(--panel);
+  color: var(--txt);
+  border: 1px solid var(--line-strong);
+}
+.lang-sep {
+  margin: 40px 0 0;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+}

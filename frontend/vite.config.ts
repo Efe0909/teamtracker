@@ -12,6 +12,12 @@ export default defineConfig({
     strictPort: true,
     proxy: { "/api": "http://127.0.0.1:8000" },
   },
-  build: { sourcemap: false },
+  // home/privacy/terms.html: apex'in JS'siz statik sayfalari (Google marka
+  // dogrulamasi ham HTML okur). nginx yalniz polonyum.com'da `/`, `/privacy`,
+  // `/terms`'u bunlara verir; gelistirmede /home.html, /privacy.html ile ac.
+  build: {
+    sourcemap: false,
+    rollupOptions: { input: ["index.html", "home.html", "privacy.html", "terms.html"] },
+  },
   test: { environment: "jsdom", setupFiles: ["./src/test-setup.ts"] },
 });

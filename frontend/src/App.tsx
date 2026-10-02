@@ -8,7 +8,6 @@ import { currentSurface } from "./api/session";
 import { ErrorScreen } from "./surfaces/errors/ErrorScreen";
 import { Session } from "./surfaces/Session";
 import { Entry } from "./surfaces/welcome/Entry";
-import { Legal } from "./surfaces/welcome/Legal";
 import { Welcome } from "./surfaces/welcome/Welcome";
 import { ToastProvider } from "./ui/ui";
 
@@ -29,8 +28,9 @@ export function App() {
   const surface = currentSurface();
   if (surface === "welcome") {
     const path = location.pathname;
+    // `/`, `/privacy`, `/terms` apex'te STATIK sayfa (home/privacy/terms.html,
+    // nginx verir); buraya yalniz gelistirmede ya da bilinmeyen yolda dusulur.
     if (path === "/welcome") return <Welcome />;
-    if (path === "/privacy" || path === "/terms") return <Legal page={path === "/privacy" ? "privacy" : "terms"} />;
     return <Entry />;
   }
   return (

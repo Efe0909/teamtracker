@@ -1,6 +1,0 @@
-# Yalnizca gelistirme/test. Imaja GIRMEZ — Dockerfile sadece
-# requirements.txt'i okur.
-
--r requirements.txt
-
-pytest
