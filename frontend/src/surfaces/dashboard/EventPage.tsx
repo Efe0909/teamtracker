@@ -27,6 +27,7 @@ import {
 import { ErrorScreen } from "../errors/ErrorScreen";
 import s from "./dashboard.module.css";
 import { EVENT_KIND, EVENT_STATUS, WIDGET, WIDGET_TYPES } from "./eventModel";
+import { Otf } from "./Otf";
 import { Purchases } from "./Purchases";
 import { href } from "./routes";
 
@@ -128,6 +129,10 @@ function EventView({ e }: { e: EventDetail }) {
                       // Sunucuda kayit widget'inin kaydi hep dolu.
                       return w.record_id === null ? null
                         : <LinkedRecord key={w.id} id={w.record_id} onRemove={e.can_edit ? drop : undefined} />;
+                    }
+                    if (w.type === "otf") {
+                      return <Otf key={w.id} eventId={e.id} event={e} canEdit={e.can_edit}
+                        onRemove={canStructure && e.can_edit ? drop : undefined} />;
                     }
                     return <Purchases key={w.id} eventId={e.id} items={e.materials}
                       onRemove={canStructure && e.can_edit ? drop : undefined} />;
@@ -487,7 +492,7 @@ function Timeline({ e }: { e: EventDetail }) {
   const today = toIsoDay(new Date());
   const next = e.checkpoints.findIndex((c) => !c.done);
   return (
-    <SideSec icon="flag" title="Zaman çizelgesi" action={e.can_edit ? <AddCheckpoint e={e} /> : undefined}>
+    <SideSec icon="flag" title="Zaman çizelgesi" action={e.can_manage ? <AddCheckpoint e={e} /> : undefined}>
       {e.checkpoints.length === 0 ? <span className={r.muted}>Checkpoint yok.</span> : (
         <ol className={s.evTimeline}>
           {e.checkpoints.map((c, i) => (
@@ -500,17 +505,44 @@ function Timeline({ e }: { e: EventDetail }) {
               <span className={s.evStep}>
                 <span>{c.label}</span>
                 <span className={r.muted}>
-                  {c.date === null ? "tarih yok" : c.date === today ? "bugün" : formatDay(c.date)}
+                  {e.can_manage ? <CheckpointDate id={c.id} date={c.date} today={today} /> : dayText(c.date, today)}
                   {c.done ? " · tamam" : ""}
                 </span>
               </span>
-              {e.can_edit && <IconButton icon="x" size={13} label={`${c.label} checkpoint'ini kaldır`} disabled={busy}
+              {e.can_manage && <IconButton icon="x" size={13} label={`${c.label} checkpoint'ini kaldır`} disabled={busy}
                 onClick={() => run(eventOps.dropCheckpoint(c.id))} />}
             </li>
           ))}
         </ol>
       )}
     </SideSec>
+  );
+}
+
+const dayText = (d: string | null, today: string) => (d === null ? "tarih yok" : d === today ? "bugün" : formatDay(d));
+
+/** Son tarih (yalniz `manage_events`). Varsayilan: etkinlikten 7 gun once, etkinlikle kayar. */
+function CheckpointDate({ id, date, today }: { id: string; date: string | null; today: string }) {
+  const { run, busy } = useRun();
+  const [open, setOpen] = useState(false);
+  const [v, setV] = useState("");
+  return (
+    <Popover align="start" open={open}
+      onOpenChange={(o) => { setOpen(o); if (o) setV(date ?? ""); }}
+      trigger={<button type="button" className={r.editLink} aria-label="Son tarihi değiştir">{dayText(date, today)}</button>}>
+      <form className={r.dueForm} onSubmit={(ev) => {
+        ev.preventDefault();
+        if (v !== "") run(eventOps.checkpointDate(id, v), () => setOpen(false));
+      }}>
+        <input className={ui.input} type="date" value={v} onChange={(ev) => setV(ev.target.value)} aria-label="Son tarih" autoFocus />
+        <div className={ui.dact}>
+          <Button size="sm" disabled={busy} onClick={() => run(eventOps.checkpointDate(id, null), () => setOpen(false))}>
+            Varsayılan (7 gün önce)
+          </Button>
+          <Button type="submit" variant="primary" size="sm" disabled={busy || v === ""}>Kaydet</Button>
+        </div>
+      </form>
+    </Popover>
   );
 }
 
@@ -533,7 +565,7 @@ function AddCheckpoint({ e }: { e: EventDetail }) {
         }}>
         <input className={ui.input} value={label} onChange={(ev) => setLabel(ev.target.value)} aria-label="Checkpoint adı"
           placeholder="Checkpoint adı" maxLength={200} required autoFocus />
-        <input className={ui.input} type="date" value={date} onChange={(ev) => setDate(ev.target.value)} aria-label="Tarih (isteğe bağlı)" />
+        <input className={ui.input} type="date" value={date} onChange={(ev) => setDate(ev.target.value)} aria-label="Tarih (boşsa etkinlikten 7 gün önce)" title="Boş bırakılırsa etkinlikten 7 gün önce" />
         <div className={ui.dact}>
           <Button type="submit" variant="primary" size="sm" disabled={busy || label.trim() === ""}>Ekle</Button>
         </div>

@@ -17,6 +17,8 @@ import type {
   MaterialPatch,
   MaterialProvider,
   NewEvent,
+  OtfInput,
+  OtfView,
   WidgetType,
   Feed,
   Home,
@@ -62,6 +64,7 @@ export const keys = {
   tags: ["tags"] as const,
   events: ["events"] as const,
   event: (id: Uuid) => ["event", id] as const,
+  otf: (id: Uuid) => ["otf", id] as const,
 };
 
 /** Rust `db/filters.rs` sozlesmesi. Gecersiz deger sunucuda sessizce duser. */
@@ -254,6 +257,9 @@ export const eventOps = {
   addCheckpoint: (id: Uuid, label: string, date: IsoDate | null): EventOp =>
     ({ method: "POST", path: `/api/events/${id}/checkpoints`, body: { label, date } }),
   checkpoint: (cid: Uuid, done: boolean): EventOp => ({ method: "PATCH", path: `/api/event-checkpoints/${cid}`, body: { done } }),
+  /** `manage_events`. null = varsayilan son tarih (etkinlikten 7 gun once). */
+  checkpointDate: (cid: Uuid, date: IsoDate | null): EventOp =>
+    ({ method: "PATCH", path: `/api/event-checkpoints/${cid}`, body: { date } }),
   dropCheckpoint: (cid: Uuid): EventOp => ({ method: "DELETE", path: `/api/event-checkpoints/${cid}` }),
   addWidget: (id: Uuid, type: WidgetType, record_id: Uuid | null = null): EventOp =>
     ({ method: "POST", path: `/api/events/${id}/widgets`, body: { type, record_id } }),
@@ -279,6 +285,22 @@ export function useEventWrite() {
     },
   });
 }
+
+export function useOtf(eventId: Uuid) {
+  return useQuery({ queryKey: keys.otf(eventId), queryFn: () => request<OtfView>("GET", `/api/events/${eventId}/otf`) });
+}
+
+/** Formun tamami tek PUT (form gibi kaydedilir). */
+export function useSaveOtf(eventId: Uuid) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (f: OtfInput) => request<OtfView>("PUT", `/api/events/${eventId}/otf`, f),
+    onSuccess: (v) => qc.setQueryData(keys.otf(eventId), v),
+  });
+}
+
+/** Doldurulmus Word dosyasi (Content-Disposition dosya adini tasir). */
+export const otfDocxUrl = (eventId: Uuid) => `/api/events/${eventId}/otf.docx`;
 
 export function useCreateRecord() {
   const qc = useQueryClient();

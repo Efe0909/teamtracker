@@ -68,6 +68,7 @@ export const SCOPE: Readonly<Partial<Record<string, string>>> = {
   edit_deadline: "Son tarih değiştir — kayıtların ve eylemlerin teslim tarihi",
   tag_media: "Ekleri etiketle — katıldığın sohbetlerdeki görsellere etiket ekle/çıkar",
   // Etkinlik modulu (spec/73 §5, §3) — Rust'ta henuz yok.
+  manage_events: "Etkinlikleri yönet — her etkinliği düzenle, checkpoint ekle/sil/tarihini değiştir",
   manage_event_widgets: "Etkinlik widget'larını düzenle — şablondan gelen widget'ları ekle/kaldır",
   manage_purchases: "Satın alımları yönet — adım ilerlet, tedarikçi ve fiyat yaz",
 };

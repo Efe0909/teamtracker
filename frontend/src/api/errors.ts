@@ -73,6 +73,10 @@ export type ApiErrorCode =
   | "invalid_state"
   | "invalid_contact"
   | "invalid_price"
+  | "invalid_otf_item"
+  | "invalid_quantity"
+  | "too_many_contacts"
+  | "otf_template"
   | "network";
 
 export const ERRORS = {
@@ -144,6 +148,10 @@ export const ERRORS = {
   invalid_state: "Süreç adımı geçersiz.",
   invalid_contact: "Tedarikçi boş olamaz ve 300 karakteri aşamaz.",
   invalid_price: "Fiyat geçersiz.",
+  invalid_otf_item: "Formda olmayan bir kalem seçildi. Sayfayı yenile.",
+  invalid_quantity: "Adet 1 ile 10000 arasında olmalı.",
+  too_many_contacts: "Formda en çok 3 etkinlik sorumlusu yer alır.",
+  otf_template: "Form şablonu okunamadı. Yöneticiye haber ver.",
   network: "Sunucuya ulaşılamadı. Bağlantını kontrol et.",
 } satisfies Record<ApiErrorCode, string>;
 

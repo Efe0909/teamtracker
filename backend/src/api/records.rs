@@ -458,10 +458,16 @@ pub async fn patch(
             .execute(&mut *tx).await?;
         log(&mut tx, rec.chat_id, me.id, "field_changed", &rec.title, Some(field),
             change(&from, &to)).await?;
-        if field == "title" {
-            // Ikiz kaydin basligi etkinlige de yazilir: tek ad, iki yuz (spec/73 §3a).
-            sqlx::query("update events set title = $2, updated_at = now() where record_id = $1")
-                .bind(rec.id).bind(to.as_str()).execute(&mut *tx).await?;
+        // Ikizin basligi, onemi ve sorumlusu etkinlige de yazilir: iki yuz ayni
+        // (spec/73 §3a). SQL sabit; deger yine sutun tipine baglanir.
+        let synced = match field {
+            "title" => Some("update events set title = $2, updated_at = now() where record_id = $1"),
+            "priority" => Some("update events set priority = $2, updated_at = now() where record_id = $1"),
+            "owner_id" => Some("update events set owner_id = $2, updated_at = now() where record_id = $1"),
+            _ => None,
+        };
+        if let Some(sql) = synced {
+            bind_value(sqlx::query(sql).bind(rec.id), field, &to)?.execute(&mut *tx).await?;
         }
         tx.commit().await?;
     }

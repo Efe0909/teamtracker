@@ -105,7 +105,7 @@ create table event_widgets (
   id          uuid primary key default gen_random_uuid(),
   event_id    uuid not null references events(id) on delete cascade,
   widget_type text not null check (widget_type in
-              ('supplies','record')),
+              ('supplies','record','otf')),
   record_id   uuid references records(id) on delete cascade,
   position    smallint not null,
   check ((widget_type = 'record') = (record_id is not null))
@@ -181,7 +181,7 @@ seçer**, yaşam döngüsü ayırmaz; tek tablo doğru. Veri ise türün tablosu
 - **Widget kaldırmak veriyi silmez.** Yuva gider, `materials` satırları etkinlikte
   kalır; widget geri eklenince aynı liste görünür. Veriyi silmek ayrı, açık bir eylem.
 - Kayıt dışındaki türlerden etkinlikte en çok bir widget (kısmi `unique`).
-- **Yalnız alanları tanımlı türler var**: bugün `supplies` (satın alımlar, §5) ve
+- **Yalnız alanları tanımlı türler var**: bugün `supplies` (satın alımlar, §5), `otf` (§5b) ve
   `record`. Yarım (iskelet) widget yayına girmez. Yeni tür = kendi tablosu +
   bileşeni + `widget_type` check'ine bir değer, **aynı göçte**. Aday türler
   (mekan, gündem, ulaşım, bütçe, duyuru) alanları tasarlanınca bu belgeye eklenir.
@@ -217,13 +217,18 @@ Yeni etkinlikte widget yuvaları ve checkpoint'ler **etkinlik türünün
 şablonundan kopyalanır**; sonra elle eklenir/silinir. Şablon kodda (Rust'ta bir
 sabit, ön yüzde `EVENT_TEMPLATE` onizlemesi) — kullanıcı tanımlı şablon yok.
 
-| Tür | Widget'lar | Checkpoint'ler (gün farkı, 0 = etkinlik günü) |
+**Kural:** bütün hazırlık etkinlikten **en geç 7 gün önce** biter (Rust
+`DEADLINE_DAYS`, testle zorlanır). Şablonda bundan geç checkpoint yok; elle
+tarihsiz eklenen checkpoint de etkinlikten 7 gün önceye düşer. Farklı tarih,
+checkpoint ekleme ve silme `manage_events` ister; işaretlemek düzenleyen herkese açık.
+
+| Tür | Widget'lar | Checkpoint'ler (etkinlikten gün farkı) |
 |---|---|---|
-| Toplantı | — | gündem toplandı −7, davet −5, toplantı 0, notlar +2 |
-| Eğitim | satın alımlar | eğitmen −21, mekan −14, malzeme hazır −3, eğitim 0, geri bildirim +3 |
-| Sosyal | — | bütçe onayı −21, mekan −14, duyuru −7, etkinlik 0 |
-| Saha ziyareti | — | ziyaret onayı −21, ulaşım −7, ziyaret 0, rapor +5 |
-| Konferans | satın alımlar | başvuru −45, stand −30, tanıtım −10, malzeme −3, etkinlik 0, değerlendirme +7 |
+| Toplantı | — | gündem toplandı −10, davet −7 |
+| Eğitim | satın alımlar | eğitmen −21, mekan −14, malzeme hazır −7 |
+| Sosyal | — | bütçe onayı −21, mekan −14, duyuru −7 |
+| Saha ziyareti | — | ziyaret onayı −21, ulaşım −7 |
+| Konferans | satın alımlar | başvuru −45, stand −30, tanıtım −10, malzeme −7 |
 
 Yeni widget türü tanımlandıkça ilgili türlerin şablonuna eklenir.
 
@@ -285,17 +290,50 @@ ister**: yeni `manage_purchases`. Okumak etkinliği görebilen herkese açık;
 yetkisiz görünüm salt okunur (adım noktaları tıklanmaz, ekleme formu yerine
 yetki notu). Ön yüz yalnız gösterir; karar Rust'ta (`spec/70-guvenlik.md`).
 
-Yeni scope'lar (göçte `scopes`'a eklenecek): `manage_event_widgets`,
+Yeni scope'lar (`010_events.sql`): `manage_events`, `manage_event_widgets`,
 `manage_purchases`. Ekrandaki adları `frontend/src/lib/labels.ts` `SCOPE`'ta.
 
 ---
 
+## 5b. OTF widget'ı — üniversitenin etkinlik talep formu
+
+Kampüste yapılan etkinlik için üniversite **FORM.GN.05 "Organizasyon ve Etkinlik
+Talep Formu"** (OTF) ister. Gönderim kuralları (kulübe gelen duyuru, 2026):
+kulüp mail adresinden, Word (.docx), etkinlikten **en geç 3 iş günü önce**,
+dosya adı `KULÜPADI_25EKİM_OTF.docx`, mail konusu `KULÜP ADI ETKİNLİK TARİHİ OTF`.
+Eski formatta, geç ya da kurala uymayan OTF işleme alınmaz.
+
+- **Şablon:** üniversitenin taslağı `backend/tools/otf_template.py` ile bir kez
+  işlenir. 56 içerik denetiminin her birine, önündeki yazı doğrulanarak `w:tag`
+  eklenir; metin alanlarına `{{anahtar}}` konur. Çıktı `backend/assets/otf.docx`
+  dosyasıdır ve binary'ye gömülür. Rust (`backend/src/otf.rs`) yalnız iki işlem
+  yapar: `{{anahtar}}` → değer, işaretli kutu → ☒. Yayında Python yok.
+  Üniversite yeni sürüm yayınlarsa araç yeniden koşar; etiket eşleşmezse durur.
+  `otf.rs` testleri her anahtarın şablonda olduğunu doğrular.
+- **Veri:** `event_otf` (amaç, bitiş saati, danışman, yaş grubu, kazanımlar,
+  altı bölüm açıklaması), `event_otf_items` (işaretli kutu + isteğe bağlı adet),
+  `event_otf_contacts` (en çok 3 sorumlu; telefon profilden). Etkinlikten
+  gelenler (ad, tarih, başlangıç saati, yer, katılımcı sayısı) **tekrar tutulmaz**,
+  dosya üretilirken okunur.
+- **Adetler:** yeni taslak adetleri kutuda değil bölümün AÇIKLAMA'sında istiyor;
+  adet girilen kalem açıklamaya `Projeksiyon: 2 adet` olarak yazılır.
+- **Uçlar:** `GET/PUT /api/events/{id}/otf` (form bütün olarak kaydedilir; yazmak
+  etkinliği düzenleyebilene), `GET /api/events/{id}/otf.docx` (dosya adı kurala
+  uygun). Cevap dosya adını, mail konusunu, son günü (3 iş günü önce; hafta sonu
+  sayılmaz, resmi tatil bilinmiyor) ve geç kalındı mı bilgisini taşır.
+- Kulüp adı ve dosya adındaki kısa ad yapılandırmadan gelir:
+  `EKIPTAKIP_CLUB_NAME`, `EKIPTAKIP_CLUB_CODE`.
+- Şablonda toplantı, eğitim ve sosyal etkinlik OTF widget'ı ve "OTF gönderildi"
+  checkpoint'iyle (−7) açılır. Saha ziyareti ve konferans kampüs dışı sayılır.
+- **Mail gönderilmez:** dosya kulüp adresinden elle gönderilir; uygulama dosyayı,
+  adı ve konuyu hazırlar.
+
 ## 6. Uygulama kararları
 
-- **Etkinliği kim düzenler?** İkiz kaydını düzenleyebilen (kayıt yetki yolları
-  aynen: sorumlu, açan, katılımcı, takım, dal izni). Yeni `manage_events` scope'u
-  yok: her etkinliğin kaydı zaten var, ikinci bir yetki sistemi ayrışırdı.
-  Etkinliğe kişi eklemek ikizin katılımcısı da yapar (sohbet bildirimi + yetki),
+- **Etkinliği kim düzenler?** (Efe, 2026-10-02) Kayıtların mekanizması: ikiz
+  kaydını düzenleyebilen (sorumlu, açan, katılımcı, takım, dal izni) **ya da**
+  ayrı `manage_events` scope'u olan — o her etkinliği düzenler ve checkpoint
+  yapısını (ekle, sil, son tarih) yalnız o değiştirir. Etkinliğe kişi eklemek ikizin katılımcısı da yapar (sohbet bildirimi + yetki),
   çıkarmak ikisinden de çıkarır.
 - **Checkpoint tarihi göreli.** Şablondan gelen checkpoint `offset_days` tutar
   (`due_date` boş); tarih okunurken `events.date + offset_days`. Havuzdaki

@@ -2268,10 +2268,17 @@ a.evMore:hover {
   color: var(--ok-text);
 }
 /* surec: nokta + aradaki cizgi; tamam olan dolu ve cizgisi duz */
+/* Sabit genislik, iki uca hizali: 3 ve 4 adimli satirlar ayni hizada baslar ve
+   biter; aradaki bosluk (ve cizgi) adim sayisina gore uzar. 4 adim: 4*12 + 3*14. */
 .mPipe {
+  --gap: 14px;
   display: inline-flex;
   align-items: center;
-  gap: 14px;
+  justify-content: space-between;
+  width: 90px;
+}
+.mPipe[data-n="3"] {
+  --gap: 27px;
 }
 .mStep {
   appearance: none;
@@ -2295,7 +2302,7 @@ a.evMore:hover {
   position: absolute;
   top: 50%;
   right: calc(100% + 2px);
-  width: 14px;
+  width: var(--gap);
   border-top: 2px dashed var(--line-strong);
   translate: 0 -50%;
 }
@@ -2479,4 +2486,108 @@ button.evDot:hover:not(:disabled) {
 }
 li[data-state="todo"] > .evStep > span:first-child {
   color: var(--dim);
+}
+
+/* --- OTF widget'i (Otf.tsx) --- */
+.otfDeadline {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--fs-sm);
+  color: var(--dim);
+}
+.otfDeadline[data-late="true"] {
+  color: var(--err-text);
+  font-weight: 500;
+}
+.otfDownload {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+  font-size: var(--fs-sm);
+}
+.otfCopy {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.otfCopy code {
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+}
+.otfWarn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--warn-text);
+}
+.otfBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  padding-top: var(--s-2);
+}
+.otfEvent {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px var(--s-3);
+  margin: 0;
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-sm);
+  background: var(--panel2);
+  font-size: var(--fs-sm);
+}
+.otfEvent dt {
+  color: var(--dim);
+}
+.otfEvent dd {
+  margin: 0;
+}
+.otfGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--s-3);
+}
+.otfSection {
+  gap: var(--s-2);
+}
+.otfItems {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.otfItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 6px 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  font-weight: 400;
+}
+.otfItem[data-on="true"] {
+  border-color: var(--acc);
+  background: var(--acc-bg);
+}
+.otfItem label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  cursor: pointer;
+}
+.otfQty {
+  width: 72px;
+  height: 24px;
+}
+.otfContacts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+.otfActs {
+  display: flex;
+  gap: var(--s-2);
 }

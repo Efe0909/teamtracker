@@ -15,6 +15,7 @@ mod home;
 mod meta;
 mod nodes;
 mod notify;
+mod otf;
 mod profile;
 mod records;
 mod teams;
@@ -64,6 +65,8 @@ pub fn router() -> Router<AppState> {
         .route("/api/events/{id}/checkpoints", post(events::add_checkpoint))
         .route("/api/events/{id}/widgets", post(events::add_widget))
         .route("/api/events/{id}/materials", post(events::add_material))
+        .route("/api/events/{id}/otf", get(otf::get).put(otf::put))
+        .route("/api/events/{id}/otf.docx", get(otf::docx))
         .route("/api/event-checkpoints/{id}",
             patch(events::patch_checkpoint).delete(events::delete_checkpoint))
         .route("/api/event-widgets/{id}", delete(events::delete_widget))

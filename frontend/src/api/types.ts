@@ -145,7 +145,7 @@ export interface RecordDetail {
 export type EventKind = "meeting" | "training" | "social" | "visit" | "conference";
 export type EventStatus = "idea" | "planning" | "confirmed" | "done" | "cancelled";
 /** Yalniz alanlari TANIMLI widget turleri. `record` tek kayitlik, digerleri tekil. */
-export type WidgetType = "supplies" | "record";
+export type WidgetType = "supplies" | "record" | "otf";
 export type MaterialType = "consumable" | "equipment" | "service";
 
 /** Liste ve ayrintinin ortak satiri. `record_ids` = kayit widget'larinin kayitlari (ikiz haric). */
@@ -211,8 +211,10 @@ export interface EventDetail extends EventSummary {
   checkpoints: Checkpoint[];
   widgets: EventWidget[];
   materials: Material[];
-  /** Ikiz kaydi duzenleyebilir mi. Scope'lar (widget, satin alim) meta'dan. */
+  /** Ikiz kaydi duzenleyebilir ya da `manage_events`. Diger scope'lar meta'dan. */
   can_edit: boolean;
+  /** `manage_events`: checkpoint ekle/sil/son tarih. */
+  can_manage: boolean;
 }
 
 export interface NewEvent {
@@ -233,6 +235,46 @@ export type EventPatch =
   | { field: "place"; value: string | null }
   | { field: "attendees"; value: number | null }
   | { field: "description"; value: string | null };
+
+/** OTF (FORM.GN.05) formu — Rust api/otf.rs. Etkinlikten gelenler (ad, tarih,
+ *  baslangic saati, yer, katilimci sayisi) burada yok: dosyada etkinlikten okunur. */
+export interface OtfFields {
+  purpose: string | null;
+  /** "HH:MM" */
+  end_time: string | null;
+  advisor: string | null;
+  age_group: string | null;
+  outcomes: string | null;
+  layout_notes: string | null;
+  av_notes: string | null;
+  tech_notes: string | null;
+  host_notes: string | null;
+  care_notes: string | null;
+  other_notes: string | null;
+}
+
+export interface OtfItem {
+  item: string;
+  /** Doluysa bolum aciklamasina "Etiket: N adet" olarak yazilir. */
+  quantity: number | null;
+}
+
+export interface OtfInput extends OtfFields {
+  items: OtfItem[];
+  /** En cok 3 etkinlik sorumlusu, formdaki sirayla; telefon profilden. */
+  contacts: Uuid[];
+}
+
+export interface OtfView extends OtfInput {
+  /** Kutu katalogu (tek kaynak Rust otf::SECTIONS). `key` bolumun aciklama alanini secer: `${key}_notes`. */
+  catalog: { key: "layout" | "av" | "tech" | "host" | "care" | "other"; label: string; items: { key: string; label: string }[] }[];
+  club_name: string;
+  file_name: string;
+  subject: string;
+  /** Etkinlikten 3 is gunu once; tarihsiz etkinlikte null. */
+  deadline: IsoDate | null;
+  late: boolean;
+}
 
 export interface MaterialPatch {
   name?: string;

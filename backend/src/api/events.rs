@@ -4,10 +4,11 @@
 //! eylemler orada. Ikiz yalniz `create`'te dogar; var olan kayit ikiz
 //! yapilamaz, sonradan degistirilemez (gocteki tetikleyici).
 //!
-//! Yetki: etkinligi, ikiz kaydini duzenleyebilen duzenler (kayit yetki yollari
-//! aynen: sorumlu, acan, katilimci, takim, dal). Ayrica sablon widget'i (kayit
-//! disi) eklemek/kaldirmak `manage_event_widgets`, satin alim yazmak
-//! `manage_purchases` ister. Okuma herkese acik (kayitlarla ayni).
+//! Yetki: etkinligi, ikiz kaydini duzenleyebilen (kayit yetki yollari aynen:
+//! sorumlu, acan, katilimci, takim, dal) YA DA `manage_events` sahibi duzenler.
+//! Checkpoint yapisi (ekle, sil, tarih) yalniz `manage_events`; isaretlemek
+//! duzenleyen herkese. Sablon widget'i (kayit disi) `manage_event_widgets`,
+//! satin alim `manage_purchases` ister. Okuma herkese acik (kayitlarla ayni).
 //!
 //! Yazma uclari guncel etkinlik ayrintisini dondurur (kayitlarla ayni sozlesme).
 
@@ -98,9 +99,11 @@ pub struct Detail {
     checkpoints: Vec<Checkpoint>,
     widgets: Vec<Widget>,
     materials: Vec<Material>,
-    /// Ikiz kaydi duzenleyebilir mi (etkinlik alanlari, kisiler, takimlar,
-    /// checkpoint'ler, kayit widget'lari). Scope'lar `/api/meta`'dan.
+    /// Duzenleyebilir mi (etkinlik alanlari, kisiler, takimlar, checkpoint
+    /// isaretleme, kayit widget'lari): ikiz kaydi duzenleyebilen ya da `manage_events`.
     can_edit: bool,
+    /// `manage_events`: checkpoint ekle/sil/tarih.
+    can_manage: bool,
 }
 
 #[derive(Serialize, sqlx::FromRow)]
@@ -155,7 +158,8 @@ struct Provider {
 
 async fn detail_of(st: &AppState, me: &User, event: EventRow) -> Result<Detail> {
     let twin = records::load(&st.pool, event.record_id).await?;
-    let can_edit = crate::db::scope::can_edit_record(&st.pool, me, &twin, &st.tree).await?;
+    let can_manage = common::has_scope(st, me, "manage_events").await?;
+    let can_edit = can_manage || crate::db::scope::can_edit_record(&st.pool, me, &twin, &st.tree).await?;
     let participants = sqlx::query_as(
         "select user_id, role from event_participants where event_id = $1 order by added_at")
         .bind(event.id).fetch_all(&st.pool).await?;
@@ -187,7 +191,7 @@ async fn detail_of(st: &AppState, me: &User, event: EventRow) -> Result<Detail> 
             m.providers.push(p);
         }
     }
-    Ok(Detail { event, participants, team_ids, checkpoints, widgets, materials, can_edit })
+    Ok(Detail { event, participants, team_ids, checkpoints, widgets, materials, can_edit, can_manage })
 }
 
 async fn reply(st: &AppState, me: &User, id: Uuid) -> Result<Json<Detail>> {
@@ -201,11 +205,13 @@ pub async fn get(
     reply(&st, &me, common::id(&raw)?).await
 }
 
-/// Etkinlik + ikizi; ikizi duzenleyemeyen 403.
-async fn editable(st: &AppState, me: &User, id: Uuid) -> Result<(EventRow, Record)> {
+/// Etkinlik + ikizi; ikizi duzenleyemeyen ve `manage_events`'i olmayan 403.
+pub(crate) async fn editable(st: &AppState, me: &User, id: Uuid) -> Result<(EventRow, Record)> {
     let ev = load(&st.pool, id).await?;
     let twin = records::load(&st.pool, ev.record_id).await?;
-    records::require_edit(st, me, &twin).await?;
+    if !common::has_scope(st, me, "manage_events").await? {
+        records::require_edit(st, me, &twin).await?;
+    }
     Ok((ev, twin))
 }
 
@@ -220,25 +226,39 @@ async fn require_scope(st: &AppState, me: &User, scope: &str) -> Result<()> {
 /// degismez. On yuzdeki `EVENT_TEMPLATE` yalniz onizleme; kaynak burasi.
 type Template = (&'static [WidgetType], &'static [(&'static str, i16)]);
 
+/// Varsayilan kural (Efe, 2026-10-02): butun hazirlik etkinlikten en gec bu
+/// kadar gun once biter. Sablonda bundan gec checkpoint yok; elle eklenen
+/// tarihsiz checkpoint da buraya duser. Farkli tarih `manage_events` ister.
+const DEADLINE_DAYS: i16 = 7;
+
 fn template(kind: EventKind) -> Template {
     match kind {
-        EventKind::Meeting => (&[], &[
-            ("Gündem toplandı", -7), ("Davet gönderildi", -5), ("Toplantı", 0), ("Notlar paylaşıldı", 2),
+        // Kampuste yapilan turler OTF ister (universite talep formu, api/otf.rs).
+        EventKind::Meeting => (&[WidgetType::Otf], &[
+            ("Gündem toplandı", -10), ("OTF gönderildi", -7), ("Davet gönderildi", -7),
         ]),
-        EventKind::Training => (&[WidgetType::Supplies], &[
-            ("Eğitmen kesinleşti", -21), ("Mekan ayarlandı", -14), ("Malzeme hazır", -3),
-            ("Eğitim", 0), ("Geri bildirim", 3),
+        EventKind::Training => (&[WidgetType::Otf, WidgetType::Supplies], &[
+            ("Eğitmen kesinleşti", -21), ("Mekan ayarlandı", -14), ("OTF gönderildi", -7), ("Malzeme hazır", -7),
         ]),
-        EventKind::Social => (&[], &[
-            ("Bütçe onayı", -21), ("Mekan ayarlandı", -14), ("Duyuru", -7), ("Etkinlik", 0),
+        EventKind::Social => (&[WidgetType::Otf], &[
+            ("Bütçe onayı", -21), ("Mekan ayarlandı", -14), ("OTF gönderildi", -7), ("Duyuru", -7),
         ]),
-        EventKind::Visit => (&[], &[
-            ("Ziyaret onayı", -21), ("Ulaşım ayarlandı", -7), ("Ziyaret", 0), ("Rapor", 5),
-        ]),
+        EventKind::Visit => (&[], &[("Ziyaret onayı", -21), ("Ulaşım ayarlandı", -7)]),
         EventKind::Conference => (&[WidgetType::Supplies], &[
-            ("Başvuru", -45), ("Stand kesinleşti", -30), ("Tanıtım", -10), ("Malzeme hazır", -3),
-            ("Etkinlik", 0), ("Değerlendirme", 7),
+            ("Başvuru", -45), ("Stand kesinleşti", -30), ("Tanıtım", -10), ("Malzeme hazır", -7),
         ]),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn template_checkpoints_end_a_week_before() {
+        for k in [EventKind::Meeting, EventKind::Training, EventKind::Social, EventKind::Visit, EventKind::Conference] {
+            assert!(template(k).1.iter().all(|(_, d)| *d <= -DEADLINE_DAYS), "{k:?}");
+        }
     }
 }
 
@@ -371,12 +391,17 @@ pub async fn patch(
         EventPatch::Priority(v) => {
             set("update events set priority = $2, updated_at = now() where id = $1")
                 .bind(v).execute(&mut *tx).await?;
+            // Onem ve sorumlu iki yuzde ayni: ozet satiri ve "top kimde" ikizden okunur.
+            sqlx::query("update records set priority = $2 where id = $1")
+                .bind(twin.id).bind(v).execute(&mut *tx).await?;
             log_change(&mut tx, &twin, &me, "priority", json(ev.priority), json(v)).await?;
         }
         EventPatch::OwnerId(v) => {
             records::check_user(&st.pool, v).await?;
             set("update events set owner_id = $2, updated_at = now() where id = $1")
                 .bind(v).execute(&mut *tx).await?;
+            sqlx::query("update records set owner_id = $2 where id = $1")
+                .bind(twin.id).bind(v).execute(&mut *tx).await?;
             log_change(&mut tx, &twin, &me, "owner_id", json(ev.owner_id), json(v)).await?;
         }
         EventPatch::Date(v) => {
@@ -517,13 +542,16 @@ pub async fn add_checkpoint(
     State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>,
     Body(b): Body<NewCheckpoint>,
 ) -> Result<Json<Detail>> {
-    let (ev, _) = editable(&st, &me, common::id(&raw)?).await?;
+    let ev = load(&st.pool, common::id(&raw)?).await?;
+    require_scope(&st, &me, "manage_events").await?;
     let label = common::text(Some(b.label), LABEL_MAX, "invalid_label")?
         .ok_or(AppError::BadRequest("invalid_label"))?;
+    // Tarih verilmezse varsayilan son tarih: etkinlikten DEADLINE_DAYS once (goreli).
     sqlx::query(
-        "insert into event_checkpoints (event_id, label, due_date, position)
-         values ($1, $2, $3, (select coalesce(max(position) + 1, 0) from event_checkpoints where event_id = $1))")
-        .bind(ev.id).bind(label).bind(b.date).execute(&st.pool).await?;
+        "insert into event_checkpoints (event_id, label, due_date, offset_days, position)
+         values ($1, $2, $3, case when $3::date is null then $4 end,
+                 (select coalesce(max(position) + 1, 0) from event_checkpoints where event_id = $1))")
+        .bind(ev.id).bind(label).bind(b.date).bind(-DEADLINE_DAYS).execute(&st.pool).await?;
     reply(&st, &me, ev.id).await
 }
 
@@ -533,10 +561,16 @@ async fn event_of(pool: &PgPool, sql: &'static str, id: Uuid) -> Result<Uuid> {
 
 #[derive(Deserialize)]
 pub struct CheckpointPatch {
-    done: bool,
+    #[serde(default)]
+    done: Option<bool>,
+    /// Gelirse (`manage_events`): mutlak son tarih; `null` varsayilana doner
+    /// (etkinlikten DEADLINE_DAYS once, goreli).
+    #[serde(default, deserialize_with = "common::present")]
+    date: Option<Option<NaiveDate>>,
 }
 
-/// Elle isaretlenir; tarih gecti diye kendiliginden dolmaz.
+/// Elle isaretlenir; tarih gecti diye kendiliginden dolmaz. Isaretlemek
+/// duzenleyen herkese, tarihi degistirmek `manage_events`'e.
 pub async fn patch_checkpoint(
     State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>,
     Body(b): Body<CheckpointPatch>,
@@ -544,9 +578,20 @@ pub async fn patch_checkpoint(
     let id = common::id(&raw)?;
     let event = event_of(&st.pool, "select event_id from event_checkpoints where id = $1", id).await?;
     editable(&st, &me, event).await?;
-    sqlx::query(
-        "update event_checkpoints set done_at = case when $2 then coalesce(done_at, now()) end where id = $1")
-        .bind(id).bind(b.done).execute(&st.pool).await?;
+    let mut tx = st.pool.begin().await?;
+    if let Some(done) = b.done {
+        sqlx::query(
+            "update event_checkpoints set done_at = case when $2 then coalesce(done_at, now()) end where id = $1")
+            .bind(id).bind(done).execute(&mut *tx).await?;
+    }
+    if let Some(date) = b.date {
+        require_scope(&st, &me, "manage_events").await?;
+        sqlx::query(
+            "update event_checkpoints set due_date = $2, offset_days = case when $2::date is null then $3 end
+              where id = $1")
+            .bind(id).bind(date).bind(-DEADLINE_DAYS).execute(&mut *tx).await?;
+    }
+    tx.commit().await?;
     reply(&st, &me, event).await
 }
 
@@ -555,7 +600,7 @@ pub async fn delete_checkpoint(
 ) -> Result<Json<Detail>> {
     let id = common::id(&raw)?;
     let event = event_of(&st.pool, "select event_id from event_checkpoints where id = $1", id).await?;
-    editable(&st, &me, event).await?;
+    require_scope(&st, &me, "manage_events").await?;
     sqlx::query("delete from event_checkpoints where id = $1").bind(id).execute(&st.pool).await?;
     reply(&st, &me, event).await
 }

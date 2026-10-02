@@ -11,32 +11,22 @@ export { EVENT_KIND, EVENT_STATUS };
 export const WIDGET: Record<WidgetType, { label: string; icon: IconName }> = {
   supplies: { label: "Satın alımlar", icon: "box" },
   record: { label: "Kayıt", icon: "tasks" },
+  otf: { label: "Etkinlik talep formu (OTF)", icon: "edit" },
 };
 export const WIDGET_TYPES = Object.keys(WIDGET) as WidgetType[];
 
 /** Tur sablonunun ONIZLEMESI (yeni etkinlik formu). Kaynak Rust `events.rs`
  *  `template`: etkinlik olusturulurken orada kopyalanir. Ikisi birlikte degisir. */
 export const EVENT_TEMPLATE: Record<EventKind, { widgets: Exclude<WidgetType, "record">[]; checkpoints: [string, number][] }> = {
-  meeting: {
-    widgets: [],
-    checkpoints: [["Gündem toplandı", -7], ["Davet gönderildi", -5], ["Toplantı", 0], ["Notlar paylaşıldı", 2]],
-  },
+  // Butun hazirlik etkinlikten en gec 7 gun once biter (Rust DEADLINE_DAYS).
+  meeting: { widgets: ["otf"], checkpoints: [["Gündem toplandı", -10], ["OTF gönderildi", -7], ["Davet gönderildi", -7]] },
   training: {
-    widgets: ["supplies"],
-    checkpoints: [["Eğitmen kesinleşti", -21], ["Mekan ayarlandı", -14], ["Malzeme hazır", -3], ["Eğitim", 0], ["Geri bildirim", 3]],
+    widgets: ["otf", "supplies"],
+    checkpoints: [["Eğitmen kesinleşti", -21], ["Mekan ayarlandı", -14], ["OTF gönderildi", -7], ["Malzeme hazır", -7]],
   },
-  social: {
-    widgets: [],
-    checkpoints: [["Bütçe onayı", -21], ["Mekan ayarlandı", -14], ["Duyuru", -7], ["Etkinlik", 0]],
-  },
-  visit: {
-    widgets: [],
-    checkpoints: [["Ziyaret onayı", -21], ["Ulaşım ayarlandı", -7], ["Ziyaret", 0], ["Rapor", 5]],
-  },
-  conference: {
-    widgets: ["supplies"],
-    checkpoints: [["Başvuru", -45], ["Stand kesinleşti", -30], ["Tanıtım", -10], ["Malzeme hazır", -3], ["Etkinlik", 0], ["Değerlendirme", 7]],
-  },
+  social: { widgets: ["otf"], checkpoints: [["Bütçe onayı", -21], ["Mekan ayarlandı", -14], ["OTF gönderildi", -7], ["Duyuru", -7]] },
+  visit: { widgets: [], checkpoints: [["Ziyaret onayı", -21], ["Ulaşım ayarlandı", -7]] },
+  conference: { widgets: ["supplies"], checkpoints: [["Başvuru", -45], ["Stand kesinleşti", -30], ["Tanıtım", -10], ["Malzeme hazır", -7]] },
 };
 
 // --- satin alimlar (spec/73 §5) -----------------------------------------------------

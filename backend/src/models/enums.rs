@@ -121,7 +121,7 @@ sql_enum!(
 sql_enum!(
     /// `event_widgets.widget_type`. Yalniz alanlari TANIMLI turler; yeni tur =
     /// kendi tablosu + bilesen + buraya bir satir, ayni gocte.
-    WidgetType { Supplies => "supplies", Record => "record" }
+    WidgetType { Supplies => "supplies", Record => "record", Otf => "otf" }
 );
 
 sql_enum!(

@@ -1,5 +1,7 @@
--- OTOMATIK URETILDI: tools/gen_seed.py. ELLE DUZENLEME — kaynak
--- shared/seed.py (Python tarafi). VAROLAN VERIYI SILER.
+-- Yerel gelistirme tohumu. VAROLAN VERIYI SILER.
+-- Ilk hali tools/gen_seed.py ile Python arsivinden uretildi; arsiv kaldirildi,
+-- kaynak artik BU DOSYA (elle duzenlenir). Testler basliklara bakiyor
+-- ("Bütçe onayı 6 gündür bekliyor") — var olan satirlarin metnini degistirme.
 
 truncate users, nodes, teams, team_members, team_nodes, pillars, chats, records,
          record_participants, actions, cards, messages, activity
@@ -9,6 +11,20 @@ truncate users, nodes, teams, team_members, team_nodes, pillars, chats, records,
 insert into users (id,email,name,color,is_admin,created_at) values ('075deca4-2769-59ea-ace4-039eed00ca23','efe@ekiptakip.local','Efe','#5b8cff',false,now() - interval '10 day');
 insert into users (id,email,name,color,is_admin,created_at) values ('4f5c8d98-3962-5a7d-b38f-c4a7b023d676','selin@ekiptakip.local','Selin','#e5484d',true,now() - interval '9 day');
 insert into users (id,email,name,color,is_admin,created_at) values ('7a995bfb-9114-538d-b999-14fa104f12a6','deniz@ekiptakip.local','Deniz','#d99a2b',false,now() - interval '8 day');
+-- yetkisiz/iliskisiz kullanici senaryolari icin (hicbir dal izni yok)
+insert into users (id,email,name,color,is_admin,created_at) values ('6a39d915-1ee4-44d2-b14b-323d87a5828e','ayse@ekiptakip.local','Ayşe','#2f9e8f',false,now() - interval '7 day');
+insert into users (id,email,name,color,is_admin,created_at) values ('84f19ab9-1788-4761-9181-2ac9f0b7a436','mert@ekiptakip.local','Mert','#c2410c',false,now() - interval '6 day');
+insert into users (id,email,name,color,is_admin,created_at) values ('8bb5cdb7-eabe-444b-bce5-350d58d623e8','zeynep@ekiptakip.local','Zeynep','#a21caf',false,now() - interval '5 day');
+insert into users (id,email,name,color,is_admin,created_at) values ('f1b9e26d-3b3f-40db-a500-f25a3bd05c2c','can@ekiptakip.local','Can','#4d7c0f',false,now() - interval '4 day');
+-- telefon: OTF formunda etkinlik sorumlusunun telefonu profilden gelir
+update users set phone = v.phone from (values
+  ('075deca4-2769-59ea-ace4-039eed00ca23'::uuid, '0532 111 22 33'),
+  ('4f5c8d98-3962-5a7d-b38f-c4a7b023d676'::uuid, '0533 222 33 44'),
+  ('7a995bfb-9114-538d-b999-14fa104f12a6'::uuid, '0535 333 44 55'),
+  ('6a39d915-1ee4-44d2-b14b-323d87a5828e'::uuid, '0536 444 55 66'),
+  ('84f19ab9-1788-4761-9181-2ac9f0b7a436'::uuid, '0537 555 66 77'),
+  ('8bb5cdb7-eabe-444b-bce5-350d58d623e8'::uuid, '0538 666 77 88')
+) as v(id, phone) where users.id = v.id;
 
 -- === agac ===
 insert into nodes (id,parent_id,name,node_type,sort_order) values ('a9394863-062f-5089-abd3-2a8c418fb542',null,'Yıllık Bayi Toplantısı 2026','operational',0);
@@ -44,6 +60,10 @@ insert into team_members (team_id,user_id,role) values ('b7d5cc5f-ef59-594b-a67a
 insert into team_members (team_id,user_id,role) values ('b7d5cc5f-ef59-594b-a67a-6a356fd372f3','075deca4-2769-59ea-ace4-039eed00ca23','member');
 insert into team_members (team_id,user_id,role) values ('fc8b1cd5-7c9f-53c6-a2cc-978a9bec79a5','7a995bfb-9114-538d-b999-14fa104f12a6','member');
 insert into team_members (team_id,user_id,role) values ('fc8b1cd5-7c9f-53c6-a2cc-978a9bec79a5','075deca4-2769-59ea-ace4-039eed00ca23','member');
+-- Ayse Tasarim, Mert Satin Alim, Zeynep Maliye; Can takimsiz (yeni gelen)
+insert into team_members (team_id,user_id,role) values ('2ebfe4f2-d0cc-5e82-9579-059601fe9275','6a39d915-1ee4-44d2-b14b-323d87a5828e','member');
+insert into team_members (team_id,user_id,role) values ('fc8b1cd5-7c9f-53c6-a2cc-978a9bec79a5','84f19ab9-1788-4761-9181-2ac9f0b7a436','lead');
+insert into team_members (team_id,user_id,role) values ('b7d5cc5f-ef59-594b-a67a-6a356fd372f3','8bb5cdb7-eabe-444b-bce5-350d58d623e8','member');
 
 -- === takim <-> agac baglari (team_nodes, spec/22) ===
 insert into team_nodes (team_id,node_id) values ('b7d5cc5f-ef59-594b-a67a-6a356fd372f3','57494550-15de-5aa6-9802-a5252f8f1e4a');

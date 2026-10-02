@@ -114,7 +114,7 @@ function Row({ m, canEdit, busy, run, open, onToggle }: {
           <span className={s.mOwned}><Icon name="check" size={13} /> Zaten var</span>
         ) : (
           // Adim noktalari: tamam olana tikla → o adim ve sonrasi geri alinir; tamam olmayana → oraya kadar ilerler.
-          <span className={s.mPipe} role="group" aria-label={`${m.name} süreci: ${m.state}/${steps.length}`}>
+          <span className={s.mPipe} data-n={steps.length} role="group" aria-label={`${m.name} süreci: ${m.state}/${steps.length}`}>
             {steps.map((label, i) => (
               <button key={label} type="button" className={s.mStep} data-done={i < m.state}
                 disabled={!canEdit || busy} title={`${label}${i < m.state ? " — tamam" : ""}`}
@@ -186,12 +186,13 @@ function Providers({ m, canEdit, busy, run, best }: {
             contact: contact.trim(), price: price === "" ? null : Number(price), arrival_date: date === "" ? null : date,
           }), () => { setContact(""); setPrice(""); setDate(""); });
         }}>
-          <input className={ui.input} value={contact} onChange={(e) => setContact(e.target.value)} required
+          <input className={ui.input} value={contact} onChange={(e) => setContact(e.target.value)}
             placeholder="Bağlantı ya da telefon" aria-label="Tedarikçi" />
           <input className={ui.input} type="number" min={0} step="0.01" value={price} onChange={(e) => setPrice(e.target.value)}
             placeholder="Fiyat ₺" aria-label="Fiyat" />
           <input className={ui.input} type="date" value={date} onChange={(e) => setDate(e.target.value)} aria-label="Varış tarihi" />
-          <Button size="sm" type="submit" disabled={busy}><Icon name="plus" size={14} /> Tedarikçi</Button>
+          {/* `required` yerine kapali dugme: sifirlanan bos alan :invalid kirmizisinda kalmasin. */}
+          <Button size="sm" type="submit" disabled={busy || contact.trim() === ""}><Icon name="plus" size={14} /> Tedarikçi</Button>
         </form>
       )}
     </div>

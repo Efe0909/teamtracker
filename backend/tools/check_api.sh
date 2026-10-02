@@ -23,7 +23,7 @@ R=$(curl -s "$B/api/me")
 ok "$(jq -r .user <<<"$R")" null "user"
 ok "$(jq -r .auth <<<"$R")" fake "auth"
 ok "$(jq -r .csrf <<<"$R")" null "csrf"
-ok "$(jq -r '.dev_users|length' <<<"$R")" 3 "dev_users"
+ok "$(jq -r '.dev_users|length' <<<"$R")" 7 "dev_users"
 
 t no_html_anywhere
 ok "$(code "$B/")" 404 "/"
@@ -98,7 +98,7 @@ ok "$(curl -s "$B/api/records" | jq -r .error)" unauthorized "records"
 t meta
 R=$(g w /api/meta)
 ok "$(jq -r .me.id <<<"$R")" "$SELIN" "me.id"
-ok "$(jq '.users|length' <<<"$R")" 3 "users"
+ok "$(jq '.users|length' <<<"$R")" 7 "users"
 ok "$(jq '.teams|length' <<<"$R")" 5 "teams (3 sade + 2 pillar takimi)"
 ok "$(jq -c '[.pillars[]|.name]' <<<"$R")" '["Güvenlik","Kalite"]' "pillars sort_order, ad"
 ok "$(jq -c '.pillars[0]|keys' <<<"$R")" '["color","description","id","is_active","name","sort_order","team_id"]' "MetaPillar alanlari"

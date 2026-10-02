@@ -20,6 +20,7 @@ mod mentions;
 #[allow(dead_code)]
 mod models;
 mod mail;
+mod otf;
 mod push;
 mod ratelimit;
 mod state;

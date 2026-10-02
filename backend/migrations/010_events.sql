@@ -67,7 +67,7 @@ create index on event_checkpoints(event_id, position);
 create table event_widgets (
   id          uuid primary key default gen_random_uuid(),
   event_id    uuid not null references events(id) on delete cascade,
-  widget_type text not null check (widget_type in ('supplies','record')),
+  widget_type text not null check (widget_type in ('supplies','record','otf')),
   record_id   uuid references records(id) on delete cascade,
   position    smallint not null,
   check ((widget_type = 'record') = (record_id is not null))
@@ -103,5 +103,42 @@ create table material_providers (
 );
 create index on material_providers(material_id);
 
-insert into scopes (name) values ('manage_event_widgets'), ('manage_purchases')
+-- OTF (FORM.GN.05) talep formu widget'i. Etkinlikten gelenler (ad, tarih,
+-- saat, yer, katilimci sayisi) burada TEKRAR TUTULMAZ; dosya uretilirken okunur.
+create table event_otf (
+  event_id     uuid primary key references events(id) on delete cascade,
+  purpose      text,                 -- "adi, amaci, icerigi"nin ad disi kismi
+  end_time     time,
+  advisor      text,
+  age_group    text,
+  outcomes     text,
+  -- bolum aciklamalari (adetler buraya da yazilir)
+  layout_notes text,
+  av_notes     text,
+  tech_notes   text,
+  host_notes   text,
+  care_notes   text,
+  other_notes  text,
+  updated_at   timestamptz not null default now()
+);
+
+-- Isaretli kutular. Anahtar listesi Rust `otf::SECTIONS`'ta (sablonla birlikte
+-- degisir); sema metni kabul eder, uc dogrular.
+create table event_otf_items (
+  event_id uuid not null references events(id) on delete cascade,
+  item     text not null check (item ~ '^[a-z_]+$'),
+  quantity integer check (quantity between 1 and 10000),
+  primary key (event_id, item)
+);
+
+-- Etkinlik sorumlulari (en cok 3, formdaki sira). Telefon kisinin profilinden.
+create table event_otf_contacts (
+  event_id uuid not null references events(id) on delete cascade,
+  user_id  uuid not null references users(id) on delete cascade,
+  position smallint not null check (position between 0 and 2),
+  primary key (event_id, user_id),
+  unique (event_id, position)
+);
+
+insert into scopes (name) values ('manage_events'), ('manage_event_widgets'), ('manage_purchases')
 on conflict (name) do nothing;
