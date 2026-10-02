@@ -1,8 +1,8 @@
 // Sistem olayini cumleye cevirir. API yapilandirilmis olgu doner
 // (`verb`, `target_label`=alan, `body`={"from","to"}); metin burada.
 
-import type { FeedItem, Notice } from "../api/types";
-import { ACTION_STATUS, formatDay, PRIORITY, STATUS, TEAM_ROLE } from "./labels";
+import type { EventStatus, FeedItem, Notice } from "../api/types";
+import { ACTION_STATUS, EVENT_STATUS, formatDay, PRIORITY, STATUS, TEAM_ROLE } from "./labels";
 import type { Lookup } from "./lookup";
 
 const FIELD: Record<string, string> = {
@@ -51,6 +51,24 @@ function valueText(field: string, v: unknown, L: Lookup, action: boolean): strin
   }
 }
 
+const EVENT_FIELD: Record<string, string> = {
+  status: "Durum",
+  priority: "Önem",
+  owner_id: "Sorumlu",
+  date: "Tarih",
+  start_time: "Saat",
+  place: "Yer",
+  attendees: "Katılım",
+  description: "Açıklama",
+};
+
+function eventValue(field: string, v: unknown, L: Lookup): string {
+  if (v === null || v === undefined || v === "") return "—";
+  if (field === "status") return EVENT_STATUS[String(v) as EventStatus]?.label ?? String(v);
+  if (field === "date") return formatDay(String(v));
+  return valueText(field, v, L, false);
+}
+
 function roleText(v: unknown): string {
   return TEAM_ROLE[String(v) as keyof typeof TEAM_ROLE] ?? "—";
 }
@@ -66,6 +84,13 @@ export function describe(item: FeedItem | Notice, L: Lookup): string {
       return ch === null
         ? `${FIELD[field] ?? field} alanını değiştirdi`
         : `${FIELD[field] ?? field}: ${valueText(field, ch.from, L, false)} → ${valueText(field, ch.to, L, false)}`;
+    // Etkinlik alanlari ikizin akisina yazilir (arsiv, spec/73 §3a).
+    case "event_changed": {
+      const label = EVENT_FIELD[field] ?? field;
+      return ch === null
+        ? `etkinliğin ${label.toLocaleLowerCase("tr")} alanını değiştirdi`
+        : `Etkinlik · ${label}: ${eventValue(field, ch.from, L)} → ${eventValue(field, ch.to, L)}`;
+    }
     case "action_added": {
       const owner = ch !== null && ch.to !== null ? ` (${valueText("owner_id", ch.to, L, true)})` : "";
       return `eylem ekledi: “${item.subject_label ?? ""}”${owner}`;

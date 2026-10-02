@@ -60,6 +60,19 @@ export type ApiErrorCode =
   | "invalid_subscription"
   | "invalid_host"
   | "invalid_config"
+  | "event_needs_date"
+  | "invalid_time"
+  | "invalid_place"
+  | "invalid_attendees"
+  | "invalid_role"
+  | "invalid_label"
+  | "own_record"
+  | "unknown_record"
+  | "invalid_record"
+  | "invalid_notes"
+  | "invalid_state"
+  | "invalid_contact"
+  | "invalid_price"
   | "network";
 
 export const ERRORS = {
@@ -118,6 +131,19 @@ export const ERRORS = {
   invalid_subscription: "Bildirim aboneliği kurulamadı. Sayfayı yenileyip tekrar dene.",
   invalid_host: "Bu adresten giriş yapılamıyor.",
   invalid_config: "Giriş ayarları eksik. Yöneticiye haber ver.",
+  event_needs_date: "Kesinleşmiş ya da yapılmış etkinliğin tarihi olmalı; saat de tarihsiz girilemez.",
+  invalid_time: "Saat geçersiz. Örnek: 14:30",
+  invalid_place: "Yer en fazla 200 karakter olabilir.",
+  invalid_attendees: "Katılımcı sayısı geçersiz.",
+  invalid_role: "Rol en fazla 60 karakter olabilir.",
+  invalid_label: "Checkpoint adı boş olamaz ve 120 karakteri aşamaz.",
+  own_record: "Etkinliğin kendi kaydı widget olarak bağlanamaz.",
+  unknown_record: "Seçilen kayıt bulunamadı.",
+  invalid_record: "Kayıt widget'ı için bir kayıt seçilmeli.",
+  invalid_notes: "Not çok uzun.",
+  invalid_state: "Süreç adımı geçersiz.",
+  invalid_contact: "Tedarikçi boş olamaz ve 300 karakteri aşamaz.",
+  invalid_price: "Fiyat geçersiz.",
   network: "Sunucuya ulaşılamadı. Bağlantını kontrol et.",
 } satisfies Record<ApiErrorCode, string>;
 

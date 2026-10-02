@@ -1,5 +1,6 @@
 import { expect, it } from "vitest";
-import { bestOffer, materialSteps, purchaseHealth, type Material } from "./eventModel";
+import type { Material } from "../../api/types";
+import { bestOffer, materialSteps, purchaseHealth } from "./eventModel";
 
 const m = (p: Partial<Material>): Material => ({
   id: "x", name: "x", notes: null, type: "consumable", priority: "medium", state: 0,

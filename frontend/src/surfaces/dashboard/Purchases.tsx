@@ -2,21 +2,21 @@
 // ilerletilen surec adimlari, tikla-ac tedarikci tablosu. Baslik noktasi
 // "gerekli" adimini gecmislerin durumunu ozetler. Yazmak `manage_purchases`
 // ister; yetkisiz goruntu salt okunur.
-//
-// ponytail: degisiklikler ust bilesenin belleginde (sahte veri) — API gelince
-// her islem tek PATCH/POST.
 
 import { useState } from "react";
-import type { Priority } from "../../api/types";
+import { errorText } from "../../api/client";
+import { eventOps, useEventWrite, type EventOp } from "../../api/hooks";
+import type { Material, MaterialPatch, Priority, Uuid } from "../../api/types";
 import r from "../../features/record/record.module.css";
 import { ago, formatDay, PRIORITY } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
 import { Icon, type IconName } from "../../ui/icons";
-import { Button, cx, IconButton, Menu, MenuItem, MenuSep, ui } from "../../ui/ui";
+import { Button, cx, IconButton, Menu, MenuItem, MenuSep, ui, useToast } from "../../ui/ui";
 import s from "./dashboard.module.css";
-import {
-  bestOffer, MATERIAL_TYPE, materialSteps, purchaseHealth, type Material, type MaterialProvider, type PurchaseHealth,
-} from "./eventModel";
+import { bestOffer, MATERIAL_TYPE, materialSteps, purchaseHealth, type PurchaseHealth } from "./eventModel";
+
+/** Tek yazma kapisi: hata tostu ortak, `ok` yalniz basarida. */
+type Run = (op: EventOp, ok?: () => void) => void;
 
 const PRIO_ICON: Record<Priority, IconName> = { critical: "alert", high: "prHigh", medium: "prMedium", low: "prLow" };
 
@@ -29,9 +29,9 @@ const HEALTH: Record<PurchaseHealth, string> = {
 
 const money = new Intl.NumberFormat("tr", { style: "currency", currency: "TRY", maximumFractionDigits: 2 });
 
-export function Purchases({ items, onChange, onRemove }: {
+export function Purchases({ eventId, items, onRemove }: {
+  eventId: Uuid;
   items: Material[];
-  onChange: (next: Material[]) => void;
   /** Yoksa kaldirma dugmesi cizilmez (sablon widget'i, scope yok). */
   onRemove?: (() => void) | undefined;
 }) {
@@ -39,9 +39,11 @@ export function Purchases({ items, onChange, onRemove }: {
   const canEdit = L.can("manage_purchases");
   const [open, setOpen] = useState<string | null>(null);
   const [name, setName] = useState("");
+  const w = useEventWrite();
+  const toast = useToast();
+  const run: Run = (op, ok) =>
+    w.mutate(op, { onSuccess: () => ok?.(), onError: (e) => toast({ text: errorText(e), error: true }) });
 
-  const patch = (id: string, p: Partial<Material>) =>
-    onChange(items.map((m) => (m.id === id ? { ...m, ...p, updated_at: new Date().toISOString() } : m)));
   const health = purchaseHealth(items);
   const last = items.reduce((a, m) => (m.updated_at > a ? m.updated_at : a), "");
   // Elde olanlar sona; gerisi eklenme sirasinda.
@@ -67,10 +69,8 @@ export function Purchases({ items, onChange, onRemove }: {
       {rows.length === 0 ? <span className={r.muted}>Malzeme yok.</span> : (
         <ul className={s.mList}>
           {rows.map((m) => (
-            <Row key={m.id} m={m} canEdit={canEdit} open={open === m.id}
-              onToggle={() => setOpen(open === m.id ? null : m.id)}
-              onPatch={(p) => patch(m.id, p)}
-              onDelete={() => onChange(items.filter((x) => x.id !== m.id))} />
+            <Row key={m.id} m={m} canEdit={canEdit} busy={w.isPending} run={run} open={open === m.id}
+              onToggle={() => setOpen(open === m.id ? null : m.id)} />
           ))}
         </ul>
       )}
@@ -79,15 +79,11 @@ export function Purchases({ items, onChange, onRemove }: {
         <form className={s.mAdd} onSubmit={(e) => {
           e.preventDefault();
           if (name.trim() === "") return;
-          onChange([...items, {
-            id: `m${Date.now()}`, name: name.trim(), notes: null, type: "consumable", priority: "medium", state: 0,
-            has_sponsor: false, owned: false, updated_at: new Date().toISOString(), providers: [],
-          }]);
-          setName("");
+          run(eventOps.addMaterial(eventId, name.trim()), () => setName(""));
         }}>
           <input className={ui.input} value={name} onChange={(e) => setName(e.target.value)} placeholder="Malzeme ya da hizmet adı…"
             aria-label="Yeni malzeme" maxLength={200} />
-          <Button size="sm" type="submit" disabled={name.trim() === ""}><Icon name="plus" size={14} /> Ekle</Button>
+          <Button size="sm" type="submit" disabled={name.trim() === "" || w.isPending}><Icon name="plus" size={14} /> Ekle</Button>
         </form>
       ) : (
         <span className={r.muted}><Icon name="lock" size={13} /> Düzenlemek için “Satın alımları yönet” yetkisi gerekir.</span>
@@ -96,9 +92,10 @@ export function Purchases({ items, onChange, onRemove }: {
   );
 }
 
-function Row({ m, canEdit, open, onToggle, onPatch, onDelete }: {
-  m: Material; canEdit: boolean; open: boolean; onToggle: () => void; onPatch: (p: Partial<Material>) => void; onDelete: () => void;
+function Row({ m, canEdit, busy, run, open, onToggle }: {
+  m: Material; canEdit: boolean; busy: boolean; run: Run; open: boolean; onToggle: () => void;
 }) {
+  const onPatch = (p: MaterialPatch) => run(eventOps.material(m.id, p));
   const steps = materialSteps(m);
   const best = bestOffer(m);
   return (
@@ -120,7 +117,7 @@ function Row({ m, canEdit, open, onToggle, onPatch, onDelete }: {
           <span className={s.mPipe} role="group" aria-label={`${m.name} süreci: ${m.state}/${steps.length}`}>
             {steps.map((label, i) => (
               <button key={label} type="button" className={s.mStep} data-done={i < m.state}
-                disabled={!canEdit} title={`${label}${i < m.state ? " — tamam" : ""}`}
+                disabled={!canEdit || busy} title={`${label}${i < m.state ? " — tamam" : ""}`}
                 aria-label={`${label}${i < m.state ? " — tamam, geri al" : " — işaretle"}`}
                 onClick={() => onPatch({ state: i < m.state ? i : i + 1 })} />
             ))}
@@ -135,24 +132,23 @@ function Row({ m, canEdit, open, onToggle, onPatch, onDelete }: {
             <MenuItem icon="check" onSelect={() => onPatch({ owned: !m.owned })}>
               {m.owned ? "Zaten var işaretini kaldır" : "Zaten var olarak işaretle"}
             </MenuItem>
-            <MenuItem icon="wallet" onSelect={() => onPatch(m.has_sponsor
-              ? { has_sponsor: false, state: Math.min(m.state, 3) }
-              : { has_sponsor: true })}>
+            {/* Sponsor kalkinca 4→3 kirpmasi sunucuda. */}
+            <MenuItem icon="wallet" onSelect={() => onPatch({ has_sponsor: !m.has_sponsor })}>
               {m.has_sponsor ? "Sponsor adımını kaldır" : "Sponsorlu (adım ekle)"}
             </MenuItem>
             <MenuSep />
-            <MenuItem icon="trash" danger onSelect={onDelete}>Sil</MenuItem>
+            <MenuItem icon="trash" danger onSelect={() => run(eventOps.dropMaterial(m.id))}>Sil</MenuItem>
           </Menu>
         ) : <span className={s.mMoreGap} />}
       </div>
 
-      {open && <Providers m={m} canEdit={canEdit} onPatch={onPatch} best={best.price} />}
+      {open && <Providers m={m} canEdit={canEdit} busy={busy} run={run} best={best.price} />}
     </li>
   );
 }
 
-function Providers({ m, canEdit, onPatch, best }: {
-  m: Material; canEdit: boolean; onPatch: (p: Partial<Material>) => void; best: number | null;
+function Providers({ m, canEdit, busy, run, best }: {
+  m: Material; canEdit: boolean; busy: boolean; run: Run; best: number | null;
 }) {
   const [contact, setContact] = useState("");
   const [price, setPrice] = useState("");
@@ -174,8 +170,8 @@ function Providers({ m, canEdit, onPatch, best }: {
                 <td>{p.arrival_date === null ? "—" : formatDay(p.arrival_date)}</td>
                 {canEdit && (
                   <td>
-                    <IconButton icon="x" label="Tedarikçiyi sil"
-                      onClick={() => onPatch({ providers: m.providers.filter((x) => x.id !== p.id) })} />
+                    <IconButton icon="x" label="Tedarikçiyi sil" disabled={busy}
+                      onClick={() => run(eventOps.dropProvider(p.id))} />
                   </td>
                 )}
               </tr>
@@ -186,19 +182,16 @@ function Providers({ m, canEdit, onPatch, best }: {
       {canEdit && (
         <form className={s.mProvAdd} onSubmit={(e) => {
           e.preventDefault();
-          const p: MaterialProvider = {
-            id: `p${Date.now()}`, contact: contact.trim(),
-            price: price === "" ? null : Number(price), arrival_date: date === "" ? null : date,
-          };
-          onPatch({ providers: [...m.providers, p] });
-          setContact(""); setPrice(""); setDate("");
+          run(eventOps.addProvider(m.id, {
+            contact: contact.trim(), price: price === "" ? null : Number(price), arrival_date: date === "" ? null : date,
+          }), () => { setContact(""); setPrice(""); setDate(""); });
         }}>
           <input className={ui.input} value={contact} onChange={(e) => setContact(e.target.value)} required
             placeholder="Bağlantı ya da telefon" aria-label="Tedarikçi" />
           <input className={ui.input} type="number" min={0} step="0.01" value={price} onChange={(e) => setPrice(e.target.value)}
             placeholder="Fiyat ₺" aria-label="Fiyat" />
           <input className={ui.input} type="date" value={date} onChange={(e) => setDate(e.target.value)} aria-label="Varış tarihi" />
-          <Button size="sm" type="submit"><Icon name="plus" size={14} /> Tedarikçi</Button>
+          <Button size="sm" type="submit" disabled={busy}><Icon name="plus" size={14} /> Tedarikçi</Button>
         </form>
       )}
     </div>

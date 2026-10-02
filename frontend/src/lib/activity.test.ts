@@ -35,4 +35,11 @@ describe("activity cumleleri", () => {
       .toBe("takımı “Bütçe Onayı” birimine bağladı");
     expect(sentence(item({ verb: "team_renamed", body: '{"from":"A","to":"B"}' }), L)).toBe("takımın adını değiştirdi: A → B");
   });
+
+  it("etkinlik alanlari ikizin akisinda etiketli", () => {
+    expect(sentence(item({ verb: "event_changed", target_label: "status", body: '{"from":"planning","to":"confirmed"}' }), L))
+      .toBe("Etkinlik · Durum: Planlanıyor → Kesin");
+    expect(sentence(item({ verb: "event_changed", target_label: "start_time", body: '{"from":null,"to":"14:30"}' }), L))
+      .toBe("Etkinlik · Saat: — → 14:30");
+  });
 });

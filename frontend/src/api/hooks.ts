@@ -10,6 +10,14 @@ import type {
   ActionPatch,
   AdminView,
   Attachment,
+  EventDetail,
+  EventPatch,
+  EventSummary,
+  IsoDate,
+  MaterialPatch,
+  MaterialProvider,
+  NewEvent,
+  WidgetType,
   Feed,
   Home,
   Meta,
@@ -52,6 +60,8 @@ export const keys = {
   nodes: ["nodes"] as const,
   admin: ["admin"] as const,
   tags: ["tags"] as const,
+  events: ["events"] as const,
+  event: (id: Uuid) => ["event", id] as const,
 };
 
 /** Rust `db/filters.rs` sozlesmesi. Gecersiz deger sunucuda sessizce duser. */
@@ -207,6 +217,66 @@ export function usePatchAction() {
     mutationFn: ({ id, patch }: { id: Uuid; patch: ActionPatch }) =>
       request<RecordDetail>("PATCH", `/api/actions/${id}`, patch),
     onSuccess: (d) => afterRecordWrite(qc, d),
+  });
+}
+
+// --- etkinlikler (spec/73) ---------------------------------------------------------
+
+export function useEvents() {
+  return useQuery({ queryKey: keys.events, queryFn: () => request<EventSummary[]>("GET", "/api/events") });
+}
+
+export function useEvent(id: Uuid) {
+  return useQuery({ queryKey: keys.event(id), queryFn: () => request<EventDetail>("GET", `/api/events/${id}`) });
+}
+
+export function useCreateEvent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (e: NewEvent) => request<{ id: Uuid; record_id: Uuid }>("POST", "/api/events", e),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.events });
+      void qc.invalidateQueries({ queryKey: keys.recordsAll });
+    },
+  });
+}
+
+/** Etkinlige yazan her uc guncel ayrintiyi doner. Yollar burada (`eventOps`),
+ *  bilesen yol yazmaz. */
+export type EventOp = { method: "POST" | "PATCH" | "PUT" | "DELETE"; path: string; body?: unknown };
+
+export const eventOps = {
+  patch: (id: Uuid, p: EventPatch): EventOp => ({ method: "PATCH", path: `/api/events/${id}`, body: p }),
+  participant: (id: Uuid, user: Uuid, on: boolean, role: string | null = null): EventOp =>
+    on ? { method: "PUT", path: `/api/events/${id}/participants/${user}`, body: { role } }
+      : { method: "DELETE", path: `/api/events/${id}/participants/${user}` },
+  team: (id: Uuid, team: Uuid, on: boolean): EventOp => ({ method: on ? "PUT" : "DELETE", path: `/api/events/${id}/teams/${team}` }),
+  addCheckpoint: (id: Uuid, label: string, date: IsoDate | null): EventOp =>
+    ({ method: "POST", path: `/api/events/${id}/checkpoints`, body: { label, date } }),
+  checkpoint: (cid: Uuid, done: boolean): EventOp => ({ method: "PATCH", path: `/api/event-checkpoints/${cid}`, body: { done } }),
+  dropCheckpoint: (cid: Uuid): EventOp => ({ method: "DELETE", path: `/api/event-checkpoints/${cid}` }),
+  addWidget: (id: Uuid, type: WidgetType, record_id: Uuid | null = null): EventOp =>
+    ({ method: "POST", path: `/api/events/${id}/widgets`, body: { type, record_id } }),
+  dropWidget: (wid: Uuid): EventOp => ({ method: "DELETE", path: `/api/event-widgets/${wid}` }),
+  addMaterial: (id: Uuid, name: string): EventOp => ({ method: "POST", path: `/api/events/${id}/materials`, body: { name } }),
+  material: (mid: Uuid, p: MaterialPatch): EventOp => ({ method: "PATCH", path: `/api/materials/${mid}`, body: p }),
+  dropMaterial: (mid: Uuid): EventOp => ({ method: "DELETE", path: `/api/materials/${mid}` }),
+  addProvider: (mid: Uuid, p: Omit<MaterialProvider, "id">): EventOp =>
+    ({ method: "POST", path: `/api/materials/${mid}/providers`, body: p }),
+  dropProvider: (pid: Uuid): EventOp => ({ method: "DELETE", path: `/api/material-providers/${pid}` }),
+};
+
+export function useEventWrite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (op: EventOp) => request<EventDetail>(op.method, op.path, op.body),
+    onSuccess: (d) => {
+      qc.setQueryData(keys.event(d.id), d);
+      void qc.invalidateQueries({ queryKey: keys.events });
+      // Baslik ve kisiler ikize de yazilir; baglanan kayit "en cok baglanan"i degistirir.
+      void qc.invalidateQueries({ queryKey: keys.recordsAll });
+      void qc.invalidateQueries({ queryKey: keys.record(d.record_id) });
+    },
   });
 }
 

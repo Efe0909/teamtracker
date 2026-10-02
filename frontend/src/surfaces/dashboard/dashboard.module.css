@@ -2461,7 +2461,17 @@ li[data-state="next"] > .evDot {
   border-color: var(--acc);
   box-shadow: 0 0 0 3px var(--acc-bg);
 }
+/* duzenleyebilene nokta dugme: basinca tamam/geri al */
+button.evDot {
+  padding: 0;
+  cursor: pointer;
+}
+button.evDot:hover:not(:disabled) {
+  border-color: var(--acc);
+}
 .evStep {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   font-size: var(--fs-md);

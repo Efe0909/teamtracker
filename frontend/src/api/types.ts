@@ -95,6 +95,8 @@ export interface RecordSummary {
   open_actions: number;
   action_overdue: boolean;
   messages: number;
+  /** Etkinligin ikiz kaydiysa etkinlik (spec/73 §3a). */
+  event_id: Uuid | null;
 }
 
 export interface RecordFull {
@@ -134,6 +136,112 @@ export interface RecordDetail {
   /** Bu kisi kaydi sabitlemis mi (Panolar widget'i). */
   pinned: boolean;
   membership: Membership;
+  /** Etkinligin ikiz kaydiysa etkinlik: Etkinlik | Kayit anahtari buradan. */
+  event_id: Uuid | null;
+}
+
+// --- etkinlikler (Rust api/events.rs, spec/73) --------------------------------
+
+export type EventKind = "meeting" | "training" | "social" | "visit" | "conference";
+export type EventStatus = "idea" | "planning" | "confirmed" | "done" | "cancelled";
+/** Yalniz alanlari TANIMLI widget turleri. `record` tek kayitlik, digerleri tekil. */
+export type WidgetType = "supplies" | "record";
+export type MaterialType = "consumable" | "equipment" | "service";
+
+/** Liste ve ayrintinin ortak satiri. `record_ids` = kayit widget'larinin kayitlari (ikiz haric). */
+export interface EventSummary {
+  id: Uuid;
+  /** Ikiz kayit: sohbet + arsiv. */
+  record_id: Uuid;
+  title: string;
+  kind: EventKind;
+  status: EventStatus;
+  priority: Priority;
+  owner_id: Uuid | null;
+  date: IsoDate | null;
+  /** "HH:MM" */
+  start_time: string | null;
+  place: string | null;
+  attendees: number | null;
+  description: string | null;
+  created_by: Uuid | null;
+  created_at: IsoTime;
+  updated_at: IsoTime;
+  record_ids: Uuid[];
+}
+
+export interface EventWidget {
+  id: Uuid;
+  type: WidgetType;
+  record_id: Uuid | null;
+}
+
+export interface Checkpoint {
+  id: Uuid;
+  label: string;
+  date: IsoDate | null;
+  done: boolean;
+}
+
+export interface MaterialProvider {
+  id: Uuid;
+  contact: string;
+  price: number | null;
+  arrival_date: IsoDate | null;
+}
+
+export interface Material {
+  id: Uuid;
+  name: string;
+  notes: string | null;
+  type: MaterialType;
+  priority: Priority;
+  /** Tamamlanan adim sayisi. */
+  state: number;
+  has_sponsor: boolean;
+  /** "Zaten var": surece girmez. */
+  owned: boolean;
+  updated_at: IsoTime;
+  providers: MaterialProvider[];
+}
+
+export interface EventDetail extends EventSummary {
+  participants: { user_id: Uuid; role: string | null }[];
+  team_ids: Uuid[];
+  checkpoints: Checkpoint[];
+  widgets: EventWidget[];
+  materials: Material[];
+  /** Ikiz kaydi duzenleyebilir mi. Scope'lar (widget, satin alim) meta'dan. */
+  can_edit: boolean;
+}
+
+export interface NewEvent {
+  title: string;
+  kind: EventKind;
+  unit_id: Uuid;
+  date?: IsoDate;
+  priority?: Priority;
+}
+
+export type EventPatch =
+  | { field: "title"; value: string }
+  | { field: "status"; value: EventStatus }
+  | { field: "priority"; value: Priority }
+  | { field: "owner_id"; value: Uuid | null }
+  | { field: "date"; value: IsoDate | null }
+  | { field: "start_time"; value: string | null }
+  | { field: "place"; value: string | null }
+  | { field: "attendees"; value: number | null }
+  | { field: "description"; value: string | null };
+
+export interface MaterialPatch {
+  name?: string;
+  notes?: string | null;
+  type?: MaterialType;
+  priority?: Priority;
+  state?: number;
+  has_sponsor?: boolean;
+  owned?: boolean;
 }
 
 export type AccessMode = "public" | "request" | "private";
