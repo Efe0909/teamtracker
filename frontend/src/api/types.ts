@@ -183,6 +183,17 @@ export interface Checkpoint {
   done: boolean;
 }
 
+export type CheckpointAction = "done" | "undone" | "delete";
+
+/** Bekleyen onay istegi (onaylayici olmayan duzenleyen ister). */
+export interface CheckpointRequest {
+  id: Uuid;
+  checkpoint_id: Uuid;
+  user_id: Uuid;
+  action: CheckpointAction;
+  created_at: IsoTime;
+}
+
 export interface MaterialProvider {
   id: Uuid;
   contact: string;
@@ -213,8 +224,12 @@ export interface EventDetail extends EventSummary {
   materials: Material[];
   /** Ikiz kaydi duzenleyebilir ya da `manage_events`. Diger scope'lar meta'dan. */
   can_edit: boolean;
-  /** `manage_events`: checkpoint ekle/sil/son tarih. */
+  /** `manage_events`: checkpoint ekle/son tarih. */
   can_manage: boolean;
+  /** Etkinlik sorumlusu ya da `manage_events`: adimi dogrudan isaretler/kaldirir, istekleri yanitlar. */
+  can_approve: boolean;
+  /** Bekleyen istekler: onaylayiciya hepsi, digerine yalniz kendisininki. */
+  requests: CheckpointRequest[];
 }
 
 export interface NewEvent {

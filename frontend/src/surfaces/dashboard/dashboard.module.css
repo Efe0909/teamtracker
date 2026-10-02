@@ -2487,6 +2487,34 @@ button.evDot:hover:not(:disabled) {
 li[data-state="todo"] > .evStep > span:first-child {
   color: var(--dim);
 }
+.evWaiting {
+  color: var(--warn-text);
+}
+
+/* onay istekleri: onaylayiciya sayfanin ustunde */
+.evRequests {
+  margin: 0 0 var(--s-4);
+  padding: var(--s-3);
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  border: 1px solid var(--warn);
+  border-radius: var(--r-md);
+  background: var(--warn-bg);
+  font-size: var(--fs-md);
+}
+.evRequests > li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2) var(--s-3);
+}
+.evRequestBtns {
+  display: inline-flex;
+  gap: var(--s-2);
+}
 
 /* --- OTF widget'i (Otf.tsx) --- */
 .otfDeadline {

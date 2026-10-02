@@ -63,6 +63,18 @@ create table event_checkpoints (
 );
 create index on event_checkpoints(event_id, position);
 
+-- Onay istegi: etkinligi duzenleyen ama onaylayici olmayan (sorumlu ya da
+-- manage_events degil) kisi adimi isaretleyemez/kaldiramaz, ister. Ayni kisi
+-- ayni adim icin ayni eylemi iki kez isteyemez (idempotent).
+create table event_checkpoint_requests (
+  id            uuid primary key default gen_random_uuid(),
+  checkpoint_id uuid not null references event_checkpoints(id) on delete cascade,
+  user_id       uuid not null references users(id) on delete cascade,
+  action        text not null check (action in ('done','undone','delete')),
+  created_at    timestamptz not null default now(),
+  unique (checkpoint_id, user_id, action)
+);
+
 -- Widget = sayfadaki YUVA. Veri turun tablosunda; istisna `record`: yuva bagin kendisi.
 create table event_widgets (
   id          uuid primary key default gen_random_uuid(),

@@ -6,8 +6,9 @@
 //!
 //! Yetki: etkinligi, ikiz kaydini duzenleyebilen (kayit yetki yollari aynen:
 //! sorumlu, acan, katilimci, takim, dal) YA DA `manage_events` sahibi duzenler.
-//! Checkpoint yapisi (ekle, sil, tarih) yalniz `manage_events`; isaretlemek
-//! duzenleyen herkese. Sablon widget'i (kayit disi) `manage_event_widgets`,
+//! Checkpoint yapisi (ekle, tarih) yalniz `manage_events`. Isaretlemek ve
+//! kaldirmak ONAYLAYICIYA (etkinlik sorumlusu ya da `manage_events`); diger
+//! duzenleyen onay ISTER (`event_checkpoint_requests`). Sablon widget'i (kayit disi) `manage_event_widgets`,
 //! satin alim `manage_purchases` ister. Okuma herkese acik (kayitlarla ayni).
 //!
 //! Yazma uclari guncel etkinlik ayrintisini dondurur (kayitlarla ayni sozlesme).
@@ -102,8 +103,23 @@ pub struct Detail {
     /// Duzenleyebilir mi (etkinlik alanlari, kisiler, takimlar, checkpoint
     /// isaretleme, kayit widget'lari): ikiz kaydi duzenleyebilen ya da `manage_events`.
     can_edit: bool,
-    /// `manage_events`: checkpoint ekle/sil/tarih.
+    /// `manage_events`: checkpoint ekle/tarih.
     can_manage: bool,
+    /// Onaylayici: etkinlik sorumlusu ya da `manage_events`. Adimi dogrudan
+    /// isaretler/kaldirir, baskalarinin isteklerini yanitlar.
+    can_approve: bool,
+    /// Bekleyen onay istekleri: onaylayiciya hepsi, digerine yalniz kendisininki.
+    requests: Vec<CheckpointRequest>,
+}
+
+#[derive(Serialize, sqlx::FromRow)]
+struct CheckpointRequest {
+    id: Uuid,
+    checkpoint_id: Uuid,
+    user_id: Uuid,
+    /// "done" | "undone" | "delete"
+    action: String,
+    created_at: DateTime<Utc>,
 }
 
 #[derive(Serialize, sqlx::FromRow)]
@@ -160,6 +176,7 @@ async fn detail_of(st: &AppState, me: &User, event: EventRow) -> Result<Detail> 
     let twin = records::load(&st.pool, event.record_id).await?;
     let can_manage = common::has_scope(st, me, "manage_events").await?;
     let can_edit = can_manage || crate::db::scope::can_edit_record(&st.pool, me, &twin, &st.tree).await?;
+    let can_approve = can_manage || event.owner_id == Some(me.id);
     let participants = sqlx::query_as(
         "select user_id, role from event_participants where event_id = $1 order by added_at")
         .bind(event.id).fetch_all(&st.pool).await?;
@@ -172,8 +189,15 @@ async fn detail_of(st: &AppState, me: &User, event: EventRow) -> Result<Detail> 
                 c.done_at is not null as done
            from event_checkpoints c join events e on e.id = c.event_id
           where c.event_id = $1
-          order by coalesce(c.due_date, e.date + c.offset_days::int) nulls last, c.position")
+          order by (c.done_at is null), c.done_at,
+                   coalesce(c.due_date, e.date + c.offset_days::int) nulls last, c.position")
         .bind(event.id).fetch_all(&st.pool).await?;
+    // Tamamlananlar uste (tamamlanma sirasiyla); geri alinan tarih yerine doner.
+    let requests = sqlx::query_as(
+        "select r.id, r.checkpoint_id, r.user_id, r.action, r.created_at
+           from event_checkpoint_requests r join event_checkpoints c on c.id = r.checkpoint_id
+          where c.event_id = $1 and ($2 or r.user_id = $3) order by r.created_at")
+        .bind(event.id).bind(can_approve).bind(me.id).fetch_all(&st.pool).await?;
     let widgets = sqlx::query_as(
         "select id, widget_type as kind, record_id from event_widgets where event_id = $1 order by position")
         .bind(event.id).fetch_all(&st.pool).await?;
@@ -191,7 +215,7 @@ async fn detail_of(st: &AppState, me: &User, event: EventRow) -> Result<Detail> 
             m.providers.push(p);
         }
     }
-    Ok(Detail { event, participants, team_ids, checkpoints, widgets, materials, can_edit, can_manage })
+    Ok(Detail { event, participants, team_ids, checkpoints, widgets, materials, can_edit, can_manage, can_approve, requests })
 }
 
 async fn reply(st: &AppState, me: &User, id: Uuid) -> Result<Json<Detail>> {
@@ -569,20 +593,34 @@ pub struct CheckpointPatch {
     date: Option<Option<NaiveDate>>,
 }
 
+/// Onaylayici: etkinlik sorumlusu ya da `manage_events` (spec/73 §6).
+async fn is_approver(st: &AppState, me: &User, ev: &EventRow) -> Result<bool> {
+    Ok(ev.owner_id == Some(me.id) || common::has_scope(st, me, "manage_events").await?)
+}
+
+async fn require_approver(st: &AppState, me: &User, ev: &EventRow) -> Result<()> {
+    if is_approver(st, me, ev).await? { Ok(()) } else { Err(AppError::Forbidden) }
+}
+
 /// Elle isaretlenir; tarih gecti diye kendiliginden dolmaz. Isaretlemek
-/// duzenleyen herkese, tarihi degistirmek `manage_events`'e.
+/// onaylayiciya (digerleri `request_checkpoint` ile ister), tarihi
+/// degistirmek `manage_events`'e.
 pub async fn patch_checkpoint(
     State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>,
     Body(b): Body<CheckpointPatch>,
 ) -> Result<Json<Detail>> {
     let id = common::id(&raw)?;
     let event = event_of(&st.pool, "select event_id from event_checkpoints where id = $1", id).await?;
-    editable(&st, &me, event).await?;
+    let (ev, _) = editable(&st, &me, event).await?;
     let mut tx = st.pool.begin().await?;
     if let Some(done) = b.done {
+        require_approver(&st, &me, &ev).await?;
         sqlx::query(
             "update event_checkpoints set done_at = case when $2 then coalesce(done_at, now()) end where id = $1")
             .bind(id).bind(done).execute(&mut *tx).await?;
+        // Dogrudan yapilan eylemin bekleyen istegi artik anlamsiz.
+        sqlx::query("delete from event_checkpoint_requests where checkpoint_id = $1 and action = $2")
+            .bind(id).bind(if done { "done" } else { "undone" }).execute(&mut *tx).await?;
     }
     if let Some(date) = b.date {
         require_scope(&st, &me, "manage_events").await?;
@@ -600,8 +638,104 @@ pub async fn delete_checkpoint(
 ) -> Result<Json<Detail>> {
     let id = common::id(&raw)?;
     let event = event_of(&st.pool, "select event_id from event_checkpoints where id = $1", id).await?;
-    require_scope(&st, &me, "manage_events").await?;
+    let ev = load(&st.pool, event).await?;
+    require_approver(&st, &me, &ev).await?;
     sqlx::query("delete from event_checkpoints where id = $1").bind(id).execute(&st.pool).await?;
+    reply(&st, &me, event).await
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum RequestAction {
+    Done,
+    Undone,
+    Delete,
+}
+
+impl RequestAction {
+    fn as_str(&self) -> &'static str {
+        match self {
+            Self::Done => "done",
+            Self::Undone => "undone",
+            Self::Delete => "delete",
+        }
+    }
+}
+
+#[derive(Deserialize)]
+pub struct NewRequest {
+    action: RequestAction,
+}
+
+/// Onaylayici olmayan duzenleyen adimi dogrudan degistiremez: ister. Ayni
+/// istek ikinci kez yazilmaz ve ikizin sohbetine ikinci satir dusmez.
+pub async fn request_checkpoint(
+    State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>,
+    Body(b): Body<NewRequest>,
+) -> Result<Json<Detail>> {
+    let id = common::id(&raw)?;
+    let event = event_of(&st.pool, "select event_id from event_checkpoints where id = $1", id).await?;
+    let (ev, twin) = editable(&st, &me, event).await?;
+    let (label, done): (String, bool) = sqlx::query_as(
+        "select label, done_at is not null from event_checkpoints where id = $1")
+        .bind(id).fetch_one(&st.pool).await?;
+    // Zaten istenen duruma gelmis adim icin istek anlamsiz.
+    if (matches!(b.action, RequestAction::Done) && done) || (matches!(b.action, RequestAction::Undone) && !done) {
+        return Err(AppError::Conflict("checkpoint_state"));
+    }
+    let mut tx = st.pool.begin().await?;
+    let added = sqlx::query(
+        "insert into event_checkpoint_requests (checkpoint_id, user_id, action) values ($1, $2, $3)
+         on conflict do nothing")
+        .bind(id).bind(me.id).bind(b.action.as_str()).execute(&mut *tx).await?.rows_affected();
+    if added > 0 {
+        records::log(&mut tx, twin.chat_id, me.id, "checkpoint_requested", &label, Some(b.action.as_str()), None).await?;
+        records::touch(&mut tx, twin.id).await?;
+    }
+    tx.commit().await?;
+    reply(&st, &me, ev.id).await
+}
+
+#[derive(Deserialize)]
+pub struct Resolve {
+    approve: bool,
+}
+
+/// Onaylayici istegi yanitlar: onay eylemi yapar, ret yapmaz; ikisinde de istek
+/// silinir ve ikizin sohbetine `checkpoint_approved` / `checkpoint_denied` yazilir.
+pub async fn resolve_request(
+    State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>,
+    Body(b): Body<Resolve>,
+) -> Result<Json<Detail>> {
+    let id = common::id(&raw)?;
+    let (cid, action, event, label): (Uuid, String, Uuid, String) = sqlx::query_as(
+        "select r.checkpoint_id, r.action, c.event_id, c.label
+           from event_checkpoint_requests r join event_checkpoints c on c.id = r.checkpoint_id
+          where r.id = $1")
+        .bind(id).fetch_optional(&st.pool).await?.ok_or(AppError::NotFound)?;
+    let ev = load(&st.pool, event).await?;
+    require_approver(&st, &me, &ev).await?;
+    let twin = records::load(&st.pool, ev.record_id).await?;
+    let mut tx = st.pool.begin().await?;
+    if b.approve {
+        match action.as_str() {
+            "done" => sqlx::query(
+                "update event_checkpoints set done_at = coalesce(done_at, now()) where id = $1")
+                .bind(cid).execute(&mut *tx).await?,
+            "undone" => sqlx::query("update event_checkpoints set done_at = null where id = $1")
+                .bind(cid).execute(&mut *tx).await?,
+            // Adimla birlikte tum istekleri de (cascade) gider.
+            _ => sqlx::query("delete from event_checkpoints where id = $1").bind(cid).execute(&mut *tx).await?,
+        };
+    }
+    // Onayda ayni adim icin ayni eylemi isteyen digerleri de karsilanmis olur.
+    sqlx::query(
+        "delete from event_checkpoint_requests where id = $1 or ($2 and checkpoint_id = $3 and action = $4)")
+        .bind(id).bind(b.approve).bind(cid).bind(&action).execute(&mut *tx).await?;
+    records::log(&mut tx, twin.chat_id, me.id,
+        if b.approve { "checkpoint_approved" } else { "checkpoint_denied" }, &label, Some(&action), None).await?;
+    records::touch(&mut tx, twin.id).await?;
+    tx.commit().await?;
     reply(&st, &me, event).await
 }
 

@@ -10,7 +10,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { ApiError, errorText } from "../../api/client";
 import { eventOps, useEvent, useEventWrite, useRecord, useRecords } from "../../api/hooks";
-import type { EventDetail, EventStatus, Uuid } from "../../api/types";
+import type { CheckpointAction, EventDetail, EventStatus, Uuid } from "../../api/types";
 import { NewRecordForm } from "../../features/record/NewRecordForm";
 import { BallLine } from "../../features/record/parts";
 import r from "../../features/record/record.module.css";
@@ -89,6 +89,7 @@ function EventView({ e }: { e: EventDetail }) {
       <div className={s.recordBody}>
         <div className={s.recordMain}>
           <div className={s.recordInner}>
+            <Requests e={e} />
             <Head e={e} />
             {/* Kayit sayfasiyla ayni blok: ozellikler + "top kimde" (ikiz kaydin eylemlerinden). */}
             <div className={s.fieldsBlock}>
@@ -486,11 +487,18 @@ function SideSec({ icon, title, action, children }: { icon: IconName; title: str
 }
 
 /** Checkpoint'ler: gecen dolu nokta, siradaki halka, kalanlar kesikli cizgi.
- *  `done` sunucudan; noktaya basmak isaretler/geri alir. */
+ *  Sira sunucudan (tamamlananlar uste, sonra tarih); "siradaki" ilk acik adim.
+ *  Noktaya/X'e basmak: onaylayici dogrudan isaretler/kaldirir, diger duzenleyen
+ *  ONAY ISTER (spec/73 §6). */
 function Timeline({ e }: { e: EventDetail }) {
+  const L = useLookup();
   const { run, busy } = useRun();
+  const toast = useToast();
   const today = toIsoDay(new Date());
   const next = e.checkpoints.findIndex((c) => !c.done);
+  const waiting = new Set(e.requests.filter((q) => q.user_id === L.meta.me.id).map((q) => q.checkpoint_id));
+  const ask = (cid: Uuid, action: CheckpointAction) =>
+    run(eventOps.requestCheckpoint(cid, action), () => toast({ text: "Onay istendi", error: false }));
   return (
     <SideSec icon="flag" title="Zaman çizelgesi" action={e.can_manage ? <AddCheckpoint e={e} /> : undefined}>
       {e.checkpoints.length === 0 ? <span className={r.muted}>Checkpoint yok.</span> : (
@@ -500,22 +508,53 @@ function Timeline({ e }: { e: EventDetail }) {
               {e.can_edit ? (
                 <button type="button" className={s.evDot} disabled={busy} aria-pressed={c.done}
                   aria-label={c.done ? `${c.label}: tamamlanmadı olarak işaretle` : `${c.label}: tamamlandı olarak işaretle`}
-                  onClick={() => run(eventOps.checkpoint(c.id, !c.done))} />
+                  onClick={() => (e.can_approve ? run(eventOps.checkpoint(c.id, !c.done)) : ask(c.id, c.done ? "undone" : "done"))} />
               ) : <span className={s.evDot} aria-hidden="true" />}
               <span className={s.evStep}>
                 <span>{c.label}</span>
                 <span className={r.muted}>
                   {e.can_manage ? <CheckpointDate id={c.id} date={c.date} today={today} /> : dayText(c.date, today)}
                   {c.done ? " · tamam" : ""}
+                  {waiting.has(c.id) && <span className={s.evWaiting}> · onay bekliyor</span>}
                 </span>
               </span>
-              {e.can_manage && <IconButton icon="x" size={13} label={`${c.label} checkpoint'ini kaldır`} disabled={busy}
-                onClick={() => run(eventOps.dropCheckpoint(c.id))} />}
+              {e.can_edit && <IconButton icon="x" size={13} label={`${c.label} checkpoint'ini kaldır`} disabled={busy}
+                onClick={() => (e.can_approve ? run(eventOps.dropCheckpoint(c.id)) : ask(c.id, "delete"))} />}
             </li>
           ))}
         </ol>
       )}
     </SideSec>
+  );
+}
+
+const REQUEST_TEXT: Record<CheckpointAction, string> = {
+  done: "adımını tamamlamak",
+  undone: "adımını tamamlanmadı olarak işaretlemek",
+  delete: "adımını kaldırmak",
+};
+
+/** Onaylayicinin kutusu: bekleyen istekler, Onayla / Reddet. Yalniz onaylayiciya
+ *  ve istek varsa gorunur (sunucu digerine yalniz kendi isteklerini verir). */
+function Requests({ e }: { e: EventDetail }) {
+  const L = useLookup();
+  const { run, busy } = useRun();
+  if (!e.can_approve || e.requests.length === 0) return null;
+  return (
+    <ul className={s.evRequests} aria-label="Bekleyen onay istekleri">
+      {e.requests.map((q) => (
+        <li key={q.id}>
+          <span>
+            <b>{L.user(q.user_id)?.name ?? "Biri"}</b> “{e.checkpoints.find((c) => c.id === q.checkpoint_id)?.label ?? ""}”{" "}
+            {REQUEST_TEXT[q.action]} istiyor
+          </span>
+          <span className={s.evRequestBtns}>
+            <Button size="sm" disabled={busy} onClick={() => run(eventOps.resolveRequest(q.id, false))}>Reddet</Button>
+            <Button size="sm" variant="primary" disabled={busy} onClick={() => run(eventOps.resolveRequest(q.id, true))}>Onayla</Button>
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }
 

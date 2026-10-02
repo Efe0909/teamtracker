@@ -10,6 +10,7 @@ import type {
   ActionPatch,
   AdminView,
   Attachment,
+  CheckpointAction,
   EventDetail,
   EventPatch,
   EventSummary,
@@ -261,6 +262,12 @@ export const eventOps = {
   checkpointDate: (cid: Uuid, date: IsoDate | null): EventOp =>
     ({ method: "PATCH", path: `/api/event-checkpoints/${cid}`, body: { date } }),
   dropCheckpoint: (cid: Uuid): EventOp => ({ method: "DELETE", path: `/api/event-checkpoints/${cid}` }),
+  /** Onaylayici olmayan duzenleyen dogrudan degistiremez: ister. */
+  requestCheckpoint: (cid: Uuid, action: CheckpointAction): EventOp =>
+    ({ method: "POST", path: `/api/event-checkpoints/${cid}/requests`, body: { action } }),
+  /** Onaylayici: istegi onayla (eylemi yapar) ya da reddet. */
+  resolveRequest: (rid: Uuid, approve: boolean): EventOp =>
+    ({ method: "POST", path: `/api/checkpoint-requests/${rid}`, body: { approve } }),
   addWidget: (id: Uuid, type: WidgetType, record_id: Uuid | null = null): EventOp =>
     ({ method: "POST", path: `/api/events/${id}/widgets`, body: { type, record_id } }),
   dropWidget: (wid: Uuid): EventOp => ({ method: "DELETE", path: `/api/event-widgets/${wid}` }),

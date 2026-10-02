@@ -219,8 +219,9 @@ sabit, ön yüzde `EVENT_TEMPLATE` onizlemesi) — kullanıcı tanımlı şablon
 
 **Kural:** bütün hazırlık etkinlikten **en geç 7 gün önce** biter (Rust
 `DEADLINE_DAYS`, testle zorlanır). Şablonda bundan geç checkpoint yok; elle
-tarihsiz eklenen checkpoint de etkinlikten 7 gün önceye düşer. Farklı tarih,
-checkpoint ekleme ve silme `manage_events` ister; işaretlemek düzenleyen herkese açık.
+tarihsiz eklenen checkpoint de etkinlikten 7 gün önceye düşer. Farklı tarih ve
+checkpoint ekleme `manage_events` ister; işaretlemek/silmek onaylayıcıya, diğer
+düzenleyene onay isteği (§6).
 
 | Tür | Widget'lar | Checkpoint'ler (etkinlikten gün farkı) |
 |---|---|---|
@@ -340,6 +341,22 @@ Eski formatta, geç ya da kurala uymayan OTF işleme alınmaz.
   etkinliğe tarih verilince checkpoint'ler kendiliğinden dolar, tarih kayınca
   bekleyenler kayar. Tamamlanmış göreli checkpoint tarih değişmeden önce eski
   tarihine sabitlenir (`offset_days` → `due_date`). Elle eklenen checkpoint mutlak.
+- **Checkpoint sırası (sunucuda, `detail_of`):** tamamlananlar üstte
+  (`done_at` sırasıyla), sonra açık olanlar tarihe göre (tarihsiz sonda), sonra
+  `position`. Tamamlanan adım en üste çıkar, geri alınırsa tarihindeki yerine döner.
+  Ön yüz sunucu sırasını çizer; "sıradaki" halka ilk açık adımdır.
+- **Onay akışı:** onaylayıcı = etkinlik sorumlusu (`events.owner_id`) **ya da**
+  `manage_events`. Onaylayıcı adımı doğrudan işaretler / geri alır / kaldırır
+  (`PATCH`/`DELETE /api/event-checkpoints/{id}`; başkasına 403). Etkinliği
+  düzenleyen ama onaylayıcı olmayan kişi aynı düğmelere basınca **istek** açar:
+  `POST /api/event-checkpoints/{id}/requests` `{action: done|undone|delete}`
+  (`event_checkpoint_requests`, aynı kişi+adım+eylem tek satır). İstek ikizin
+  sohbetine `checkpoint_requested` (konu = adım adı, hedef = eylem) yazar.
+  Onaylayıcı `POST /api/checkpoint-requests/{id}` `{approve}` ile yanıtlar:
+  onay eylemi yapar (`checkpoint_approved`), ret yapmaz (`checkpoint_denied`);
+  ikisinde de istek silinir. Ayrıntı cevabı `can_approve` ve `requests` taşır
+  (onaylayıcıya hepsi, diğerine yalnız kendisininki). Tarih değiştirme ve ekleme
+  `manage_events`'te kalır.
 - **Arşiv:** etkinlik alan değişiklikleri ikizin akışına `verb = event_changed`
   (`target_label` = alan, detay `{from,to}`) olarak yazılır; başlık değişikliği
   kayıtla ortak `field_changed`.
@@ -348,7 +365,8 @@ Eski formatta, geç ya da kurala uymayan OTF işleme alınmaz.
 - Uçlar: `GET/POST /api/events`, `GET/PATCH /api/events/{id}` (tek alan,
   `{field, value}`), `PUT/DELETE …/participants/{user}` (`{role}`),
   `PUT/DELETE …/teams/{team}`, `POST …/checkpoints|widgets|materials`,
-  `PATCH/DELETE /api/event-checkpoints/{id}`, `DELETE /api/event-widgets/{id}`,
+  `PATCH/DELETE /api/event-checkpoints/{id}`, `POST /api/event-checkpoints/{id}/requests`,
+  `POST /api/checkpoint-requests/{id}`, `DELETE /api/event-widgets/{id}`,
   `PATCH/DELETE /api/materials/{id}`, `POST /api/materials/{id}/providers`,
   `DELETE /api/material-providers/{id}`. Yazma uçları güncel ayrıntıyı döner.
 

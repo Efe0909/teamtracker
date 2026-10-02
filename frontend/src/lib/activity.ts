@@ -62,6 +62,12 @@ const EVENT_FIELD: Record<string, string> = {
   description: "Açıklama",
 };
 
+const CHECKPOINT_ACTION: Record<string, string> = {
+  done: "tamamlamak",
+  undone: "tamamlanmadı olarak işaretlemek",
+  delete: "kaldırmak",
+};
+
 function eventValue(field: string, v: unknown, L: Lookup): string {
   if (v === null || v === undefined || v === "") return "—";
   if (field === "status") return EVENT_STATUS[String(v) as EventStatus]?.label ?? String(v);
@@ -91,6 +97,13 @@ export function describe(item: FeedItem | Notice, L: Lookup): string {
         ? `etkinliğin ${label.toLocaleLowerCase("tr")} alanını değiştirdi`
         : `Etkinlik · ${label}: ${eventValue(field, ch.from, L)} → ${eventValue(field, ch.to, L)}`;
     }
+    // Adim onayi (spec/73 §6): subject = adim adi, target = eylem (done/undone/delete)
+    case "checkpoint_requested":
+      return `“${item.subject_label ?? ""}” adımını ${CHECKPOINT_ACTION[field] ?? "değiştirmek"} için onay istedi`;
+    case "checkpoint_approved":
+      return `“${item.subject_label ?? ""}” adımı için isteği onayladı`;
+    case "checkpoint_denied":
+      return `“${item.subject_label ?? ""}” adımı için isteği reddetti`;
     case "action_added": {
       const owner = ch !== null && ch.to !== null ? ` (${valueText("owner_id", ch.to, L, true)})` : "";
       return `eylem ekledi: “${item.subject_label ?? ""}”${owner}`;

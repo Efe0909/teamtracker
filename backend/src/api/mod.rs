@@ -69,6 +69,8 @@ pub fn router() -> Router<AppState> {
         .route("/api/events/{id}/otf.docx", get(otf::docx))
         .route("/api/event-checkpoints/{id}",
             patch(events::patch_checkpoint).delete(events::delete_checkpoint))
+        .route("/api/event-checkpoints/{id}/requests", post(events::request_checkpoint))
+        .route("/api/checkpoint-requests/{id}", post(events::resolve_request))
         .route("/api/event-widgets/{id}", delete(events::delete_widget))
         .route("/api/materials/{id}", patch(events::patch_material).delete(events::delete_material))
         .route("/api/materials/{id}/providers", post(events::add_provider))

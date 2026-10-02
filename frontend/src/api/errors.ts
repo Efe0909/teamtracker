@@ -66,6 +66,7 @@ export type ApiErrorCode =
   | "invalid_attendees"
   | "invalid_role"
   | "invalid_label"
+  | "checkpoint_state"
   | "own_record"
   | "unknown_record"
   | "invalid_record"
@@ -141,6 +142,7 @@ export const ERRORS = {
   invalid_attendees: "Katılımcı sayısı geçersiz.",
   invalid_role: "Rol en fazla 60 karakter olabilir.",
   invalid_label: "Checkpoint adı boş olamaz ve 120 karakteri aşamaz.",
+  checkpoint_state: "Adım zaten bu durumda; onay istenecek bir şey yok.",
   own_record: "Etkinliğin kendi kaydı widget olarak bağlanamaz.",
   unknown_record: "Seçilen kayıt bulunamadı.",
   invalid_record: "Kayıt widget'ı için bir kayıt seçilmeli.",

@@ -42,4 +42,15 @@ describe("activity cumleleri", () => {
     expect(sentence(item({ verb: "event_changed", target_label: "start_time", body: '{"from":null,"to":"14:30"}' }), L))
       .toBe("Etkinlik · Saat: — → 14:30");
   });
+
+  it("adim onayi istegi, onayi ve reddi", () => {
+    const req = (action: string) => item({ verb: "checkpoint_requested", subject_label: "OTF", target_label: action });
+    expect(sentence(req("done"), L)).toBe("“OTF” adımını tamamlamak için onay istedi");
+    expect(sentence(req("undone"), L)).toBe("“OTF” adımını tamamlanmadı olarak işaretlemek için onay istedi");
+    expect(sentence(req("delete"), L)).toBe("“OTF” adımını kaldırmak için onay istedi");
+    expect(sentence(item({ verb: "checkpoint_approved", subject_label: "OTF", target_label: "done" }), L))
+      .toBe("“OTF” adımı için isteği onayladı");
+    expect(sentence(item({ verb: "checkpoint_denied", subject_label: "OTF", target_label: "done" }), L))
+      .toBe("“OTF” adımı için isteği reddetti");
+  });
 });
