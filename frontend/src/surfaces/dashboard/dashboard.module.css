@@ -1606,16 +1606,26 @@ a.row:hover {
   gap: 8px;
 }
 .matrixHead {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   margin-bottom: var(--s-3);
 }
+/* sutun sirali: ilk sutun gun etiketleri, sonra her hafta [ay, 7 gun] */
 .matrix {
-  display: flex;
+  display: grid;
+  grid-template-rows: auto repeat(7, 13px);
+  grid-template-columns: auto;
+  grid-auto-columns: 13px;
+  grid-auto-flow: column;
   gap: 3px;
 }
-.matrixCol {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
+.matrixAxis {
+  font-size: var(--fs-xs);
+  line-height: 13px;
+  color: var(--dim);
+  white-space: nowrap;
+  padding-right: 4px;
 }
 .matrixCell,
 .matrixGap {
@@ -1627,10 +1637,86 @@ a.row:hover {
   background: var(--tint);
 }
 .lv0 { background: var(--tint); }
-.lv1 { background: color-mix(in srgb, var(--acc) 25%, var(--tint)); }
-.lv2 { background: color-mix(in srgb, var(--acc) 50%, var(--tint)); }
-.lv3 { background: color-mix(in srgb, var(--acc) 75%, var(--tint)); }
-.lv4 { background: var(--acc); }
+.lv1 { background: var(--heat-1); }
+.lv2 { background: var(--heat-2); }
+.lv3 { background: var(--heat-3); }
+.lv4 { background: var(--heat-4); }
+
+/* matris + yaninda kisi istatistikleri */
+.usageBody {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--s-6);
+}
+/* istatistikler satir satir, iki sutun: "Etiket  deger". Matrisin yaninda iki
+   sutuna yer yoksa matrisin ALTINA iner (tek sutunda matristen uzun kalmasin). */
+.usageLines {
+  flex: 1;
+  min-width: min(100%, 464px);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  column-gap: var(--s-6);
+  row-gap: var(--s-2);
+  align-content: start;
+}
+.usageLines dl {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.usageLines dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s-3);
+  font-size: var(--fs-md);
+  line-height: 1.4;
+}
+.usageLines dt {
+  color: var(--dim);
+}
+.usageLines dd {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--acc-strong);
+  white-space: nowrap;
+}
+/* siralanir sutun basligi */
+.sortBtn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.sortBtn > svg {
+  opacity: 0;
+}
+.sortBtn:hover > svg {
+  opacity: 0.5;
+}
+.sortBtn[data-on="true"] {
+  color: var(--txt);
+}
+.sortBtn[data-on="true"] > svg {
+  opacity: 1;
+}
+.matrixLegend {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: var(--s-2);
+  font-size: var(--fs-xs);
+  color: var(--dim);
+}
 
 /* --- KPI iskeleti ---------------------------------------------------------- */
 .kpiGrid {

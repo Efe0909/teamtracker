@@ -38,7 +38,9 @@ function AdminScreen({ v }: { v: AdminView }) {
       <div className={s.pageHead}>
         <div className={s.pageTitle}>
           <h1>Yönetim</h1>
-          <p className={s.pageSub}>Kim girebilir, neyi değiştirebilir.</p>
+          <p className={s.pageSub}>
+            {tab === "activity" ? "Kim ne zaman uğruyor, ne kadar iş çıkarıyor." : "Kim girebilir, neyi değiştirebilir."}
+          </p>
         </div>
       </div>
       <Segmented label="Yönetim bölümü" value={tab} onChange={setTab}
