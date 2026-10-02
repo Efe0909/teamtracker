@@ -16,14 +16,14 @@ import type { IconName } from "../../ui/icons";
 
 export type EventKind = "meeting" | "training" | "social" | "visit" | "conference";
 export type EventStatus = "idea" | "planning" | "confirmed" | "done" | "cancelled";
-/** `record` tek kayitlik widget: bir etkinlikte birden cok olabilir, digerleri tekil. */
-export type WidgetType = "venue" | "supplies" | "agenda" | "transport" | "budget" | "promo" | "record";
-export type WidgetStatus = "todo" | "doing" | "done";
+/** Yalniz alanlari TANIMLI widget turleri — iskelet tur yok. Yeni tur = kendi
+ *  tablosu + bilesen birlikte gelir (spec/73 §3). `record` tek kayitlik: bir
+ *  etkinlikte birden cok olabilir, digerleri tekil. */
+export type WidgetType = "supplies" | "record";
 
 export interface EventWidget {
   id: string;
   type: WidgetType;
-  status: WidgetStatus;
   /** Yalniz `record` widget'inda. Null = henuz secilmedi (yeni/var olan sorusu);
    *  bu hal sunucuya yazilmaz, istemcide kalir. */
   record_id: Uuid | null;
@@ -80,44 +80,33 @@ export const EVENT_STATUS: Record<EventStatus, { label: string; tone: Tone }> = 
 };
 
 export const WIDGET: Record<WidgetType, { label: string; icon: IconName }> = {
-  venue: { label: "Yer / mekan", icon: "venue" },
   supplies: { label: "Satın alımlar", icon: "box" },
-  agenda: { label: "Gündem", icon: "chat" },
-  transport: { label: "Ulaşım", icon: "bus" },
-  budget: { label: "Bütçe", icon: "wallet" },
-  promo: { label: "Duyuru / tanıtım", icon: "megaphone" },
   record: { label: "Kayıt", icon: "tasks" },
 };
 export const WIDGET_TYPES = Object.keys(WIDGET) as WidgetType[];
-
-export const WIDGET_STATUS: Record<WidgetStatus, { label: string; tone: Tone }> = {
-  todo: { label: "Yapılacak", tone: "neutral" },
-  doing: { label: "Devam", tone: "info" },
-  done: { label: "Tamam", tone: "ok" },
-};
 
 /** Tur sablonu: yeni etkinlige otomatik yuklenen widget'lar ve checkpoint'ler
  *  (gun farki etkinlik tarihine gore; 0 = etkinlik gunu). `record` sablonda
  *  yok: kaydi olmayan kayit widget'i sunucuda tutulmaz. */
 export const EVENT_TEMPLATE: Record<EventKind, { widgets: Exclude<WidgetType, "record">[]; checkpoints: [string, number][] }> = {
   meeting: {
-    widgets: ["agenda", "venue"],
+    widgets: [],
     checkpoints: [["Gündem toplandı", -7], ["Davet gönderildi", -5], ["Toplantı", 0], ["Notlar paylaşıldı", 2]],
   },
   training: {
-    widgets: ["venue", "supplies"],
+    widgets: ["supplies"],
     checkpoints: [["Eğitmen kesinleşti", -21], ["Mekan ayarlandı", -14], ["Malzeme hazır", -3], ["Eğitim", 0], ["Geri bildirim", 3]],
   },
   social: {
-    widgets: ["venue", "budget"],
+    widgets: [],
     checkpoints: [["Bütçe onayı", -21], ["Mekan ayarlandı", -14], ["Duyuru", -7], ["Etkinlik", 0]],
   },
   visit: {
-    widgets: ["transport", "venue"],
+    widgets: [],
     checkpoints: [["Ziyaret onayı", -21], ["Ulaşım ayarlandı", -7], ["Ziyaret", 0], ["Rapor", 5]],
   },
   conference: {
-    widgets: ["venue", "supplies", "promo", "budget"],
+    widgets: ["supplies"],
     checkpoints: [["Başvuru", -45], ["Stand kesinleşti", -30], ["Tanıtım", -10], ["Malzeme hazır", -3], ["Etkinlik", 0], ["Değerlendirme", 7]],
   },
 };
@@ -234,7 +223,6 @@ const DESC: Record<EventKind, string> = {
   conference: "Dış etkinlik: stand, tanıtım malzemesi ve ekip nöbeti planlanacak.",
 };
 const ROLES = ["Sosyal medya", "Lojistik", "Sponsorluk"];
-const STEPS: WidgetStatus[] = ["doing", "todo", "done", "todo"];
 
 /** Tarihler bugune gore kayar: sekmeler hangi gun acilirsa acilsin dolu. */
 function mockEvents(users: MetaUser[], teams: MetaTeam[], records: RecordSummary[]): EventItem[] {
@@ -292,12 +280,9 @@ function mockEvents(users: MetaUser[], teams: MetaTeam[], records: RecordSummary
         return { id: `e${i + 1}-c${j}`, label, date: d, done: d !== null && d < today };
       }),
       widgets: [
-        ...tpl.widgets.map((type, j): EventWidget => ({
-          id: `e${i + 1}-w${j}`, type, record_id: null,
-          status: status === "done" ? "done" : status === "idea" ? "todo" : STEPS[(i + j) % STEPS.length]!,
-        })),
+        ...tpl.widgets.map((type, j): EventWidget => ({ id: `e${i + 1}-w${j}`, type, record_id: null })),
         // Bagli her kayit kendi widget'i (spec/73 §3: event_records yok, kayit widget'i tek kaynak).
-        ...record_ids.map((rid, j): EventWidget => ({ id: `e${i + 1}-r${j}`, type: "record", record_id: rid, status: "doing" })),
+        ...record_ids.map((rid, j): EventWidget => ({ id: `e${i + 1}-r${j}`, type: "record", record_id: rid })),
       ],
     };
   });

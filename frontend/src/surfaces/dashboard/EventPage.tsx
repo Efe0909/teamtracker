@@ -26,8 +26,8 @@ import {
 import { ErrorScreen } from "../errors/ErrorScreen";
 import s from "./dashboard.module.css";
 import {
-  EVENT_KIND, EVENT_STATUS, mockMaterials, useMockEvents, useMockRecords, WIDGET, WIDGET_STATUS, WIDGET_TYPES,
-  type EventItem, type EventWidget, type WidgetType,
+  EVENT_KIND, EVENT_STATUS, mockMaterials, useMockEvents, useMockRecords, WIDGET, WIDGET_TYPES,
+  type EventItem, type WidgetType,
 } from "./eventModel";
 import { Purchases } from "./Purchases";
 import { href } from "./routes";
@@ -61,7 +61,7 @@ function EventView({ e }: { e: EventItem }) {
   // Kayit disindaki turlerden etkinlikte en cok bir tane (spec/73 §3).
   const missing = WIDGET_TYPES.filter((t) => t !== "record" && !widgets.some((w) => w.type === t));
   const add = (type: WidgetType, record_id: Uuid | null = null) =>
-    setWidgets((ws) => [...ws, { id: `${e.id}-w${Date.now()}`, type, status: "todo", record_id }]);
+    setWidgets((ws) => [...ws, { id: `${e.id}-w${Date.now()}`, type, record_id }]);
   const remove = (wid: string) => setWidgets(widgets.filter((w) => w.id !== wid));
   const setRecord = (wid: string, rid: Uuid) => setWidgets(widgets.map((w) => (w.id === wid ? { ...w, record_id: rid } : w)));
   // Etkinligin kendi kaydi da "bagli" sayilir: widget olarak eklenemez.
@@ -101,7 +101,7 @@ function EventView({ e }: { e: EventItem }) {
               </div>
               {widgets.length === 0 ? (
                 <div className={r.box}>
-                  <span className={r.boxEmpty}>Widget yok. Mekan, malzeme ya da bütçe takibi için “Widget ekle”.</span>
+                  <span className={r.boxEmpty}>Widget yok. Bağlı kayıt ya da satın alım takibi için “Widget ekle”.</span>
                 </div>
               ) : (
                 <div className={s.evWidgets}>
@@ -110,10 +110,8 @@ function EventView({ e }: { e: EventItem }) {
                       return <RecordWidget key={w.id} recordId={w.record_id} linked={linked}
                         onPick={(rid) => setRecord(w.id, rid)} onRemove={() => remove(w.id)} />;
                     }
-                    const onRemove = canStructure ? () => remove(w.id) : undefined;
-                    return w.type === "supplies"
-                      ? <Purchases key={w.id} items={materials} onChange={setMaterials} onRemove={onRemove} />
-                      : <Widget key={w.id} w={w} onRemove={onRemove} />;
+                    return <Purchases key={w.id} items={materials} onChange={setMaterials}
+                      onRemove={canStructure ? () => remove(w.id) : undefined} />;
                   })}
                 </div>
               )}
@@ -251,30 +249,6 @@ function TwinBall({ recordId }: { recordId: Uuid }) {
 }
 
 // --- widget ------------------------------------------------------------------------
-
-/** Alanlari henuz tanimlanmamis sablon widget'i. `onRemove` yoksa (scope yok) kaldirilamaz. */
-function Widget({ w, onRemove }: { w: EventWidget; onRemove?: (() => void) | undefined }) {
-  const t = WIDGET[w.type];
-  return (
-    <div className={cx(r.card, r.cardHover)}>
-      <div className={r.cardHead}>
-        <Icon name={t.icon} size={18} />
-        <b>{t.label}</b>
-        <Tag tone={WIDGET_STATUS[w.status].tone}>{WIDGET_STATUS[w.status].label}</Tag>
-        {onRemove !== undefined && (
-          <span className={r.cardActs}>
-            <IconButton icon="trash" label="Widget'ı kaldır (veri silinmez)" onClick={onRemove} />
-          </span>
-        )}
-      </div>
-      {/* ponytail: alanlar tanimlanmadi — iskelet. Turun tablosu gelince doldurulur. */}
-      <div className={s.evSkeleton} aria-label="Henüz alanı yok">
-        <span /><span /><span />
-        <small className={r.muted}>Alanlar henüz tanımlanmadı.</small>
-      </div>
-    </div>
-  );
-}
 
 /** Tek kayitlik widget. Kayit secilmeden once "yeni / var olani ekle" sorar;
  *  secilince kaydin basligini ve eylemlerini gosterir. */

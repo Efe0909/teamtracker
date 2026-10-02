@@ -104,9 +104,8 @@ create table event_widgets (
   id          uuid primary key default gen_random_uuid(),
   event_id    uuid not null references events(id) on delete cascade,
   widget_type text not null check (widget_type in
-              ('venue','supplies','agenda','transport','budget','promo','record')),
+              ('supplies','record')),
   record_id   uuid references records(id) on delete cascade,
-  status      text not null default 'todo' check (status in ('todo','doing','done')),
   position    smallint not null,
   check ((widget_type = 'record') = (record_id is not null))
 );
@@ -181,6 +180,10 @@ seçer**, yaşam döngüsü ayırmaz; tek tablo doğru. Veri ise türün tablosu
 - **Widget kaldırmak veriyi silmez.** Yuva gider, `materials` satırları etkinlikte
   kalır; widget geri eklenince aynı liste görünür. Veriyi silmek ayrı, açık bir eylem.
 - Kayıt dışındaki türlerden etkinlikte en çok bir widget (kısmi `unique`).
+- **Yalnız alanları tanımlı türler var**: bugün `supplies` (satın alımlar, §5) ve
+  `record`. Yarım (iskelet) widget yayına girmez. Yeni tür = kendi tablosu +
+  bileşeni + `widget_type` check'ine bir değer, **aynı göçte**. Aday türler
+  (mekan, gündem, ulaşım, bütçe, duyuru) alanları tasarlanınca bu belgeye eklenir.
 
 ### Kayıt widget'ı — tek kayıt, çok widget
 
@@ -215,11 +218,13 @@ sabit, ön yüzde `EVENT_TEMPLATE` onizlemesi) — kullanıcı tanımlı şablon
 
 | Tür | Widget'lar | Checkpoint'ler (gün farkı, 0 = etkinlik günü) |
 |---|---|---|
-| Toplantı | gündem, mekan | gündem toplandı −7, davet −5, toplantı 0, notlar +2 |
-| Eğitim | mekan, satın alımlar | eğitmen −21, mekan −14, malzeme hazır −3, eğitim 0, geri bildirim +3 |
-| Sosyal | mekan, bütçe | bütçe onayı −21, mekan −14, duyuru −7, etkinlik 0 |
-| Saha ziyareti | ulaşım, mekan | ziyaret onayı −21, ulaşım −7, ziyaret 0, rapor +5 |
-| Konferans | mekan, satın alımlar, duyuru, bütçe | başvuru −45, stand −30, tanıtım −10, malzeme −3, etkinlik 0, değerlendirme +7 |
+| Toplantı | — | gündem toplandı −7, davet −5, toplantı 0, notlar +2 |
+| Eğitim | satın alımlar | eğitmen −21, mekan −14, malzeme hazır −3, eğitim 0, geri bildirim +3 |
+| Sosyal | — | bütçe onayı −21, mekan −14, duyuru −7, etkinlik 0 |
+| Saha ziyareti | — | ziyaret onayı −21, ulaşım −7, ziyaret 0, rapor +5 |
+| Konferans | satın alımlar | başvuru −45, stand −30, tanıtım −10, malzeme −3, etkinlik 0, değerlendirme +7 |
+
+Yeni widget türü tanımlandıkça ilgili türlerin şablonuna eklenir.
 
 - Kayıt widget'ı şablonda **yok**: kaydı olmayan kayıt widget'ı sunucuda tutulmaz.
 - Kopya **oluşturma anında** alınır: şablon sonra değişirse eski etkinlikler değişmez.

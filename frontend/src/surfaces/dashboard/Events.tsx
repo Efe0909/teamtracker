@@ -396,11 +396,13 @@ function NewEventForm({ onCancel }: { onCancel: () => void }) {
       </label>
       <div className={s.evTemplate}>
         <span className={s.dim}>{EVENT_KIND[kind]} şablonu otomatik yükler:</span>
-        <div className={s.evTemplateRow}>
-          {tpl.widgets.map((w) => (
-            <span key={w} className={s.evChip}><Icon name={WIDGET[w].icon} size={13} /> {WIDGET[w].label}</span>
-          ))}
-        </div>
+        {tpl.widgets.length > 0 && (
+          <div className={s.evTemplateRow}>
+            {tpl.widgets.map((w) => (
+              <span key={w} className={s.evChip}><Icon name={WIDGET[w].icon} size={13} /> {WIDGET[w].label}</span>
+            ))}
+          </div>
+        )}
         <ol className={s.evTemplateSteps}>
           {tpl.checkpoints.map(([label, n]) => (
             <li key={label}>

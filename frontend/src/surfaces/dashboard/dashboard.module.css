@@ -2004,22 +2004,6 @@ a.evTitle:hover {
   gap: var(--s-3);
   align-items: start;
 }
-.evSkeleton {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.evSkeleton > span {
-  height: 10px;
-  border-radius: 5px;
-  background: var(--tint);
-}
-.evSkeleton > span:nth-child(2) {
-  width: 75%;
-}
-.evSkeleton > span:nth-child(3) {
-  width: 50%;
-}
 /* Gorevler tablosunda ikiz kaydin "Etkinlik" etiketi (baglanti) */
 a.evTag {
   flex: none;
