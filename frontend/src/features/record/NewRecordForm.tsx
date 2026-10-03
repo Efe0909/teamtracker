@@ -3,14 +3,14 @@
 // oncelik, birim, takim, sorumlu, pillar). Kutu yigini yok.
 
 import { useState } from "react";
-import { errorText } from "../../api/client";
+import { ApiError, errorText } from "../../api/client";
 import { useCreateRecord } from "../../api/hooks";
 import type { AccessMode, Priority, RecordKind, Uuid } from "../../api/types";
 import { CARD, CARD_TYPES, type CardType } from "../../lib/cards";
 import { KIND, PRIORITY, PRIORITY_ORDER } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
 import { Icon } from "../../ui/icons";
-import { Button, Picker, PriorityTag, TeamName, ui, Who } from "../../ui/ui";
+import { Button, Dialog, Picker, PriorityTag, TeamName, ui, Who } from "../../ui/ui";
 import { NodeTreePicker, useNodesOf } from "../nodes/NodePicker";
 import { ACCESS } from "./Join";
 import s from "./form.module.css";
@@ -35,6 +35,19 @@ export function NewRecordForm(props: {
   const [priority, setPriority] = useState<Priority>("medium");
   const [desc, setDesc] = useState("");
   const [access, setAccess] = useState<AccessMode>("public");
+  const [qualityReasons, setQualityReasons] = useState<string[] | null>(null);
+  const submit = (quality_override = false) => m.mutate(
+    {
+      kind, title, description: desc.trim() === "" ? null : desc,
+      unit_id: unit, team_id: team, pillar_id: pillar, owner_id: owner,
+      priority, card_types: cards, access_mode: access, quality_override,
+    },
+    {
+      onSuccess: (r) => props.onCreated(r.id),
+      onError: (x) => x instanceof ApiError && x.code === "low_quality"
+        ? setQualityReasons(x.reasons) : setErr(errorText(x)),
+    },
+  );
 
   return (
     <form
@@ -42,30 +55,19 @@ export function NewRecordForm(props: {
       onSubmit={(e) => {
         e.preventDefault();
         setErr(null);
-        m.mutate(
-          {
-            kind,
-            title,
-            description: desc.trim() === "" ? null : desc,
-            unit_id: unit,
-            team_id: team,
-            pillar_id: pillar,
-            owner_id: owner,
-            priority,
-            card_types: cards,
-            access_mode: access,
-          },
-          { onSuccess: (r) => props.onCreated(r.id), onError: (x) => setErr(errorText(x)) },
-        );
+        submit();
       }}
     >
       {err !== null && <p className={ui.error} role="alert">{err}</p>}
       <div className={s.doc}>
         <input className={ui.titleInput} value={title} onChange={(e) => setTitle(e.target.value)}
           placeholder="Başlık — kısa ve aranabilir" required maxLength={200} autoFocus aria-label="Başlık" />
+        <small className={ui.fieldHint}>{Array.from(title.trim()).length}/5 karakter</small>
         <textarea className={s.body} value={desc} onChange={(e) => setDesc(e.target.value)}
-          placeholder="Açıklama: ne oldu, nerede, ne zaman? (isteğe bağlı)" rows={4} aria-label="Açıklama" />
+          placeholder="Açıklama: ne yapılacak, neden, kim için?" rows={4} aria-label="Açıklama" />
+        <small className={ui.fieldHint}>{desc.trim().length}/30 karakter</small>
       </div>
+      {L.meta.external_off?.includes("decision") && <p className={ui.fieldHint}>Kalite kontrolü kapalı (dış servis devre dışı)</p>}
 
       <div className={s.chips} role="group" aria-label="Özellikler">
         <Picker look="chip" active label="Tür" value={kind} onChange={setKind}
@@ -130,10 +132,19 @@ export function NewRecordForm(props: {
       <div className={`${ui.dact} ${s.foot}`}>
         {props.onCancel !== undefined && <Button onClick={props.onCancel}>Vazgeç</Button>}
         <Button type="submit" variant="primary" big aria-busy={m.isPending}
-          disabled={m.isPending || title.trim() === "" || unit === ""}>
+          disabled={m.isPending || Array.from(title.trim()).length < 5 || Array.from(desc.trim()).length < 30 || unit === ""}>
           {m.isPending ? "Açılıyor…" : "Kaydı aç"}
         </Button>
       </div>
+      <Dialog open={qualityReasons !== null} onClose={() => setQualityReasons(null)} title="Kalite kontrolü uyarısı">
+        <p>Metin bazı ölçütlerde zayıf bulundu: {(qualityReasons ?? []).map((r) => ({
+          specific: "somut iş veya sonuç", context: "ekip için yeterli bağlam", closing_justified: "kapanış gerekçesi",
+        }[r] ?? r)).join(", ")}.</p>
+        <div className={ui.dact}>
+          <Button onClick={() => setQualityReasons(null)}>Düzenle</Button>
+          <Button variant="primary" disabled={m.isPending} onClick={() => { setQualityReasons(null); submit(true); }}>Yine de gönder</Button>
+        </div>
+      </Dialog>
     </form>
   );
 }

@@ -196,6 +196,17 @@ fn name_of(raw: String) -> Result<String> {
     common::text(Some(raw), NAME_MAX, "invalid_name")?.ok_or(AppError::BadRequest("invalid_name"))
 }
 
+fn check_name(name: &str) -> Result<()> {
+    common::min_chars(Some(name), common::NAME_MIN, "name_too_short")
+}
+
+fn check_description(description: Option<&str>) -> Result<()> {
+    if let Some(value) = description.filter(|s| !s.trim().is_empty()) {
+        common::min_chars(Some(value), common::DESC_MIN, "description_too_short")?;
+    }
+    Ok(())
+}
+
 fn parse_type(raw: String) -> Result<NodeType> {
     serde_json::from_value(Value::String(raw)).map_err(|_| AppError::BadRequest("invalid_type"))
 }
@@ -226,7 +237,9 @@ pub async fn create(
     State(st): State<AppState>, CurrentUser(me): CurrentUser, Body(b): Body<NewNode>,
 ) -> Result<Json<TreeView>> {
     let name = name_of(b.name)?;
+    check_name(&name)?;
     let description = common::text(b.description, TEXT_MAX, "invalid_description")?;
+    check_description(description.as_deref())?;
     let wanted = b.node_type.map(parse_type).transpose()?;
     let parent_id = b.parent_id.ok_or(AppError::Conflict("root_locked"))?;
     let access = NodeAccess::load(&st.pool, &me).await?;
@@ -363,6 +376,12 @@ pub async fn patch(
                 None => node.attrs.clone(),
             },
         };
+        if next.name != node.name && node.node_type != NodeType::Operational {
+            check_name(&next.name)?;
+        }
+        if next.description != current_description {
+            check_description(next.description.as_deref())?;
+        }
         let structural = next.node_type != node.node_type || next.parent_id != node.parent_id
             || next.is_active != node.is_active || next.shape != node.shape || next.attrs != node.attrs;
         // Kok ve slot: yalniz ad/aciklama (spec/74 §4.1-4.2).

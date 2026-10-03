@@ -79,6 +79,18 @@ telefon ──https──> Cloudflare ──tünel──> cloudflared ──> ng
 
 ---
 
+## Dış servisler
+
+Rust API yapılandırması NixOS secrets/env üzerinden sağlanır; anahtarlar loglanmaz.
+
+| Değişken | Kullanım | Varsayılan / kapalı davranış |
+|---|---|---|
+| `OPENROUTER_API_KEY` | Kalite denetimi | Yoksa karar servisi kapalı; uzunluk kuralları sürer |
+| `EKIPTAKIP_DECISION_MODEL` | OpenRouter model adı | `respan/span-01-lite` |
+| `EKIPTAKIP_EXTERNAL_OFF` | Virgüllü `decision`, `resend`, `push` listesi veya `all` | Boş liste |
+
+Kapalı servisler `/api/meta.external_off` ile istemciye bildirilir. Kayıt metinlerinin OpenRouter'a gönderilmesi KVKK aktarım değerlendirmesi gerektirir; kalite denetimini kapatmak için `EKIPTAKIP_EXTERNAL_OFF=decision` ayarla. Bkz. `spec/76-bilgi-yogunlugu.md`.
+
 ## Devamı
 
 - [`DOCKER.md`](../references/python/deploy/DOCKER.md) — (0.1) konteyner yığını, agenix sırları, medya dizini,

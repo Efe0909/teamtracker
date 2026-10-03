@@ -359,6 +359,8 @@ function AddForm(props: { parent: TreeNode; onClose: (added: boolean) => void })
   const [widget, setWidget] = useState<TemplateWidget>("otf");
   const [err, setErr] = useState<string | null>(null);
   const nameLabel = fixed ? `${TYPE_LABEL[type]} adı` : "Alt düğüm adı";
+  const nameValid = Array.from(name.trim()).length >= 5;
+  const descValid = desc.trim() === "" || Array.from(desc.trim()).length >= 30;
 
   return (
     <form
@@ -382,6 +384,7 @@ function AddForm(props: { parent: TreeNode; onClose: (added: boolean) => void })
           <span>{nameLabel}<Req /></span>
           <input className={ui.input} value={name} onChange={(e) => setName(e.target.value)} required maxLength={200}
             autoFocus placeholder={nameLabel.toLocaleLowerCase("tr")} />
+          <small className={ui.fieldHint}>{Array.from(name.trim()).length}/5 karakter</small>
         </label>
         {!fixed && (
           <div className={ui.field}>
@@ -403,10 +406,11 @@ function AddForm(props: { parent: TreeNode; onClose: (added: boolean) => void })
         Açıklama
         <textarea className={ui.input} rows={2} value={desc} onChange={(e) => setDesc(e.target.value)}
           placeholder="açıklama (isteğe bağlı)" />
+        <small className={ui.fieldHint}>{Array.from(desc.trim()).length}/30 karakter · isteğe bağlı</small>
       </label>
       <div className={ui.dact}>
         <Button onClick={() => props.onClose(false)}>Vazgeç</Button>
-        <Button type="submit" variant="primary" aria-busy={m.isPending} disabled={m.isPending || name.trim() === ""}>
+        <Button type="submit" variant="primary" aria-busy={m.isPending} disabled={m.isPending || !nameValid || !descValid}>
           {m.isPending ? "Ekleniyor…" : "Ekle"}
         </Button>
       </div>
@@ -433,6 +437,8 @@ function EditForm(props: { node: TreeNode; tree: TreeView; byId: ReadonlyMap<Uui
 
   // Kok ve slot: yalniz ad/aciklama (spec/74 §4.1-4.2).
   const locked = node.locked !== null;
+  const nameValid = node.node_type === "operational" || Array.from(name.trim()).length >= 5 || name.trim() === node.name;
+  const descValid = desc.trim() === "" || Array.from(desc.trim()).length >= 30 || desc.trim() === (node.description ?? "");
   // Tur ve shape yalniz serbest kokte (Birimler) secilir; sabit kurallarda sunucunun.
   const free = !locked && node.root_key === "units";
   const up = node.parent_id === null ? undefined : byId.get(node.parent_id);
@@ -497,6 +503,7 @@ function EditForm(props: { node: TreeNode; tree: TreeView; byId: ReadonlyMap<Uui
         <label className={ui.field}>
           <span>Ad<Req /></span>
           <input className={ui.input} value={name} onChange={(e) => setName(e.target.value)} required maxLength={200} autoFocus />
+          <small className={ui.fieldHint}>{Array.from(name.trim()).length}/5 karakter</small>
         </label>
         {free && (
           <div className={ui.field}>
@@ -527,6 +534,7 @@ function EditForm(props: { node: TreeNode; tree: TreeView; byId: ReadonlyMap<Uui
         Açıklama
         <textarea className={ui.input} rows={2} value={desc} onChange={(e) => setDesc(e.target.value)}
           placeholder="açıklama — bu düğüm ne kapsıyor?" />
+        <small className={ui.fieldHint}>{Array.from(desc.trim()).length}/30 karakter · isteğe bağlı</small>
       </label>
       <div className={ui.dact}>
         {node.can_hard_delete && !locked && (
@@ -535,7 +543,7 @@ function EditForm(props: { node: TreeNode; tree: TreeView; byId: ReadonlyMap<Uui
           </Button>
         )}
         <Button onClick={onClose}>Vazgeç</Button>
-        <Button type="submit" variant="primary" aria-busy={m.isPending} disabled={m.isPending || name.trim() === ""}>
+        <Button type="submit" variant="primary" aria-busy={m.isPending} disabled={m.isPending || !nameValid || !descValid}>
           {m.isPending ? "Kaydediliyor…" : "Kaydet"}
         </Button>
       </div>

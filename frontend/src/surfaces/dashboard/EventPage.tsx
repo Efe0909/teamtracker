@@ -42,8 +42,8 @@ type Op = ReturnType<typeof eventOps.patch>;
 function useRun() {
   const w = useEventWrite();
   const toast = useToast();
-  const run = (op: Op, ok?: () => void) =>
-    w.mutate(op, { onSuccess: () => ok?.(), onError: (x) => toast({ text: errorText(x), error: true }) });
+  const run = (op: Op, ok?: () => void, fail?: (error: unknown) => boolean) =>
+    w.mutate(op, { onSuccess: () => ok?.(), onError: (x) => { if (!fail?.(x)) toast({ text: errorText(x), error: true }); } });
   return { run, busy: w.isPending };
 }
 
@@ -227,16 +227,26 @@ function Head({ e }: { e: EventDetail }) {
 /** parts.tsx TextEdit'in etkinlik karsiligi: baslik ya da aciklama. */
 function TextEdit({ e, field, onClose }: { e: EventDetail; field: "title" | "description"; onClose: () => void }) {
   const { run, busy } = useRun();
+  const L = useLookup();
   const [v, setV] = useState((field === "title" ? e.title : e.description) ?? "");
+  const [qualityReasons, setQualityReasons] = useState<string[] | null>(null);
+  const submit = (quality_override = false) => {
+    const patch = field === "title"
+      ? { field: "title", value: v.trim() } as const
+      : { field: "description", value: v.trim() === "" ? null : v } as const;
+    run(eventOps.patch(e.id, patch, quality_override), onClose, (x) => {
+      if (!(x instanceof ApiError && x.code === "low_quality")) return false;
+      setQualityReasons(x.reasons);
+      return true;
+    });
+  };
   return (
     <Dialog open onClose={onClose} title={field === "title" ? "Başlığı düzenle" : "Açıklamayı düzenle"} wide>
       <form
         className={ui.formStack}
         onSubmit={(ev) => {
           ev.preventDefault();
-          run(eventOps.patch(e.id, field === "title"
-            ? { field: "title", value: v.trim() }
-            : { field: "description", value: v.trim() === "" ? null : v }), onClose);
+          submit();
         }}
       >
         {field === "title" ? (
@@ -246,13 +256,22 @@ function TextEdit({ e, field, onClose }: { e: EventDetail; field: "title" | "des
           <textarea className={ui.input} aria-labelledby="dlg-title" value={v} onChange={(ev) => setV(ev.target.value)}
             rows={8} autoFocus />
         )}
+        <small className={ui.fieldHint}>{Array.from(v.trim()).length}/{field === "title" ? 5 : 30} karakter</small>
+        {L.meta.external_off?.includes("decision") && <p className={ui.fieldHint}>Kalite kontrolü kapalı (dış servis devre dışı)</p>}
         <div className={ui.dact}>
           <Button onClick={onClose}>Vazgeç</Button>
-          <Button type="submit" variant="primary" aria-busy={busy} disabled={busy || (field === "title" && v.trim() === "")}>
+          <Button type="submit" variant="primary" aria-busy={busy} disabled={busy || (field === "title" && Array.from(v.trim()).length < 5) || (field === "description" && Array.from(v.trim()).length < 30 && v.trim() !== (e.description ?? ""))}>
             {busy ? "Kaydediliyor…" : "Kaydet"}
           </Button>
         </div>
       </form>
+      <Dialog open={qualityReasons !== null} onClose={() => setQualityReasons(null)} title="Kalite kontrolü uyarısı">
+        <p>Metin bazı ölçütlerde zayıf bulundu: {(qualityReasons ?? []).map((r) => ({ specific: "somut iş veya sonuç", context: "ekip için yeterli bağlam" }[r as "specific" | "context"] ?? r)).join(", ")}.</p>
+        <div className={ui.dact}>
+          <Button onClick={() => setQualityReasons(null)}>Düzenle</Button>
+          <Button variant="primary" disabled={busy} onClick={() => { setQualityReasons(null); submit(true); }}>Yine de gönder</Button>
+        </div>
+      </Dialog>
     </Dialog>
   );
 }

@@ -37,6 +37,17 @@ fn name_of(raw: String) -> Result<String> {
     common::text(Some(raw), NAME_MAX, "invalid_name")?.ok_or(AppError::BadRequest("invalid_name"))
 }
 
+fn check_name(name: &str) -> Result<()> {
+    common::min_chars(Some(name), common::NAME_MIN, "name_too_short")
+}
+
+fn check_description(description: Option<&str>) -> Result<()> {
+    if let Some(value) = description.filter(|s| !s.trim().is_empty()) {
+        common::min_chars(Some(value), common::DESC_MIN, "description_too_short")?;
+    }
+    Ok(())
+}
+
 /// Tekil ihlali (teams.name / pillars.name) 409 `name_taken`; gerisi 500.
 fn name_taken(e: sqlx::Error) -> AppError {
     match e.as_database_error() {
@@ -114,7 +125,9 @@ pub async fn create_team(
 ) -> Result<(StatusCode, Json<CreatedTeam>)> {
     manage_teams(&st, &me).await?;
     let name = name_of(b.name)?;
+    check_name(&name)?;
     let description = common::text(b.description, TEXT_MAX, "invalid_description")?;
+    check_description(description.as_deref())?;
     let color = common::text(b.color, COLOR_MAX, "invalid_color")?;
     let mut tx = st.pool.begin().await?;
     let (id, _) = insert_team(&mut tx, me.id, &name, description.as_deref(), color.as_deref()).await?;
@@ -156,6 +169,13 @@ pub async fn patch_team(
            from teams t where t.id = $1 for update")
         .bind(id).fetch_optional(&mut *tx).await?.ok_or(AppError::NotFound)?;
     let next_name = name.unwrap_or_else(|| old_name.clone());
+    if next_name != old_name {
+        common::min_chars(Some(&next_name), common::NAME_MIN, "name_too_short")?;
+    }
+    let next_description = description.clone().unwrap_or_else(|| old_description.clone());
+    if next_description != old_description {
+        check_description(next_description.as_deref())?;
+    }
     if is_pillar && next_name != old_name {
         return Err(AppError::Conflict("team_is_pillar"));
     }
@@ -255,7 +275,9 @@ pub async fn create_pillar(
 ) -> Result<(StatusCode, Json<CreatedPillar>)> {
     manage_teams(&st, &me).await?;
     let name = name_of(b.name)?;
+    check_name(&name)?;
     let description = common::text(b.description, TEXT_MAX, "invalid_description")?;
+    check_description(description.as_deref())?;
     let color = common::text(b.color, COLOR_MAX, "invalid_color")?;
     let mut tx = st.pool.begin().await?;
     let (team_id, _) = insert_team(&mut tx, me.id, &name, description.as_deref(), color.as_deref()).await?;
@@ -314,7 +336,13 @@ pub async fn patch_pillar(
            from pillars p join teams t on t.id = p.team_id where p.id = $1 for update of p")
         .bind(id).fetch_optional(&mut *tx).await?.ok_or(AppError::NotFound)?;
     let next_name = name.unwrap_or_else(|| old.name.clone());
-    let next_description = description.unwrap_or(old.description);
+    let next_description = description.unwrap_or_else(|| old.description.clone());
+    if next_name != old.name {
+        check_name(&next_name)?;
+    }
+    if next_description != old.description {
+        check_description(next_description.as_deref())?;
+    }
     let next_color = color.unwrap_or(old.color);
     sqlx::query(
         "update pillars set name = $2, description = $3, color = $4, is_active = $5,

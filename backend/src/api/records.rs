@@ -12,6 +12,7 @@ use std::collections::HashMap;
 
 use axum::{
     extract::{Path, Query, State},
+    http::StatusCode,
     Json,
 };
 use chrono::{DateTime, NaiveDate, Utc};
@@ -393,7 +394,7 @@ pub struct Created {
 /// (spec/90 G1). Duzenleme yetkisi ondan sonra iliski yollarindan gelir.
 pub async fn create(
     State(st): State<AppState>, CurrentUser(me): CurrentUser, Body(b): Body<NewRecord>,
-) -> Result<Json<Created>> {
+) -> Result<(StatusCode, Json<Created>)> {
     let title = common::text(Some(b.title), TITLE_MAX, "invalid_title")?
         .ok_or(AppError::BadRequest("invalid_title"))?;
     let description = common::text(b.description, TEXT_MAX, "invalid_description")?;
@@ -429,7 +430,7 @@ pub async fn create(
         cards::insert(&mut tx, id, me.id, t, None, &serde_json::Map::new()).await?;
     }
     tx.commit().await?;
-    Ok(Json(Created { id }))
+    Ok((StatusCode::CREATED, Json(Created { id })))
 }
 
 // --- alan degisimi ---------------------------------------------------------
@@ -962,23 +963,6 @@ pub async fn decide_join(
     Ok(Json(detail_of(&st, &me, rec).await?))
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn patch_govdesi_not_ve_onay_tasir() {
-        let b = serde_json::from_str::<RecordPatchBody>(
-            r#"{"field":"status","value":"closed","closing_note":"n","quality_override":true}"#).ok();
-        assert!(b.is_some_and(|b| matches!(b.patch, RecordPatch::Status(RecordStatus::Closed))
-            && b.closing_note.as_deref() == Some("n") && b.quality_override));
-        // Eski bicim (yalniz field/value) aynen gecer; bilinmeyen alan yine reddedilir.
-        let b = serde_json::from_str::<ActionPatchBody>(r#"{"field":"title","value":"x"}"#).ok();
-        assert!(b.is_some_and(|b| matches!(b.patch, ActionPatch::Title(_)) && !b.quality_override));
-        assert!(serde_json::from_str::<RecordPatchBody>(r#"{"field":"sifre","value":"x"}"#).is_err());
-    }
-}
-
 /// Gizli kayit mi ve ben uye degil miyim: sohbet/kart/oy gibi uc noktalar bunu sorar.
 pub(crate) async fn is_restricted(st: &AppState, me: &User, rec: &Record) -> Result<bool> {
     let mode: String = sqlx::query_scalar("select access_mode from records where id = $1")
@@ -993,4 +977,20 @@ pub(crate) async fn may_respond(st: &AppState, me: &User, rec: &Record) -> Resul
     let mode: String = sqlx::query_scalar("select access_mode from records where id = $1")
         .bind(rec.id).fetch_one(&st.pool).await?;
     Ok(mode == "public" || scope::can_edit_record(&st.pool, me, rec, &st.tree).await?)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn patch_govdesi_not_ve_onay_tasir() {
+        let b = serde_json::from_str::<RecordPatchBody>(
+            r#"{"field":"status","value":"closed","closing_note":"n","quality_override":true}"#).ok();
+        assert!(b.is_some_and(|b| matches!(b.patch, RecordPatch::Status(RecordStatus::Closed))
+            && b.closing_note.as_deref() == Some("n") && b.quality_override));
+        let b = serde_json::from_str::<ActionPatchBody>(r#"{"field":"title","value":"x"}"#).ok();
+        assert!(b.is_some_and(|b| matches!(b.patch, ActionPatch::Title(_)) && !b.quality_override));
+        assert!(serde_json::from_str::<RecordPatchBody>(r#"{"field":"unknown","value":"x"}"#).is_err());
+    }
 }

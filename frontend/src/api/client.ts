@@ -6,10 +6,12 @@ import { ERRORS, isErrorCode, type ApiErrorCode } from "./errors";
 export class ApiError extends Error {
   readonly code: ApiErrorCode;
   readonly status: number;
-  constructor(code: ApiErrorCode, status: number) {
+  readonly reasons: string[];
+  constructor(code: ApiErrorCode, status: number, reasons: string[] = []) {
     super(ERRORS[code]);
     this.code = code;
     this.status = status;
+    this.reasons = reasons;
   }
 }
 
@@ -50,7 +52,9 @@ export async function request<T>(method: Method, path: string, body?: unknown): 
       typeof data === "object" && data !== null && "error" in data && typeof data.error === "string"
         ? data.error
         : "internal";
-    throw new ApiError(isErrorCode(code) ? code : "internal", r.status);
+    const reasons = typeof data === "object" && data !== null && "reasons" in data && Array.isArray(data.reasons)
+      ? data.reasons.filter((x): x is string => typeof x === "string") : [];
+    throw new ApiError(isErrorCode(code) ? code : "internal", r.status, reasons);
   }
   return data as T;
 }
@@ -71,7 +75,9 @@ export async function upload<T>(file: File): Promise<T> {
       typeof data === "object" && data !== null && "error" in data && typeof data.error === "string"
         ? data.error
         : r.status === 413 ? "file_too_big" : "internal";
-    throw new ApiError(isErrorCode(code) ? code : "internal", r.status);
+    const reasons = typeof data === "object" && data !== null && "reasons" in data && Array.isArray(data.reasons)
+      ? data.reasons.filter((x): x is string => typeof x === "string") : [];
+    throw new ApiError(isErrorCode(code) ? code : "internal", r.status, reasons);
   }
   return data as T;
 }

@@ -226,7 +226,7 @@ describe("API hata kodu Turkce metne cevrilir (api/errors.ts)", () => {
     });
     renderTree();
     fireEvent.click(await screen.findByLabelText("Birimler: alt düğüm ekle"));
-    fireEvent.change(await screen.findByLabelText(/^Alt düğüm adı/), { target: { value: "x" } });
+    fireEvent.change(await screen.findByLabelText(/^Alt düğüm adı/), { target: { value: "Yeni Birim Adı" } });
     fireEvent.click(screen.getByRole("button", { name: "Ekle" }));
     await waitFor(() => expect(screen.getByRole("alert").textContent).toBe(ERRORS.invalid_name));
   });

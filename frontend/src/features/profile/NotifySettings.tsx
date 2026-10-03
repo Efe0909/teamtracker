@@ -6,6 +6,7 @@ import { errorText } from "../../api/client";
 import { useNotifyPrefs, usePatchNotifyPrefs } from "../../api/hooks";
 import type { NotifyLevel } from "../../api/types";
 import { NOTIFY } from "../../lib/labels";
+import { useLookup } from "../../lib/lookup";
 import { disablePush, enablePush, pushState, type PushState } from "../../lib/push";
 import { Button, Choices, Dialog, ui, useToast } from "../../ui/ui";
 
@@ -14,6 +15,7 @@ const hh = (h: number) => `${String(h).padStart(2, "0")}:00`;
 
 export function NotifySettings({ open, onClose }: { open: boolean; onClose: () => void }) {
   const q = useNotifyPrefs();
+  const L = useLookup();
   const m = usePatchNotifyPrefs();
   const toast = useToast();
   const fail = (e: unknown) => toast({ text: errorText(e), error: true });
@@ -48,6 +50,7 @@ export function NotifySettings({ open, onClose }: { open: boolean; onClose: () =
           <Choices<NotifyLevel> current={p.level} busy={m.isPending}
             options={(Object.keys(NOTIFY) as NotifyLevel[]).map((v) => ({ value: v, label: NOTIFY[v].label }))}
             onPick={(level) => m.mutate({ level }, { onError: fail })} />
+          {L.meta.external_off?.includes("push") && <p className={ui.fieldHint}>Anlık bildirim servisi kapalı</p>}
           <fieldset className={ui.field}>
             <legend>Bu cihaz <span className={ui.fieldHint}>— anlık bildirim yalnız izin verdiğin cihazlara gider</span></legend>
             {device === "unsupported" ? (

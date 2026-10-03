@@ -5,7 +5,7 @@
 // Veri /api/events'ten; suzme istemcide, liste kucuk.
 
 import { useEffect, useState } from "react";
-import { errorText } from "../../api/client";
+import { ApiError, errorText } from "../../api/client";
 import { useCreateEvent, useEvents, useRecords } from "../../api/hooks";
 import type { EventSummary, IsoDate, RecordSummary, Uuid } from "../../api/types";
 import { NodeListPicker, NodeTreePicker, useNodesOf } from "../../features/nodes/NodePicker";
@@ -388,22 +388,39 @@ function NewEventForm({ onCancel }: { onCancel: () => void }) {
   const kind = picked ?? kinds[0]?.id ?? null;
   const [unit, setUnit] = useState<Uuid | null>(null);
   const [date, setDate] = useState("");
+  const [description, setDescription] = useState("");
+  const [qualityReasons, setQualityReasons] = useState<string[] | null>(null);
   const tpl = kindTemplate(L.meta.nodes, kind);
-  const ready = title.trim() !== "" && unit !== null && kind !== null;
+  const ready = Array.from(title.trim()).length >= 5 && Array.from(description.trim()).length >= 30 && unit !== null && kind !== null;
+  const submit = (quality_override = false) => {
+    if (kind === null || unit === null) return;
+    create.mutate(
+      { title: title.trim(), kind_id: kind, unit_id: unit, description: description.trim(), quality_override, ...(date === "" ? {} : { date }) },
+      {
+        onSuccess: (r) => navigate(href({ name: "event", id: r.id })),
+        onError: (e) => { if (e instanceof ApiError && e.code === "low_quality") setQualityReasons(e.reasons); },
+      },
+    );
+  };
   return (
     <form className={ui.formStack} onSubmit={(e) => {
       e.preventDefault();
       if (!ready || kind === null || unit === null || create.isPending) return;
-      create.mutate(
-        { title: title.trim(), kind_id: kind, unit_id: unit, ...(date === "" ? {} : { date }) },
-        { onSuccess: (r) => navigate(href({ name: "event", id: r.id })) },
-      );
+      submit();
     }}>
       <label className={ui.field}>
         <span>Ad</span>
         <input className={ui.input} required maxLength={200} autoFocus placeholder="Örn. DC araba atölyesi"
           value={title} onChange={(e) => setTitle(e.target.value)} />
+        <small className={ui.fieldHint}>{Array.from(title.trim()).length}/5 karakter</small>
       </label>
+      <label className={ui.field}>
+        <span>Açıklama</span>
+        <textarea className={ui.input} rows={4} value={description} onChange={(e) => setDescription(e.target.value)}
+          placeholder="Ne yapılacak, neden, kim için?" aria-label="Açıklama" />
+        <small className={ui.fieldHint}>{Array.from(description.trim()).length}/30 karakter</small>
+      </label>
+      {L.meta.external_off?.includes("decision") && <p className={ui.fieldHint}>Kalite kontrolü kapalı (dış servis devre dışı)</p>}
       <div className={ui.field}>
         <span>Tür</span>
         <NodeListPicker rootKey="event_types" label="Tür" value={kind} onChange={setKind} placeholder="Tür seç" />
@@ -435,7 +452,14 @@ function NewEventForm({ onCancel }: { onCancel: () => void }) {
           ))}
         </ol>
       </div>
-      {create.isError && <p className={ui.error} role="alert">{errorText(create.error)}</p>}
+      {create.isError && !(create.error instanceof ApiError && create.error.code === "low_quality") && <p className={ui.error} role="alert">{errorText(create.error)}</p>}
+      <Dialog open={qualityReasons !== null} onClose={() => setQualityReasons(null)} title="Kalite kontrolü uyarısı">
+        <p>Metin bazı ölçütlerde zayıf bulundu: {(qualityReasons ?? []).map((r) => ({ specific: "somut iş veya sonuç", context: "ekip için yeterli bağlam" }[r] ?? r)).join(", ")}.</p>
+        <div className={ui.dact}>
+          <Button onClick={() => setQualityReasons(null)}>Düzenle</Button>
+          <Button variant="primary" disabled={create.isPending} onClick={() => { setQualityReasons(null); submit(true); }}>Yine de gönder</Button>
+        </div>
+      </Dialog>
       <div className={ui.dact}>
         <Button onClick={onCancel}>Vazgeç</Button>
         <Button type="submit" variant="primary" disabled={!ready || create.isPending}>Oluştur</Button>

@@ -100,6 +100,7 @@ R=$(g w /api/meta)
 ok "$(jq -r .me.id <<<"$R")" "$SELIN" "me.id"
 ok "$(jq '.users|length' <<<"$R")" 7 "users"
 ok "$(jq '.teams|length' <<<"$R")" 5 "teams (3 sade + 2 pillar takimi)"
+ok "$(jq -r '.external_off|index("decision")!=null' <<<"$R")" true "anahtarsiz karar servisi kapali"
 ok "$(jq -c '[.pillars[]|.name]' <<<"$R")" '["Güvenlik","Kalite"]' "pillars sort_order, ad"
 ok "$(jq -c '.pillars[0]|keys' <<<"$R")" '["color","description","id","is_active","name","sort_order","team_id"]' "MetaPillar alanlari"
 ok "$(jq -c '.teams[0]|keys' <<<"$R")" '["banner_id","chat_id","color","description","id","name","node_ids","pillar_id"]' "MetaTeam alanlari (node_id yok)"
@@ -157,8 +158,15 @@ t actions
 R=$(w w POST "$WT" "/api/records/$BUTCE/actions" "{\"title\":\"Sozlesme taslagi\",\"owner_id\":\"$DENIZ\"}")
 ok "$(jq '.actions|length' <<<"$R")" 3 "eklendi"
 A=$(DB "select id from actions where title='Sozlesme taslagi'")
-ok "$(w w PATCH "$WT" "/api/actions/$A" '{"field":"status","value":"closed"}' | jq -r ".actions[]|select(.id==\"$A\").status")" closed "kapandi"
+ok "$(w w PATCH "$WT" "/api/actions/$A" '{"field":"status","value":"closed","closing_note":"Sozlesme taslagi tamamlandi ve yoneticiye gonderildi."}' | jq -r ".actions[]|select(.id==\"$A\").status")" closed "kapandi"
 ok "$(DB "select resolved_by from actions where id='$A'")" "$SELIN" "kapatan izde"
+ANOTE='Sozlesme taslagi tamamlandi ve yoneticiye gonderildi.'
+ok "$(DB "select closing_note from actions where id='$A'")" "$ANOTE" "eylem kapanis notu saklandi"
+BCHAT=$(DB "select chat_id from records where id='$BUTCE'")
+ok "$(g w "/api/chats/$BCHAT/feed" | jq -r '.items[]|select(.verb=="closing_note" and .target_label=="action")|.body' | tail -1)" "$ANOTE" "eylem kapanis notu akis mesaji"
+w w PATCH "$WT" "/api/actions/$A" '{"field":"status","value":"open"}' >/dev/null
+ok "$(DB "select coalesce(closing_note,'NULL') from actions where id='$A'")" NULL "eylem yeniden acilinca not silinir"
+ok "$(w w PATCH "$WT" "/api/actions/$A" '{"field":"status","value":"cancelled"}' | jq -r ".actions[]|select(.id==\"$A\").status")" cancelled "eylem iptali not gerektirmez"
 ok "$(w w POST "$WT" "/api/records/$BUTCE/actions" '{"title":"  "}' | jq -r .error)" invalid_title "bos baslik"
 
 t messages
@@ -171,11 +179,27 @@ ok "$(w w POST "$WT" "/api/chats/$BCHAT/messages" '{"body":"   "}' | jq -r .erro
 t create_record_open_to_all
 # Kayit acmak herkese, her birimde acik (kullanici karari, spec/90 G1): UNIT
 # Deniz'in dali (Uretim Hatti A) DISINDA ve yine 200.
-R=$(w n POST "$NT" /api/records "{\"kind\":\"task\",\"title\":\"Sozlesme kaydi\",\"unit_id\":\"$UNIT\",\"owner_id\":null}")
+R=$(w n POST "$NT" /api/records "{\"kind\":\"task\",\"title\":\"Sozlesme kaydi\",\"description\":\"Sozlesme taslagi hazirlanacak ve hukuk ekibiyle paylasilarak gozden gecirilecek.\",\"unit_id\":\"$UNIT\",\"owner_id\":null}")
 NEW=$(jq -r .id <<<"$R")
 ok "$(DB "select created_by from records where id='$NEW'")" "$DENIZ" "acan"
+ok "$(w n POST "$NT" /api/records "{\"kind\":\"task\",\"title\":\"abc\",\"description\":\"Bu aciklama uzun ve gecerli bir test metnidir.\",\"unit_id\":\"$UNIT\"}" | jq -r .error)" title_too_short "kisa baslik"
+ok "$(w n POST "$NT" /api/records "{\"kind\":\"task\",\"title\":\"Gecerli baslik\",\"description\":\"kisa\",\"unit_id\":\"$UNIT\"}" | jq -r .error)" description_too_short "kisa aciklama"
+LEGACY=$(DB "with c as (insert into chats default values returning id) insert into records (unit_id,chat_id,kind,title,description,created_by) select '$UNIT',id,'task','Old','x','$DENIZ' from c returning id" | head -1)
+w n PATCH "$NT" "/api/records/$LEGACY" '{"field":"priority","value":"low"}' >/dev/null
+ok "$(DB "select priority from records where id='$LEGACY'")" low "degismeyen eski kisa alan denetlenmez"
+ok "$(w n PATCH "$NT" "/api/records/$NEW" '{"field":"status","value":"closed"}' | jq -r .error)" closing_note_required "kapanis notu zorunlu"
+ok "$(w n PATCH "$NT" "/api/records/$NEW" '{"field":"status","value":"closed","closing_note":"Kisa not"}' | jq -r .error)" closing_note_too_short "kisa kapanis notu"
+NOTE='Sozlesme taslagi hazirlandi ve yoneticiye inceleme icin gonderildi.'
+ok "$(w n PATCH "$NT" "/api/records/$NEW" "{\"field\":\"status\",\"value\":\"closed\",\"closing_note\":\"$NOTE\"}" | jq -r .record.status)" closed "kayit kapandi"
+ok "$(DB "select closing_note from records where id='$NEW'")" "$NOTE" "kapanis notu saklandi"
+NEWCHAT=$(DB "select chat_id from records where id='$NEW'")
+ok "$(g n "/api/chats/$NEWCHAT/feed" | jq -r '.items[]|select(.verb=="closing_note")|.body' | tail -1)" "$NOTE" "kapanis notu akis mesaji"
+w n PATCH "$NT" "/api/records/$NEW" '{"field":"status","value":"open"}' >/dev/null
+ok "$(DB "select coalesce(closing_note,'NULL') from records where id='$NEW'")" NULL "yeniden acinca not silinir"
+ok "$(w n PATCH "$NT" "/api/records/$NEW" '{"field":"status","value":"cancelled"}' | jq -r .record.status)" cancelled "iptal not gerektirmez"
+
 ok "$(g n "/api/records/$NEW" | jq -r .access.can_edit)" true "acan duzenler"
-ok "$(w n POST "$NT" /api/records "{\"kind\":\"task\",\"title\":\"x\",\"unit_id\":\"$DENIZ\"}" | jq -r .error)" invalid_unit "gecersiz birim"
+ok "$(w n POST "$NT" /api/records "{\"kind\":\"task\",\"title\":\"Gecersiz birim kaydi\",\"description\":\"Bu kayit gecersiz birim icin dogrulama amaciyla olusturuldu.\",\"unit_id\":\"$DENIZ\"}" | jq -r .error)" invalid_unit "gecersiz birim"
 
 t home_teams_notifications
 ok "$(g w /api/home | jq '.counts|has("overdue_records")')" true "sayaclar"
@@ -246,8 +270,8 @@ t node_types_per_root
 # Tur kurallari kok semasindan (refdata.rs): Birimler'de cell artik her yerde.
 R=$(w w POST "$WT" /api/nodes "{\"name\":\"Yeni Hücre\",\"node_type\":\"cell\",\"parent_id\":\"$MALZEME\"}")
 ok "$(jq -r ".nodes[]|select(.name==\"Yeni Hücre\").node_type" <<<"$R")" cell "cell kok-yalniz degil"
-ok "$(w w POST "$WT" /api/nodes "{\"name\":\"Yer\",\"node_type\":\"location\",\"parent_id\":\"$MALZEME\"}" | jq -r .error)" type_not_allowed "Birimler'e location girmez"
-ok "$(w w POST "$WT" /api/nodes "{\"name\":\"X\",\"node_type\":\"checkpoint\",\"parent_id\":\"$TYPES\"}" | jq -r .error)" type_not_allowed "Etkinlik Turleri'ne yalniz option"
+ok "$(w w POST "$WT" /api/nodes "{\"name\":\"Toplanti Yeri\",\"node_type\":\"location\",\"parent_id\":\"$MALZEME\"}" | jq -r .error)" type_not_allowed "Birimler'e location girmez"
+ok "$(w w POST "$WT" /api/nodes "{\"name\":\"Gecersiz Adim\",\"node_type\":\"checkpoint\",\"parent_id\":\"$TYPES\"}" | jq -r .error)" type_not_allowed "Etkinlik Turleri'ne yalniz option"
 ok "$(w w PATCH "$WT" "/api/nodes/$ILETISIM" "{\"parent_id\":\"$PLACES\"}" | jq -r .error)" type_not_allowed "kokler arasi tasima yok"
 ok "$(jq -c ".nodes[]|select(.id==\"$UNITS\").child_types" <<<"$R")" '["cell","machine","task","step","generic"]' "Birimler tur listesi"
 
@@ -261,12 +285,12 @@ STEPS=$(jq -r ".nodes[]|select(.parent_id==\"$ATOLYE\" and .attrs.slot==\"steps\
 ok "$(w w DELETE "$WT" "/api/nodes/$STEPS" '' | jq -r .error)" operational_locked "slot silinmez"
 R=$(w w POST "$WT" /api/nodes "{\"name\":\"Mekan\",\"parent_id\":\"$STEPS\",\"attrs\":{\"offset_days\":-3}}")
 ok "$(jq -c '.nodes[]|select(.name=="Mekan" and .node_type=="checkpoint").warnings' <<<"$R")" '["late_checkpoint"]' "7 gun kurali reddetmez, uyarir"
-ok "$(w w POST "$WT" /api/nodes "{\"name\":\"Y\",\"parent_id\":\"$STEPS\",\"attrs\":{\"offset_days\":\"x\"}}" | jq -r .error)" invalid_attrs "attrs dogrulanir"
+ok "$(w w POST "$WT" /api/nodes "{\"name\":\"Gecersiz Adim\",\"parent_id\":\"$STEPS\",\"attrs\":{\"offset_days\":\"x\"}}" | jq -r .error)" invalid_attrs "attrs dogrulanir"
 ok "$(w n POST "$NT" /api/nodes "{\"name\":\"Deniz turu\",\"parent_id\":\"$TYPES\"}" | jq -r .error)" forbidden "manage_event_types yok"
 DB "insert into user_scopes (user_id,scope) values ('$DENIZ','manage_event_types')" >/dev/null
 ok "$(wc_ n POST "$NT" /api/nodes "{\"name\":\"Deniz turu\",\"parent_id\":\"$TYPES\"}")" 200 "scope ile ekler (dal izni gerekmez)"
 DB "delete from user_scopes where user_id='$DENIZ' and scope='manage_event_types'" >/dev/null
-ok "$(w w POST "$WT" /api/records "{\"kind\":\"task\",\"title\":\"x\",\"unit_id\":\"$ATOLYE\"}" | jq -r .error)" unit_outside_units "tur birim degil"
+ok "$(w w POST "$WT" /api/records "{\"kind\":\"task\",\"title\":\"Gecersiz birim kaydi\",\"description\":\"Bu kayit etkinlik turunu birim olarak kullanamaz.\",\"unit_id\":\"$ATOLYE\"}" | jq -r .error)" unit_outside_units "tur birim degil"
 
 t node_favorites
 ok "$(w w PUT "$WT" "/api/nodes/$MALZEME/favorite" '' | jq -c .)" "[\"$MALZEME\"]" "favori eklenir"
@@ -275,17 +299,18 @@ ok "$(w w DELETE "$WT" "/api/nodes/$MALZEME/favorite" '' | jq -c .)" "[]" "favor
 
 t node_inactive_parent
 w w PATCH "$WT" "/api/nodes/$SALON" '{"is_active":false}' >/dev/null
-ok "$(w w POST "$WT" /api/nodes "{\"name\":\"X\",\"node_type\":\"generic\",\"parent_id\":\"$SALON\"}" | jq -r .error)" inactive_parent "pasifin altina eklenemez"
+ok "$(w w POST "$WT" /api/nodes "{\"name\":\"Yeni Alt Dugum\",\"node_type\":\"generic\",\"parent_id\":\"$SALON\"}" | jq -r .error)" inactive_parent "pasifin altina eklenemez"
 ok "$(w w PATCH "$WT" "/api/nodes/$ULASIM" "{\"parent_id\":\"$SALON\"}" | jq -r .error)" inactive_parent "pasifin altina tasinamaz"
 w w PATCH "$WT" "/api/nodes/$SALON" '{"is_active":true}' >/dev/null
 
 t node_invalid_name
 ok "$(w w POST "$WT" /api/nodes '{"name":"","node_type":"generic","parent_id":null}' | jq -r .error)" invalid_name "bos ad"
+ok "$(w w POST "$WT" /api/nodes '{"name":"Kisa","node_type":"generic","parent_id":null}' | jq -r .error)" name_too_short "kisa ad"
 LONG=$(printf 'a%.0s' $(seq 1 201))
 ok "$(w w POST "$WT" /api/nodes "{\"name\":\"$LONG\",\"node_type\":\"generic\",\"parent_id\":null}" | jq -r .error)" invalid_name "201 karakter"
 
 t node_invalid_parent
-ok "$(w w POST "$WT" /api/nodes '{"name":"X","node_type":"generic","parent_id":"00000000-0000-0000-0000-000000000000"}' | jq -r .error)" invalid_parent "olmayan ust"
+ok "$(w w POST "$WT" /api/nodes '{"name":"Gecersiz Ust Dugum","node_type":"generic","parent_id":"00000000-0000-0000-0000-000000000000"}' | jq -r .error)" invalid_parent "olmayan ust"
 
 t node_types_no_team_pillar
 # Takim ve pillar agactan ayrildi (spec/22): o turle yazma invalid_type,
@@ -322,11 +347,11 @@ ok "$(DB "select count(*) from team_nodes where team_id='$SATIN'")" 2 "takimin d
 
 t node_activity_olgu
 AC0=$(DB "select count(*) from activity where verb='node_changed'")
-w w PATCH "$WT" "/api/nodes/$ULASIM" '{"name":"Ulaşım Planı","description":"detaylar"}' >/dev/null
+w w PATCH "$WT" "/api/nodes/$ULASIM" '{"name":"Ulaşım Planı","description":"Ulasim isleminin adimlari ve gerekli tedarik bilgileri ekipte paylasilir."}' >/dev/null
 ok "$(DB "select count(*) from activity where verb='node_changed'")" "$((AC0+2))" "iki alan degisti, iki satir"
 ok "$(DB "select detail from activity where verb='node_changed' and target_label='name' order by created_at desc limit 1")" '{"from":"Ulaşım & Konaklama","to":"Ulaşım Planı"}' "ad olgu, cumle degil"
-ok "$(DB "select detail from activity where verb='node_changed' and target_label='description' order by created_at desc limit 1")" '{"from":null,"to":"detaylar"}' "aciklama olgu"
-w w PATCH "$WT" "/api/nodes/$ULASIM" '{"name":"Ulaşım Planı","description":"detaylar"}' >/dev/null
+ok "$(DB "select detail from activity where verb='node_changed' and target_label='description' order by created_at desc limit 1")" '{"from":null,"to":"Ulasim isleminin adimlari ve gerekli tedarik bilgileri ekipte paylasilir."}' "aciklama olgu"
+w w PATCH "$WT" "/api/nodes/$ULASIM" '{"name":"Ulaşım Planı","description":"Ulasim isleminin adimlari ve gerekli tedarik bilgileri ekipte paylasilir."}' >/dev/null
 ok "$(DB "select count(*) from activity where verb='node_changed'")" "$((AC0+2))" "degismeyince iz yok"
 
 # null ACIKLAMAYI SILER, VERILMEYEN alan (name) degismez.
@@ -445,26 +470,28 @@ ok "$(DB "select detail from activity where chat_id='$TMC' and verb='member_role
 
 # --- takim ve pillar yazmalari (spec/22) ---------------------------------------
 t teams_crud
-R=$(w w POST "$WT" /api/teams '{"name":"Bakım","description":"Makine bakımı","color":"#0f766e"}')
+ok "$(w w POST "$WT" /api/teams '{"name":"Ekip","description":null,"color":null}' | jq -r .error)" name_too_short "kisa takim adi"
+ok "$(w w POST "$WT" /api/teams '{"name":"Uzun Takim","description":"kisa","color":null}' | jq -r .error)" description_too_short "kisa takim aciklamasi"
+R=$(w w POST "$WT" /api/teams '{"name":"Bakım Takımı","description":"Makine bakımını planlar ve ekipman arızalarını düzenli olarak izler.","color":"#0f766e"}')
 TID=$(jq -r .id <<<"$R")
 ok "$(jq -c 'keys' <<<"$R")" '["id"]' "201 { id }"
 ok "$(wc_ w POST "$WT" /api/teams '{"name":"Bakım2","description":null,"color":null}')" 201 "201"
 TID2=$(DB "select id from teams where name='Bakım2'")
 ok "$(DB "select count(*) from chats where id=(select chat_id from teams where id='$TID')")" 1 "sohbetiyle birlikte"
 ok "$(DB "select count(*) from activity where verb='team_created' and chat_id=(select chat_id from teams where id='$TID')")" 1 "team_created duvara"
-ok "$(w w POST "$WT" /api/teams '{"name":"Bakım","description":null,"color":null}' | jq -r .error)" name_taken "ayni ad"
-ok "$(wc_ w POST "$WT" /api/teams '{"name":"Bakım","description":null,"color":null}')" 409 "409"
+ok "$(w w POST "$WT" /api/teams '{"name":"Bakım Takımı","description":null,"color":null}' | jq -r .error)" name_taken "ayni ad"
+ok "$(wc_ w POST "$WT" /api/teams '{"name":"Bakım Takımı","description":null,"color":null}')" 409 "409"
 ok "$(w w POST "$WT" /api/teams '{"name":"  ","description":null,"color":null}' | jq -r .error)" invalid_name "bos ad"
 ok "$(wc_ n POST "$NT" /api/teams '{"name":"Yetkisiz","description":null,"color":null}')" 403 "manage_teams yoksa 403"
 ok "$(DB "select count(*) from teams where name='Yetkisiz'")" 0 "403 yazmaz"
 
 t teams_patch
 ok "$(wc_ w PATCH "$WT" "/api/teams/$TID" '{"name":"Bakım Ekibi"}')" 204 "ad"
-ok "$(DB "select name||'|'||description from teams where id='$TID'")" "Bakım Ekibi|Makine bakımı" "verilmeyen alan degismez"
+ok "$(DB "select name||'|'||description from teams where id='$TID'")" "Bakım Ekibi|Makine bakımını planlar ve ekipman arızalarını düzenli olarak izler." "verilmeyen alan degismez"
 w w PATCH "$WT" "/api/teams/$TID" '{"description":null,"color":"#111111"}' >/dev/null
 ok "$(DB "select coalesce(description,'NULL')||'|'||color from teams where id='$TID'")" "NULL|#111111" "null siler"
 ok "$(w w PATCH "$WT" "/api/teams/$TID" '{"name":"Maliye"}' | jq -r .error)" name_taken "ad cakismasi"
-ok "$(DB "select detail from activity where verb='team_renamed' and chat_id=(select chat_id from teams where id='$TID')")" '{"from":"Bakım","to":"Bakım Ekibi"}' "team_renamed olgusu"
+ok "$(DB "select detail from activity where verb='team_renamed' and chat_id=(select chat_id from teams where id='$TID')")" '{"from":"Bakım Takımı","to":"Bakım Ekibi"}' "team_renamed olgusu"
 ok "$(wc_ w PATCH "$WT" "/api/teams/00000000-0000-0000-0000-000000000000" '{"name":"x"}')" 404 "olmayan takim"
 ok "$(wc_ n PATCH "$NT" "/api/teams/$TID" '{"name":"x"}')" 403 "yetkisiz"
 
@@ -486,7 +513,7 @@ ok "$(wc_ w DELETE "$WT" "/api/teams/$TID/nodes/$MEKAN" '')" 204 "yoksa da 204"
 ok "$(DB "select string_agg(verb, ',' order by created_at) from activity where verb like 'team_node_%' and chat_id=(select chat_id from teams where id='$TID')")" "team_node_linked,team_node_unlinked" "kopma bir kez yazildi"
 
 t teams_delete
-TREC=$(w w POST "$WT" /api/records "{\"kind\":\"task\",\"title\":\"Takim silme\",\"unit_id\":\"$UNIT\",\"owner_id\":null,\"team_id\":\"$TID2\"}" | jq -r .id)
+TREC=$(w w POST "$WT" /api/records "{\"kind\":\"task\",\"title\":\"Takim silme\",\"description\":\"Takim silme davranisini dogrulamak icin olusturulan kayit aciklamasi.\",\"unit_id\":\"$UNIT\",\"owner_id\":null,\"team_id\":\"$TID2\"}" | jq -r .id)
 TCHAT=$(DB "select chat_id from teams where id='$TID2'")
 ok "$(wc_ n DELETE "$NT" "/api/teams/$TID2" '')" 403 "yetkisiz"
 ok "$(wc_ w DELETE "$WT" "/api/teams/$TID2" '')" 204 "sil"
@@ -496,11 +523,13 @@ ok "$(DB "select coalesce(team_id::text,'NULL') from records where id='$TREC'")"
 ok "$(wc_ w DELETE "$WT" "/api/teams/$TID2" '')" 404 "ikinci silme 404"
 
 t pillars_crud
-R=$(w w POST "$WT" /api/pillars '{"name":"Çevre","description":"Çevre pillar","color":"#0f766e"}')
+ok "$(w w POST "$WT" /api/pillars '{"name":"abc","description":null,"color":null}' | jq -r .error)" name_too_short "kisa pillar adi"
+ok "$(w w POST "$WT" /api/pillars '{"name":"Valid Pillar","description":"kisa","color":null}' | jq -r .error)" description_too_short "kisa pillar aciklamasi"
+R=$(w w POST "$WT" /api/pillars '{"name":"Çevre","description":"Çevre çalışmaları ve sürdürülebilirlik hedeflerini kulüp genelinde koordine eder.","color":"#0f766e"}')
 PID=$(jq -r .id <<<"$R"); PTID=$(jq -r .team_id <<<"$R")
 ok "$(jq -c 'keys' <<<"$R")" '["id","team_id"]' "201 { id, team_id }"
 ok "$(DB "select team_id from pillars where id='$PID'")" "$PTID" "ozel takim bagli"
-ok "$(DB "select name||'|'||description||'|'||color from teams where id='$PTID'")" "Çevre|Çevre pillar|#0f766e" "takim pillar'dan turedi"
+ok "$(DB "select name||'|'||description||'|'||color from teams where id='$PTID'")" "Çevre|Çevre çalışmaları ve sürdürülebilirlik hedeflerini kulüp genelinde koordine eder.|#0f766e" "takim pillar'dan turedi"
 ok "$(DB "select count(*) from chats where id=(select chat_id from teams where id='$PTID')")" 1 "sohbet var"
 ok "$(DB "select sort_order from pillars where id='$PID'")" 2 "sona eklenir"
 ok "$(w w POST "$WT" /api/pillars '{"name":"Çevre","description":null,"color":null}' | jq -r .error)" name_taken "pillar adi"
@@ -528,10 +557,10 @@ ok "$(wc_ w PATCH "$WT" "/api/pillars/00000000-0000-0000-0000-000000000000" '{"n
 ok "$(wc_ n PATCH "$NT" "/api/pillars/$PID" '{"name":"x"}')" 403 "yetkisiz"
 
 t records_pillar
-ok "$(w w POST "$WT" /api/records "{\"kind\":\"task\",\"title\":\"Pasif pillar\",\"unit_id\":\"$UNIT\",\"owner_id\":null,\"pillar_id\":\"$PID\"}" | jq -r .error)" invalid_pillar "pasif pillar"
-ok "$(w w POST "$WT" /api/records "{\"kind\":\"task\",\"title\":\"Yok pillar\",\"unit_id\":\"$UNIT\",\"owner_id\":null,\"pillar_id\":\"$UNIT\"}" | jq -r .error)" invalid_pillar "dugum kimligi pillar degil"
+ok "$(w w POST "$WT" /api/records "{\"kind\":\"task\",\"title\":\"Pasif pillar\",\"description\":\"Bu kayit pasif pillar secimini reddettigini dogrular.\",\"unit_id\":\"$UNIT\",\"owner_id\":null,\"pillar_id\":\"$PID\"}" | jq -r .error)" invalid_pillar "pasif pillar"
+ok "$(w w POST "$WT" /api/records "{\"kind\":\"task\",\"title\":\"Yok pillar\",\"description\":\"Bu kayit dugum kimliginin pillar yerine gecmedigini sinar.\",\"unit_id\":\"$UNIT\",\"owner_id\":null,\"pillar_id\":\"$UNIT\"}" | jq -r .error)" invalid_pillar "dugum kimligi pillar degil"
 w w PATCH "$WT" "/api/pillars/$PID" '{"is_active":true}' >/dev/null
-PREC=$(w w POST "$WT" /api/records "{\"kind\":\"task\",\"title\":\"Pillar kaydi\",\"unit_id\":\"$UNIT\",\"owner_id\":null,\"pillar_id\":\"$PID\"}" | jq -r .id)
+PREC=$(w w POST "$WT" /api/records "{\"kind\":\"task\",\"title\":\"Pillar kaydi\",\"description\":\"Aktif pillar kaydinin liste ve PATCH filtrelerini dogrulamak icin kullanilir.\",\"unit_id\":\"$UNIT\",\"owner_id\":null,\"pillar_id\":\"$PID\"}" | jq -r .id)
 ok "$(DB "select pillar_id from records where id='$PREC'")" "$PID" "aktif pillar"
 KALITE=$(DB "select id from pillars where name='Kalite'")
 # Kalite'nin iki tohum kaydindan biri (Kapak Ünitesi) node_hard_delete'te gitti.
@@ -598,7 +627,7 @@ ok "$(g n "/api/chats/$VCHAT/feed" | jq -r ".attachments[\"$MID\"][0].deleted")"
 # --- kart bloklari (R4-F01, F02, F12) -------------------------------------------
 # Iletisim dalinda kayit: Efe (Malzeme) ve Deniz (Uretim) duzenleyemez.
 t cards
-KR=$(w w POST "$WT" /api/records "{\"kind\":\"task\",\"title\":\"Kart denemesi\",\"unit_id\":\"$ILETISIM\",\"owner_id\":null,\"card_types\":[\"meeting\",\"pool\",\"media\"]}" | jq -r .id)
+KR=$(w w POST "$WT" /api/records "{\"kind\":\"task\",\"title\":\"Kart denemesi\",\"description\":\"Toplanti ve katilim bilgilerini gosteren kartlari burada test edecegiz.\",\"unit_id\":\"$ILETISIM\",\"owner_id\":null,\"card_types\":[\"meeting\",\"pool\",\"media\"]}" | jq -r .id)
 ok "$(g n "/api/records/$KR" | jq -r '[.access.can_edit, (.cards|map(.card_type)|join(","))]|join(" ")')" "false meeting,pool,media" "acilista kart secici"
 KM=$(g w "/api/records/$KR" | jq -r '.cards[]|select(.card_type=="meeting").id')
 KP=$(g w "/api/records/$KR" | jq -r '.cards[]|select(.card_type=="pool").id')
@@ -632,7 +661,7 @@ t record_owner_change
 # A2: sorumluyu mevcut sorumlu, admin ya da birimin dal editoru degistirir.
 # Deniz katilimci (can_edit) ama Tedarikci Secimi onun dali degil; Efe'nin
 # dali (Malzeme Temini) onu kapsiyor.
-OR=$(w w POST "$WT" /api/records "{\"kind\":\"task\",\"title\":\"Sorumlu denemesi\",\"unit_id\":\"$TEDARIK\",\"owner_id\":\"$SELIN\"}" | jq -r .id)
+OR=$(w w POST "$WT" /api/records "{\"kind\":\"task\",\"title\":\"Sorumlu denemesi\",\"description\":\"Kayit sorumlusu degistirme yetkisi bu icerik uzerinden sinanir.\",\"unit_id\":\"$TEDARIK\",\"owner_id\":\"$SELIN\"}" | jq -r .id)
 w w PUT "$WT" "/api/records/$OR/participants/$DENIZ" '' >/dev/null
 ok "$(w n PATCH "$NT" "/api/records/$OR" "$(OWN "\"$DENIZ\"")" | jq -r .error)" owner_change_denied "duzenleyen kendini sorumlu yapamaz"
 ok "$(wc_ n PATCH "$NT" "/api/records/$OR" "$(OWN null)")" 403 "sorumluyu bosaltamaz"
@@ -647,7 +676,7 @@ ok "$(DB "select owner_id from records where id='$OR'")" "$EFE" "son sorumlu"
 
 t event_owner_change
 # A2 etkinlikte: ayni kural + manage_events. Sorumlu ikize de yazilir.
-EV=$(w w POST "$WT" /api/events "{\"title\":\"Yetki etkinligi\",\"kind_id\":\"$ATOLYE\",\"unit_id\":\"$TEDARIK\"}")
+EV=$(w w POST "$WT" /api/events "{\"title\":\"Yetki etkinligi\",\"description\":\"Yetki degisikligi testinde kullanilan etkinlik aciklamasi.\",\"kind_id\":\"$ATOLYE\",\"unit_id\":\"$TEDARIK\"}")
 EVID=$(jq -r .id <<<"$EV"); EVREC=$(jq -r .record_id <<<"$EV")
 w w PUT "$WT" "/api/events/$EVID/participants/$DENIZ" '{}' >/dev/null
 ok "$(w n PATCH "$NT" "/api/events/$EVID" "$(OWN "\"$DENIZ\"")" | jq -r .error)" owner_change_denied "katilimci onaylayici olamaz"
@@ -663,7 +692,7 @@ ok "$(g c2 "/api/records/$VEKALET" | jq -r .access.can_edit)" false "atanmadan o
 w w POST "$WT" "/api/records/$VEKALET/actions" "{\"title\":\"Can'in eylemi\",\"owner_id\":\"$CAN\"}" >/dev/null
 ok "$(DB "select count(*) from record_participants where record_id='$VEKALET' and user_id='$CAN'")" 1 "acilista sahip katilimci"
 CA=$(DB "select id from actions where title='Can''in eylemi'")
-ok "$(w c2 PATCH "$CT" "/api/actions/$CA" '{"field":"status","value":"closed"}' | jq -r ".actions[]|select(.id==\"$CA\").status")" closed "sahip kendi eylemini kapatir"
+ok "$(w c2 PATCH "$CT" "/api/actions/$CA" '{"field":"status","value":"closed","closing_note":"Eylem tamamlandi ve sonuc ekip arkadaslariyla paylasildi."}' | jq -r ".actions[]|select(.id==\"$CA\").status")" closed "sahip kendi eylemini kapatir"
 w w PATCH "$WT" "/api/actions/$CA" "{\"field\":\"owner_id\",\"value\":\"$ZEYNEP\"}" >/dev/null
 ok "$(DB "select count(*) from record_participants where record_id='$VEKALET' and user_id='$ZEYNEP'")" 1 "atamada sahip katilimci"
 w w PATCH "$WT" "/api/actions/$CA" "{\"field\":\"owner_id\",\"value\":\"$CAN\"}" >/dev/null

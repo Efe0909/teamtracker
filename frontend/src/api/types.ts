@@ -93,6 +93,7 @@ export interface Meta {
   /** sort_order, sonra ad; pasifler de gelir. */
   pillars: MetaPillar[];
   nodes: MetaNode[];
+  external_off?: ("decision" | "resend" | "push")[];
 }
 
 // --- kayitlar --------------------------------------------------------------
@@ -133,6 +134,7 @@ export interface RecordFull {
   due_date: IsoDate | null;
   created_at: IsoTime;
   updated_at: IsoTime;
+  closing_note: string | null;
 }
 
 export interface Action {
@@ -143,6 +145,7 @@ export interface Action {
   due_date: IsoDate | null;
   created_at: IsoTime;
   resolved_at: IsoTime | null;
+  closing_note: string | null;
 }
 
 export interface RecordDetail {
@@ -258,6 +261,8 @@ export interface NewEvent {
   unit_id: Uuid;
   date?: IsoDate;
   priority?: Priority;
+  description: string;
+  quality_override?: boolean;
 }
 
 export type EventPatch =
@@ -401,7 +406,7 @@ export interface CardView {
 }
 
 /** PATCH /api/records/{id} — Rust `RecordPatch`, alan basina deger tipi. */
-export type RecordPatch =
+export type RecordPatch = (
   | { field: "status"; value: RecordStatus }
   | { field: "priority"; value: Priority }
   | { field: "owner_id"; value: Uuid | null }
@@ -411,13 +416,15 @@ export type RecordPatch =
   | { field: "due_date"; value: IsoDate | null }
   | { field: "title"; value: string }
   | { field: "description"; value: string | null }
-  | { field: "access_mode"; value: AccessMode };
+  | { field: "access_mode"; value: AccessMode }
+) & { closing_note?: string; quality_override?: boolean };
 
-export type ActionPatch =
+export type ActionPatch = (
   | { field: "status"; value: ActionStatus }
   | { field: "owner_id"; value: Uuid | null }
   | { field: "due_date"; value: IsoDate | null }
-  | { field: "title"; value: string };
+  | { field: "title"; value: string }
+) & { closing_note?: string; quality_override?: boolean };
 
 export interface NewRecord {
   kind: RecordKind;
@@ -432,6 +439,7 @@ export interface NewRecord {
   card_types: string[];
   /** Erisim kipi; kayit sayfasindan sonra da degisir. */
   access_mode: AccessMode;
+  quality_override?: boolean;
 }
 
 export interface NewAction {

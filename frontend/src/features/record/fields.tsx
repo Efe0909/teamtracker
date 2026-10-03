@@ -3,15 +3,15 @@
 // select yok (eski dialog kararinin amaci korunur, kutu kalabaligi gider).
 // Yetki API'den (`access`), on yuz karar vermez yalniz gosterir.
 
-import type { ReactNode } from "react";
-import { errorText } from "../../api/client";
+import { useState, type ReactNode } from "react";
+import { ApiError, errorText } from "../../api/client";
 import { usePatchRecord } from "../../api/hooks";
 import type { AccessMode, IsoDate, RecordDetail, RecordPatch } from "../../api/types";
 import { isDone, KIND, PRIORITY, PRIORITY_ORDER, STATUS, STATUS_ORDER } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
 import { DateField } from "../../ui/DateField";
 import { Icon, type IconName } from "../../ui/icons";
-import { cx, Due, Picker, PriorityTag, Status, TeamName, Tip, useToast, Who } from "../../ui/ui";
+import { Button, cx, Dialog, Due, Picker, PriorityTag, Status, TeamName, Tip, ui, useToast, Who } from "../../ui/ui";
 import { NodeTreePicker } from "../nodes/NodePicker";
 import { ACCESS } from "./Join";
 import s from "./record.module.css";
@@ -49,6 +49,15 @@ export function Properties({ d }: { d: RecordDetail }) {
 
   // Kapatma engeli ONDEN soylenir, reddedilince degil (spec/17 I5).
   const openActs = d.actions.filter((a) => !isDone(a.status)).length;
+  const [closing, setClosing] = useState(false);
+  const [closingNote, setClosingNote] = useState("");
+  const [qualityReasons, setQualityReasons] = useState<string[] | null>(null);
+  const submitClose = (quality_override = false) => m.mutate(
+    { field: "status", value: "closed", closing_note: closingNote, quality_override },
+    { onSuccess: () => { setClosing(false); setClosingNote(""); },
+      onError: (e) => e instanceof ApiError && e.code === "low_quality" ? setQualityReasons(e.reasons)
+        : toast({ text: errorText(e), error: true }) },
+  );
 
   return (
     <div className={s.props}>
@@ -60,7 +69,8 @@ export function Properties({ d }: { d: RecordDetail }) {
             render: <Status status={v} />,
             ...(v === "closed" && openActs > 0 ? { disabled: true, hint: `${openActs} açık eylem` } : {}),
           }))}
-          onChange={(v) => save({ field: "status", value: v }, { field: "status", value: r.status })} />
+          onChange={(v) => v === "closed" && r.status !== "closed"
+            ? setClosing(true) : save({ field: "status", value: v }, { field: "status", value: r.status })} />
       </Row>
       <Row icon="user" label="Sorumlu">
         <Picker look="prop" label="Sorumlu" disabled={ro} busy={m.isPending} value={r.owner_id}
@@ -120,6 +130,27 @@ export function Properties({ d }: { d: RecordDetail }) {
       <Row icon="inbox" label="Tür">
         <span className={s.propStatic}>{KIND[r.kind]}</span>
       </Row>
+      <Dialog open={closing} onClose={() => setClosing(false)} title="Kaydı kapat">
+        <div className={ui.formStack}>
+          <label className={ui.field}>
+            <span>Kapanış notu</span>
+            <textarea className={ui.input} rows={5} value={closingNote} onChange={(e) => setClosingNote(e.target.value)} />
+            <small className={ui.fieldHint}>{Array.from(closingNote.trim()).length}/30 karakter</small>
+          </label>
+          {L.meta.external_off?.includes("decision") && <p className={ui.fieldHint}>Kalite kontrolü kapalı (dış servis devre dışı)</p>}
+          <div className={ui.dact}>
+            <Button onClick={() => setClosing(false)}>Vazgeç</Button>
+            <Button variant="primary" disabled={m.isPending || Array.from(closingNote.trim()).length < 30} onClick={() => submitClose()}>Kapat</Button>
+          </div>
+        </div>
+        <Dialog open={qualityReasons !== null} onClose={() => setQualityReasons(null)} title="Kalite kontrolü uyarısı">
+          <p>Not zayıf bulundu: {(qualityReasons ?? []).map((r: string) => ({ closing_justified: "kapanış gerekçesi" }[r as "closing_justified"] ?? r)).join(", ")}.</p>
+          <div className={ui.dact}>
+            <Button onClick={() => setQualityReasons(null)}>Düzenle</Button>
+            <Button variant="primary" disabled={m.isPending} onClick={() => { setQualityReasons(null); submitClose(true); }}>Yine de gönder</Button>
+          </div>
+        </Dialog>
+      </Dialog>
     </div>
   );
 }
