@@ -375,12 +375,15 @@ export function Popover(props: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   align?: "start" | "end";
+  /** Acilista odagi kendin ver (preventDefault) — takvim gun dugmesine odaklanir. */
+  onOpenAutoFocus?: (e: Event) => void;
 }) {
   return (
     <RP.Root open={props.open} onOpenChange={props.onOpenChange}>
       <RP.Trigger asChild>{props.trigger}</RP.Trigger>
       <RP.Portal>
-        <RP.Content className={cx(s.pop, s.popPad)} align={props.align ?? "start"} sideOffset={6} collisionPadding={12}>
+        <RP.Content className={cx(s.pop, s.popPad)} align={props.align ?? "start"} sideOffset={6} collisionPadding={12}
+          {...(props.onOpenAutoFocus !== undefined ? { onOpenAutoFocus: props.onOpenAutoFocus } : {})}>
           {props.children}
         </RP.Content>
       </RP.Portal>

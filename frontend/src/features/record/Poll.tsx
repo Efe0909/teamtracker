@@ -6,6 +6,7 @@ import { errorText, upload } from "../../api/client";
 import { useCardWrite } from "../../api/hooks";
 import type { Attachment, CardView, PollOption, Uuid } from "../../api/types";
 import { useLookup } from "../../lib/lookup";
+import { DateTimeField } from "../../ui/DateField";
 import { Icon } from "../../ui/icons";
 import { Avatar, Button, cx, Dialog, ui, useToast } from "../../ui/ui";
 import s from "./record.module.css";
@@ -215,10 +216,11 @@ export function PollForm({ c, recordId, onClose }: { c?: CardView; recordId?: Uu
           </p>
         )}
         {timerOn && (
-          <label className={ui.field}>
+          <div className={ui.field}>
             <span>Bitiş</span>
-            <input className={ui.input} type="datetime-local" value={closesAt} onChange={(e) => setClosesAt(e.target.value)} />
-          </label>
+            <DateTimeField aria-label="Bitiş" placeholder="Bitiş zamanı seç" value={closesAt === "" ? null : closesAt}
+              onChange={(v) => setClosesAt(v ?? "")} />
+          </div>
         )}
         <div className={ui.dact}>
           <Button onClick={onClose}>Vazgeç</Button>

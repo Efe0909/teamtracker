@@ -10,7 +10,10 @@ import type { Material, MaterialPatch, Priority, Uuid } from "../../api/types";
 import r from "../../features/record/record.module.css";
 import { ago, formatDay, PRIORITY } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
+import { useSort, type Accessors } from "../../lib/sort";
+import { DateField } from "../../ui/DateField";
 import { Icon, type IconName } from "../../ui/icons";
+import { SortTh } from "../../ui/SortTh";
 import { Button, cx, IconButton, Menu, MenuItem, MenuSep, ui, useToast } from "../../ui/ui";
 import s from "./dashboard.module.css";
 import { bestOffer, MATERIAL_TYPE, materialSteps, purchaseHealth, type PurchaseHealth } from "./eventModel";
@@ -147,6 +150,12 @@ function Row({ m, canEdit, busy, run, open, onToggle }: {
   );
 }
 
+const PROVIDER_SORT: Accessors<Material["providers"][number]> = {
+  contact: (p) => p.contact,
+  price: (p) => p.price,
+  arrival: (p) => p.arrival_date,
+};
+
 function Providers({ m, canEdit, busy, run, best }: {
   m: Material; canEdit: boolean; busy: boolean; run: Run; best: number | null;
 }) {
@@ -154,16 +163,22 @@ function Providers({ m, canEdit, busy, run, best }: {
   const [price, setPrice] = useState("");
   const [date, setDate] = useState("");
   const link = (c: string) => /^https?:\/\//.test(c);
+  const sorter = useSort("providers", m.providers, PROVIDER_SORT);
   return (
     <div className={s.mDetail}>
       {m.notes !== null && <p className={r.muted}>{m.notes}</p>}
       {m.providers.length === 0 ? <span className={r.muted}>Tedarikçi yok.</span> : (
         <table className={s.mProv}>
           <thead>
-            <tr><th scope="col">Tedarikçi</th><th scope="col">Fiyat</th><th scope="col">Varış</th>{canEdit && <th />}</tr>
+            <tr>
+              <SortTh sorter={sorter} k="contact" label="Tedarikçi" />
+              <SortTh sorter={sorter} k="price" label="Fiyat" />
+              <SortTh sorter={sorter} k="arrival" label="Varış" />
+              {canEdit && <th />}
+            </tr>
           </thead>
           <tbody>
-            {m.providers.map((p) => (
+            {sorter.rows.map((p) => (
               <tr key={p.id} data-best={p.price !== null && p.price === best}>
                 <td>{link(p.contact) ? <a href={p.contact} target="_blank" rel="noopener noreferrer">{p.contact.replace(/^https?:\/\/(www\.)?/, "")}</a> : p.contact}</td>
                 <td>{p.price === null ? "—" : money.format(p.price)}</td>
@@ -190,7 +205,8 @@ function Providers({ m, canEdit, busy, run, best }: {
             placeholder="Bağlantı ya da telefon" aria-label="Tedarikçi" />
           <input className={ui.input} type="number" min={0} step="0.01" value={price} onChange={(e) => setPrice(e.target.value)}
             placeholder="Fiyat ₺" aria-label="Fiyat" />
-          <input className={ui.input} type="date" value={date} onChange={(e) => setDate(e.target.value)} aria-label="Varış tarihi" />
+          <DateField aria-label="Varış tarihi" placeholder="Varış tarihi" value={date === "" ? null : date}
+            onChange={(v) => setDate(v ?? "")} clearable />
           {/* `required` yerine kapali dugme: sifirlanan bos alan :invalid kirmizisinda kalmasin. */}
           <Button size="sm" type="submit" disabled={busy || contact.trim() === ""}><Icon name="plus" size={14} /> Tedarikçi</Button>
         </form>

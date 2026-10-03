@@ -1611,32 +1611,6 @@ a.row:hover {
   color: var(--acc-strong);
   white-space: nowrap;
 }
-/* siralanir sutun basligi */
-.sortBtn {
-  appearance: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 0;
-  border: 0;
-  background: none;
-  font: inherit;
-  color: inherit;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.sortBtn > svg {
-  opacity: 0;
-}
-.sortBtn:hover > svg {
-  opacity: 0.5;
-}
-.sortBtn[data-on="true"] {
-  color: var(--txt);
-}
-.sortBtn[data-on="true"] > svg {
-  opacity: 1;
-}
 .matrixLegend {
   display: flex;
   align-items: center;
