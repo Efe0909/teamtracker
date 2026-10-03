@@ -230,7 +230,20 @@ async fn reply(st: &AppState, me: &User, id: Uuid) -> Result<Json<Detail>> {
 pub async fn get(
     State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>,
 ) -> Result<Json<Detail>> {
-    reply(&st, &me, common::id(&raw)?).await
+    let id = common::id(&raw)?;
+    require_visible(&st, &me, id).await?;
+    reply(&st, &me, id).await
+}
+
+/// Ikiz gizliyse ve ben uye degilsem etkinlik de kapali: ikizin sohbeti gibi
+/// 403 (spec/75 A4). Ayrinti, OTF ve .docx bunu sorar.
+pub(crate) async fn require_visible(st: &AppState, me: &User, id: Uuid) -> Result<()> {
+    let ev = load(&st.pool, id).await?;
+    let twin = records::load(&st.pool, ev.record_id).await?;
+    if records::is_restricted(st, me, &twin).await? {
+        return Err(AppError::Forbidden);
+    }
+    Ok(())
 }
 
 /// Etkinlik + ikizi; ikizi duzenleyemeyen ve `manage_events`'i olmayan 403.
@@ -422,6 +435,12 @@ pub async fn patch(
         }
         EventPatch::OwnerId(v) => {
             records::check_user(&st.pool, v).await?;
+            // Sorumlu onaylayicidir: her duzenleyen kendini atayamaz (spec/75 A2).
+            if !(records::may_set_owner(&st, &me, &twin, v).await?
+                || common::has_scope(&st, &me, "manage_events").await?)
+            {
+                return Err(AppError::Denied("owner_change_denied"));
+            }
             set("update events set owner_id = $2, updated_at = now() where id = $1")
                 .bind(v).execute(&mut *tx).await?;
             sqlx::query("update records set owner_id = $2 where id = $1")

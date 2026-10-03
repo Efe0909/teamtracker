@@ -360,6 +360,31 @@ ok "$(wc_ e PATCH "$ET" "/api/admin/users/$DENIZ" "$(U admin true)")" 403 "manag
 ok "$(wc_ e PATCH "$ET" "/api/admin/users/$SELIN" "$(U active false)")" 403 "manage_users admini kapatamaz"
 ok "$(w w PATCH "$WT" "/api/admin/users/$EFE" "$(U grant_scope '"yok_boyle"')" | jq -r .error)" invalid_scope "gecersiz kapsam"
 
+t admin_grant_limits
+# spec/75 A1: admin olmayan manage_users yalniz KENDINDE olani verir ve geri
+# alir, manage_users'i hic, kendi satirina hic dokunmaz. Admin sinirsiz.
+# Efe: edit_nodes + manage_users + Malzeme Temini dali.
+ZEYNEP=$(DB "select id from users where name='Zeynep'")
+SEA=$(DB "select count(*) from security_events where event_type='permission_denied' and actor_id='$EFE'")
+ok "$(w e PATCH "$ET" "/api/admin/users/$EFE" "$(U grant_scope '"manage_teams"')" | jq -r .error)" self_permissions "kendine scope veremez"
+ok "$(w e PATCH "$ET" "/api/admin/users/$EFE" "$(U revoke_scope '"edit_nodes"')" | jq -r .error)" self_permissions "kendinden de alamaz"
+ok "$(wc_ e PATCH "$ET" "/api/admin/users/$EFE" "$(U active false)")" 403 "kendini kapatamaz (403)"
+ok "$(w e PATCH "$ET" "/api/admin/users/$ZEYNEP" "$(U grant_scope '"manage_teams"')" | jq -r .error)" grant_not_held "kendinde olmayan scope"
+ok "$(w e PATCH "$ET" "/api/admin/users/$DENIZ" "$(U revoke_scope '"manage_teams"')" | jq -r .error)" grant_not_held "veremeyecegini alamaz"
+ok "$(w e PATCH "$ET" "/api/admin/users/$ZEYNEP" "$(U grant_scope '"manage_users"')" | jq -r .error)" grant_manage_users "manage_users verilemez"
+ok "$(w e PATCH "$ET" "/api/admin/users/$ZEYNEP" "$(U grant_node "\"$URETIM\"")" | jq -r .error)" grant_not_held "kendi dali disi"
+ok "$(DB "select count(*) from security_events where event_type='permission_denied' and actor_id='$EFE'")" "$((SEA+7))" "her red denetimde"
+ok "$(DB "select count(*) from user_scopes where (user_id='$ZEYNEP' and scope in ('manage_teams','manage_users')) or (user_id='$EFE' and scope='manage_teams')")" 0 "reddedilen yazilmadi"
+ok "$(wc_ e PATCH "$ET" "/api/admin/users/$ZEYNEP" "$(U grant_scope '"edit_nodes"')")" 200 "kendinde olani verir"
+ok "$(wc_ e PATCH "$ET" "/api/admin/users/$ZEYNEP" "$(U grant_node "\"$TEDARIK\"")")" 200 "kendi dalinin altini verir"
+ok "$(DB "select count(*) from user_node_scopes where user_id='$ZEYNEP' and node_id='$TEDARIK'")" 1 "dal yazildi"
+ok "$(wc_ e PATCH "$ET" "/api/admin/users/$ZEYNEP" "$(U revoke_node "\"$TEDARIK\"")")" 200 "kendi dalinda geri alir"
+ok "$(wc_ e PATCH "$ET" "/api/admin/users/$ZEYNEP" "$(U revoke_scope '"edit_nodes"')")" 200 "kendinde olani geri alir"
+ok "$(wc_ w PATCH "$WT" "/api/admin/users/$SELIN" "$(U grant_scope '"manage_teams"')")" 200 "admin kendi satirina yazar"
+ok "$(wc_ w PATCH "$WT" "/api/admin/users/$ZEYNEP" "$(U grant_node "\"$URETIM\"")")" 200 "admin her dali verir"
+w w PATCH "$WT" "/api/admin/users/$SELIN" "$(U revoke_scope '"manage_teams"')" >/dev/null
+w w PATCH "$WT" "/api/admin/users/$ZEYNEP" "$(U revoke_node "\"$URETIM\"")" >/dev/null
+
 t admin_users
 ok "$(w e POST "$ET" /api/admin/users '{"email":" Yeni@X.org ","name":"Yeni"}' | jq -r '.people[]|select(.email=="yeni@x.org").name')" Yeni "davet, e-posta kucuk harf"
 ok "$(w e POST "$ET" /api/admin/users '{"email":"YENI@x.org","name":"Iki"}' | jq -r .error)" user_exists "ayni e-posta"
@@ -381,7 +406,15 @@ t admin_roles
 ROL=$(w w POST "$WT" /api/admin/roles '{"name":"Yapici","scopes":["edit_deadline"]}' | jq -r '.roles[]|select(.name=="Yapici").id')
 ok "$(w w POST "$WT" /api/admin/roles '{"name":"Yapici","scopes":[]}' | jq -r .error)" role_exists "ayni ad"
 ok "$(w w POST "$WT" /api/admin/roles '{"name":"Z","scopes":["yok"]}' | jq -r .error)" invalid_scope "gecersiz kapsam"
-w e PATCH "$ET" "/api/admin/users/$DENIZ" "$(U grant_role "\"$ROL\"")" >/dev/null   # manage_users ATAYABILIR
+# A1: rolun BUTUN scope'lari atayanda olmali; manage_users iceren rol hic.
+ok "$(w e PATCH "$ET" "/api/admin/users/$DENIZ" "$(U grant_role "\"$ROL\"")" | jq -r .error)" grant_not_held "rolun scope'u atayanda yok"
+w w PATCH "$WT" "/api/admin/users/$EFE" "$(U grant_scope '"edit_deadline"')" >/dev/null
+ok "$(wc_ e PATCH "$ET" "/api/admin/users/$DENIZ" "$(U grant_role "\"$ROL\"")")" 200 "manage_users kendinde olani ATAYABILIR"
+ROLMU=$(w w POST "$WT" /api/admin/roles '{"name":"Kisi yonetimi","scopes":["manage_users"]}' | jq -r '.roles[]|select(.name=="Kisi yonetimi").id')
+ok "$(w e PATCH "$ET" "/api/admin/users/$ZEYNEP" "$(U grant_role "\"$ROLMU\"")" | jq -r .error)" grant_manage_users "manage_users iceren rol verilemez"
+ok "$(wc_ w PATCH "$WT" "/api/admin/users/$ZEYNEP" "$(U grant_role "\"$ROLMU\"")")" 200 "admin verir"
+ok "$(w e PATCH "$ET" "/api/admin/users/$ZEYNEP" "$(U revoke_role "\"$ROLMU\"")" | jq -r .error)" grant_manage_users "manage_users rolunu geri de alamaz"
+w w DELETE "$WT" "/api/admin/roles/$ROLMU" '' >/dev/null
 w w PATCH "$WT" "/api/admin/users/$DENIZ" "$(U grant_scope '"create_tags"')" >/dev/null
 w w PATCH "$WT" "/api/admin/roles/$ROL" '{"scopes":["edit_deadline","create_tags"]}' >/dev/null
 ok "$(g w /api/admin | jq -c ".people[]|select(.id==\"$DENIZ\").scopes[]|select(.name==\"create_tags\")|[.direct,(.via_roles|length)]")" "[true,1]" "kaynak: dogrudan + rol"
@@ -588,6 +621,89 @@ ok "$(w w POST "$WT" "/api/cards/$KMD/attachments" "{\"attachment_ids\":[\"$KA\"
 ok "$(w w POST "$WT" "/api/cards/$KM/attachments" "{\"attachment_ids\":[\"$KA\"]}" | jq -r .error)" invalid_card_type "yalniz medya kartina"
 ok "$(w w DELETE "$WT" "/api/cards/$KMD" '' | jq -r '.cards|length')" 2 "kart silinir"
 ok "$(DB "select count(*) from card_attachments where attachment_id='$KA'")" 0 "ek bagsiz kalir (supurmeye)"
+
+# --- yetki kararlari (spec/75 §6, §7; 2026-10-03) -------------------------------
+CAN=$(DB "select id from users where name='Can'")
+curl -s -c "$J/c2" -o /dev/null "$B/api/auth/dev-login?user_id=$CAN"
+CT=$(curl -s -b "$J/c2" "$B/api/me" | jq -r .csrf)
+OWN(){ printf '{"field":"owner_id","value":%s}' "$1"; }
+
+t record_owner_change
+# A2: sorumluyu mevcut sorumlu, admin ya da birimin dal editoru degistirir.
+# Deniz katilimci (can_edit) ama Tedarikci Secimi onun dali degil; Efe'nin
+# dali (Malzeme Temini) onu kapsiyor.
+OR=$(w w POST "$WT" /api/records "{\"kind\":\"task\",\"title\":\"Sorumlu denemesi\",\"unit_id\":\"$TEDARIK\",\"owner_id\":\"$SELIN\"}" | jq -r .id)
+w w PUT "$WT" "/api/records/$OR/participants/$DENIZ" '' >/dev/null
+ok "$(w n PATCH "$NT" "/api/records/$OR" "$(OWN "\"$DENIZ\"")" | jq -r .error)" owner_change_denied "duzenleyen kendini sorumlu yapamaz"
+ok "$(wc_ n PATCH "$NT" "/api/records/$OR" "$(OWN null)")" 403 "sorumluyu bosaltamaz"
+ok "$(DB "select owner_id from records where id='$OR'")" "$SELIN" "degismedi"
+ok "$(wc_ w PATCH "$WT" "/api/records/$OR" "$(OWN null)")" 200 "admin bosaltir"
+ok "$(w n PATCH "$NT" "/api/records/$OR" "$(OWN "\"$ZEYNEP\"")" | jq -r .error)" owner_change_denied "sorumlusuzu baskasina veremez"
+ok "$(wc_ n PATCH "$NT" "/api/records/$OR" "$(OWN "\"$DENIZ\"")")" 200 "sorumlusuz kaydi kendine alir"
+ok "$(wc_ n PATCH "$NT" "/api/records/$OR" "$(OWN "\"$ZEYNEP\"")")" 200 "sorumlu devreder"
+ok "$(w n PATCH "$NT" "/api/records/$OR" "$(OWN "\"$DENIZ\"")" | jq -r .error)" owner_change_denied "devreden geri alamaz"
+ok "$(wc_ e PATCH "$ET" "/api/records/$OR" "$(OWN "\"$EFE\"")")" 200 "dal editoru degistirir"
+ok "$(DB "select owner_id from records where id='$OR'")" "$EFE" "son sorumlu"
+
+t event_owner_change
+# A2 etkinlikte: ayni kural + manage_events. Sorumlu ikize de yazilir.
+EV=$(w w POST "$WT" /api/events "{\"title\":\"Yetki etkinligi\",\"kind_id\":\"$ATOLYE\",\"unit_id\":\"$TEDARIK\"}")
+EVID=$(jq -r .id <<<"$EV"); EVREC=$(jq -r .record_id <<<"$EV")
+w w PUT "$WT" "/api/events/$EVID/participants/$DENIZ" '{}' >/dev/null
+ok "$(w n PATCH "$NT" "/api/events/$EVID" "$(OWN "\"$DENIZ\"")" | jq -r .error)" owner_change_denied "katilimci onaylayici olamaz"
+DB "insert into user_scopes (user_id,scope) values ('$DENIZ','manage_events')" >/dev/null
+ok "$(wc_ n PATCH "$NT" "/api/events/$EVID" "$(OWN "\"$DENIZ\"")")" 200 "manage_events degistirir"
+DB "delete from user_scopes where user_id='$DENIZ' and scope='manage_events'" >/dev/null
+ok "$(DB "select owner_id from records where id='$EVREC'")" "$DENIZ" "ikize yazildi"
+ok "$(wc_ n PATCH "$NT" "/api/events/$EVID" "$(OWN "\"$SELIN\"")")" 200 "sorumlu devreder"
+
+t action_owner_participant
+# K1: eyleme atanan kayda katilimci olur, eylemini kapatabilir (A3 de kapanir).
+ok "$(g c2 "/api/records/$VEKALET" | jq -r .access.can_edit)" false "atanmadan once duzenleyemez"
+w w POST "$WT" "/api/records/$VEKALET/actions" "{\"title\":\"Can'in eylemi\",\"owner_id\":\"$CAN\"}" >/dev/null
+ok "$(DB "select count(*) from record_participants where record_id='$VEKALET' and user_id='$CAN'")" 1 "acilista sahip katilimci"
+CA=$(DB "select id from actions where title='Can''in eylemi'")
+ok "$(w c2 PATCH "$CT" "/api/actions/$CA" '{"field":"status","value":"closed"}' | jq -r ".actions[]|select(.id==\"$CA\").status")" closed "sahip kendi eylemini kapatir"
+w w PATCH "$WT" "/api/actions/$CA" "{\"field\":\"owner_id\",\"value\":\"$ZEYNEP\"}" >/dev/null
+ok "$(DB "select count(*) from record_participants where record_id='$VEKALET' and user_id='$ZEYNEP'")" 1 "atamada sahip katilimci"
+w w PATCH "$WT" "/api/actions/$CA" "{\"field\":\"owner_id\",\"value\":\"$CAN\"}" >/dev/null
+ok "$(DB "select count(*) from record_participants where record_id='$VEKALET' and user_id='$CAN'")" 1 "idempotent"
+ok "$(DB "select count(*) from actions a where owner_id is not null and not exists (select 1 from record_participants p where p.record_id=a.record_id and p.user_id=a.owner_id)")" 0 "katilimci olmayan eylem sahibi yok"
+
+t card_request_mode
+# K5: request kipinde kart cevabi ve oy yalniz onayli uyeye ve duzenleyene.
+w w PATCH "$WT" "/api/records/$KR" '{"field":"access_mode","value":"request"}' >/dev/null
+ok "$(wc_ n PUT "$NT" "/api/cards/$KP/signup" '{"answer":"yes"}')" 403 "onaysiz katilamaz"
+ok "$(wc_ n PUT "$NT" "/api/cards/$KP/vote" '{"options":[0]}')" 403 "onaysiz oy veremez"
+ok "$(g n "/api/records/$KR" | jq '.cards|length')" 2 "okuma acik (gizli degil)"
+ok "$(wc_ w PUT "$WT" "/api/cards/$KP/signup" '{"answer":"yes"}')" 200 "duzenleyen katilir"
+w n POST "$NT" "/api/records/$KR/join" '' >/dev/null
+w w POST "$WT" "/api/records/$KR/join-requests/$DENIZ" '{"approve":true}' >/dev/null
+ok "$(wc_ n PUT "$NT" "/api/cards/$KP/signup" '{"answer":"yes"}')" 200 "onayli uye katilir"
+ok "$(w n PUT "$NT" "/api/cards/$KP/vote" '{"options":[0]}' | jq -r .error)" invalid_card_type "onayli uye oy kapisindan gecer"
+w w PATCH "$WT" "/api/records/$KR" '{"field":"access_mode","value":"public"}' >/dev/null
+
+t private_event_and_attachments
+# A4: ikizi gizli etkinlik, ikizin sohbeti gibi uye olmayana 403.
+# A5: gizli kayda bagli ek de; profil fotografi yine herkese.
+w w PATCH "$WT" "/api/records/$EVREC" '{"field":"access_mode","value":"private"}' >/dev/null
+ok "$(code -b "$J/bos" "$B/api/events/$EVID")" 403 "etkinlik ayrintisi"
+ok "$(code -b "$J/bos" "$B/api/events/$EVID/otf")" 403 "OTF"
+ok "$(code -b "$J/bos" "$B/api/events/$EVID/otf.docx")" 403 "docx"
+ok "$(code -b "$J/n" "$B/api/events/$EVID")" 200 "katilimci gorur"
+ok "$(code -b "$J/n" "$B/api/events/$EVID/otf")" 200 "katilimci OTF gorur"
+EVCHAT=$(DB "select chat_id from records where id='$EVREC'")
+PA=$(up w "$WT" "$J/px.png" | jq -r .id)
+w w POST "$WT" "/api/chats/$EVCHAT/messages" "{\"body\":\"\",\"attachment_ids\":[\"$PA\"]}" >/dev/null
+ok "$(code -b "$J/bos" "$B/api/attachments/$PA")" 403 "gizli sohbetteki ek"
+ok "$(code -b "$J/bos" "$B/api/attachments/$PA/thumb")" 403 "kucuk resmi de"
+ok "$(code -b "$J/n" "$B/api/attachments/$PA")" 200 "uye indirir"
+AV=$(up w "$WT" "$J/px.png" | jq -r .id)
+ok "$(code -b "$J/bos" "$B/api/attachments/$AV")" 200 "bagsiz (profil adayi) ek herkese"
+w w PATCH "$WT" /api/me/profile "{\"avatar_id\":\"$PA\"}" >/dev/null
+ok "$(code -b "$J/bos" "$B/api/attachments/$PA/thumb")" 200 "profil fotografi gizli sohbetten gelse de herkese"
+w w PATCH "$WT" "/api/records/$EVREC" '{"field":"access_mode","value":"public"}' >/dev/null
+ok "$(code -b "$J/bos" "$B/api/events/$EVID")" 200 "ikiz acilinca gorunur"
 
 # --- Google kipi -------------------------------------------------------------
 t google_me

@@ -6,7 +6,8 @@
 //! ilerleme gosterebilir.
 //!
 //! Izin (Python `attachments.py` son hali):
-//!   gorme    -> oturumu olan herkes (kartlar gibi, KNOW-47)
+//!   gorme    -> oturumu olan herkes (kartlar gibi, KNOW-47); gizli kayda
+//!               bagli ek yalniz uyeye (spec/75 A5)
 //!   silme    -> yukleyen ya da admin; MESAJ KALIR, gorsel mezar tasi olur
 //!   etiket   -> `tag_media` + ekin durdugu sohbete/karta KATILIM;
 //!               YENI etiket adi ayrica `create_tags`
@@ -27,7 +28,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::{
-    api::common::{self, Body},
+    api::{common::{self, Body}, records},
     auth::CurrentUser,
     db::scope,
     error::{AppError, Result},
@@ -228,8 +229,23 @@ async fn blob(st: &AppState, id: Uuid) -> Result<Blob> {
         .bind(id).fetch_optional(&st.pool).await?.ok_or(AppError::NotFound)
 }
 
-async fn serve(st: &AppState, raw: &str, thumb: bool) -> Result<Response> {
-    let b = blob(st, common::id(raw)?).await?;
+/// Gizli kayda (sohbet ya da kart) bagli ek yalniz uyeye (spec/75 A5). Bagsiz
+/// ve takim duvari ekleri herkese: `place` onlarda kayit bulmaz. Profil
+/// fotografi ve takim kapagi gizli sohbetteki bir ek olsa da herkese acik.
+async fn serve(st: &AppState, me: &User, raw: &str, thumb: bool) -> Result<Response> {
+    let id = common::id(raw)?;
+    let b = blob(st, id).await?;
+    if let (Some(rec), _) = place(st, id).await? {
+        if records::is_restricted(st, me, &rec).await? {
+            let face: bool = sqlx::query_scalar(
+                "select exists(select 1 from users where avatar_id = $1)
+                     or exists(select 1 from teams where banner_id = $1)")
+                .bind(id).fetch_one(&st.pool).await?;
+            if !face {
+                return Err(AppError::Forbidden);
+            }
+        }
+    }
     let root = std::path::Path::new(&b.mount_path).join(&b.media_prefix);
     let (key, mime) = match (thumb, &b.thumb_key) {
         (true, Some(t)) => (t.as_str(), media::THUMB_MIME),
@@ -249,12 +265,12 @@ async fn serve(st: &AppState, raw: &str, thumb: bool) -> Result<Response> {
     ).into_response())
 }
 
-pub async fn get(State(st): State<AppState>, CurrentUser(_): CurrentUser, Path(raw): Path<String>) -> Result<Response> {
-    serve(&st, &raw, false).await
+pub async fn get(State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>) -> Result<Response> {
+    serve(&st, &me, &raw, false).await
 }
 
-pub async fn thumb(State(st): State<AppState>, CurrentUser(_): CurrentUser, Path(raw): Path<String>) -> Result<Response> {
-    serve(&st, &raw, true).await
+pub async fn thumb(State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>) -> Result<Response> {
+    serve(&st, &me, &raw, true).await
 }
 
 // --- sil -------------------------------------------------------------------

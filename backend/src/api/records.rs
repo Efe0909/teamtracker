@@ -222,6 +222,37 @@ pub async fn get(
     Ok(Json(detail_of(&st, &me, rec).await?))
 }
 
+/// Sorumluyu kim degistirir (spec/75 A2). Cagiran `can_edit`'i zaten sordu.
+/// Sorumlu decider ve etkinlik onaylayicisi oldugu icin her duzenleyene acik
+/// degil: mevcut sorumlu, admin ya da kaydin biriminde dal editoru
+/// (`edit_nodes` + dal, `NodeAccess`). Istisna: sorumlusuz kaydi duzenleyen
+/// herkes KENDINE alabilir (spec/70 §3 kural 3). Etkinlikte `manage_events`
+/// ayrica gecer (events.rs).
+pub(crate) async fn may_set_owner(st: &AppState, me: &User, rec: &Record, to: Option<Uuid>) -> Result<bool> {
+    if to == rec.owner_id || me.is_admin || rec.owner_id == Some(me.id) {
+        return Ok(true);
+    }
+    if rec.owner_id.is_none() && to == Some(me.id) {
+        return Ok(true);
+    }
+    let access = scope::NodeAccess::load(&st.pool, me).await?;
+    Ok(access.on(&common::tree(st), rec.unit_id, scope::NodeScope::Edit))
+}
+
+/// Eylemin sorumlusu kayda katilimci olur (spec/75 K1): eylemi kapatabilsin,
+/// gizli kayitta bildirimle sohbeti okuyup ucta 403 almasin (A3). IDEMPOTENT.
+async fn add_action_owner(
+    tx: &mut sqlx::Transaction<'_, Postgres>, record_id: Uuid, owner: Option<Uuid>, by: Uuid,
+) -> Result<()> {
+    if let Some(u) = owner {
+        sqlx::query(
+            "insert into record_participants (record_id, user_id, added_by) values ($1, $2, $3)
+             on conflict do nothing")
+            .bind(record_id).bind(u).bind(by).execute(&mut **tx).await?;
+    }
+    Ok(())
+}
+
 pub(crate) async fn require_edit(st: &AppState, me: &User, rec: &Record) -> Result<()> {
     if scope::can_edit_record(&st.pool, me, rec, &st.tree).await? {
         Ok(())
@@ -400,6 +431,9 @@ pub async fn patch(
             rec.priority.clone().into(), serde_json::to_value(v).unwrap_or_default()),
         RecordPatch::OwnerId(v) => {
             check_user(&st.pool, v).await?;
+            if !may_set_owner(&st, &me, &rec, v).await? {
+                return Err(AppError::Denied("owner_change_denied"));
+            }
             ("owner_id", "update records set owner_id = $2 where id = $1",
              serde_json::to_value(rec.owner_id).unwrap_or_default(),
              serde_json::to_value(v).unwrap_or_default())
@@ -526,6 +560,7 @@ pub async fn add_action(
          values ($1, $2, $3, $4, $5)")
         .bind(rec.id).bind(&title).bind(b.owner_id).bind(me.id).bind(b.due_date)
         .execute(&mut *tx).await?;
+    add_action_owner(&mut tx, rec.id, b.owner_id, me.id).await?;
     log(&mut tx, rec.chat_id, me.id, "action_added", &title, None,
         change(serde_json::Value::Null, b.owner_id)).await?;
     touch(&mut tx, rec.id).await?;
@@ -580,6 +615,7 @@ pub async fn patch_action(
             check_user(&st.pool, v).await?;
             sqlx::query("update actions set owner_id = $2 where id = $1")
                 .bind(a.id).bind(v).execute(&mut *tx).await?;
+            add_action_owner(&mut tx, rec.id, v, me.id).await?;
             ("owner_id", serde_json::to_value(a.owner_id), serde_json::to_value(v))
         }
         ActionPatch::DueDate(v) => {
@@ -814,4 +850,13 @@ pub(crate) async fn is_restricted(st: &AppState, me: &User, rec: &Record) -> Res
     let mode: String = sqlx::query_scalar("select access_mode from records where id = $1")
         .bind(rec.id).fetch_one(&st.pool).await?;
     Ok(mode == "private" && !scope::can_edit_record(&st.pool, me, rec, &st.tree).await?)
+}
+
+/// Kart katilimi ve oy (spec/75 K5): `public` kayitta herkes kendi adina;
+/// `request` ve `private`'ta yalniz uye (onayli katilimci ya da duzenleyen).
+/// `is_restricted`'tan ayri: `request` kayitta okuma acik kalir.
+pub(crate) async fn may_respond(st: &AppState, me: &User, rec: &Record) -> Result<bool> {
+    let mode: String = sqlx::query_scalar("select access_mode from records where id = $1")
+        .bind(rec.id).fetch_one(&st.pool).await?;
+    Ok(mode == "public" || scope::can_edit_record(&st.pool, me, rec, &st.tree).await?)
 }

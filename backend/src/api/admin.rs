@@ -26,6 +26,7 @@ use crate::{
     api::common::{self, Body},
     audit,
     auth::CurrentUser,
+    db::scope,
     error::{AppError, Result},
     models::{enums::NotifyLevel, user::{User, COLORS}},
     state::AppState,
@@ -232,6 +233,7 @@ pub async fn patch_user(
 ) -> Result<Json<AdminView>> {
     can_manage(&st, &me).await?;
     let id = common::id(&raw)?;
+    within_grant(&st, &me, id, &op).await?;
     let mut tx = st.pool.begin().await?;
     // Aktif adminler KILITLI okunur: iki admin ayni anda birbirini dusururse
     // ikisi de "bir admin daha var" gorup sistemi adminsiz birakabilirdi.
@@ -346,6 +348,49 @@ pub async fn patch_user(
             detail.as_deref()).await;
     }
     view(&st.pool, &me).await
+}
+
+/// Admin olmayan `manage_users` sahibinin siniri (spec/75 A1). Admin sinirsiz.
+/// - Kendi satirina HIC dokunmaz (grant, revoke, kapatma, avatar).
+/// - Yalniz KENDINDE olani verir: scope etkin scope'larinda, rolun butun
+///   scope'lari etkin scope'larinda, dal kendi dallarindan birinin altinda.
+/// - `manage_users`'i ne dogrudan ne rol icinde verir.
+///
+/// Geri almak da ayni sinirda: veremeyecegini alamaz. Red 403 + kod; denetim
+/// izi `audit::forbidden` ara katmanindan (`permission_denied`).
+async fn within_grant(st: &AppState, me: &User, target: Uuid, op: &UserOp) -> Result<()> {
+    if me.is_admin {
+        return Ok(());
+    }
+    if target == me.id {
+        return Err(AppError::Denied("self_permissions"));
+    }
+    let wanted: Vec<String> = match op {
+        UserOp::GrantScope(s) | UserOp::RevokeScope(s) => vec![s.clone()],
+        UserOp::GrantRole(r) | UserOp::RevokeRole(r) => {
+            sqlx::query_scalar("select scope from role_scopes where role_id = $1")
+                .bind(r).fetch_all(&st.pool).await?
+        }
+        UserOp::GrantNode(n) | UserOp::RevokeNode(n) => {
+            let held = scope::permitted_nodes(&st.pool, me).await?;
+            let tree = common::tree(st);
+            return if held.iter().any(|p| tree.is_descendant(*n, *p)) {
+                Ok(())
+            } else {
+                Err(AppError::Denied("grant_not_held"))
+            };
+        }
+        UserOp::Active(_) | UserOp::Admin(_) | UserOp::Avatar(_) => return Ok(()),
+    };
+    if wanted.iter().any(|s| s == "manage_users") {
+        return Err(AppError::Denied("grant_manage_users"));
+    }
+    let mine = scope::active(&st.pool, me).await?;
+    if wanted.iter().all(|s| mine.contains(s)) {
+        Ok(())
+    } else {
+        Err(AppError::Denied("grant_not_held"))
+    }
 }
 
 /// Yazim hatasi sessizce yetki vermesin: FK de korur ama 500 yerine kod.

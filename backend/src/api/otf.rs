@@ -233,9 +233,11 @@ fn view(
 }
 
 pub async fn get(
-    State(st): State<AppState>, CurrentUser(_me): CurrentUser, Path(raw): Path<String>,
+    State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>,
 ) -> Result<Json<View>> {
-    reply(&st, common::id(&raw)?).await
+    let id = common::id(&raw)?;
+    events::require_visible(&st, &me, id).await?;
+    reply(&st, id).await
 }
 
 async fn reply(st: &AppState, id: Uuid) -> Result<Json<View>> {
@@ -378,11 +380,12 @@ struct Contact {
     phone: Option<String>,
 }
 
-/// Doldurulmus .docx. Okuma herkese acik (etkinlik gibi).
+/// Doldurulmus .docx. Okuma etkinlik gibi: herkese acik, ikiz gizliyse uyeye (A4).
 pub async fn docx(
-    State(st): State<AppState>, CurrentUser(_me): CurrentUser, Path(raw): Path<String>,
+    State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>,
 ) -> Result<Response> {
     let id = common::id(&raw)?;
+    events::require_visible(&st, &me, id).await?;
     let ev = event_info(&st.pool, id).await?;
     // Kopyayla dolup gozden gecirilmemis form gonderilmesin.
     if load_review(&st.pool, id).await?.is_some_and(|r| r.needs_review) {
