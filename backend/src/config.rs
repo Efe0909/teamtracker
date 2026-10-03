@@ -46,7 +46,34 @@ pub struct Config {
     /// e-posta. Icerik degil yol: liste agenix sirri, ortamda gorunmesin.
     pub bootstrap_admins_file: Option<String>,
 
+    /// Karar modeli (spec/76): anahtar bos ise kalite kontrolu KAPALI.
+    pub decision_key: String,
+    pub decision_model: String,
+    /// `EKIPTAKIP_EXTERNAL_OFF`: elle kapatilan dis servisler (KNOW-358).
+    pub external_off: Vec<String>,
+
     pub env: Env,
+}
+
+/// Dis servisler. Kapali olan ya azalir (decision: yalniz uzunluk kurali)
+/// ya da hic calismaz (resend: kuyrukta bekler, push: liste calisir).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Service { Decision, Resend, Push }
+
+impl Service {
+    pub const ALL: [Service; 3] = [Service::Decision, Service::Resend, Service::Push];
+    pub fn key(self) -> &'static str {
+        match self { Service::Decision => "decision", Service::Resend => "resend", Service::Push => "push" }
+    }
+}
+
+/// "all" ya da virgullu liste; bosluk ve buyuk harf onemsiz.
+fn parse_off(raw: &str) -> Vec<String> {
+    raw.split(',').map(|s| s.trim().to_lowercase()).filter(|s| !s.is_empty()).collect()
+}
+
+fn listed(off: &[String], s: Service) -> bool {
+    off.iter().any(|o| o == "all" || o == s.key())
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -130,8 +157,27 @@ impl Config {
                 .unwrap_or_else(|| "ÖzÜ Maker Kulübü".into()),
             club_code: Some(var("EKIPTAKIP_CLUB_CODE")).filter(|s| !s.is_empty())
                 .unwrap_or_else(|| "OZUMAKER".into()),
+            decision_key: var("OPENROUTER_API_KEY"),
+            decision_model: Some(var("EKIPTAKIP_DECISION_MODEL")).filter(|s| !s.is_empty())
+                .unwrap_or_else(|| "respan/span-01-lite".into()),
+            external_off: parse_off(&var("EKIPTAKIP_EXTERNAL_OFF")),
             env,
         })
+    }
+
+    /// TEK KAPI: servis listede degil VE anahtari/yapilandirmasi var.
+    pub fn external_on(&self, s: Service) -> bool {
+        let configured = match s {
+            Service::Decision => !self.decision_key.is_empty(),
+            Service::Resend => !self.mail_api_key.is_empty(),
+            Service::Push => !self.vapid_private.is_empty(),
+        };
+        configured && !listed(&self.external_off, s)
+    }
+
+    /// `/api/meta`: on yuz kapali servisi ACIKCA soyler (sessiz dusus yok).
+    pub fn external_off_keys(&self) -> Vec<&'static str> {
+        Service::ALL.into_iter().filter(|s| !self.external_on(*s)).map(Service::key).collect()
     }
 
     /// Davet postasindaki baglantilar: yapilandirilmis host'lar, yoksa yerel gelistirme.
@@ -153,5 +199,21 @@ impl Config {
     /// istiyoruz (KNOW-31).
     pub fn cookie_name(&self) -> &'static str {
         if self.in_production() { "__Secure-ekiptakip" } else { "ekiptakip" }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dis_servis_listesi() {
+        let off = parse_off(" Decision , push,,");
+        assert_eq!(off, ["decision", "push"]);
+        assert!(listed(&off, Service::Decision) && listed(&off, Service::Push));
+        assert!(!listed(&off, Service::Resend));
+        let all = parse_off("ALL");
+        assert!(Service::ALL.iter().all(|s| listed(&all, *s)));
+        assert!(parse_off("").is_empty());
     }
 }

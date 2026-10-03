@@ -19,6 +19,9 @@ pub enum AppError {
     /// Istek gecerli ama durum izin vermiyor (ornegin "open_actions": acik
     /// eylemi olan kayit kapanmaz). Kod on yuzde Turkce iletiye cevrilir.
     Conflict(&'static str),
+    /// Karar modeli metni zayif buldu (spec/76): 422 `low_quality` + `reasons`
+    /// (soru adlari). Istemci `quality_override: true` ile yine gonderebilir.
+    LowQuality(Vec<&'static str>),
     Db(sqlx::Error),
 }
 
@@ -41,6 +44,10 @@ impl IntoResponse for AppError {
             AppError::NotFound => (StatusCode::NOT_FOUND, "not_found"),
             AppError::BadRequest(c) => (StatusCode::BAD_REQUEST, *c),
             AppError::Conflict(c) => (StatusCode::CONFLICT, *c),
+            AppError::LowQuality(reasons) => {
+                return (StatusCode::UNPROCESSABLE_ENTITY,
+                    Json(serde_json::json!({ "error": "low_quality", "reasons": reasons }))).into_response();
+            }
             AppError::Db(e) => {
                 tracing::error!("db error: {e}");
                 (StatusCode::INTERNAL_SERVER_ERROR, "internal")

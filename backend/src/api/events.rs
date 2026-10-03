@@ -25,6 +25,7 @@ use uuid::Uuid;
 use crate::{
     api::{common::{self, Body}, records},
     auth::CurrentUser,
+    decision,
     error::{AppError, Result},
     models::{
         enums::{EventStatus, MaterialType, NodeType, Priority, RecordKind, WidgetType},
@@ -305,6 +306,11 @@ pub struct NewEvent {
     date: Option<NaiveDate>,
     #[serde(default)]
     priority: Option<Priority>,
+    /// Zorunlu, >= 30 (spec/76).
+    #[serde(default)]
+    description: Option<String>,
+    #[serde(default)]
+    quality_override: bool,
 }
 
 #[derive(Serialize)]
@@ -320,8 +326,13 @@ pub async fn create(
 ) -> Result<Json<Created>> {
     let title = common::text(Some(b.title), TITLE_MAX, "invalid_title")?
         .ok_or(AppError::BadRequest("invalid_title"))?;
+    let description = common::text(b.description, TEXT_MAX, "invalid_description")?;
+    records::check_title(&title)?;
+    records::check_description(description.as_deref())?;
     records::check_unit(&st, b.unit_id)?;
     check_kind(&st, b.kind_id)?;
+    let reasons = decision::gate(&st, decision::Kind::Entry,
+        &decision::entry_state(&title, description.as_deref()), b.quality_override).await?;
     // Sablon kilit altinda okunur, kilit await'ten once birakilir (state.rs).
     let (checkpoints, widgets) = refdata::template(&common::tree(&st), b.kind_id);
     let priority = b.priority.unwrap_or(Priority::Medium);
@@ -337,11 +348,12 @@ pub async fn create(
         .fetch_one(&mut *tx).await?;
     records::log(&mut tx, chat_id, me.id, "created", &title, None,
         records::change(serde_json::Value::Null, me.id)).await?;
+    records::log_override(&mut tx, chat_id, me.id, &title, "record", reasons).await?;
     let id: Uuid = sqlx::query_scalar(
-        "insert into events (record_id, title, kind_id, status, priority, owner_id, date, created_by)
-         values ($1, $2, $3, $4, $5, $6, $7, $6) returning id")
+        "insert into events (record_id, title, kind_id, status, priority, owner_id, date, created_by, description)
+         values ($1, $2, $3, $4, $5, $6, $7, $6, $8) returning id")
         .bind(record_id).bind(&title).bind(b.kind_id).bind(status).bind(priority).bind(me.id).bind(b.date)
-        .fetch_one(&mut *tx).await?;
+        .bind(&description).fetch_one(&mut *tx).await?;
     sqlx::query("insert into event_participants (event_id, user_id) values ($1, $2)")
         .bind(id).bind(me.id).execute(&mut *tx).await?;
     for (i, w) in widgets.iter().enumerate() {
@@ -379,6 +391,15 @@ pub enum EventPatch {
     Description(Option<String>),
 }
 
+/// `quality_override`: baslik/aciklamada model zayif bulsa da yaz (spec/76).
+#[derive(Deserialize)]
+pub struct EventPatchBody {
+    #[serde(flatten)]
+    patch: EventPatch,
+    #[serde(default)]
+    quality_override: bool,
+}
+
 fn json(v: impl Serialize) -> serde_json::Value {
     serde_json::to_value(v).unwrap_or_default()
 }
@@ -397,11 +418,33 @@ async fn log_change(
 
 pub async fn patch(
     State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>,
-    Body(p): Body<EventPatch>,
+    Body(EventPatchBody { patch: p, quality_override }): Body<EventPatchBody>,
 ) -> Result<Json<Detail>> {
     let (ev, twin) = editable(&st, &me, common::id(&raw)?).await?;
     let fixed = matches!(ev.status, EventStatus::Confirmed | EventStatus::Done);
+    // Bilgi yogunlugu (spec/76): yalniz DEGISEN baslik/aciklama; model islemden once.
+    let trimmed = |s: &str| Some(s.trim().to_string()).filter(|s| !s.is_empty());
+    let entry = match &p {
+        EventPatch::Title(v) if v.trim() != ev.title => {
+            records::check_title(v.trim())?;
+            Some(("title", decision::entry_state(v.trim(), ev.description.as_deref())))
+        }
+        EventPatch::Description(v) if v.as_deref().and_then(trimmed) != ev.description => {
+            let d = v.as_deref().and_then(trimmed);
+            records::check_description(d.as_deref())?;
+            Some(("description", decision::entry_state(&ev.title, d.as_deref())))
+        }
+        _ => None,
+    };
+    let overridden = match entry {
+        Some((field, state)) => decision::gate(&st, decision::Kind::Entry, &state, quality_override)
+            .await?.map(|r| (field, r)),
+        None => None,
+    };
     let mut tx = st.pool.begin().await?;
+    if let Some((field, reasons)) = overridden {
+        records::log_override(&mut tx, twin.chat_id, me.id, &twin.title, field, Some(reasons)).await?;
+    }
     let set = |sql: &'static str| sqlx::query(sql).bind(ev.id);
     match p {
         EventPatch::Title(v) => {

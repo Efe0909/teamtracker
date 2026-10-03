@@ -23,6 +23,7 @@ use crate::{
     api::{cards::{self, CardView}, common::{self, Body}},
     auth::CurrentUser,
     db::{filters::Filters, scope},
+    decision,
     error::{AppError, Result},
     models::{
         enums::{ActionStatus, Priority, RecordKind, RecordStatus},
@@ -154,6 +155,7 @@ struct ActionOut {
     due_date: Option<NaiveDate>,
     created_at: DateTime<Utc>,
     resolved_at: Option<DateTime<Utc>>,
+    closing_note: Option<String>,
 }
 
 pub(crate) async fn load(pool: &PgPool, id: Uuid) -> Result<Record> {
@@ -191,7 +193,7 @@ pub(crate) async fn detail_of(st: &AppState, me: &User, rec: Record) -> Result<D
         });
     }
     let actions = sqlx::query_as(
-        "select id, title, status, owner_id, due_date, created_at, resolved_at
+        "select id, title, status, owner_id, due_date, created_at, resolved_at, closing_note
            from actions where record_id = $1
           order by (status in ('closed','cancelled')), created_at")
         .bind(rec.id).fetch_all(&st.pool).await?;
@@ -314,6 +316,42 @@ pub(crate) fn change(from: impl Serialize, to: impl Serialize) -> Option<String>
     Some(serde_json::json!({ "from": from, "to": to }).to_string())
 }
 
+// --- bilgi yogunlugu (spec/76) ---------------------------------------------
+
+/// Baslik >= 5 karakter (zorunlu alan, `text` once kirpar).
+pub(crate) fn check_title(title: &str) -> Result<()> {
+    common::min_chars(Some(title), common::NAME_MIN, "title_too_short")
+}
+
+/// Aciklama >= 30. Bos da kisa sayilir: yeni yazimda aciklama zorunlu.
+pub(crate) fn check_description(d: Option<&str>) -> Result<()> {
+    common::min_chars(Some(d.unwrap_or("")), common::DESC_MIN, "description_too_short")
+}
+
+/// Model zayif buldu, kisi yine gonderdi: kaydin akisinda iz (yoneticiler gorur).
+pub(crate) async fn log_override(
+    tx: &mut sqlx::Transaction<'_, Postgres>, chat_id: Uuid, actor: Uuid, subject: &str,
+    field: &str, reasons: Option<Vec<&'static str>>,
+) -> Result<()> {
+    match reasons {
+        Some(r) => log(tx, chat_id, actor, "quality_override", subject, Some(field),
+            Some(serde_json::json!({ "reasons": r }).to_string())).await,
+        None => Ok(()),
+    }
+}
+
+/// `closed`'a gecis: not zorunlu, >= 30, model tartar. Donen: (not, override nedenleri).
+async fn closing(
+    st: &AppState, note: Option<String>, context: &str, override_: bool,
+) -> Result<(String, Option<Vec<&'static str>>)> {
+    let note = common::text(note, TEXT_MAX, "invalid_closing_note")?
+        .ok_or(AppError::BadRequest("closing_note_required"))?;
+    common::min_chars(Some(&note), common::DESC_MIN, "closing_note_too_short")?;
+    let state = format!("{context}\nKapanış notu: {note}");
+    let reasons = decision::gate(st, decision::Kind::Closing, &state, override_).await?;
+    Ok((note, reasons))
+}
+
 // --- yeni kayit ------------------------------------------------------------
 
 #[derive(Deserialize)]
@@ -338,6 +376,9 @@ pub struct NewRecord {
     /// public | request | private; bos = public.
     #[serde(default)]
     access_mode: Option<String>,
+    /// Model zayif bulsa da gonder (spec/76); kayitta izi kalir.
+    #[serde(default)]
+    quality_override: bool,
 }
 
 #[derive(Serialize)]
@@ -356,6 +397,8 @@ pub async fn create(
     let title = common::text(Some(b.title), TITLE_MAX, "invalid_title")?
         .ok_or(AppError::BadRequest("invalid_title"))?;
     let description = common::text(b.description, TEXT_MAX, "invalid_description")?;
+    check_title(&title)?;
+    check_description(description.as_deref())?;
     check_unit(&st, b.unit_id)?;
     check_pillar(&st.pool, b.pillar_id).await?;
     check_team(&st.pool, b.team_id).await?;
@@ -364,6 +407,9 @@ pub async fn create(
     if !matches!(access_mode, "public" | "request" | "private") {
         return Err(AppError::BadRequest("invalid_access_mode"));
     }
+    // Ag cagrisi islemden ONCE: model beklenirken baglanti tutulmaz.
+    let reasons = decision::gate(&st, decision::Kind::Entry,
+        &decision::entry_state(&title, description.as_deref()), b.quality_override).await?;
 
     let mut tx = st.pool.begin().await?;
     let chat_id: Uuid = sqlx::query_scalar("insert into chats default values returning id")
@@ -378,6 +424,7 @@ pub async fn create(
         .fetch_one(&mut *tx).await?;
     log(&mut tx, chat_id, me.id, "created", &title, None,
         change(serde_json::Value::Null, b.owner_id)).await?;
+    log_override(&mut tx, chat_id, me.id, &title, "record", reasons).await?;
     for t in &b.card_types {
         cards::insert(&mut tx, id, me.id, t, None, &serde_json::Map::new()).await?;
     }
@@ -404,12 +451,28 @@ pub enum RecordPatch {
     AccessMode(String),
 }
 
+/// `{"field","value"}` + kapanis notu ve kalite onayi (spec/76). Not yalniz
+/// `closed`'a geciste okunur; `quality_override` baslik/aciklama/notta.
+#[derive(Deserialize)]
+pub struct RecordPatchBody {
+    #[serde(flatten)]
+    patch: RecordPatch,
+    #[serde(default)]
+    closing_note: Option<String>,
+    #[serde(default)]
+    quality_override: bool,
+}
+
 pub async fn patch(
     State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>,
-    Body(p): Body<RecordPatch>,
+    Body(body): Body<RecordPatchBody>,
 ) -> Result<Json<Detail>> {
     let rec = load(&st.pool, common::id(&raw)?).await?;
     require_edit(&st, &me, &rec).await?;
+    let RecordPatchBody { patch: p, closing_note, quality_override } = body;
+    // Kapanis notu (closed'a geciste dolu) ve model onayi atlandiysa nedenleri.
+    let mut note: Option<String> = None;
+    let mut reasons: Option<Vec<&'static str>> = None;
 
     // (alan, sql, eski, yeni) — SQL SABIT, kullanici girdisi yalniz bind.
     let (field, sql, from, to): (&str, &str, serde_json::Value, serde_json::Value) = match p {
@@ -422,6 +485,11 @@ pub async fn patch(
                 if open > 0 {
                     // Kayit acik eylemi varken kapanmaz (spec/20-sema.md §3a).
                     return Err(AppError::Conflict("open_actions"));
+                }
+                if rec.status != "closed" {
+                    let (n, r) = closing(&st, closing_note, &format!("Kayıt: {}", rec.title),
+                        quality_override).await?;
+                    (note, reasons) = (Some(n), r);
                 }
             }
             ("status", "update records set status = $2 where id = $1",
@@ -479,10 +547,21 @@ pub async fn patch(
         RecordPatch::Title(v) => {
             let v = common::text(Some(v), TITLE_MAX, "invalid_title")?
                 .ok_or(AppError::BadRequest("invalid_title"))?;
+            // Yalniz DEGISEN alan sinanir: eski kisa veri duzenlenene dek kalir.
+            if v != rec.title {
+                check_title(&v)?;
+                reasons = decision::gate(&st, decision::Kind::Entry,
+                    &decision::entry_state(&v, rec.description.as_deref()), quality_override).await?;
+            }
             ("title", "update records set title = $2 where id = $1", rec.title.clone().into(), v.into())
         }
         RecordPatch::Description(v) => {
             let v = common::text(v, TEXT_MAX, "invalid_description")?;
+            if v != rec.description {
+                check_description(v.as_deref())?;
+                reasons = decision::gate(&st, decision::Kind::Entry,
+                    &decision::entry_state(&rec.title, v.as_deref()), quality_override).await?;
+            }
             ("description", "update records set description = $2 where id = $1",
              serde_json::to_value(&rec.description).unwrap_or_default(),
              serde_json::to_value(v).unwrap_or_default())
@@ -495,6 +574,16 @@ pub async fn patch(
             .execute(&mut *tx).await?;
         log(&mut tx, rec.chat_id, me.id, "field_changed", &rec.title, Some(field),
             change(&from, &to)).await?;
+        // Kapanis notu satirda; closed'dan cikan her gecis onu siler (yeniden acma).
+        if field == "status" {
+            sqlx::query("update records set closing_note = $2 where id = $1")
+                .bind(rec.id).bind(&note).execute(&mut *tx).await?;
+        }
+        if let Some(n) = &note {
+            log(&mut tx, rec.chat_id, me.id, "closing_note", &rec.title, Some("record"), Some(n.clone())).await?;
+        }
+        log_override(&mut tx, rec.chat_id, me.id, &rec.title,
+            if note.is_some() { "closing_note" } else { field }, reasons).await?;
         // Ikizin basligi, onemi ve sorumlusu etkinlige de yazilir: iki yuz ayni
         // (spec/73 §3a). SQL sabit; deger yine sutun tipine baglanir.
         let synced = match field {
@@ -578,6 +667,17 @@ pub enum ActionPatch {
     Title(String),
 }
 
+/// Kayittaki gibi: kapanis notu yalniz `closed`'a geciste (spec/76).
+#[derive(Deserialize)]
+pub struct ActionPatchBody {
+    #[serde(flatten)]
+    patch: ActionPatch,
+    #[serde(default)]
+    closing_note: Option<String>,
+    #[serde(default)]
+    quality_override: bool,
+}
+
 #[derive(sqlx::FromRow)]
 struct ActionRow {
     id: Uuid,
@@ -590,25 +690,42 @@ struct ActionRow {
 
 pub async fn patch_action(
     State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>,
-    Body(p): Body<ActionPatch>,
+    Body(body): Body<ActionPatchBody>,
 ) -> Result<Json<Detail>> {
     let a: ActionRow = sqlx::query_as(
         "select id, record_id, title, status, owner_id, due_date from actions where id = $1")
         .bind(common::id(&raw)?).fetch_optional(&st.pool).await?.ok_or(AppError::NotFound)?;
     let rec = load(&st.pool, a.record_id).await?;
     require_edit(&st, &me, &rec).await?;
+    let ActionPatchBody { patch: p, closing_note, quality_override } = body;
+
+    // Model cagrisi islemden once (agda beklerken baglanti tutulmaz).
+    let (note, reasons) = match p {
+        ActionPatch::Status(ActionStatus::Closed) if !matches!(a.status, ActionStatus::Closed) => {
+            let (n, r) = closing(&st, closing_note,
+                &format!("Eylem: {}\nKayıt: {}", a.title, rec.title), quality_override).await?;
+            (Some(n), r)
+        }
+        _ => (None, None),
+    };
 
     let mut tx = st.pool.begin().await?;
     let (field, from, to) = match p {
         ActionPatch::Status(v) => {
             let done = matches!(v, ActionStatus::Closed | ActionStatus::Cancelled);
             // Kapatan ve zamani izde durur; yeniden acmak ikisini de siler.
+            // Kapanis notu yalniz closed'a geciste dolar, baska her durum siler.
             sqlx::query(
                 "update actions set status = $2,
                         resolved_by = case when $3 then $4 end,
-                        resolved_at = case when $3 then now() end
+                        resolved_at = case when $3 then now() end,
+                        closing_note = $5
                   where id = $1")
-                .bind(a.id).bind(v).bind(done).bind(me.id).execute(&mut *tx).await?;
+                .bind(a.id).bind(v).bind(done).bind(me.id).bind(&note).execute(&mut *tx).await?;
+            if let Some(n) = &note {
+                log(&mut tx, rec.chat_id, me.id, "closing_note", &a.title, Some("action"), Some(n.clone())).await?;
+            }
+            log_override(&mut tx, rec.chat_id, me.id, &a.title, "closing_note", reasons).await?;
             ("status", serde_json::to_value(a.status), serde_json::to_value(v))
         }
         ActionPatch::OwnerId(v) => {
@@ -843,6 +960,23 @@ pub async fn decide_join(
     }
     tx.commit().await?;
     Ok(Json(detail_of(&st, &me, rec).await?))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn patch_govdesi_not_ve_onay_tasir() {
+        let b = serde_json::from_str::<RecordPatchBody>(
+            r#"{"field":"status","value":"closed","closing_note":"n","quality_override":true}"#).ok();
+        assert!(b.is_some_and(|b| matches!(b.patch, RecordPatch::Status(RecordStatus::Closed))
+            && b.closing_note.as_deref() == Some("n") && b.quality_override));
+        // Eski bicim (yalniz field/value) aynen gecer; bilinmeyen alan yine reddedilir.
+        let b = serde_json::from_str::<ActionPatchBody>(r#"{"field":"title","value":"x"}"#).ok();
+        assert!(b.is_some_and(|b| matches!(b.patch, ActionPatch::Title(_)) && !b.quality_override));
+        assert!(serde_json::from_str::<RecordPatchBody>(r#"{"field":"sifre","value":"x"}"#).is_err());
+    }
 }
 
 /// Gizli kayit mi ve ben uye degil miyim: sohbet/kart/oy gibi uc noktalar bunu sorar.
