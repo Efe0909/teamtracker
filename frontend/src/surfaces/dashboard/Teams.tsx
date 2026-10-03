@@ -329,7 +329,7 @@ export function RecordsWidget({ query, showTeam, move }: {
         <Segmented label="Kayıt durumu" value={done} onChange={setDone}
           options={[{ value: "false", label: "Açık" }, { value: "true", label: "Kapanan" }]} />
       }>
-      {() => (rows.data === undefined ? <Loading /> : <RecordTable rows={rows.data} showTeam={showTeam} />)}
+      {() => (rows.data === undefined ? <Loading /> : <RecordTable rows={rows.data} showTeam={showTeam} sortKey="team-records" />)}
     </Widget>
   );
 }

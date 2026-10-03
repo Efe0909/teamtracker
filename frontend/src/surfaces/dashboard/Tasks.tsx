@@ -170,13 +170,16 @@ const COLS: { key: ColKey; label: string; width: number }[] = [
 ];
 const DEFAULTS = Object.fromEntries(COLS.map((c) => [c.key, c.width])) as Record<ColKey, number>;
 
-export function RecordTable({ rows, showTeam = true }: { rows: RecordSummary[]; showTeam?: boolean }) {
+/** `sortKey`: siralama tablo basina saklanir; Gorevler ile takim sayfasi ayri hatirlar. */
+export function RecordTable({ rows, showTeam = true, sortKey = "records" }: {
+  rows: RecordSummary[]; showTeam?: boolean; sortKey?: string;
+}) {
   const L = useLookup();
   const [saved, setSaved] = useStored<Record<string, number>>("table.cols", {});
   const widths = resolveWidths(DEFAULTS, saved);
   const drag = useRef<{ key: ColKey; x: number; w: number } | null>(null);
   const cols = COLS.filter((c) => showTeam || c.key !== "team");
-  const sorter = useSort("records", rows, {
+  const sorter = useSort(sortKey, rows, {
     title: (r) => r.title,
     status: (r) => STATUS_ORDER.indexOf(r.status),
     priority: (r) => PRIORITY_ORDER.indexOf(r.priority),

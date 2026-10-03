@@ -13,6 +13,9 @@
   color: var(--txt);
   font-size: var(--fs-md);
   text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   cursor: pointer;
   transition:
     border-color 0.12s var(--ease),
