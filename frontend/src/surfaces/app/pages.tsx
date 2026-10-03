@@ -20,7 +20,7 @@ import { href } from "./routes";
 
 /** Acik zemin, tek dil (koyu gradyan kart kaldirildi — spec/16 P2 #13).
  *  Kartin tamami tek baglanti; sahte "Devam et" dugmesi yok (P2 #6). */
-function RecordCard({ r }: { r: RecordSummary }) {
+export function RecordCard({ r }: { r: RecordSummary }) {
   const L = useLookup();
   const path = L.path(r.unit_id);
   return (
@@ -28,6 +28,11 @@ function RecordCard({ r }: { r: RecordSummary }) {
       <span className={s.cardBody}>
         <span className={s.cardTags}>
           <KindTag kind={r.kind} />
+          {r.event_id !== null && (
+            <Tag tone="neutral">
+              <Icon name="calendar" size={12} /> Etkinlik
+            </Tag>
+          )}
           {(r.priority === "critical" || r.priority === "high") && <PriorityTag priority={r.priority} />}
         </span>
         <span className={s.cardTitle}>{r.title}</span>
@@ -51,7 +56,7 @@ function RecordCard({ r }: { r: RecordSummary }) {
   );
 }
 
-function RecordList({ rows, empty }: { rows: RecordSummary[] | undefined; empty: string }) {
+export function RecordList({ rows, empty }: { rows: RecordSummary[] | undefined; empty: string }) {
   if (rows === undefined) return <Loading />;
   if (rows.length === 0) return <Empty title="Burası boş">{empty}</Empty>;
   return (
@@ -134,12 +139,38 @@ export function TodoPage({ done }: { done: boolean }) {
 // --- arama -----------------------------------------------------------------
 
 export function SearchPage({ q }: { q: string }) {
+  const L = useLookup();
   const [text, setText] = useState(q);
   useEffect(() => {
     const t = window.setTimeout(() => navigate(href({ name: "search", q: text.trim() }), { replace: true }), 300);
     return () => window.clearTimeout(t);
   }, [text]);
-  const rows = useRecords({ search: q }, q.length >= 3);
+
+  const needle = q.trim().toLocaleLowerCase("tr");
+  const isQuerying = needle.length >= 2;
+  const rows = useRecords({ search: q }, isQuerying);
+
+  const matchedTeams = isQuerying
+    ? L.meta.teams.filter(
+        (t) =>
+          t.name.toLocaleLowerCase("tr").includes(needle) ||
+          (t.description !== null && t.description.toLocaleLowerCase("tr").includes(needle)),
+      )
+    : [];
+
+  const matchedUsers = isQuerying
+    ? L.meta.users.filter(
+        (u) =>
+          u.name.toLocaleLowerCase("tr").includes(needle) ||
+          (u.nickname !== null && u.nickname.toLocaleLowerCase("tr").includes(needle)),
+      )
+    : [];
+
+  const hasAnyResults =
+    matchedTeams.length > 0 ||
+    matchedUsers.length > 0 ||
+    (rows.data !== undefined && rows.data.length > 0);
+
   return (
     <>
       <TopBar title="Ara" />
@@ -149,16 +180,77 @@ export function SearchPage({ q }: { q: string }) {
           type="search"
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder="Başlık veya açıklama ara…"
+          placeholder="Kayıt, takım veya kişi ara…"
           aria-label="Ara"
           enterKeyHint="search"
         />
       </div>
       <div className={s.pad}>
-        {q.length < 3 ? (
-          <Empty title="Kayıt ara">En az üç harf yaz; başlık ve açıklamada aranır.</Empty>
+        {!isQuerying ? (
+          <Empty title="Arama yap">En az iki harf yaz; kayıt, takım ve kişilerde aranır.</Empty>
+        ) : rows.isPending && !hasAnyResults ? (
+          <Loading />
+        ) : !hasAnyResults ? (
+          <Empty title="Sonuç yok">“{q}” için sonuç yok.</Empty>
         ) : (
-          <RecordList rows={rows.data} empty={`“${q}” için sonuç yok.`} />
+          <>
+            {matchedTeams.length > 0 && (
+              <>
+                <h2 className={s.group}>Takımlar ({matchedTeams.length})</h2>
+                {matchedTeams.map((t) => (
+                  <Link key={t.id} href={href({ name: "team", id: t.id })} className={s.card}>
+                    <span className={s.cardBody}>
+                      <span className={s.cardTitle}>{t.name}</span>
+                      {t.description !== null && <span className={s.cardPath}>{t.description}</span>}
+                    </span>
+                    <span className={s.chev}>
+                      <Icon name="chevron" size={20} />
+                    </span>
+                  </Link>
+                ))}
+              </>
+            )}
+
+            {matchedUsers.length > 0 && (
+              <>
+                <h2 className={s.group}>Kişiler ({matchedUsers.length})</h2>
+                {matchedUsers.map((u) => (
+                  <div key={u.id} className={s.card}>
+                    <Avatar user={u} size={36} />
+                    <span className={s.cardBody}>
+                      <span className={s.cardTitle}>{u.name}</span>
+                      <span className={s.cardMeta}>
+                        {u.nickname !== null && <span>@{u.nickname}</span>}
+                        {u.phone !== null && (
+                          <a
+                            href={`tel:${u.phone}`}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 4,
+                              color: "var(--acc-strong)",
+                              textDecoration: "none",
+                            }}
+                          >
+                            <Icon name="phone" size={13} /> {u.phone}
+                          </a>
+                        )}
+                      </span>
+                    </span>
+                  </div>
+                ))}
+              </>
+            )}
+
+            {rows.data !== undefined && rows.data.length > 0 && (
+              <>
+                <h2 className={s.group}>Kayıtlar ({rows.data.length})</h2>
+                {rows.data.map((r) => (
+                  <RecordCard key={r.id} r={r} />
+                ))}
+              </>
+            )}
+          </>
         )}
       </div>
     </>

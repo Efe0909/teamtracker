@@ -37,38 +37,6 @@
   display: grid;
   place-items: center;
 }
-.menu {
-  position: absolute;
-  right: var(--s-2);
-  top: calc(56px + env(safe-area-inset-top));
-  width: 240px;
-  padding: var(--s-2);
-  border: 1px solid var(--line);
-  border-radius: var(--r-md);
-  background: var(--panel);
-  box-shadow: var(--sh-lg);
-  display: flex;
-  flex-direction: column;
-}
-.menuHead {
-  padding: var(--s-2);
-  font-weight: 700;
-}
-.menuItem {
-  display: flex;
-  align-items: center;
-  gap: var(--s-2);
-  min-height: var(--tap);
-  padding: 0 var(--s-2);
-  border: 0;
-  border-radius: var(--r-sm);
-  background: transparent;
-  color: var(--txt);
-  text-decoration: none;
-  font-size: var(--fs-md);
-  text-align: left;
-  cursor: pointer;
-}
 
 /* --- alt sekmeler ----------------------------------------------------- */
 .tabs {
@@ -330,4 +298,165 @@ button.card {
   font: inherit;
   text-align: left;
   cursor: pointer;
+}
+
+/* --- etkinlik ve checkpoint seridi ------------------------------------ */
+.eventStrip {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.eventHead {
+  padding: var(--s-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.eventTitleLine {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+}
+
+.eventTagLine {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+}
+
+.eventToggleBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--tint);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 4px var(--s-2);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--txt);
+  cursor: pointer;
+  min-height: 28px;
+}
+
+.eventToggleBtn:active {
+  background: var(--panel2);
+}
+
+.eventMeta {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+  font-size: var(--fs-sm);
+  color: var(--dim);
+}
+
+.eventMeta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.progressBar {
+  height: 5px;
+  background: var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-top: 2px;
+}
+
+.progressFill {
+  height: 100%;
+  background: var(--ok);
+  transition: width 0.2s var(--ease);
+}
+
+.checkpointList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+}
+
+.checkpointItem {
+  border-bottom: 1px solid var(--line);
+}
+
+.checkpointItem:last-child {
+  border-bottom: 0;
+}
+
+.checkpointBtn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-2) var(--s-3);
+  min-height: var(--tap);
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: var(--fs-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.checkpointBtn:active:not(:disabled) {
+  background: var(--tint);
+}
+
+.checkpointBtn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.checkbox {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: 4px;
+  border: 2px solid var(--line-field);
+  display: grid;
+  place-items: center;
+  color: var(--on-acc);
+  background: var(--panel);
+}
+
+.checkboxDone {
+  border-color: var(--ok);
+  background: var(--ok);
+}
+
+.checkpointLabel {
+  flex: 1;
+  line-height: 1.35;
+}
+
+.checkpointDone .checkpointLabel {
+  text-decoration: line-through;
+  color: var(--dim);
+}
+
+.checkpointDate {
+  font-size: var(--fs-xs);
+  color: var(--dim);
+  flex: none;
+}
+
+.checkpointWaiting {
+  font-size: var(--fs-xs);
+  color: var(--warn-text);
+  background: var(--warn-bg);
+  padding: 2px 6px;
+  border-radius: var(--r-md);
+  flex: none;
 }

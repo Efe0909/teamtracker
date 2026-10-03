@@ -4,10 +4,13 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { useMyActions, useNotifications } from "../../api/hooks";
+import { NotifySettings } from "../../features/profile/NotifySettings";
+import { ProfileDialog } from "../../features/profile/ProfileDialog";
 import { useLookup } from "../../lib/lookup";
 import { useLocation } from "../../lib/router";
+import { setTheme, useTheme, type Theme } from "../../lib/theme";
 import { Icon, type IconName } from "../../ui/icons";
-import { Avatar, cx, Link, ui } from "../../ui/ui";
+import { Avatar, cx, Link, Menu, MenuItem, MenuLabel, MenuRadio, MenuSep, ui } from "../../ui/ui";
 import { ErrorScreen } from "../errors/ErrorScreen";
 import { signOut } from "../Session";
 import s from "./app.module.css";
@@ -55,10 +58,51 @@ function Page({ route }: { route: Route }) {
   }
 }
 
+const THEME_OPTS: { value: Theme; label: string; icon: IconName }[] = [
+  { value: "light", label: "Açık", icon: "sun" },
+  { value: "dark", label: "Koyu", icon: "moon" },
+  { value: "system", label: "Sistem", icon: "system" },
+];
+
+function MobileUserMenu() {
+  const L = useLookup();
+  const theme = useTheme();
+  const [profileOpen, setProfileOpen] = useState(!L.meta.me.profile_complete);
+  const [notifyOpen, setNotifyOpen] = useState(false);
+  return (
+    <>
+      <Menu
+        align="end"
+        side="bottom"
+        trigger={
+          <button type="button" className={ui.iconBtn} aria-label="Hesap menüsü">
+            <Avatar user={L.me} size={30} />
+          </button>
+        }
+      >
+        <MenuLabel>{L.me.name}</MenuLabel>
+        <MenuItem icon="user" onSelect={() => setProfileOpen(true)}>
+          Profilim
+        </MenuItem>
+        <MenuItem icon="bell" onSelect={() => setNotifyOpen(true)}>
+          Bildirimler
+        </MenuItem>
+        <MenuSep />
+        <MenuLabel>Tema</MenuLabel>
+        <MenuRadio value={theme} onChange={setTheme} options={THEME_OPTS} />
+        <MenuSep />
+        <MenuItem icon="logout" onSelect={() => void signOut()}>
+          Çıkış yap
+        </MenuItem>
+      </Menu>
+      <NotifySettings open={notifyOpen} onClose={() => setNotifyOpen(false)} />
+      <ProfileDialog open={profileOpen} onClose={() => setProfileOpen(false)} />
+    </>
+  );
+}
+
 /** Ust cubuk. `back` verilirse solda geri dugmesi (gecmis yoksa listeye). */
 export function TopBar({ title, back, right }: { title: string; back?: boolean; right?: ReactNode }) {
-  const L = useLookup();
-  const [menu, setMenu] = useState(false);
   useEffect(() => {
     document.title = `${title} — EkipTakip`;
   }, [title]);
@@ -77,21 +121,7 @@ export function TopBar({ title, back, right }: { title: string; back?: boolean; 
         )}
       </span>
       <h1>{title}</h1>
-      <span className={s.slot}>
-        {right ?? (
-          <button type="button" className={ui.iconBtn} aria-label="Hesap menüsü" aria-expanded={menu} onClick={() => setMenu((v) => !v)}>
-            <Avatar user={L.me} size={30} />
-          </button>
-        )}
-      </span>
-      {menu && (
-        <div className={s.menu} role="menu">
-          <div className={s.menuHead}>{L.me.name}</div>
-          <button role="menuitem" type="button" className={s.menuItem} onClick={() => void signOut()}>
-            <Icon name="logout" size={18} /> Çıkış yap
-          </button>
-        </div>
-      )}
+      <span className={s.slot}>{right ?? <MobileUserMenu />}</span>
     </header>
   );
 }
