@@ -12,7 +12,8 @@
 //!
 //! Katilim `data.signups` icinde (KNOW-281), yazim TEK `jsonb_set` ifadesi —
 //! okuyup-degistirip-yazmak iki eszamanli cevaptan birini kaybederdi. Katilim
-//! kaydi DUZENLEMEK degildir: oturumu olan herkes kendi adina cevap verir.
+//! kaydi DUZENLEMEK degildir: herkes kendi adina cevap verir. `public` kayitta
+//! oturumu olan herkes; `request`/`private`'ta yalniz uye (spec/75 K5).
 
 use std::collections::HashMap;
 
@@ -432,7 +433,7 @@ pub async fn signup(
     Body(b): Body<SignupIn>,
 ) -> Result<Json<Detail>> {
     let (id, t, rec) = load(&st, &raw).await?;
-    if records::is_restricted(&st, &me, &rec).await? {
+    if !records::may_respond(&st, &me, &rec).await? {
         return Err(AppError::Forbidden);
     }
     let t = t.ok_or(AppError::BadRequest("invalid_card_type"))?;
@@ -479,13 +480,13 @@ fn valid_ballot(picked: &[usize], other: bool, n: usize, allow_other: bool, mult
         && (multiple || picked.len() + usize::from(other) <= 1)
 }
 
-/// Oturumu olan herkes kendi adina oy verir (katilim gibi duzenleme degil).
+/// Herkes kendi adina oy verir (katilim gibi duzenleme degil; kip kurali K5).
 pub async fn vote(
     State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>,
     Body(b): Body<VoteIn>,
 ) -> Result<Json<Detail>> {
     let (id, t, rec) = load(&st, &raw).await?;
-    if records::is_restricted(&st, &me, &rec).await? {
+    if !records::may_respond(&st, &me, &rec).await? {
         return Err(AppError::Forbidden);
     }
     if !t.is_some_and(|t| t.poll) {

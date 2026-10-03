@@ -1,0 +1,5096 @@
+{
+ "GET /api/me": {
+  "method": "GET",
+  "path": "/api/me",
+  "handler": "mod::me",
+  "helpers": [],
+  "actual_checks": {
+   "scopes": [],
+   "markers": [
+    "is_admin"
+   ],
+   "actors": [
+    "unclear"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.04,
+    "hard_delete_nodes": 0.02,
+    "manage_users": 0.05,
+    "manage_teams": 0.03,
+    "create_tags": 0.02,
+    "edit_deadline": 0.03,
+    "tag_media": 0.03,
+    "manage_events": 0.04,
+    "manage_event_widgets": 0.03,
+    "manage_purchases": 0.02,
+    "manage_event_types": 0.03,
+    "manage_event_locations": 0.03
+   },
+   "actor": "anyone_logged_in",
+   "actor_probs": {
+    "owner_or_editor": 0,
+    "admin_only": 0,
+    "scope_holder": 0,
+    "branch_editor": 0,
+    "anyone_logged_in": 1,
+    "record_member": 0
+   },
+   "confidence": 1
+  },
+  "flags": []
+ },
+ "GET /api/auth/google": {
+  "method": "GET",
+  "path": "/api/auth/google",
+  "handler": "auth::google_start",
+  "helpers": [
+   "auth::rate_limited",
+   "auth::to_welcome",
+   "auth::as_str",
+   "auth::redirect_uri",
+   "auth::b64url",
+   "auth::oauth_cookie"
+  ],
+  "actual_checks": {
+   "scopes": [],
+   "markers": [
+    "no_session"
+   ],
+   "actors": [
+    "anyone_logged_in"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.03,
+    "hard_delete_nodes": 0.02,
+    "manage_users": 0.05,
+    "manage_teams": 0.04,
+    "create_tags": 0.02,
+    "edit_deadline": 0.03,
+    "tag_media": 0.03,
+    "manage_events": 0.04,
+    "manage_event_widgets": 0.03,
+    "manage_purchases": 0.02,
+    "manage_event_types": 0.03,
+    "manage_event_locations": 0.03
+   },
+   "actor": "anyone_logged_in",
+   "actor_probs": {
+    "owner_or_editor": 0.01,
+    "anyone_logged_in": 0.89,
+    "admin_only": 0.02,
+    "record_member": 0.02,
+    "branch_editor": 0,
+    "scope_holder": 0.06
+   },
+   "confidence": 0.86
+  },
+  "flags": []
+ },
+ "GET /api/auth/callback": {
+  "method": "GET",
+  "path": "/api/auth/callback",
+  "handler": "auth::google_callback",
+  "helpers": [
+   "auth::rate_limited",
+   "auth::to_welcome",
+   "auth::as_str",
+   "auth::oauth_cookie",
+   "auth::redirect_uri",
+   "auth::exchange",
+   "auth::can_enter",
+   "auth::dest_url"
+  ],
+  "actual_checks": {
+   "scopes": [],
+   "markers": [
+    "no_session"
+   ],
+   "actors": [
+    "anyone_logged_in"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.04,
+    "hard_delete_nodes": 0.02,
+    "manage_users": 0.05,
+    "manage_teams": 0.04,
+    "create_tags": 0.02,
+    "edit_deadline": 0.03,
+    "tag_media": 0.03,
+    "manage_events": 0.04,
+    "manage_event_widgets": 0.03,
+    "manage_purchases": 0.02,
+    "manage_event_types": 0.03,
+    "manage_event_locations": 0.03
+   },
+   "actor": "anyone_logged_in",
+   "actor_probs": {
+    "owner_or_editor": 0.02,
+    "anyone_logged_in": 0.69,
+    "record_member": 0.02,
+    "scope_holder": 0.21,
+    "branch_editor": 0,
+    "admin_only": 0.06
+   },
+   "confidence": 0.63
+  },
+  "flags": []
+ },
+ "POST /api/auth/logout": {
+  "method": "POST",
+  "path": "/api/auth/logout",
+  "handler": "auth::logout",
+  "helpers": [],
+  "actual_checks": {
+   "scopes": [],
+   "markers": [
+    "no_session"
+   ],
+   "actors": [
+    "anyone_logged_in"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.03,
+    "hard_delete_nodes": 0.01,
+    "manage_users": 0.04,
+    "manage_teams": 0.03,
+    "create_tags": 0.01,
+    "edit_deadline": 0.02,
+    "tag_media": 0.02,
+    "manage_events": 0.03,
+    "manage_event_widgets": 0.02,
+    "manage_purchases": 0.02,
+    "manage_event_types": 0.02,
+    "manage_event_locations": 0.02
+   },
+   "actor": "anyone_logged_in",
+   "actor_probs": {
+    "scope_holder": 0,
+    "branch_editor": 0,
+    "owner_or_editor": 0,
+    "record_member": 0,
+    "anyone_logged_in": 1,
+    "admin_only": 0
+   },
+   "confidence": 1
+  },
+  "flags": []
+ },
+ "GET /api/auth/dev-login": {
+  "method": "GET",
+  "path": "/api/auth/dev-login",
+  "handler": "auth::dev_login",
+  "helpers": [],
+  "actual_checks": {
+   "scopes": [],
+   "markers": [
+    "no_session"
+   ],
+   "actors": [
+    "anyone_logged_in"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.09,
+    "hard_delete_nodes": 0.03,
+    "manage_users": 0.44,
+    "manage_teams": 0.15,
+    "create_tags": 0.04,
+    "edit_deadline": 0.06,
+    "tag_media": 0.04,
+    "manage_events": 0.09,
+    "manage_event_widgets": 0.05,
+    "manage_purchases": 0.04,
+    "manage_event_types": 0.06,
+    "manage_event_locations": 0.05
+   },
+   "actor": "admin_only",
+   "actor_probs": {
+    "owner_or_editor": 0,
+    "admin_only": 0.91,
+    "record_member": 0,
+    "branch_editor": 0,
+    "scope_holder": 0.01,
+    "anyone_logged_in": 0.08
+   },
+   "confidence": 0.89
+  },
+  "flags": [
+   "actor: code anyone_logged_in vs jev admin_only"
+  ]
+ },
+ "GET /api/meta": {
+  "method": "GET",
+  "path": "/api/meta",
+  "handler": "meta::meta",
+  "helpers": [
+   "common::tree"
+  ],
+  "actual_checks": {
+   "scopes": [],
+   "markers": [
+    "is_admin",
+    "membership"
+   ],
+   "actors": [
+    "record_member"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.09,
+    "hard_delete_nodes": 0.02,
+    "manage_users": 0.08,
+    "manage_teams": 0.07,
+    "create_tags": 0.04,
+    "edit_deadline": 0.05,
+    "tag_media": 0.04,
+    "manage_events": 0.08,
+    "manage_event_widgets": 0.05,
+    "manage_purchases": 0.04,
+    "manage_event_types": 0.06,
+    "manage_event_locations": 0.06
+   },
+   "actor": "anyone_logged_in",
+   "actor_probs": {
+    "owner_or_editor": 0,
+    "admin_only": 0,
+    "anyone_logged_in": 1,
+    "record_member": 0,
+    "scope_holder": 0,
+    "branch_editor": 0
+   },
+   "confidence": 0.99
+  },
+  "flags": [
+   "actor: code record_member vs jev anyone_logged_in"
+  ]
+ },
+ "PATCH /api/me/profile": {
+  "method": "PATCH",
+  "path": "/api/me/profile",
+  "handler": "profile::patch",
+  "helpers": [
+   "common::text",
+   "profile::phone_ok"
+  ],
+  "actual_checks": {
+   "scopes": [],
+   "markers": [
+    "owner_id"
+   ],
+   "actors": [
+    "owner_or_editor"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.04,
+    "hard_delete_nodes": 0.01,
+    "manage_users": 0.07,
+    "manage_teams": 0.04,
+    "create_tags": 0.02,
+    "edit_deadline": 0.03,
+    "tag_media": 0.03,
+    "manage_events": 0.04,
+    "manage_event_widgets": 0.02,
+    "manage_purchases": 0.02,
+    "manage_event_types": 0.02,
+    "manage_event_locations": 0.02
+   },
+   "actor": "anyone_logged_in",
+   "actor_probs": {
+    "anyone_logged_in": 0.98,
+    "owner_or_editor": 0.02,
+    "scope_holder": 0,
+    "admin_only": 0,
+    "branch_editor": 0,
+    "record_member": 0
+   },
+   "confidence": 0.98
+  },
+  "flags": [
+   "actor: code owner_or_editor vs jev anyone_logged_in"
+  ]
+ },
+ "GET /api/home": {
+  "method": "GET",
+  "path": "/api/home",
+  "handler": "home::home",
+  "helpers": [],
+  "actual_checks": {
+   "scopes": [],
+   "markers": [
+    "owner_id"
+   ],
+   "actors": [
+    "owner_or_editor"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.04,
+    "hard_delete_nodes": 0.01,
+    "manage_users": 0.03,
+    "manage_teams": 0.03,
+    "create_tags": 0.02,
+    "edit_deadline": 0.03,
+    "tag_media": 0.03,
+    "manage_events": 0.05,
+    "manage_event_widgets": 0.03,
+    "manage_purchases": 0.03,
+    "manage_event_types": 0.03,
+    "manage_event_locations": 0.03
+   },
+   "actor": "anyone_logged_in",
+   "actor_probs": {
+    "owner_or_editor": 0,
+    "record_member": 0,
+    "admin_only": 0,
+    "branch_editor": 0,
+    "anyone_logged_in": 1,
+    "scope_holder": 0
+   },
+   "confidence": 1
+  },
+  "flags": [
+   "actor: code owner_or_editor vs jev anyone_logged_in"
+  ]
+ },
+ "POST /api/pins/{slug}": {
+  "method": "POST",
+  "path": "/api/pins/{slug}",
+  "handler": "home::pin",
+  "helpers": [],
+  "actual_checks": {
+   "scopes": [],
+   "markers": [
+    "session_only"
+   ],
+   "actors": [
+    "anyone_logged_in"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.14,
+    "hard_delete_nodes": 0.02,
+    "manage_users": 0.05,
+    "manage_teams": 0.05,
+    "create_tags": 0.05,
+    "edit_deadline": 0.05,
+    "tag_media": 0.09,
+    "manage_events": 0.11,
+    "manage_event_widgets": 0.08,
+    "manage_purchases": 0.04,
+    "manage_event_types": 0.06,
+    "manage_event_locations": 0.06
+   },
+   "actor": "anyone_logged_in",
+   "actor_probs": {
+    "anyone_logged_in": 0.93,
+    "record_member": 0.02,
+    "admin_only": 0,
+    "owner_or_editor": 0.03,
+    "branch_editor": 0.01,
+    "scope_holder": 0.01
+   },
+   "confidence": 0.9
+  },
+  "flags": []
+ },
+ "DELETE /api/pins/{slug}": {
+  "method": "DELETE",
+  "path": "/api/pins/{slug}",
+  "handler": "home::unpin",
+  "helpers": [],
+  "actual_checks": {
+   "scopes": [],
+   "markers": [
+    "session_only"
+   ],
+   "actors": [
+    "anyone_logged_in"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.11,
+    "hard_delete_nodes": 0.04,
+    "manage_users": 0.05,
+    "manage_teams": 0.05,
+    "create_tags": 0.03,
+    "edit_deadline": 0.05,
+    "tag_media": 0.16,
+    "manage_events": 0.1,
+    "manage_event_widgets": 0.08,
+    "manage_purchases": 0.03,
+    "manage_event_types": 0.05,
+    "manage_event_locations": 0.04
+   },
+   "actor": "anyone_logged_in",
+   "actor_probs": {
+    "owner_or_editor": 0.06,
+    "anyone_logged_in": 0.92,
+    "admin_only": 0,
+    "record_member": 0.01,
+    "scope_holder": 0.01,
+    "branch_editor": 0
+   },
+   "confidence": 0.9
+  },
+  "flags": []
+ },
+ "GET /api/records": {
+  "method": "GET",
+  "path": "/api/records",
+  "handler": "records::list",
+  "helpers": [],
+  "actual_checks": {
+   "scopes": [],
+   "markers": [
+    "owner_id"
+   ],
+   "actors": [
+    "owner_or_editor"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.08,
+    "hard_delete_nodes": 0.02,
+    "manage_users": 0.03,
+    "manage_teams": 0.05,
+    "create_tags": 0.03,
+    "edit_deadline": 0.06,
+    "tag_media": 0.05,
+    "manage_events": 0.08,
+    "manage_event_widgets": 0.05,
+    "manage_purchases": 0.04,
+    "manage_event_types": 0.05,
+    "manage_event_locations": 0.04
+   },
+   "actor": "anyone_logged_in",
+   "actor_probs": {
+    "admin_only": 0,
+    "branch_editor": 0.01,
+    "owner_or_editor": 0.11,
+    "anyone_logged_in": 0.62,
+    "record_member": 0.24,
+    "scope_holder": 0.02
+   },
+   "confidence": 0.54
+  },
+  "flags": [
+   "actor: code owner_or_editor vs jev anyone_logged_in"
+  ]
+ },
+ "POST /api/records": {
+  "method": "POST",
+  "path": "/api/records",
+  "handler": "records::create",
+  "helpers": [
+   "common::text",
+   "records::check_unit",
+   "common::tree",
+   "records::get",
+   "records::check_pillar",
+   "records::check_team",
+   "records::check_user",
+   "records::log",
+   "records::change",
+   "cards::insert",
+   "cards::kind",
+   "cards::clean",
+   "cards::link_option_photos"
+  ],
+  "actual_checks": {
+   "scopes": [],
+   "markers": [
+    "owner_id"
+   ],
+   "actors": [
+    "owner_or_editor"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.14,
+    "hard_delete_nodes": 0.02,
+    "manage_users": 0.06,
+    "manage_teams": 0.12,
+    "create_tags": 0.05,
+    "edit_deadline": 0.07,
+    "tag_media": 0.05,
+    "manage_events": 0.2,
+    "manage_event_widgets": 0.08,
+    "manage_purchases": 0.04,
+    "manage_event_types": 0.08,
+    "manage_event_locations": 0.08
+   },
+   "actor": "anyone_logged_in",
+   "actor_probs": {
+    "branch_editor": 0.07,
+    "admin_only": 0.01,
+    "owner_or_editor": 0.11,
+    "anyone_logged_in": 0.48,
+    "record_member": 0.09,
+    "scope_holder": 0.24
+   },
+   "confidence": 0.38
+  },
+  "flags": [
+   "actor: code owner_or_editor vs jev anyone_logged_in"
+  ]
+ },
+ "GET /api/records/{id}": {
+  "method": "GET",
+  "path": "/api/records/{id}",
+  "handler": "records::get",
+  "helpers": [
+   "records::load",
+   "common::id",
+   "records::detail_of",
+   "records::decider",
+   "common::has_scope",
+   "cards::of_record"
+  ],
+  "actual_checks": {
+   "scopes": [],
+   "markers": [
+    "is_admin",
+    "can_edit",
+    "owner_id",
+    "membership"
+   ],
+   "actors": [
+    "owner_or_editor",
+    "record_member"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.08,
+    "hard_delete_nodes": 0.02,
+    "manage_users": 0.04,
+    "manage_teams": 0.05,
+    "create_tags": 0.04,
+    "edit_deadline": 0.06,
+    "tag_media": 0.08,
+    "manage_events": 0.11,
+    "manage_event_widgets": 0.07,
+    "manage_purchases": 0.05,
+    "manage_event_types": 0.05,
+    "manage_event_locations": 0.05
+   },
+   "actor": "anyone_logged_in",
+   "actor_probs": {
+    "owner_or_editor": 0.36,
+    "scope_holder": 0.01,
+    "branch_editor": 0,
+    "record_member": 0.16,
+    "anyone_logged_in": 0.47,
+    "admin_only": 0
+   },
+   "confidence": 0.37
+  },
+  "flags": [
+   "actor: code owner_or_editor/record_member vs jev anyone_logged_in"
+  ]
+ },
+ "PATCH /api/records/{id}": {
+  "method": "PATCH",
+  "path": "/api/records/{id}",
+  "handler": "records::patch",
+  "helpers": [
+   "records::load",
+   "common::id",
+   "records::require_edit",
+   "records::check_user",
+   "records::check_team",
+   "records::check_pillar",
+   "records::check_unit",
+   "common::tree",
+   "records::get",
+   "common::has_scope",
+   "records::decider",
+   "common::text",
+   "records::bind_value",
+   "records::log",
+   "records::change",
+   "records::detail_of",
+   "cards::of_record"
+  ],
+  "actual_checks": {
+   "scopes": [
+    "edit_deadline"
+   ],
+   "markers": [
+    "is_admin",
+    "can_edit",
+    "owner_id",
+    "membership"
+   ],
+   "actors": [
+    "owner_or_editor",
+    "record_member",
+    "scope_holder"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.1,
+    "hard_delete_nodes": 0.03,
+    "manage_users": 0.11,
+    "manage_teams": 0.13,
+    "create_tags": 0.04,
+    "edit_deadline": 0.6,
+    "tag_media": 0.06,
+    "manage_events": 0.14,
+    "manage_event_widgets": 0.07,
+    "manage_purchases": 0.06,
+    "manage_event_types": 0.06,
+    "manage_event_locations": 0.06
+   },
+   "actor": "owner_or_editor",
+   "actor_probs": {
+    "scope_holder": 0,
+    "branch_editor": 0,
+    "record_member": 0,
+    "owner_or_editor": 1,
+    "anyone_logged_in": 0,
+    "admin_only": 0
+   },
+   "confidence": 0.99
+  },
+  "flags": []
+ },
+ "PUT /api/records/{id}/participants/{user}": {
+  "method": "PUT",
+  "path": "/api/records/{id}/participants/{user}",
+  "handler": "records::add_participant",
+  "helpers": [
+   "records::load",
+   "common::id",
+   "records::require_edit",
+   "records::check_user",
+   "records::touch",
+   "records::detail_of",
+   "records::decider",
+   "common::has_scope",
+   "cards::of_record"
+  ],
+  "actual_checks": {
+   "scopes": [],
+   "markers": [
+    "is_admin",
+    "can_edit",
+    "owner_id",
+    "membership"
+   ],
+   "actors": [
+    "owner_or_editor",
+    "record_member"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.11,
+    "hard_delete_nodes": 0.02,
+    "manage_users": 0.2,
+    "manage_teams": 0.19,
+    "create_tags": 0.03,
+    "edit_deadline": 0.07,
+    "tag_media": 0.05,
+    "manage_events": 0.12,
+    "manage_event_widgets": 0.05,
+    "manage_purchases": 0.04,
+    "manage_event_types": 0.04,
+    "manage_event_locations": 0.05
+   },
+   "actor": "owner_or_editor",
+   "actor_probs": {
+    "admin_only": 0,
+    "owner_or_editor": 1,
+    "record_member": 0,
+    "scope_holder": 0,
+    "anyone_logged_in": 0,
+    "branch_editor": 0
+   },
+   "confidence": 0.99
+  },
+  "flags": []
+ },
+ "DELETE /api/records/{id}/participants/{user}": {
+  "method": "DELETE",
+  "path": "/api/records/{id}/participants/{user}",
+  "handler": "records::remove_participant",
+  "helpers": [
+   "records::load",
+   "common::id",
+   "records::require_edit",
+   "records::touch",
+   "records::detail_of",
+   "records::decider",
+   "common::has_scope",
+   "cards::of_record"
+  ],
+  "actual_checks": {
+   "scopes": [],
+   "markers": [
+    "is_admin",
+    "can_edit",
+    "owner_id",
+    "membership"
+   ],
+   "actors": [
+    "owner_or_editor",
+    "record_member"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.1,
+    "hard_delete_nodes": 0.04,
+    "manage_users": 0.22,
+    "manage_teams": 0.22,
+    "create_tags": 0.02,
+    "edit_deadline": 0.06,
+    "tag_media": 0.04,
+    "manage_events": 0.12,
+    "manage_event_widgets": 0.05,
+    "manage_purchases": 0.04,
+    "manage_event_types": 0.04,
+    "manage_event_locations": 0.04
+   },
+   "actor": "owner_or_editor",
+   "actor_probs": {
+    "branch_editor": 0,
+    "owner_or_editor": 0.98,
+    "admin_only": 0,
+    "anyone_logged_in": 0,
+    "record_member": 0.02,
+    "scope_holder": 0
+   },
+   "confidence": 0.98
+  },
+  "flags": []
+ },
+ "POST /api/records/{id}/join": {
+  "method": "POST",
+  "path": "/api/records/{id}/join",
+  "handler": "records::join",
+  "helpers": [
+   "records::load",
+   "common::id",
+   "records::detail_of",
+   "records::decider",
+   "common::has_scope",
+   "cards::of_record",
+   "records::log",
+   "records::touch"
+  ],
+  "actual_checks": {
+   "scopes": [],
+   "markers": [
+    "is_admin",
+    "can_edit",
+    "owner_id",
+    "membership"
+   ],
+   "actors": [
+    "owner_or_editor",
+    "record_member"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.1,
+    "hard_delete_nodes": 0.02,
+    "manage_users": 0.05,
+    "manage_teams": 0.09,
+    "create_tags": 0.03,
+    "edit_deadline": 0.05,
+    "tag_media": 0.06,
+    "manage_events": 0.09,
+    "manage_event_widgets": 0.05,
+    "manage_purchases": 0.04,
+    "manage_event_types": 0.04,
+    "manage_event_locations": 0.04
+   },
+   "actor": "anyone_logged_in",
+   "actor_probs": {
+    "anyone_logged_in": 0.86,
+    "scope_holder": 0,
+    "record_member": 0.03,
+    "admin_only": 0,
+    "owner_or_editor": 0.11,
+    "branch_editor": 0
+   },
+   "confidence": 0.83
+  },
+  "flags": [
+   "actor: code owner_or_editor/record_member vs jev anyone_logged_in"
+  ]
+ },
+ "DELETE /api/records/{id}/join": {
+  "method": "DELETE",
+  "path": "/api/records/{id}/join",
+  "handler": "records::cancel_join",
+  "helpers": [
+   "records::load",
+   "common::id",
+   "records::detail_of",
+   "records::decider",
+   "common::has_scope",
+   "cards::of_record"
+  ],
+  "actual_checks": {
+   "scopes": [],
+   "markers": [
+    "is_admin",
+    "can_edit",
+    "owner_id",
+    "membership"
+   ],
+   "actors": [
+    "owner_or_editor",
+    "record_member"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.1,
+    "hard_delete_nodes": 0.04,
+    "manage_users": 0.08,
+    "manage_teams": 0.14,
+    "create_tags": 0.02,
+    "edit_deadline": 0.06,
+    "tag_media": 0.04,
+    "manage_events": 0.13,
+    "manage_event_widgets": 0.06,
+    "manage_purchases": 0.04,
+    "manage_event_types": 0.05,
+    "manage_event_locations": 0.05
+   },
+   "actor": "anyone_logged_in",
+   "actor_probs": {
+    "owner_or_editor": 0.22,
+    "record_member": 0.14,
+    "scope_holder": 0.01,
+    "branch_editor": 0,
+    "admin_only": 0,
+    "anyone_logged_in": 0.63
+   },
+   "confidence": 0.56
+  },
+  "flags": [
+   "actor: code owner_or_editor/record_member vs jev anyone_logged_in"
+  ]
+ },
+ "POST /api/records/{id}/join-requests/{user}": {
+  "method": "POST",
+  "path": "/api/records/{id}/join-requests/{user}",
+  "handler": "records::decide_join",
+  "helpers": [
+   "records::load",
+   "common::id",
+   "records::decider",
+   "records::log",
+   "records::touch",
+   "records::detail_of",
+   "common::has_scope",
+   "cards::of_record"
+  ],
+  "actual_checks": {
+   "scopes": [],
+   "markers": [
+    "is_admin",
+    "can_edit",
+    "owner_id",
+    "membership"
+   ],
+   "actors": [
+    "owner_or_editor",
+    "record_member"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.1,
+    "hard_delete_nodes": 0.02,
+    "manage_users": 0.17,
+    "manage_teams": 0.18,
+    "create_tags": 0.02,
+    "edit_deadline": 0.05,
+    "tag_media": 0.04,
+    "manage_events": 0.1,
+    "manage_event_widgets": 0.06,
+    "manage_purchases": 0.04,
+    "manage_event_types": 0.04,
+    "manage_event_locations": 0.04
+   },
+   "actor": "owner_or_editor",
+   "actor_probs": {
+    "owner_or_editor": 1,
+    "record_member": 0,
+    "branch_editor": 0,
+    "admin_only": 0,
+    "anyone_logged_in": 0,
+    "scope_holder": 0
+   },
+   "confidence": 0.99
+  },
+  "flags": []
+ },
+ "PUT /api/records/{id}/pin": {
+  "method": "PUT",
+  "path": "/api/records/{id}/pin",
+  "handler": "records::pin",
+  "helpers": [
+   "records::load",
+   "common::id",
+   "records::detail_of",
+   "records::decider",
+   "common::has_scope",
+   "cards::of_record"
+  ],
+  "actual_checks": {
+   "scopes": [],
+   "markers": [
+    "is_admin",
+    "can_edit",
+    "owner_id",
+    "membership"
+   ],
+   "actors": [
+    "owner_or_editor",
+    "record_member"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.1,
+    "hard_delete_nodes": 0.02,
+    "manage_users": 0.04,
+    "manage_teams": 0.05,
+    "create_tags": 0.03,
+    "edit_deadline": 0.08,
+    "tag_media": 0.07,
+    "manage_events": 0.11,
+    "manage_event_widgets": 0.07,
+    "manage_purchases": 0.04,
+    "manage_event_types": 0.04,
+    "manage_event_locations": 0.04
+   },
+   "actor": "anyone_logged_in",
+   "actor_probs": {
+    "anyone_logged_in": 0.77,
+    "record_member": 0.06,
+    "scope_holder": 0,
+    "branch_editor": 0,
+    "admin_only": 0,
+    "owner_or_editor": 0.17
+   },
+   "confidence": 0.71
+  },
+  "flags": [
+   "actor: code owner_or_editor/record_member vs jev anyone_logged_in"
+  ]
+ },
+ "DELETE /api/records/{id}/pin": {
+  "method": "DELETE",
+  "path": "/api/records/{id}/pin",
+  "handler": "records::unpin",
+  "helpers": [
+   "records::load",
+   "common::id",
+   "records::detail_of",
+   "records::decider",
+   "common::has_scope",
+   "cards::of_record"
+  ],
+  "actual_checks": {
+   "scopes": [],
+   "markers": [
+    "is_admin",
+    "can_edit",
+    "owner_id",
+    "membership"
+   ],
+   "actors": [
+    "owner_or_editor",
+    "record_member"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.09,
+    "hard_delete_nodes": 0.03,
+    "manage_users": 0.04,
+    "manage_teams": 0.04,
+    "create_tags": 0.03,
+    "edit_deadline": 0.06,
+    "tag_media": 0.05,
+    "manage_events": 0.09,
+    "manage_event_widgets": 0.07,
+    "manage_purchases": 0.03,
+    "manage_event_types": 0.04,
+    "manage_event_locations": 0.04
+   },
+   "actor": "owner_or_editor",
+   "actor_probs": {
+    "admin_only": 0,
+    "owner_or_editor": 0.48,
+    "branch_editor": 0,
+    "anyone_logged_in": 0.41,
+    "scope_holder": 0,
+    "record_member": 0.11
+   },
+   "confidence": 0.37
+  },
+  "flags": []
+ },
+ "PUT /api/records/{id}/card-order": {
+  "method": "PUT",
+  "path": "/api/records/{id}/card-order",
+  "handler": "records::set_card_order",
+  "helpers": [
+   "records::load",
+   "common::id",
+   "records::detail_of",
+   "records::decider",
+   "common::has_scope",
+   "cards::of_record"
+  ],
+  "actual_checks": {
+   "scopes": [],
+   "markers": [
+    "is_admin",
+    "can_edit",
+    "owner_id",
+    "membership"
+   ],
+   "actors": [
+    "owner_or_editor",
+    "record_member"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.11,
+    "hard_delete_nodes": 0.02,
+    "manage_users": 0.03,
+    "manage_teams": 0.05,
+    "create_tags": 0.03,
+    "edit_deadline": 0.07,
+    "tag_media": 0.06,
+    "manage_events": 0.12,
+    "manage_event_widgets": 0.07,
+    "manage_purchases": 0.04,
+    "manage_event_types": 0.04,
+    "manage_event_locations": 0.04
+   },
+   "actor": "owner_or_editor",
+   "actor_probs": {
+    "branch_editor": 0,
+    "admin_only": 0,
+    "record_member": 0.02,
+    "owner_or_editor": 0.91,
+    "scope_holder": 0,
+    "anyone_logged_in": 0.07
+   },
+   "confidence": 0.88
+  },
+  "flags": []
+ },
+ "POST /api/records/{id}/actions": {
+  "method": "POST",
+  "path": "/api/records/{id}/actions",
+  "handler": "records::add_action",
+  "helpers": [
+   "records::load",
+   "common::id",
+   "records::require_edit",
+   "common::text",
+   "records::check_user",
+   "common::has_scope",
+   "records::log",
+   "records::change",
+   "records::touch",
+   "records::detail_of",
+   "records::decider",
+   "cards::of_record"
+  ],
+  "actual_checks": {
+   "scopes": [
+    "edit_deadline"
+   ],
+   "markers": [
+    "is_admin",
+    "can_edit",
+    "owner_id",
+    "membership"
+   ],
+   "actors": [
+    "owner_or_editor",
+    "record_member",
+    "scope_holder"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.09,
+    "hard_delete_nodes": 0.02,
+    "manage_users": 0.05,
+    "manage_teams": 0.05,
+    "create_tags": 0.04,
+    "edit_deadline": 0.5,
+    "tag_media": 0.05,
+    "manage_events": 0.1,
+    "manage_event_widgets": 0.05,
+    "manage_purchases": 0.03,
+    "manage_event_types": 0.05,
+    "manage_event_locations": 0.04
+   },
+   "actor": "owner_or_editor",
+   "actor_probs": {
+    "scope_holder": 0,
+    "record_member": 0,
+    "anyone_logged_in": 0,
+    "admin_only": 0,
+    "branch_editor": 0,
+    "owner_or_editor": 1
+   },
+   "confidence": 0.99
+  },
+  "flags": []
+ },
+ "POST /api/records/{id}/cards": {
+  "method": "POST",
+  "path": "/api/records/{id}/cards",
+  "handler": "cards::create",
+  "helpers": [
+   "records::load",
+   "common::id",
+   "records::require_edit",
+   "cards::insert",
+   "cards::kind",
+   "cards::clean",
+   "cards::link_option_photos",
+   "records::touch",
+   "records::detail_of",
+   "records::decider",
+   "common::has_scope",
+   "cards::of_record"
+  ],
+  "actual_checks": {
+   "scopes": [],
+   "markers": [
+    "is_admin",
+    "can_edit",
+    "owner_id",
+    "membership"
+   ],
+   "actors": [
+    "owner_or_editor",
+    "record_member"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.1,
+    "hard_delete_nodes": 0.02,
+    "manage_users": 0.02,
+    "manage_teams": 0.05,
+    "create_tags": 0.04,
+    "edit_deadline": 0.11,
+    "tag_media": 0.07,
+    "manage_events": 0.11,
+    "manage_event_widgets": 0.07,
+    "manage_purchases": 0.05,
+    "manage_event_types": 0.06,
+    "manage_event_locations": 0.05
+   },
+   "actor": "owner_or_editor",
+   "actor_probs": {
+    "anyone_logged_in": 0,
+    "record_member": 0.01,
+    "admin_only": 0,
+    "owner_or_editor": 0.99,
+    "branch_editor": 0,
+    "scope_holder": 0
+   },
+   "confidence": 0.98
+  },
+  "flags": []
+ },
+ "PATCH /api/cards/{id}": {
+  "method": "PATCH",
+  "path": "/api/cards/{id}",
+  "handler": "cards::patch",
+  "helpers": [
+   "cards::load",
+   "common::id",
+   "cards::kind",
+   "records::load",
+   "records::require_edit",
+   "cards::clean",
+   "common::text",
+   "cards::insert",
+   "cards::clean_poll",
+   "cards::link_option_photos",
+   "records::touch",
+   "records::detail_of",
+   "records::decider",
+   "common::has_scope",
+   "cards::of_record"
+  ],
+  "actual_checks": {
+   "scopes": [],
+   "markers": [
+    "is_admin",
+    "can_edit",
+    "owner_id",
+    "membership"
+   ],
+   "actors": [
+    "owner_or_editor",
+    "record_member"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.09,
+    "hard_delete_nodes": 0.02,
+    "manage_users": 0.03,
+    "manage_teams": 0.05,
+    "create_tags": 0.04,
+    "edit_deadline": 0.2,
+    "tag_media": 0.13,
+    "manage_events": 0.17,
+    "manage_event_widgets": 0.11,
+    "manage_purchases": 0.06,
+    "manage_event_types": 0.07,
+    "manage_event_locations": 0.05
+   },
+   "actor": "owner_or_editor",
+   "actor_probs": {
+    "owner_or_editor": 0.97,
+    "admin_only": 0,
+    "anyone_logged_in": 0,
+    "record_member": 0.03,
+    "branch_editor": 0,
+    "scope_holder": 0
+   },
+   "confidence": 0.96
+  },
+  "flags": []
+ },
+ "DELETE /api/cards/{id}": {
+  "method": "DELETE",
+  "path": "/api/cards/{id}",
+  "handler": "cards::delete",
+  "helpers": [
+   "cards::load",
+   "common::id",
+   "cards::kind",
+   "records::load",
+   "records::require_edit",
+   "records::touch",
+   "records::detail_of",
+   "records::decider",
+   "common::has_scope",
+   "cards::of_record"
+  ],
+  "actual_checks": {
+   "scopes": [],
+   "markers": [
+    "is_admin",
+    "can_edit",
+    "owner_id",
+    "membership"
+   ],
+   "actors": [
+    "owner_or_editor",
+    "record_member"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.1,
+    "hard_delete_nodes": 0.1,
+    "manage_users": 0.03,
+    "manage_teams": 0.05,
+    "create_tags": 0.03,
+    "edit_deadline": 0.12,
+    "tag_media": 0.05,
+    "manage_events": 0.13,
+    "manage_event_widgets": 0.08,
+    "manage_purchases": 0.05,
+    "manage_event_types": 0.05,
+    "manage_event_locations": 0.05
+   },
+   "actor": "owner_or_editor",
+   "actor_probs": {
+    "scope_holder": 0,
+    "anyone_logged_in": 0,
+    "record_member": 0.01,
+    "admin_only": 0,
+    "owner_or_editor": 0.99,
+    "branch_editor": 0
+   },
+   "confidence": 0.99
+  },
+  "flags": []
+ },
+ "PUT /api/cards/{id}/signup": {
+  "method": "PUT",
+  "path": "/api/cards/{id}/signup",
+  "handler": "cards::signup",
+  "helpers": [
+   "cards::load",
+   "common::id",
+   "cards::kind",
+   "records::load",
+   "records::is_restricted",
+   "common::text",
+   "records::detail_of",
+   "records::decider",
+   "common::has_scope",
+   "cards::of_record"
+  ],
+  "actual_checks": {
+   "scopes": [],
+   "markers": [
+    "is_admin",
+    "can_edit",
+    "owner_id",
+    "membership"
+   ],
+   "actors": [
+    "owner_or_editor",
+    "record_member"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.08,
+    "hard_delete_nodes": 0.02,
+    "manage_users": 0.05,
+    "manage_teams": 0.06,
+    "create_tags": 0.03,
+    "edit_deadline": 0.05,
+    "tag_media": 0.05,
+    "manage_events": 0.14,
+    "manage_event_widgets": 0.09,
+    "manage_purchases": 0.04,
+    "manage_event_types": 0.07,
+    "manage_event_locations": 0.05
+   },
+   "actor": "owner_or_editor",
+   "actor_probs": {
+    "scope_holder": 0.01,
+    "branch_editor": 0,
+    "owner_or_editor": 0.71,
+    "record_member": 0.21,
+    "anyone_logged_in": 0.07,
+    "admin_only": 0
+   },
+   "confidence": 0.65
+  },
+  "flags": []
+ },
+ "PUT /api/cards/{id}/vote": {
+  "method": "PUT",
+  "path": "/api/cards/{id}/vote",
+  "handler": "cards::vote",
+  "helpers": [
+   "cards::load",
+   "common::id",
+   "cards::kind",
+   "records::load",
+   "records::is_restricted",
+   "common::text",
+   "records::detail_of",
+   "records::decider",
+   "common::has_scope",
+   "cards::of_record",
+   "cards::poll_closed",
+   "cards::valid_ballot",
+   "cards::insert",
+   "cards::clean",
+   "cards::link_option_photos"
+  ],
+  "actual_checks": {
+   "scopes": [],
+   "markers": [
+    "is_admin",
+    "can_edit",
+    "owner_id",
+    "membership"
+   ],
+   "actors": [
+    "owner_or_editor",
+    "record_member"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.08,
+    "hard_delete_nodes": 0.02,
+    "manage_users": 0.03,
+    "manage_teams": 0.04,
+    "create_tags": 0.02,
+    "edit_deadline": 0.05,
+    "tag_media": 0.05,
+    "manage_events": 0.13,
+    "manage_event_widgets": 0.09,
+    "manage_purchases": 0.04,
+    "manage_event_types": 0.07,
+    "manage_event_locations": 0.04
+   },
+   "actor": "owner_or_editor",
+   "actor_probs": {
+    "record_member": 0.25,
+    "scope_holder": 0.01,
+    "branch_editor": 0,
+    "owner_or_editor": 0.7,
+    "anyone_logged_in": 0.04,
+    "admin_only": 0
+   },
+   "confidence": 0.64
+  },
+  "flags": []
+ },
+ "POST /api/cards/{id}/attachments": {
+  "method": "POST",
+  "path": "/api/cards/{id}/attachments",
+  "handler": "cards::attach",
+  "helpers": [
+   "cards::load",
+   "common::id",
+   "cards::kind",
+   "records::load",
+   "records::require_edit",
+   "records::touch",
+   "records::detail_of",
+   "records::decider",
+   "common::has_scope",
+   "cards::of_record"
+  ],
+  "actual_checks": {
+   "scopes": [],
+   "markers": [
+    "is_admin",
+    "can_edit",
+    "owner_id",
+    "membership"
+   ],
+   "actors": [
+    "owner_or_editor",
+    "record_member"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.1,
+    "hard_delete_nodes": 0.02,
+    "manage_users": 0.03,
+    "manage_teams": 0.05,
+    "create_tags": 0.06,
+    "edit_deadline": 0.05,
+    "tag_media": 0.2,
+    "manage_events": 0.13,
+    "manage_event_widgets": 0.07,
+    "manage_purchases": 0.04,
+    "manage_event_types": 0.06,
+    "manage_event_locations": 0.04
+   },
+   "actor": "owner_or_editor",
+   "actor_probs": {
+    "owner_or_editor": 0.98,
+    "branch_editor": 0,
+    "record_member": 0.01,
+    "admin_only": 0,
+    "scope_holder": 0.01,
+    "anyone_logged_in": 0
+   },
+   "confidence": 0.98
+  },
+  "flags": []
+ },
+ "GET /api/actions/mine": {
+  "method": "GET",
+  "path": "/api/actions/mine",
+  "handler": "records::my_actions",
+  "helpers": [],
+  "actual_checks": {
+   "scopes": [],
+   "markers": [
+    "owner_id"
+   ],
+   "actors": [
+    "owner_or_editor"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.05,
+    "hard_delete_nodes": 0.02,
+    "manage_users": 0.03,
+    "manage_teams": 0.03,
+    "create_tags": 0.03,
+    "edit_deadline": 0.05,
+    "tag_media": 0.03,
+    "manage_events": 0.08,
+    "manage_event_widgets": 0.04,
+    "manage_purchases": 0.03,
+    "manage_event_types": 0.04,
+    "manage_event_locations": 0.03
+   },
+   "actor": "anyone_logged_in",
+   "actor_probs": {
+    "branch_editor": 0,
+    "admin_only": 0,
+    "record_member": 0.02,
+    "owner_or_editor": 0.03,
+    "scope_holder": 0,
+    "anyone_logged_in": 0.95
+   },
+   "confidence": 0.93
+  },
+  "flags": [
+   "actor: code owner_or_editor vs jev anyone_logged_in"
+  ]
+ },
+ "PATCH /api/actions/{id}": {
+  "method": "PATCH",
+  "path": "/api/actions/{id}",
+  "handler": "records::patch_action",
+  "helpers": [
+   "common::id",
+   "records::load",
+   "records::require_edit",
+   "records::check_user",
+   "common::has_scope",
+   "common::text",
+   "records::log",
+   "records::change",
+   "records::touch",
+   "records::detail_of",
+   "records::decider",
+   "cards::of_record"
+  ],
+  "actual_checks": {
+   "scopes": [
+    "edit_deadline"
+   ],
+   "markers": [
+    "is_admin",
+    "can_edit",
+    "owner_id",
+    "membership"
+   ],
+   "actors": [
+    "owner_or_editor",
+    "record_member",
+    "scope_holder"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.08,
+    "hard_delete_nodes": 0.02,
+    "manage_users": 0.08,
+    "manage_teams": 0.05,
+    "create_tags": 0.02,
+    "edit_deadline": 0.71,
+    "tag_media": 0.04,
+    "manage_events": 0.12,
+    "manage_event_widgets": 0.05,
+    "manage_purchases": 0.04,
+    "manage_event_types": 0.04,
+    "manage_event_locations": 0.03
+   },
+   "actor": "owner_or_editor",
+   "actor_probs": {
+    "owner_or_editor": 0.94,
+    "anyone_logged_in": 0,
+    "record_member": 0.05,
+    "admin_only": 0,
+    "branch_editor": 0,
+    "scope_holder": 0.01
+   },
+   "confidence": 0.93
+  },
+  "flags": []
+ },
+ "GET /api/events": {
+  "method": "GET",
+  "path": "/api/events",
+  "handler": "events::list",
+  "helpers": [],
+  "actual_checks": {
+   "scopes": [],
+   "markers": [
+    "session_only"
+   ],
+   "actors": [
+    "anyone_logged_in"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.1,
+    "hard_delete_nodes": 0.02,
+    "manage_users": 0.05,
+    "manage_teams": 0.07,
+    "create_tags": 0.04,
+    "edit_deadline": 0.08,
+    "tag_media": 0.05,
+    "manage_events": 0.29,
+    "manage_event_widgets": 0.08,
+    "manage_purchases": 0.06,
+    "manage_event_types": 0.08,
+    "manage_event_locations": 0.08
+   },
+   "actor": "anyone_logged_in",
+   "actor_probs": {
+    "record_member": 0.05,
+    "branch_editor": 0,
+    "scope_holder": 0.08,
+    "owner_or_editor": 0.01,
+    "anyone_logged_in": 0.85,
+    "admin_only": 0.01
+   },
+   "confidence": 0.82
+  },
+  "flags": []
+ },
+ "POST /api/events": {
+  "method": "POST",
+  "path": "/api/events",
+  "handler": "events::create",
+  "helpers": [
+   "common::text",
+   "records::check_unit",
+   "common::tree",
+   "records::get",
+   "events::check_kind",
+   "events::get",
+   "records::log",
+   "records::change"
+  ],
+  "actual_checks": {
+   "scopes": [],
+   "markers": [
+    "owner_id"
+   ],
+   "actors": [
+    "owner_or_editor"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.14,
+    "hard_delete_nodes": 0.02,
+    "manage_users": 0.04,
+    "manage_teams": 0.08,
+    "create_tags": 0.04,
+    "edit_deadline": 0.1,
+    "tag_media": 0.03,
+    "manage_events": 0.35,
+    "manage_event_widgets": 0.17,
+    "manage_purchases": 0.05,
+    "manage_event_types": 0.12,
+    "manage_event_locations": 0.06
+   },
+   "actor": "anyone_logged_in",
+   "actor_probs": {
+    "owner_or_editor": 0.12,
+    "anyone_logged_in": 0.34,
+    "record_member": 0.04,
+    "branch_editor": 0.33,
+    "scope_holder": 0.17,
+    "admin_only": 0
+   },
+   "confidence": 0.2
+  },
+  "flags": [
+   "actor: code owner_or_editor vs jev anyone_logged_in"
+  ]
+ },
+ "GET /api/events/{id}": {
+  "method": "GET",
+  "path": "/api/events/{id}",
+  "handler": "events::get",
+  "helpers": [
+   "events::reply",
+   "events::load",
+   "events::detail_of",
+   "common::id"
+  ],
+  "actual_checks": {
+   "scopes": [
+    "manage_events"
+   ],
+   "markers": [
+    "can_manage",
+    "can_edit",
+    "owner_id"
+   ],
+   "actors": [
+    "owner_or_editor",
+    "scope_holder"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.07,
+    "hard_delete_nodes": 0.02,
+    "manage_users": 0.04,
+    "manage_teams": 0.05,
+    "create_tags": 0.03,
+    "edit_deadline": 0.08,
+    "tag_media": 0.04,
+    "manage_events": 0.17,
+    "manage_event_widgets": 0.08,
+    "manage_purchases": 0.06,
+    "manage_event_types": 0.06,
+    "manage_event_locations": 0.06
+   },
+   "actor": "owner_or_editor",
+   "actor_probs": {
+    "owner_or_editor": 0.42,
+    "record_member": 0.21,
+    "branch_editor": 0,
+    "admin_only": 0,
+    "anyone_logged_in": 0.31,
+    "scope_holder": 0.06
+   },
+   "confidence": 0.3
+  },
+  "flags": [
+   "code has manage_events, jev p=0.17"
+  ]
+ },
+ "PATCH /api/events/{id}": {
+  "method": "PATCH",
+  "path": "/api/events/{id}",
+  "handler": "events::patch",
+  "helpers": [
+   "events::editable",
+   "events::load",
+   "records::load",
+   "common::has_scope",
+   "records::require_edit",
+   "common::id",
+   "common::text",
+   "records::log",
+   "records::change",
+   "events::log_change",
+   "events::json",
+   "records::check_user",
+   "events::check_location",
+   "common::tree",
+   "events::get",
+   "records::touch",
+   "events::reply",
+   "events::detail_of"
+  ],
+  "actual_checks": {
+   "scopes": [
+    "manage_events"
+   ],
+   "markers": [
+    "can_manage",
+    "can_edit",
+    "owner_id"
+   ],
+   "actors": [
+    "owner_or_editor",
+    "scope_holder"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.08,
+    "hard_delete_nodes": 0.03,
+    "manage_users": 0.07,
+    "manage_teams": 0.05,
+    "create_tags": 0.03,
+    "edit_deadline": 0.27,
+    "tag_media": 0.05,
+    "manage_events": 0.81,
+    "manage_event_widgets": 0.13,
+    "manage_purchases": 0.07,
+    "manage_event_types": 0.06,
+    "manage_event_locations": 0.16
+   },
+   "actor": "owner_or_editor",
+   "actor_probs": {
+    "owner_or_editor": 0.7,
+    "anyone_logged_in": 0,
+    "admin_only": 0,
+    "branch_editor": 0,
+    "scope_holder": 0.28,
+    "record_member": 0.02
+   },
+   "confidence": 0.63
+  },
+  "flags": []
+ },
+ "PUT /api/events/{id}/participants/{user}": {
+  "method": "PUT",
+  "path": "/api/events/{id}/participants/{user}",
+  "handler": "events::put_participant",
+  "helpers": [
+   "events::editable",
+   "events::load",
+   "records::load",
+   "common::has_scope",
+   "records::require_edit",
+   "common::id",
+   "records::check_user",
+   "common::text",
+   "records::touch",
+   "events::reply",
+   "events::detail_of"
+  ],
+  "actual_checks": {
+   "scopes": [
+    "manage_events"
+   ],
+   "markers": [
+    "can_manage",
+    "can_edit",
+    "owner_id",
+    "membership"
+   ],
+   "actors": [
+    "owner_or_editor",
+    "record_member",
+    "scope_holder"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.1,
+    "hard_delete_nodes": 0.02,
+    "manage_users": 0.19,
+    "manage_teams": 0.19,
+    "create_tags": 0.02,
+    "edit_deadline": 0.1,
+    "tag_media": 0.05,
+    "manage_events": 0.55,
+    "manage_event_widgets": 0.08,
+    "manage_purchases": 0.04,
+    "manage_event_types": 0.06,
+    "manage_event_locations": 0.05
+   },
+   "actor": "owner_or_editor",
+   "actor_probs": {
+    "branch_editor": 0,
+    "anyone_logged_in": 0,
+    "scope_holder": 0.39,
+    "owner_or_editor": 0.6,
+    "record_member": 0.01,
+    "admin_only": 0
+   },
+   "confidence": 0.51
+  },
+  "flags": []
+ },
+ "DELETE /api/events/{id}/participants/{user}": {
+  "method": "DELETE",
+  "path": "/api/events/{id}/participants/{user}",
+  "handler": "events::remove_participant",
+  "helpers": [
+   "events::editable",
+   "events::load",
+   "records::load",
+   "common::has_scope",
+   "records::require_edit",
+   "common::id",
+   "events::reply",
+   "events::detail_of"
+  ],
+  "actual_checks": {
+   "scopes": [
+    "manage_events"
+   ],
+   "markers": [
+    "can_manage",
+    "can_edit",
+    "owner_id",
+    "membership"
+   ],
+   "actors": [
+    "owner_or_editor",
+    "record_member",
+    "scope_holder"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.08,
+    "hard_delete_nodes": 0.04,
+    "manage_users": 0.26,
+    "manage_teams": 0.24,
+    "create_tags": 0.02,
+    "edit_deadline": 0.09,
+    "tag_media": 0.03,
+    "manage_events": 0.53,
+    "manage_event_widgets": 0.07,
+    "manage_purchases": 0.04,
+    "manage_event_types": 0.07,
+    "manage_event_locations": 0.05
+   },
+   "actor": "owner_or_editor",
+   "actor_probs": {
+    "owner_or_editor": 0.65,
+    "scope_holder": 0.33,
+    "record_member": 0.02,
+    "anyone_logged_in": 0,
+    "branch_editor": 0,
+    "admin_only": 0
+   },
+   "confidence": 0.58
+  },
+  "flags": []
+ },
+ "PUT /api/events/{id}/teams/{team}": {
+  "method": "PUT",
+  "path": "/api/events/{id}/teams/{team}",
+  "handler": "events::put_team",
+  "helpers": [
+   "events::editable",
+   "events::load",
+   "records::load",
+   "common::has_scope",
+   "records::require_edit",
+   "common::id",
+   "records::check_team",
+   "events::reply",
+   "events::detail_of"
+  ],
+  "actual_checks": {
+   "scopes": [
+    "manage_events"
+   ],
+   "markers": [
+    "can_manage",
+    "can_edit",
+    "owner_id"
+   ],
+   "actors": [
+    "owner_or_editor",
+    "scope_holder"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.11,
+    "hard_delete_nodes": 0.03,
+    "manage_users": 0.11,
+    "manage_teams": 0.45,
+    "create_tags": 0.02,
+    "edit_deadline": 0.11,
+    "tag_media": 0.04,
+    "manage_events": 0.51,
+    "manage_event_widgets": 0.1,
+    "manage_purchases": 0.06,
+    "manage_event_types": 0.07,
+    "manage_event_locations": 0.06
+   },
+   "actor": "owner_or_editor",
+   "actor_probs": {
+    "owner_or_editor": 0.63,
+    "record_member": 0.02,
+    "branch_editor": 0,
+    "admin_only": 0,
+    "scope_holder": 0.35,
+    "anyone_logged_in": 0
+   },
+   "confidence": 0.56
+  },
+  "flags": []
+ },
+ "DELETE /api/events/{id}/teams/{team}": {
+  "method": "DELETE",
+  "path": "/api/events/{id}/teams/{team}",
+  "handler": "events::remove_team",
+  "helpers": [
+   "events::editable",
+   "events::load",
+   "records::load",
+   "common::has_scope",
+   "records::require_edit",
+   "common::id",
+   "events::reply",
+   "events::detail_of"
+  ],
+  "actual_checks": {
+   "scopes": [
+    "manage_events"
+   ],
+   "markers": [
+    "can_manage",
+    "can_edit",
+    "owner_id"
+   ],
+   "actors": [
+    "owner_or_editor",
+    "scope_holder"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.11,
+    "hard_delete_nodes": 0.05,
+    "manage_users": 0.13,
+    "manage_teams": 0.51,
+    "create_tags": 0.02,
+    "edit_deadline": 0.09,
+    "tag_media": 0.03,
+    "manage_events": 0.56,
+    "manage_event_widgets": 0.09,
+    "manage_purchases": 0.05,
+    "manage_event_types": 0.06,
+    "manage_event_locations": 0.08
+   },
+   "actor": "owner_or_editor",
+   "actor_probs": {
+    "owner_or_editor": 0.5,
+    "scope_holder": 0.49,
+    "admin_only": 0,
+    "anyone_logged_in": 0,
+    "branch_editor": 0,
+    "record_member": 0.01
+   },
+   "confidence": 0.4
+  },
+  "flags": []
+ },
+ "POST /api/events/{id}/checkpoints": {
+  "method": "POST",
+  "path": "/api/events/{id}/checkpoints",
+  "handler": "events::add_checkpoint",
+  "helpers": [
+   "events::load",
+   "common::id",
+   "events::require_scope",
+   "common::has_scope",
+   "common::text",
+   "events::reply",
+   "events::detail_of"
+  ],
+  "actual_checks": {
+   "scopes": [
+    "manage_events"
+   ],
+   "markers": [
+    "can_manage",
+    "can_edit",
+    "owner_id"
+   ],
+   "actors": [
+    "owner_or_editor",
+    "scope_holder"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.07,
+    "hard_delete_nodes": 0.02,
+    "manage_users": 0.03,
+    "manage_teams": 0.05,
+    "create_tags": 0.02,
+    "edit_deadline": 0.24,
+    "tag_media": 0.03,
+    "manage_events": 0.84,
+    "manage_event_widgets": 0.09,
+    "manage_purchases": 0.05,
+    "manage_event_types": 0.08,
+    "manage_event_locations": 0.04
+   },
+   "actor": "scope_holder",
+   "actor_probs": {
+    "scope_holder": 1,
+    "record_member": 0,
+    "anyone_logged_in": 0,
+    "branch_editor": 0,
+    "owner_or_editor": 0,
+    "admin_only": 0
+   },
+   "confidence": 1
+  },
+  "flags": []
+ },
+ "POST /api/events/{id}/widgets": {
+  "method": "POST",
+  "path": "/api/events/{id}/widgets",
+  "handler": "events::add_widget",
+  "helpers": [
+   "common::id",
+   "events::editable",
+   "events::load",
+   "records::load",
+   "common::has_scope",
+   "records::require_edit",
+   "events::require_scope",
+   "events::reply",
+   "events::detail_of"
+  ],
+  "actual_checks": {
+   "scopes": [
+    "manage_events",
+    "manage_event_widgets"
+   ],
+   "markers": [
+    "can_manage",
+    "can_edit",
+    "owner_id"
+   ],
+   "actors": [
+    "owner_or_editor",
+    "scope_holder"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.11,
+    "hard_delete_nodes": 0.02,
+    "manage_users": 0.03,
+    "manage_teams": 0.05,
+    "create_tags": 0.03,
+    "edit_deadline": 0.1,
+    "tag_media": 0.05,
+    "manage_events": 0.54,
+    "manage_event_widgets": 0.78,
+    "manage_purchases": 0.03,
+    "manage_event_types": 0.11,
+    "manage_event_locations": 0.05
+   },
+   "actor": "scope_holder",
+   "actor_probs": {
+    "owner_or_editor": 0.19,
+    "record_member": 0,
+    "admin_only": 0,
+    "branch_editor": 0,
+    "anyone_logged_in": 0,
+    "scope_holder": 0.81
+   },
+   "confidence": 0.76
+  },
+  "flags": []
+ },
+ "POST /api/events/{id}/materials": {
+  "method": "POST",
+  "path": "/api/events/{id}/materials",
+  "handler": "events::add_material",
+  "helpers": [
+   "common::id",
+   "events::load",
+   "events::require_scope",
+   "common::has_scope",
+   "common::text",
+   "events::reply",
+   "events::detail_of"
+  ],
+  "actual_checks": {
+   "scopes": [
+    "manage_events",
+    "manage_purchases"
+   ],
+   "markers": [
+    "can_manage",
+    "can_edit",
+    "owner_id"
+   ],
+   "actors": [
+    "owner_or_editor",
+    "scope_holder"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.09,
+    "hard_delete_nodes": 0.02,
+    "manage_users": 0.03,
+    "manage_teams": 0.06,
+    "create_tags": 0.03,
+    "edit_deadline": 0.09,
+    "tag_media": 0.04,
+    "manage_events": 0.4,
+    "manage_event_widgets": 0.09,
+    "manage_purchases": 0.79,
+    "manage_event_types": 0.07,
+    "manage_event_locations": 0.04
+   },
+   "actor": "scope_holder",
+   "actor_probs": {
+    "scope_holder": 1,
+    "record_member": 0,
+    "anyone_logged_in": 0,
+    "admin_only": 0,
+    "owner_or_editor": 0,
+    "branch_editor": 0
+   },
+   "confidence": 1
+  },
+  "flags": []
+ },
+ "GET /api/events/{id}/otf": {
+  "method": "GET",
+  "path": "/api/events/{id}/otf",
+  "handler": "otf::get",
+  "helpers": [
+   "otf::reply",
+   "otf::event_info",
+   "otf::view",
+   "otf::load_fields",
+   "otf::load_items",
+   "otf::load_contacts",
+   "otf::source_of",
+   "otf::load_review",
+   "common::id"
+  ],
+  "actual_checks": {
+   "scopes": [],
+   "markers": [
+    "session_only"
+   ],
+   "actors": [
+    "anyone_logged_in"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.07,
+    "hard_delete_nodes": 0.02,
+    "manage_users": 0.03,
+    "manage_teams": 0.05,
+    "create_tags": 0.02,
+    "edit_deadline": 0.08,
+    "tag_media": 0.05,
+    "manage_events": 0.26,
+    "manage_event_widgets": 0.11,
+    "manage_purchases": 0.06,
+    "manage_event_types": 0.07,
+    "manage_event_locations": 0.07
+   },
+   "actor": "anyone_logged_in",
+   "actor_probs": {
+    "owner_or_editor": 0.21,
+    "record_member": 0.25,
+    "anyone_logged_in": 0.5,
+    "admin_only": 0,
+    "scope_holder": 0.04,
+    "branch_editor": 0
+   },
+   "confidence": 0.38
+  },
+  "flags": []
+ },
+ "PUT /api/events/{id}/otf": {
+  "method": "PUT",
+  "path": "/api/events/{id}/otf",
+  "handler": "otf::put",
+  "helpers": [
+   "common::id",
+   "events::editable",
+   "events::load",
+   "records::load",
+   "common::has_scope",
+   "records::require_edit",
+   "otf::clean",
+   "common::text",
+   "records::check_user",
+   "otf::snapshot",
+   "otf::load_items",
+   "otf::load_fields",
+   "otf::load_contacts",
+   "otf::load_review",
+   "otf::reply",
+   "otf::event_info",
+   "otf::view",
+   "otf::source_of"
+  ],
+  "actual_checks": {
+   "scopes": [
+    "manage_events"
+   ],
+   "markers": [
+    "can_edit"
+   ],
+   "actors": [
+    "owner_or_editor",
+    "scope_holder"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.09,
+    "hard_delete_nodes": 0.02,
+    "manage_users": 0.05,
+    "manage_teams": 0.05,
+    "create_tags": 0.03,
+    "edit_deadline": 0.45,
+    "tag_media": 0.05,
+    "manage_events": 0.61,
+    "manage_event_widgets": 0.2,
+    "manage_purchases": 0.08,
+    "manage_event_types": 0.07,
+    "manage_event_locations": 0.06
+   },
+   "actor": "owner_or_editor",
+   "actor_probs": {
+    "owner_or_editor": 0.74,
+    "admin_only": 0,
+    "anyone_logged_in": 0,
+    "record_member": 0.02,
+    "branch_editor": 0,
+    "scope_holder": 0.24
+   },
+   "confidence": 0.68
+  },
+  "flags": []
+ },
+ "POST /api/events/{id}/otf/autofill": {
+  "method": "POST",
+  "path": "/api/events/{id}/otf/autofill",
+  "handler": "otf::autofill",
+  "helpers": [
+   "common::id",
+   "events::editable",
+   "events::load",
+   "records::load",
+   "common::has_scope",
+   "records::require_edit",
+   "otf::source_of",
+   "otf::reply",
+   "otf::event_info",
+   "otf::view",
+   "otf::load_fields",
+   "otf::load_items",
+   "otf::load_contacts",
+   "otf::load_review"
+  ],
+  "actual_checks": {
+   "scopes": [
+    "manage_events"
+   ],
+   "markers": [
+    "can_edit"
+   ],
+   "actors": [
+    "owner_or_editor",
+    "scope_holder"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.08,
+    "hard_delete_nodes": 0.02,
+    "manage_users": 0.04,
+    "manage_teams": 0.06,
+    "create_tags": 0.04,
+    "edit_deadline": 0.32,
+    "tag_media": 0.06,
+    "manage_events": 0.62,
+    "manage_event_widgets": 0.24,
+    "manage_purchases": 0.11,
+    "manage_event_types": 0.09,
+    "manage_event_locations": 0.07
+   },
+   "actor": "owner_or_editor",
+   "actor_probs": {
+    "owner_or_editor": 0.76,
+    "record_member": 0.02,
+    "anyone_logged_in": 0,
+    "branch_editor": 0,
+    "admin_only": 0,
+    "scope_holder": 0.22
+   },
+   "confidence": 0.71
+  },
+  "flags": []
+ },
+ "GET /api/events/{id}/otf.docx": {
+  "method": "GET",
+  "path": "/api/events/{id}/otf.docx",
+  "handler": "otf::docx",
+  "helpers": [
+   "common::id",
+   "otf::event_info",
+   "otf::load_review",
+   "otf::load_fields",
+   "otf::load_items",
+   "otf::month",
+   "otf::file_name"
+  ],
+  "actual_checks": {
+   "scopes": [],
+   "markers": [
+    "session_only"
+   ],
+   "actors": [
+    "anyone_logged_in"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.08,
+    "hard_delete_nodes": 0.02,
+    "manage_users": 0.04,
+    "manage_teams": 0.06,
+    "create_tags": 0.03,
+    "edit_deadline": 0.08,
+    "tag_media": 0.05,
+    "manage_events": 0.44,
+    "manage_event_widgets": 0.14,
+    "manage_purchases": 0.06,
+    "manage_event_types": 0.07,
+    "manage_event_locations": 0.08
+   },
+   "actor": "owner_or_editor",
+   "actor_probs": {
+    "admin_only": 0.01,
+    "branch_editor": 0,
+    "record_member": 0.31,
+    "scope_holder": 0.09,
+    "owner_or_editor": 0.46,
+    "anyone_logged_in": 0.13
+   },
+   "confidence": 0.35
+  },
+  "flags": [
+   "actor: code anyone_logged_in vs jev owner_or_editor"
+  ]
+ },
+ "PATCH /api/event-checkpoints/{id}": {
+  "method": "PATCH",
+  "path": "/api/event-checkpoints/{id}",
+  "handler": "events::patch_checkpoint",
+  "helpers": [
+   "common::id",
+   "events::event_of",
+   "events::editable",
+   "events::load",
+   "records::load",
+   "common::has_scope",
+   "records::require_edit",
+   "events::require_approver",
+   "events::is_approver",
+   "events::require_scope",
+   "events::reply",
+   "events::detail_of"
+  ],
+  "actual_checks": {
+   "scopes": [
+    "manage_events"
+   ],
+   "markers": [
+    "can_manage",
+    "can_edit",
+    "owner_id",
+    "approver"
+   ],
+   "actors": [
+    "owner_or_editor",
+    "scope_holder"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.07,
+    "hard_delete_nodes": 0.03,
+    "manage_users": 0.03,
+    "manage_teams": 0.04,
+    "create_tags": 0.02,
+    "edit_deadline": 0.66,
+    "tag_media": 0.03,
+    "manage_events": 0.51,
+    "manage_event_widgets": 0.07,
+    "manage_purchases": 0.04,
+    "manage_event_types": 0.07,
+    "manage_event_locations": 0.04
+   },
+   "actor": "owner_or_editor",
+   "actor_probs": {
+    "owner_or_editor": 0.68,
+    "record_member": 0.04,
+    "scope_holder": 0.28,
+    "branch_editor": 0,
+    "anyone_logged_in": 0,
+    "admin_only": 0
+   },
+   "confidence": 0.62
+  },
+  "flags": []
+ },
+ "DELETE /api/event-checkpoints/{id}": {
+  "method": "DELETE",
+  "path": "/api/event-checkpoints/{id}",
+  "handler": "events::delete_checkpoint",
+  "helpers": [
+   "common::id",
+   "events::event_of",
+   "events::load",
+   "events::require_approver",
+   "events::is_approver",
+   "events::reply",
+   "events::detail_of"
+  ],
+  "actual_checks": {
+   "scopes": [
+    "manage_events"
+   ],
+   "markers": [
+    "can_manage",
+    "can_edit",
+    "owner_id",
+    "approver"
+   ],
+   "actors": [
+    "owner_or_editor",
+    "scope_holder"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.07,
+    "hard_delete_nodes": 0.06,
+    "manage_users": 0.03,
+    "manage_teams": 0.05,
+    "create_tags": 0.02,
+    "edit_deadline": 0.17,
+    "tag_media": 0.03,
+    "manage_events": 0.74,
+    "manage_event_widgets": 0.08,
+    "manage_purchases": 0.04,
+    "manage_event_types": 0.07,
+    "manage_event_locations": 0.05
+   },
+   "actor": "scope_holder",
+   "actor_probs": {
+    "record_member": 0,
+    "anyone_logged_in": 0,
+    "scope_holder": 0.8,
+    "admin_only": 0,
+    "owner_or_editor": 0.2,
+    "branch_editor": 0
+   },
+   "confidence": 0.76
+  },
+  "flags": []
+ },
+ "POST /api/event-checkpoints/{id}/requests": {
+  "method": "POST",
+  "path": "/api/event-checkpoints/{id}/requests",
+  "handler": "events::request_checkpoint",
+  "helpers": [
+   "common::id",
+   "events::event_of",
+   "events::editable",
+   "events::load",
+   "records::load",
+   "common::has_scope",
+   "records::require_edit",
+   "events::as_str",
+   "records::log",
+   "records::touch",
+   "events::reply",
+   "events::detail_of"
+  ],
+  "actual_checks": {
+   "scopes": [
+    "manage_events"
+   ],
+   "markers": [
+    "can_manage",
+    "can_edit",
+    "owner_id"
+   ],
+   "actors": [
+    "owner_or_editor",
+    "scope_holder"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.08,
+    "hard_delete_nodes": 0.02,
+    "manage_users": 0.03,
+    "manage_teams": 0.06,
+    "create_tags": 0.02,
+    "edit_deadline": 0.14,
+    "tag_media": 0.03,
+    "manage_events": 0.41,
+    "manage_event_widgets": 0.08,
+    "manage_purchases": 0.05,
+    "manage_event_types": 0.07,
+    "manage_event_locations": 0.05
+   },
+   "actor": "owner_or_editor",
+   "actor_probs": {
+    "owner_or_editor": 0.66,
+    "anyone_logged_in": 0,
+    "admin_only": 0,
+    "scope_holder": 0.27,
+    "record_member": 0.07,
+    "branch_editor": 0
+   },
+   "confidence": 0.59
+  },
+  "flags": []
+ },
+ "POST /api/checkpoint-requests/{id}": {
+  "method": "POST",
+  "path": "/api/checkpoint-requests/{id}",
+  "handler": "events::resolve_request",
+  "helpers": [
+   "common::id",
+   "events::load",
+   "events::require_approver",
+   "events::is_approver",
+   "records::load",
+   "events::as_str",
+   "records::log",
+   "records::touch",
+   "events::reply",
+   "events::detail_of"
+  ],
+  "actual_checks": {
+   "scopes": [
+    "manage_events"
+   ],
+   "markers": [
+    "can_manage",
+    "can_edit",
+    "owner_id",
+    "approver"
+   ],
+   "actors": [
+    "owner_or_editor",
+    "scope_holder"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.07,
+    "hard_delete_nodes": 0.04,
+    "manage_users": 0.04,
+    "manage_teams": 0.05,
+    "create_tags": 0.02,
+    "edit_deadline": 0.17,
+    "tag_media": 0.03,
+    "manage_events": 0.61,
+    "manage_event_widgets": 0.1,
+    "manage_purchases": 0.08,
+    "manage_event_types": 0.07,
+    "manage_event_locations": 0.05
+   },
+   "actor": "scope_holder",
+   "actor_probs": {
+    "branch_editor": 0,
+    "admin_only": 0,
+    "record_member": 0,
+    "owner_or_editor": 0.3,
+    "scope_holder": 0.7,
+    "anyone_logged_in": 0
+   },
+   "confidence": 0.64
+  },
+  "flags": []
+ },
+ "DELETE /api/event-widgets/{id}": {
+  "method": "DELETE",
+  "path": "/api/event-widgets/{id}",
+  "handler": "events::delete_widget",
+  "helpers": [
+   "common::id",
+   "events::editable",
+   "events::load",
+   "records::load",
+   "common::has_scope",
+   "records::require_edit",
+   "events::require_scope",
+   "events::reply",
+   "events::detail_of"
+  ],
+  "actual_checks": {
+   "scopes": [
+    "manage_events",
+    "manage_event_widgets"
+   ],
+   "markers": [
+    "can_manage",
+    "can_edit",
+    "owner_id"
+   ],
+   "actors": [
+    "owner_or_editor",
+    "scope_holder"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.08,
+    "hard_delete_nodes": 0.05,
+    "manage_users": 0.03,
+    "manage_teams": 0.04,
+    "create_tags": 0.02,
+    "edit_deadline": 0.09,
+    "tag_media": 0.05,
+    "manage_events": 0.45,
+    "manage_event_widgets": 0.62,
+    "manage_purchases": 0.04,
+    "manage_event_types": 0.12,
+    "manage_event_locations": 0.05
+   },
+   "actor": "scope_holder",
+   "actor_probs": {
+    "branch_editor": 0,
+    "admin_only": 0,
+    "owner_or_editor": 0.14,
+    "anyone_logged_in": 0,
+    "scope_holder": 0.85,
+    "record_member": 0.01
+   },
+   "confidence": 0.82
+  },
+  "flags": []
+ },
+ "PATCH /api/materials/{id}": {
+  "method": "PATCH",
+  "path": "/api/materials/{id}",
+  "handler": "events::patch_material",
+  "helpers": [
+   "common::id",
+   "events::material_event",
+   "events::event_of",
+   "events::require_scope",
+   "common::has_scope",
+   "common::text",
+   "events::reply",
+   "events::load",
+   "events::detail_of"
+  ],
+  "actual_checks": {
+   "scopes": [
+    "manage_events",
+    "manage_purchases"
+   ],
+   "markers": [
+    "can_manage",
+    "can_edit",
+    "owner_id"
+   ],
+   "actors": [
+    "owner_or_editor",
+    "scope_holder"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.08,
+    "hard_delete_nodes": 0.03,
+    "manage_users": 0.03,
+    "manage_teams": 0.04,
+    "create_tags": 0.03,
+    "edit_deadline": 0.13,
+    "tag_media": 0.04,
+    "manage_events": 0.37,
+    "manage_event_widgets": 0.1,
+    "manage_purchases": 0.8,
+    "manage_event_types": 0.08,
+    "manage_event_locations": 0.04
+   },
+   "actor": "scope_holder",
+   "actor_probs": {
+    "owner_or_editor": 0,
+    "admin_only": 0,
+    "record_member": 0,
+    "branch_editor": 0,
+    "scope_holder": 1,
+    "anyone_logged_in": 0
+   },
+   "confidence": 1
+  },
+  "flags": []
+ },
+ "DELETE /api/materials/{id}": {
+  "method": "DELETE",
+  "path": "/api/materials/{id}",
+  "handler": "events::delete_material",
+  "helpers": [
+   "common::id",
+   "events::material_event",
+   "events::event_of",
+   "events::require_scope",
+   "common::has_scope",
+   "events::reply",
+   "events::load",
+   "events::detail_of"
+  ],
+  "actual_checks": {
+   "scopes": [
+    "manage_events",
+    "manage_purchases"
+   ],
+   "markers": [
+    "can_manage",
+    "can_edit",
+    "owner_id"
+   ],
+   "actors": [
+    "owner_or_editor",
+    "scope_holder"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.08,
+    "hard_delete_nodes": 0.09,
+    "manage_users": 0.03,
+    "manage_teams": 0.05,
+    "create_tags": 0.03,
+    "edit_deadline": 0.1,
+    "tag_media": 0.05,
+    "manage_events": 0.41,
+    "manage_event_widgets": 0.1,
+    "manage_purchases": 0.74,
+    "manage_event_types": 0.08,
+    "manage_event_locations": 0.04
+   },
+   "actor": "scope_holder",
+   "actor_probs": {
+    "branch_editor": 0,
+    "admin_only": 0,
+    "record_member": 0,
+    "anyone_logged_in": 0,
+    "scope_holder": 1,
+    "owner_or_editor": 0
+   },
+   "confidence": 1
+  },
+  "flags": []
+ },
+ "POST /api/materials/{id}/providers": {
+  "method": "POST",
+  "path": "/api/materials/{id}/providers",
+  "handler": "events::add_provider",
+  "helpers": [
+   "common::id",
+   "events::material_event",
+   "events::event_of",
+   "events::require_scope",
+   "common::has_scope",
+   "common::text",
+   "events::reply",
+   "events::load",
+   "events::detail_of"
+  ],
+  "actual_checks": {
+   "scopes": [
+    "manage_events",
+    "manage_purchases"
+   ],
+   "markers": [
+    "can_manage",
+    "can_edit",
+    "owner_id"
+   ],
+   "actors": [
+    "owner_or_editor",
+    "scope_holder"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.06,
+    "hard_delete_nodes": 0.02,
+    "manage_users": 0.03,
+    "manage_teams": 0.04,
+    "create_tags": 0.02,
+    "edit_deadline": 0.08,
+    "tag_media": 0.02,
+    "manage_events": 0.24,
+    "manage_event_widgets": 0.06,
+    "manage_purchases": 0.94,
+    "manage_event_types": 0.06,
+    "manage_event_locations": 0.04
+   },
+   "actor": "scope_holder",
+   "actor_probs": {
+    "admin_only": 0,
+    "branch_editor": 0,
+    "owner_or_editor": 0,
+    "anyone_logged_in": 0,
+    "scope_holder": 1,
+    "record_member": 0
+   },
+   "confidence": 1
+  },
+  "flags": [
+   "code has manage_events, jev p=0.24"
+  ]
+ },
+ "DELETE /api/material-providers/{id}": {
+  "method": "DELETE",
+  "path": "/api/material-providers/{id}",
+  "handler": "events::delete_provider",
+  "helpers": [
+   "common::id",
+   "events::require_scope",
+   "common::has_scope",
+   "events::reply",
+   "events::load",
+   "events::detail_of"
+  ],
+  "actual_checks": {
+   "scopes": [
+    "manage_events",
+    "manage_purchases"
+   ],
+   "markers": [
+    "can_manage",
+    "can_edit",
+    "owner_id"
+   ],
+   "actors": [
+    "owner_or_editor",
+    "scope_holder"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.07,
+    "hard_delete_nodes": 0.07,
+    "manage_users": 0.03,
+    "manage_teams": 0.05,
+    "create_tags": 0.02,
+    "edit_deadline": 0.07,
+    "tag_media": 0.03,
+    "manage_events": 0.34,
+    "manage_event_widgets": 0.08,
+    "manage_purchases": 0.86,
+    "manage_event_types": 0.07,
+    "manage_event_locations": 0.04
+   },
+   "actor": "scope_holder",
+   "actor_probs": {
+    "owner_or_editor": 0,
+    "admin_only": 0,
+    "anyone_logged_in": 0,
+    "record_member": 0,
+    "branch_editor": 0,
+    "scope_holder": 1
+   },
+   "confidence": 1
+  },
+  "flags": []
+ },
+ "GET /api/chats/{id}/feed": {
+  "method": "GET",
+  "path": "/api/chats/{id}/feed",
+  "handler": "chats::feed",
+  "helpers": [
+   "common::id",
+   "chats::chat_exists",
+   "records::is_restricted",
+   "chats::owner"
+  ],
+  "actual_checks": {
+   "scopes": [],
+   "markers": [
+    "can_edit"
+   ],
+   "actors": [
+    "owner_or_editor"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.07,
+    "hard_delete_nodes": 0.02,
+    "manage_users": 0.03,
+    "manage_teams": 0.07,
+    "create_tags": 0.05,
+    "edit_deadline": 0.03,
+    "tag_media": 0.1,
+    "manage_events": 0.1,
+    "manage_event_widgets": 0.04,
+    "manage_purchases": 0.03,
+    "manage_event_types": 0.04,
+    "manage_event_locations": 0.04
+   },
+   "actor": "record_member",
+   "actor_probs": {
+    "owner_or_editor": 0.23,
+    "branch_editor": 0,
+    "admin_only": 0,
+    "record_member": 0.75,
+    "scope_holder": 0,
+    "anyone_logged_in": 0.02
+   },
+   "confidence": 0.7
+  },
+  "flags": [
+   "actor: code owner_or_editor vs jev record_member"
+  ]
+ },
+ "POST /api/chats/{id}/messages": {
+  "method": "POST",
+  "path": "/api/chats/{id}/messages",
+  "handler": "chats::post",
+  "helpers": [
+   "common::id",
+   "chats::chat_exists",
+   "common::text",
+   "records::touch",
+   "chats::invite",
+   "notify::fanout",
+   "notify::fanout_inner"
+  ],
+  "actual_checks": {
+   "scopes": [],
+   "markers": [
+    "is_admin",
+    "can_edit",
+    "owner_id",
+    "membership"
+   ],
+   "actors": [
+    "owner_or_editor",
+    "record_member"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.05,
+    "hard_delete_nodes": 0.02,
+    "manage_users": 0.04,
+    "manage_teams": 0.07,
+    "create_tags": 0.03,
+    "edit_deadline": 0.03,
+    "tag_media": 0.08,
+    "manage_events": 0.09,
+    "manage_event_widgets": 0.04,
+    "manage_purchases": 0.03,
+    "manage_event_types": 0.03,
+    "manage_event_locations": 0.03
+   },
+   "actor": "record_member",
+   "actor_probs": {
+    "branch_editor": 0,
+    "admin_only": 0,
+    "anyone_logged_in": 0,
+    "scope_holder": 0,
+    "owner_or_editor": 0.24,
+    "record_member": 0.76
+   },
+   "confidence": 0.71
+  },
+  "flags": []
+ },
+ "GET /api/teams": {
+  "method": "GET",
+  "path": "/api/teams",
+  "handler": "home::teams",
+  "helpers": [
+   "home::team_views"
+  ],
+  "actual_checks": {
+   "scopes": [],
+   "markers": [
+    "membership"
+   ],
+   "actors": [
+    "record_member"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.12,
+    "hard_delete_nodes": 0.02,
+    "manage_users": 0.13,
+    "manage_teams": 0.21,
+    "create_tags": 0.03,
+    "edit_deadline": 0.05,
+    "tag_media": 0.03,
+    "manage_events": 0.13,
+    "manage_event_widgets": 0.05,
+    "manage_purchases": 0.03,
+    "manage_event_types": 0.06,
+    "manage_event_locations": 0.06
+   },
+   "actor": "anyone_logged_in",
+   "actor_probs": {
+    "owner_or_editor": 0,
+    "record_member": 0.03,
+    "branch_editor": 0,
+    "admin_only": 0.02,
+    "anyone_logged_in": 0.83,
+    "scope_holder": 0.12
+   },
+   "confidence": 0.79
+  },
+  "flags": [
+   "actor: code record_member vs jev anyone_logged_in"
+  ]
+ },
+ "POST /api/teams": {
+  "method": "POST",
+  "path": "/api/teams",
+  "handler": "teams::create_team",
+  "helpers": [
+   "home::manage_teams",
+   "common::has_scope",
+   "teams::name_of",
+   "common::text",
+   "teams::insert_team",
+   "teams::wall"
+  ],
+  "actual_checks": {
+   "scopes": [
+    "manage_teams"
+   ],
+   "markers": [
+    "is_admin"
+   ],
+   "actors": [
+    "scope_holder"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.08,
+    "hard_delete_nodes": 0.02,
+    "manage_users": 0.1,
+    "manage_teams": 0.93,
+    "create_tags": 0.03,
+    "edit_deadline": 0.04,
+    "tag_media": 0.03,
+    "manage_events": 0.08,
+    "manage_event_widgets": 0.04,
+    "manage_purchases": 0.03,
+    "manage_event_types": 0.05,
+    "manage_event_locations": 0.04
+   },
+   "actor": "scope_holder",
+   "actor_probs": {
+    "admin_only": 0,
+    "branch_editor": 0,
+    "record_member": 0,
+    "owner_or_editor": 0,
+    "anyone_logged_in": 0,
+    "scope_holder": 1
+   },
+   "confidence": 1
+  },
+  "flags": []
+ },
+ "GET /api/teams/{id}": {
+  "method": "GET",
+  "path": "/api/teams/{id}",
+  "handler": "home::team",
+  "helpers": [
+   "home::one_team",
+   "home::team_views",
+   "common::id"
+  ],
+  "actual_checks": {
+   "scopes": [],
+   "markers": [
+    "membership"
+   ],
+   "actors": [
+    "record_member"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.11,
+    "hard_delete_nodes": 0.02,
+    "manage_users": 0.13,
+    "manage_teams": 0.2,
+    "create_tags": 0.03,
+    "edit_deadline": 0.06,
+    "tag_media": 0.03,
+    "manage_events": 0.12,
+    "manage_event_widgets": 0.04,
+    "manage_purchases": 0.04,
+    "manage_event_types": 0.05,
+    "manage_event_locations": 0.06
+   },
+   "actor": "anyone_logged_in",
+   "actor_probs": {
+    "owner_or_editor": 0.03,
+    "admin_only": 0.02,
+    "anyone_logged_in": 0.58,
+    "record_member": 0.2,
+    "branch_editor": 0,
+    "scope_holder": 0.17
+   },
+   "confidence": 0.51
+  },
+  "flags": [
+   "actor: code record_member vs jev anyone_logged_in"
+  ]
+ },
+ "PATCH /api/teams/{id}": {
+  "method": "PATCH",
+  "path": "/api/teams/{id}",
+  "handler": "teams::patch_team",
+  "helpers": [
+   "home::manage_teams",
+   "common::has_scope",
+   "common::id",
+   "common::text",
+   "teams::set_banner",
+   "teams::wall"
+  ],
+  "actual_checks": {
+   "scopes": [
+    "manage_teams"
+   ],
+   "markers": [
+    "is_admin"
+   ],
+   "actors": [
+    "scope_holder"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.13,
+    "hard_delete_nodes": 0.03,
+    "manage_users": 0.11,
+    "manage_teams": 0.78,
+    "create_tags": 0.03,
+    "edit_deadline": 0.05,
+    "tag_media": 0.04,
+    "manage_events": 0.11,
+    "manage_event_widgets": 0.04,
+    "manage_purchases": 0.03,
+    "manage_event_types": 0.05,
+    "manage_event_locations": 0.05
+   },
+   "actor": "scope_holder",
+   "actor_probs": {
+    "owner_or_editor": 0,
+    "anyone_logged_in": 0,
+    "record_member": 0,
+    "branch_editor": 0,
+    "admin_only": 0,
+    "scope_holder": 1
+   },
+   "confidence": 1
+  },
+  "flags": []
+ },
+ "DELETE /api/teams/{id}": {
+  "method": "DELETE",
+  "path": "/api/teams/{id}",
+  "handler": "teams::delete_team",
+  "helpers": [
+   "home::manage_teams",
+   "common::has_scope",
+   "common::id"
+  ],
+  "actual_checks": {
+   "scopes": [
+    "manage_teams"
+   ],
+   "markers": [
+    "is_admin"
+   ],
+   "actors": [
+    "scope_holder"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.15,
+    "hard_delete_nodes": 0.22,
+    "manage_users": 0.13,
+    "manage_teams": 0.84,
+    "create_tags": 0.02,
+    "edit_deadline": 0.04,
+    "tag_media": 0.02,
+    "manage_events": 0.1,
+    "manage_event_widgets": 0.04,
+    "manage_purchases": 0.04,
+    "manage_event_types": 0.05,
+    "manage_event_locations": 0.06
+   },
+   "actor": "scope_holder",
+   "actor_probs": {
+    "admin_only": 0,
+    "scope_holder": 1,
+    "record_member": 0,
+    "owner_or_editor": 0,
+    "anyone_logged_in": 0,
+    "branch_editor": 0
+   },
+   "confidence": 1
+  },
+  "flags": []
+ },
+ "PUT /api/teams/{id}/nodes/{node}": {
+  "method": "PUT",
+  "path": "/api/teams/{id}/nodes/{node}",
+  "handler": "teams::link_node",
+  "helpers": [
+   "home::manage_teams",
+   "common::has_scope",
+   "common::id",
+   "common::tree",
+   "teams::wall"
+  ],
+  "actual_checks": {
+   "scopes": [
+    "manage_teams"
+   ],
+   "markers": [
+    "is_admin"
+   ],
+   "actors": [
+    "scope_holder"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.43,
+    "hard_delete_nodes": 0.04,
+    "manage_users": 0.08,
+    "manage_teams": 0.59,
+    "create_tags": 0.04,
+    "edit_deadline": 0.05,
+    "tag_media": 0.03,
+    "manage_events": 0.14,
+    "manage_event_widgets": 0.06,
+    "manage_purchases": 0.03,
+    "manage_event_types": 0.11,
+    "manage_event_locations": 0.15
+   },
+   "actor": "scope_holder",
+   "actor_probs": {
+    "branch_editor": 0.01,
+    "owner_or_editor": 0,
+    "record_member": 0,
+    "admin_only": 0,
+    "scope_holder": 0.99,
+    "anyone_logged_in": 0
+   },
+   "confidence": 0.98
+  },
+  "flags": []
+ },
+ "DELETE /api/teams/{id}/nodes/{node}": {
+  "method": "DELETE",
+  "path": "/api/teams/{id}/nodes/{node}",
+  "handler": "teams::unlink_node",
+  "helpers": [
+   "home::manage_teams",
+   "common::has_scope",
+   "common::id",
+   "teams::wall"
+  ],
+  "actual_checks": {
+   "scopes": [
+    "manage_teams"
+   ],
+   "markers": [
+    "is_admin"
+   ],
+   "actors": [
+    "scope_holder"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.62,
+    "hard_delete_nodes": 0.45,
+    "manage_users": 0.07,
+    "manage_teams": 0.34,
+    "create_tags": 0.03,
+    "edit_deadline": 0.05,
+    "tag_media": 0.03,
+    "manage_events": 0.15,
+    "manage_event_widgets": 0.08,
+    "manage_purchases": 0.03,
+    "manage_event_types": 0.14,
+    "manage_event_locations": 0.17
+   },
+   "actor": "scope_holder",
+   "actor_probs": {
+    "anyone_logged_in": 0,
+    "branch_editor": 0.05,
+    "record_member": 0,
+    "owner_or_editor": 0.01,
+    "scope_holder": 0.94,
+    "admin_only": 0
+   },
+   "confidence": 0.92
+  },
+  "flags": []
+ },
+ "POST /api/pillars": {
+  "method": "POST",
+  "path": "/api/pillars",
+  "handler": "teams::create_pillar",
+  "helpers": [
+   "home::manage_teams",
+   "common::has_scope",
+   "teams::name_of",
+   "common::text",
+   "teams::insert_team",
+   "teams::wall"
+  ],
+  "actual_checks": {
+   "scopes": [
+    "manage_teams"
+   ],
+   "markers": [
+    "is_admin",
+    "owner_id"
+   ],
+   "actors": [
+    "owner_or_editor",
+    "scope_holder"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.19,
+    "hard_delete_nodes": 0.03,
+    "manage_users": 0.09,
+    "manage_teams": 0.72,
+    "create_tags": 0.03,
+    "edit_deadline": 0.05,
+    "tag_media": 0.02,
+    "manage_events": 0.11,
+    "manage_event_widgets": 0.05,
+    "manage_purchases": 0.03,
+    "manage_event_types": 0.06,
+    "manage_event_locations": 0.05
+   },
+   "actor": "scope_holder",
+   "actor_probs": {
+    "owner_or_editor": 0,
+    "anyone_logged_in": 0,
+    "admin_only": 0,
+    "record_member": 0,
+    "branch_editor": 0,
+    "scope_holder": 1
+   },
+   "confidence": 1
+  },
+  "flags": []
+ },
+ "PATCH /api/pillars/{id}": {
+  "method": "PATCH",
+  "path": "/api/pillars/{id}",
+  "handler": "teams::patch_pillar",
+  "helpers": [
+   "home::manage_teams",
+   "common::has_scope",
+   "common::id",
+   "common::text",
+   "teams::set_banner",
+   "teams::wall"
+  ],
+  "actual_checks": {
+   "scopes": [
+    "manage_teams"
+   ],
+   "markers": [
+    "is_admin"
+   ],
+   "actors": [
+    "scope_holder"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.21,
+    "hard_delete_nodes": 0.03,
+    "manage_users": 0.08,
+    "manage_teams": 0.7,
+    "create_tags": 0.03,
+    "edit_deadline": 0.05,
+    "tag_media": 0.04,
+    "manage_events": 0.13,
+    "manage_event_widgets": 0.06,
+    "manage_purchases": 0.04,
+    "manage_event_types": 0.07,
+    "manage_event_locations": 0.06
+   },
+   "actor": "scope_holder",
+   "actor_probs": {
+    "record_member": 0,
+    "branch_editor": 0,
+    "admin_only": 0,
+    "anyone_logged_in": 0,
+    "scope_holder": 1,
+    "owner_or_editor": 0
+   },
+   "confidence": 1
+  },
+  "flags": []
+ },
+ "DELETE /api/pillars/{id}": {
+  "method": "DELETE",
+  "path": "/api/pillars/{id}",
+  "handler": "teams::delete_pillar",
+  "helpers": [
+   "common::id"
+  ],
+  "actual_checks": {
+   "scopes": [],
+   "markers": [
+    "is_admin",
+    "require_admin"
+   ],
+   "actors": [
+    "admin_only"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.33,
+    "hard_delete_nodes": 0.42,
+    "manage_users": 0.12,
+    "manage_teams": 0.66,
+    "create_tags": 0.02,
+    "edit_deadline": 0.05,
+    "tag_media": 0.02,
+    "manage_events": 0.1,
+    "manage_event_widgets": 0.05,
+    "manage_purchases": 0.04,
+    "manage_event_types": 0.07,
+    "manage_event_locations": 0.07
+   },
+   "actor": "admin_only",
+   "actor_probs": {
+    "scope_holder": 0.04,
+    "anyone_logged_in": 0,
+    "record_member": 0,
+    "branch_editor": 0,
+    "owner_or_editor": 0,
+    "admin_only": 0.96
+   },
+   "confidence": 0.95
+  },
+  "flags": []
+ },
+ "POST /api/teams/{id}/members": {
+  "method": "POST",
+  "path": "/api/teams/{id}/members",
+  "handler": "home::set_member",
+  "helpers": [
+   "home::manage_teams",
+   "common::has_scope",
+   "common::id",
+   "home::team_chat",
+   "home::wall",
+   "home::one_team",
+   "home::team_views"
+  ],
+  "actual_checks": {
+   "scopes": [
+    "manage_teams"
+   ],
+   "markers": [
+    "is_admin",
+    "membership"
+   ],
+   "actors": [
+    "record_member",
+    "scope_holder"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.06,
+    "hard_delete_nodes": 0.02,
+    "manage_users": 0.33,
+    "manage_teams": 0.91,
+    "create_tags": 0.02,
+    "edit_deadline": 0.03,
+    "tag_media": 0.02,
+    "manage_events": 0.07,
+    "manage_event_widgets": 0.03,
+    "manage_purchases": 0.02,
+    "manage_event_types": 0.03,
+    "manage_event_locations": 0.03
+   },
+   "actor": "scope_holder",
+   "actor_probs": {
+    "anyone_logged_in": 0,
+    "branch_editor": 0,
+    "record_member": 0,
+    "owner_or_editor": 0,
+    "scope_holder": 1,
+    "admin_only": 0
+   },
+   "confidence": 1
+  },
+  "flags": []
+ },
+ "DELETE /api/teams/{id}/members/{user}": {
+  "method": "DELETE",
+  "path": "/api/teams/{id}/members/{user}",
+  "handler": "home::drop_member",
+  "helpers": [
+   "home::manage_teams",
+   "common::has_scope",
+   "common::id",
+   "home::team_chat",
+   "home::wall",
+   "home::one_team",
+   "home::team_views"
+  ],
+  "actual_checks": {
+   "scopes": [
+    "manage_teams"
+   ],
+   "markers": [
+    "is_admin",
+    "membership"
+   ],
+   "actors": [
+    "record_member",
+    "scope_holder"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.06,
+    "hard_delete_nodes": 0.04,
+    "manage_users": 0.36,
+    "manage_teams": 0.93,
+    "create_tags": 0.02,
+    "edit_deadline": 0.03,
+    "tag_media": 0.02,
+    "manage_events": 0.08,
+    "manage_event_widgets": 0.03,
+    "manage_purchases": 0.02,
+    "manage_event_types": 0.03,
+    "manage_event_locations": 0.03
+   },
+   "actor": "scope_holder",
+   "actor_probs": {
+    "owner_or_editor": 0,
+    "scope_holder": 1,
+    "branch_editor": 0,
+    "record_member": 0,
+    "anyone_logged_in": 0,
+    "admin_only": 0
+   },
+   "confidence": 1
+  },
+  "flags": []
+ },
+ "GET /api/notifications": {
+  "method": "GET",
+  "path": "/api/notifications",
+  "handler": "notify::list",
+  "helpers": [
+   "notify::load_prefs",
+   "notify::mentions_me"
+  ],
+  "actual_checks": {
+   "scopes": [],
+   "markers": [
+    "owner_id",
+    "membership"
+   ],
+   "actors": [
+    "owner_or_editor",
+    "record_member"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.03,
+    "hard_delete_nodes": 0.01,
+    "manage_users": 0.03,
+    "manage_teams": 0.03,
+    "create_tags": 0.02,
+    "edit_deadline": 0.02,
+    "tag_media": 0.03,
+    "manage_events": 0.05,
+    "manage_event_widgets": 0.02,
+    "manage_purchases": 0.02,
+    "manage_event_types": 0.02,
+    "manage_event_locations": 0.03
+   },
+   "actor": "anyone_logged_in",
+   "actor_probs": {
+    "owner_or_editor": 0,
+    "admin_only": 0,
+    "branch_editor": 0,
+    "record_member": 0.02,
+    "scope_holder": 0,
+    "anyone_logged_in": 0.98
+   },
+   "confidence": 0.98
+  },
+  "flags": [
+   "actor: code owner_or_editor/record_member vs jev anyone_logged_in"
+  ]
+ },
+ "POST /api/notifications/seen": {
+  "method": "POST",
+  "path": "/api/notifications/seen",
+  "handler": "notify::seen",
+  "helpers": [],
+  "actual_checks": {
+   "scopes": [],
+   "markers": [
+    "session_only"
+   ],
+   "actors": [
+    "anyone_logged_in"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.04,
+    "hard_delete_nodes": 0.01,
+    "manage_users": 0.04,
+    "manage_teams": 0.03,
+    "create_tags": 0.02,
+    "edit_deadline": 0.03,
+    "tag_media": 0.03,
+    "manage_events": 0.06,
+    "manage_event_widgets": 0.03,
+    "manage_purchases": 0.02,
+    "manage_event_types": 0.03,
+    "manage_event_locations": 0.03
+   },
+   "actor": "anyone_logged_in",
+   "actor_probs": {
+    "branch_editor": 0,
+    "anyone_logged_in": 1,
+    "scope_holder": 0,
+    "owner_or_editor": 0,
+    "record_member": 0,
+    "admin_only": 0
+   },
+   "confidence": 1
+  },
+  "flags": []
+ },
+ "GET /api/me/notifications": {
+  "method": "GET",
+  "path": "/api/me/notifications",
+  "handler": "notify::prefs",
+  "helpers": [
+   "notify::load_prefs"
+  ],
+  "actual_checks": {
+   "scopes": [],
+   "markers": [
+    "session_only"
+   ],
+   "actors": [
+    "anyone_logged_in"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.04,
+    "hard_delete_nodes": 0.01,
+    "manage_users": 0.03,
+    "manage_teams": 0.03,
+    "create_tags": 0.02,
+    "edit_deadline": 0.03,
+    "tag_media": 0.03,
+    "manage_events": 0.05,
+    "manage_event_widgets": 0.03,
+    "manage_purchases": 0.02,
+    "manage_event_types": 0.03,
+    "manage_event_locations": 0.02
+   },
+   "actor": "anyone_logged_in",
+   "actor_probs": {
+    "branch_editor": 0,
+    "owner_or_editor": 0,
+    "record_member": 0,
+    "admin_only": 0,
+    "scope_holder": 0,
+    "anyone_logged_in": 1
+   },
+   "confidence": 1
+  },
+  "flags": []
+ },
+ "PATCH /api/me/notifications": {
+  "method": "PATCH",
+  "path": "/api/me/notifications",
+  "handler": "notify::patch_prefs",
+  "helpers": [
+   "notify::load_prefs"
+  ],
+  "actual_checks": {
+   "scopes": [],
+   "markers": [
+    "session_only"
+   ],
+   "actors": [
+    "anyone_logged_in"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.04,
+    "hard_delete_nodes": 0.01,
+    "manage_users": 0.04,
+    "manage_teams": 0.03,
+    "create_tags": 0.02,
+    "edit_deadline": 0.03,
+    "tag_media": 0.02,
+    "manage_events": 0.04,
+    "manage_event_widgets": 0.02,
+    "manage_purchases": 0.02,
+    "manage_event_types": 0.02,
+    "manage_event_locations": 0.02
+   },
+   "actor": "anyone_logged_in",
+   "actor_probs": {
+    "owner_or_editor": 0,
+    "record_member": 0,
+    "branch_editor": 0,
+    "admin_only": 0,
+    "anyone_logged_in": 1,
+    "scope_holder": 0
+   },
+   "confidence": 0.99
+  },
+  "flags": []
+ },
+ "PUT /api/chats/{id}/prefs": {
+  "method": "PUT",
+  "path": "/api/chats/{id}/prefs",
+  "handler": "notify::set_chat",
+  "helpers": [
+   "common::id",
+   "notify::load_prefs"
+  ],
+  "actual_checks": {
+   "scopes": [],
+   "markers": [
+    "session_only"
+   ],
+   "actors": [
+    "anyone_logged_in"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.07,
+    "hard_delete_nodes": 0.01,
+    "manage_users": 0.04,
+    "manage_teams": 0.05,
+    "create_tags": 0.02,
+    "edit_deadline": 0.04,
+    "tag_media": 0.06,
+    "manage_events": 0.08,
+    "manage_event_widgets": 0.04,
+    "manage_purchases": 0.02,
+    "manage_event_types": 0.03,
+    "manage_event_locations": 0.03
+   },
+   "actor": "anyone_logged_in",
+   "actor_probs": {
+    "owner_or_editor": 0.03,
+    "anyone_logged_in": 0.74,
+    "admin_only": 0,
+    "scope_holder": 0,
+    "branch_editor": 0,
+    "record_member": 0.23
+   },
+   "confidence": 0.67
+  },
+  "flags": []
+ },
+ "GET /api/push/vapid": {
+  "method": "GET",
+  "path": "/api/push/vapid",
+  "handler": "notify::vapid",
+  "helpers": [],
+  "actual_checks": {
+   "scopes": [],
+   "markers": [
+    "session_only"
+   ],
+   "actors": [
+    "anyone_logged_in"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.05,
+    "hard_delete_nodes": 0.02,
+    "manage_users": 0.06,
+    "manage_teams": 0.05,
+    "create_tags": 0.03,
+    "edit_deadline": 0.03,
+    "tag_media": 0.04,
+    "manage_events": 0.06,
+    "manage_event_widgets": 0.04,
+    "manage_purchases": 0.03,
+    "manage_event_types": 0.04,
+    "manage_event_locations": 0.04
+   },
+   "actor": "anyone_logged_in",
+   "actor_probs": {
+    "admin_only": 0.03,
+    "anyone_logged_in": 0.96,
+    "record_member": 0,
+    "scope_holder": 0.01,
+    "branch_editor": 0,
+    "owner_or_editor": 0
+   },
+   "confidence": 0.95
+  },
+  "flags": []
+ },
+ "POST /api/push/subscriptions": {
+  "method": "POST",
+  "path": "/api/push/subscriptions",
+  "handler": "notify::subscribe",
+  "helpers": [],
+  "actual_checks": {
+   "scopes": [],
+   "markers": [
+    "session_only"
+   ],
+   "actors": [
+    "anyone_logged_in"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.04,
+    "hard_delete_nodes": 0.02,
+    "manage_users": 0.05,
+    "manage_teams": 0.04,
+    "create_tags": 0.02,
+    "edit_deadline": 0.03,
+    "tag_media": 0.03,
+    "manage_events": 0.06,
+    "manage_event_widgets": 0.04,
+    "manage_purchases": 0.02,
+    "manage_event_types": 0.03,
+    "manage_event_locations": 0.03
+   },
+   "actor": "anyone_logged_in",
+   "actor_probs": {
+    "anyone_logged_in": 1,
+    "record_member": 0,
+    "scope_holder": 0,
+    "branch_editor": 0,
+    "owner_or_editor": 0,
+    "admin_only": 0
+   },
+   "confidence": 0.99
+  },
+  "flags": []
+ },
+ "DELETE /api/push/subscriptions": {
+  "method": "DELETE",
+  "path": "/api/push/subscriptions",
+  "handler": "notify::unsubscribe",
+  "helpers": [],
+  "actual_checks": {
+   "scopes": [],
+   "markers": [
+    "session_only"
+   ],
+   "actors": [
+    "anyone_logged_in"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.05,
+    "hard_delete_nodes": 0.03,
+    "manage_users": 0.07,
+    "manage_teams": 0.05,
+    "create_tags": 0.02,
+    "edit_deadline": 0.03,
+    "tag_media": 0.03,
+    "manage_events": 0.07,
+    "manage_event_widgets": 0.04,
+    "manage_purchases": 0.02,
+    "manage_event_types": 0.03,
+    "manage_event_locations": 0.03
+   },
+   "actor": "anyone_logged_in",
+   "actor_probs": {
+    "owner_or_editor": 0.01,
+    "record_member": 0,
+    "admin_only": 0,
+    "branch_editor": 0,
+    "anyone_logged_in": 0.99,
+    "scope_holder": 0
+   },
+   "confidence": 0.99
+  },
+  "flags": []
+ },
+ "GET /api/nodes": {
+  "method": "GET",
+  "path": "/api/nodes",
+  "handler": "nodes::tree",
+  "helpers": [
+   "nodes::view",
+   "common::tree",
+   "nodes::locked"
+  ],
+  "actual_checks": {
+   "scopes": [],
+   "markers": [
+    "branch/NodeAccess"
+   ],
+   "actors": [
+    "branch_editor"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.18,
+    "hard_delete_nodes": 0.04,
+    "manage_users": 0.06,
+    "manage_teams": 0.07,
+    "create_tags": 0.04,
+    "edit_deadline": 0.06,
+    "tag_media": 0.04,
+    "manage_events": 0.12,
+    "manage_event_widgets": 0.07,
+    "manage_purchases": 0.04,
+    "manage_event_types": 0.12,
+    "manage_event_locations": 0.13
+   },
+   "actor": "anyone_logged_in",
+   "actor_probs": {
+    "admin_only": 0.01,
+    "anyone_logged_in": 0.72,
+    "owner_or_editor": 0.01,
+    "scope_holder": 0.07,
+    "branch_editor": 0.19,
+    "record_member": 0
+   },
+   "confidence": 0.66
+  },
+  "flags": [
+   "actor: code branch_editor vs jev anyone_logged_in"
+  ]
+ },
+ "POST /api/nodes": {
+  "method": "POST",
+  "path": "/api/nodes",
+  "handler": "nodes::create",
+  "helpers": [
+   "nodes::name_of",
+   "common::text",
+   "common::tree",
+   "nodes::list_fits",
+   "nodes::attrs_for",
+   "nodes::log",
+   "nodes::view",
+   "nodes::locked"
+  ],
+  "actual_checks": {
+   "scopes": [
+    "edit_nodes",
+    "hard_delete_nodes",
+    "manage_event_types",
+    "manage_event_locations"
+   ],
+   "markers": [
+    "branch/NodeAccess",
+    "owner_id"
+   ],
+   "actors": [
+    "branch_editor",
+    "owner_or_editor",
+    "scope_holder"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.93,
+    "hard_delete_nodes": 0.03,
+    "manage_users": 0.03,
+    "manage_teams": 0.05,
+    "create_tags": 0.04,
+    "edit_deadline": 0.05,
+    "tag_media": 0.03,
+    "manage_events": 0.15,
+    "manage_event_widgets": 0.09,
+    "manage_purchases": 0.03,
+    "manage_event_types": 0.17,
+    "manage_event_locations": 0.11
+   },
+   "actor": "branch_editor",
+   "actor_probs": {
+    "admin_only": 0,
+    "scope_holder": 0.04,
+    "branch_editor": 0.95,
+    "anyone_logged_in": 0,
+    "record_member": 0,
+    "owner_or_editor": 0.01
+   },
+   "confidence": 0.94
+  },
+  "flags": [
+   "code has hard_delete_nodes, jev p=0.03",
+   "code has manage_event_types, jev p=0.17",
+   "code has manage_event_locations, jev p=0.11"
+  ]
+ },
+ "PATCH /api/nodes/{id}": {
+  "method": "PATCH",
+  "path": "/api/nodes/{id}",
+  "handler": "nodes::patch",
+  "helpers": [
+   "common::id",
+   "common::text",
+   "common::tree",
+   "nodes::attrs_for",
+   "nodes::locked",
+   "nodes::list_fits",
+   "nodes::shape_fits",
+   "nodes::view",
+   "nodes::log"
+  ],
+  "actual_checks": {
+   "scopes": [
+    "edit_nodes",
+    "hard_delete_nodes",
+    "manage_event_types",
+    "manage_event_locations"
+   ],
+   "markers": [
+    "branch/NodeAccess"
+   ],
+   "actors": [
+    "branch_editor",
+    "scope_holder"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.93,
+    "hard_delete_nodes": 0.04,
+    "manage_users": 0.02,
+    "manage_teams": 0.03,
+    "create_tags": 0.04,
+    "edit_deadline": 0.04,
+    "tag_media": 0.03,
+    "manage_events": 0.1,
+    "manage_event_widgets": 0.05,
+    "manage_purchases": 0.03,
+    "manage_event_types": 0.11,
+    "manage_event_locations": 0.09
+   },
+   "actor": "branch_editor",
+   "actor_probs": {
+    "admin_only": 0,
+    "record_member": 0,
+    "anyone_logged_in": 0,
+    "scope_holder": 0.04,
+    "branch_editor": 0.94,
+    "owner_or_editor": 0.02
+   },
+   "confidence": 0.93
+  },
+  "flags": [
+   "code has hard_delete_nodes, jev p=0.04",
+   "code has manage_event_types, jev p=0.11",
+   "code has manage_event_locations, jev p=0.09"
+  ]
+ },
+ "DELETE /api/nodes/{id}": {
+  "method": "DELETE",
+  "path": "/api/nodes/{id}",
+  "handler": "nodes::delete",
+  "helpers": [
+   "common::id",
+   "common::tree",
+   "nodes::locked",
+   "nodes::log",
+   "nodes::view"
+  ],
+  "actual_checks": {
+   "scopes": [
+    "edit_nodes",
+    "hard_delete_nodes",
+    "manage_event_types",
+    "manage_event_locations"
+   ],
+   "markers": [
+    "branch/NodeAccess"
+   ],
+   "actors": [
+    "branch_editor",
+    "scope_holder"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.51,
+    "hard_delete_nodes": 0.78,
+    "manage_users": 0.03,
+    "manage_teams": 0.04,
+    "create_tags": 0.02,
+    "edit_deadline": 0.04,
+    "tag_media": 0.02,
+    "manage_events": 0.12,
+    "manage_event_widgets": 0.05,
+    "manage_purchases": 0.03,
+    "manage_event_types": 0.16,
+    "manage_event_locations": 0.12
+   },
+   "actor": "scope_holder",
+   "actor_probs": {
+    "admin_only": 0,
+    "scope_holder": 0.68,
+    "branch_editor": 0.29,
+    "record_member": 0,
+    "anyone_logged_in": 0,
+    "owner_or_editor": 0.03
+   },
+   "confidence": 0.62
+  },
+  "flags": [
+   "code has manage_event_types, jev p=0.16",
+   "code has manage_event_locations, jev p=0.12"
+  ]
+ },
+ "PUT /api/nodes/{id}/favorite": {
+  "method": "PUT",
+  "path": "/api/nodes/{id}/favorite",
+  "handler": "nodes::favorite",
+  "helpers": [
+   "common::id",
+   "common::tree",
+   "nodes::favorites_of"
+  ],
+  "actual_checks": {
+   "scopes": [],
+   "markers": [
+    "session_only"
+   ],
+   "actors": [
+    "anyone_logged_in"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.21,
+    "hard_delete_nodes": 0.02,
+    "manage_users": 0.03,
+    "manage_teams": 0.03,
+    "create_tags": 0.03,
+    "edit_deadline": 0.04,
+    "tag_media": 0.05,
+    "manage_events": 0.1,
+    "manage_event_widgets": 0.06,
+    "manage_purchases": 0.02,
+    "manage_event_types": 0.08,
+    "manage_event_locations": 0.08
+   },
+   "actor": "anyone_logged_in",
+   "actor_probs": {
+    "scope_holder": 0.02,
+    "branch_editor": 0.04,
+    "owner_or_editor": 0.03,
+    "record_member": 0,
+    "anyone_logged_in": 0.91,
+    "admin_only": 0
+   },
+   "confidence": 0.89
+  },
+  "flags": []
+ },
+ "DELETE /api/nodes/{id}/favorite": {
+  "method": "DELETE",
+  "path": "/api/nodes/{id}/favorite",
+  "handler": "nodes::unfavorite",
+  "helpers": [
+   "common::id",
+   "nodes::favorites_of"
+  ],
+  "actual_checks": {
+   "scopes": [],
+   "markers": [
+    "session_only"
+   ],
+   "actors": [
+    "anyone_logged_in"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.18,
+    "hard_delete_nodes": 0.03,
+    "manage_users": 0.03,
+    "manage_teams": 0.03,
+    "create_tags": 0.02,
+    "edit_deadline": 0.03,
+    "tag_media": 0.04,
+    "manage_events": 0.09,
+    "manage_event_widgets": 0.05,
+    "manage_purchases": 0.02,
+    "manage_event_types": 0.05,
+    "manage_event_locations": 0.05
+   },
+   "actor": "anyone_logged_in",
+   "actor_probs": {
+    "admin_only": 0,
+    "owner_or_editor": 0.02,
+    "record_member": 0,
+    "branch_editor": 0.01,
+    "anyone_logged_in": 0.97,
+    "scope_holder": 0
+   },
+   "confidence": 0.95
+  },
+  "flags": []
+ },
+ "POST /api/attachments": {
+  "method": "POST",
+  "path": "/api/attachments",
+  "handler": "attachments::upload",
+  "helpers": [
+   "attachments::views"
+  ],
+  "actual_checks": {
+   "scopes": [],
+   "markers": [
+    "is_admin",
+    "owner_id"
+   ],
+   "actors": [
+    "owner_or_editor"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.1,
+    "hard_delete_nodes": 0.02,
+    "manage_users": 0.03,
+    "manage_teams": 0.05,
+    "create_tags": 0.06,
+    "edit_deadline": 0.03,
+    "tag_media": 0.15,
+    "manage_events": 0.15,
+    "manage_event_widgets": 0.06,
+    "manage_purchases": 0.04,
+    "manage_event_types": 0.05,
+    "manage_event_locations": 0.03
+   },
+   "actor": "record_member",
+   "actor_probs": {
+    "branch_editor": 0,
+    "owner_or_editor": 0.16,
+    "admin_only": 0,
+    "scope_holder": 0.07,
+    "anyone_logged_in": 0.33,
+    "record_member": 0.44
+   },
+   "confidence": 0.31
+  },
+  "flags": [
+   "actor: code owner_or_editor vs jev record_member"
+  ]
+ },
+ "GET /api/attachments/{id}": {
+  "method": "GET",
+  "path": "/api/attachments/{id}",
+  "handler": "attachments::get",
+  "helpers": [
+   "attachments::serve",
+   "attachments::blob",
+   "common::id"
+  ],
+  "actual_checks": {
+   "scopes": [],
+   "markers": [
+    "owner_id"
+   ],
+   "actors": [
+    "owner_or_editor"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.07,
+    "hard_delete_nodes": 0.02,
+    "manage_users": 0.03,
+    "manage_teams": 0.03,
+    "create_tags": 0.02,
+    "edit_deadline": 0.03,
+    "tag_media": 0.14,
+    "manage_events": 0.12,
+    "manage_event_widgets": 0.07,
+    "manage_purchases": 0.04,
+    "manage_event_types": 0.04,
+    "manage_event_locations": 0.04
+   },
+   "actor": "anyone_logged_in",
+   "actor_probs": {
+    "record_member": 0.4,
+    "branch_editor": 0,
+    "admin_only": 0,
+    "anyone_logged_in": 0.47000000000000003,
+    "scope_holder": 0.02,
+    "owner_or_editor": 0.11
+   },
+   "confidence": 0.36
+  },
+  "flags": [
+   "actor: code owner_or_editor vs jev anyone_logged_in"
+  ]
+ },
+ "DELETE /api/attachments/{id}": {
+  "method": "DELETE",
+  "path": "/api/attachments/{id}",
+  "handler": "attachments::delete",
+  "helpers": [
+   "common::id",
+   "attachments::blob"
+  ],
+  "actual_checks": {
+   "scopes": [],
+   "markers": [
+    "is_admin",
+    "owner_id"
+   ],
+   "actors": [
+    "owner_or_editor"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.1,
+    "hard_delete_nodes": 0.08,
+    "manage_users": 0.03,
+    "manage_teams": 0.03,
+    "create_tags": 0.02,
+    "edit_deadline": 0.04,
+    "tag_media": 0.2,
+    "manage_events": 0.17,
+    "manage_event_widgets": 0.07,
+    "manage_purchases": 0.04,
+    "manage_event_types": 0.05,
+    "manage_event_locations": 0.04
+   },
+   "actor": "owner_or_editor",
+   "actor_probs": {
+    "branch_editor": 0,
+    "owner_or_editor": 0.83,
+    "admin_only": 0.06,
+    "anyone_logged_in": 0,
+    "scope_holder": 0.03,
+    "record_member": 0.08
+   },
+   "confidence": 0.78
+  },
+  "flags": []
+ },
+ "GET /api/attachments/{id}/thumb": {
+  "method": "GET",
+  "path": "/api/attachments/{id}/thumb",
+  "handler": "attachments::thumb",
+  "helpers": [
+   "attachments::serve",
+   "attachments::blob",
+   "common::id"
+  ],
+  "actual_checks": {
+   "scopes": [],
+   "markers": [
+    "owner_id"
+   ],
+   "actors": [
+    "owner_or_editor"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.07,
+    "hard_delete_nodes": 0.02,
+    "manage_users": 0.03,
+    "manage_teams": 0.03,
+    "create_tags": 0.02,
+    "edit_deadline": 0.03,
+    "tag_media": 0.11,
+    "manage_events": 0.11,
+    "manage_event_widgets": 0.05,
+    "manage_purchases": 0.03,
+    "manage_event_types": 0.04,
+    "manage_event_locations": 0.03
+   },
+   "actor": "anyone_logged_in",
+   "actor_probs": {
+    "owner_or_editor": 0.09,
+    "anyone_logged_in": 0.49,
+    "admin_only": 0,
+    "record_member": 0.4,
+    "branch_editor": 0,
+    "scope_holder": 0.02
+   },
+   "confidence": 0.39
+  },
+  "flags": [
+   "actor: code owner_or_editor vs jev anyone_logged_in"
+  ]
+ },
+ "POST /api/attachments/{id}/tags": {
+  "method": "POST",
+  "path": "/api/attachments/{id}/tags",
+  "handler": "attachments::add_tag",
+  "helpers": [
+   "common::id",
+   "attachments::one",
+   "attachments::place",
+   "attachments::can_tag",
+   "attachments::views",
+   "common::text",
+   "common::has_scope"
+  ],
+  "actual_checks": {
+   "scopes": [
+    "create_tags",
+    "tag_media"
+   ],
+   "markers": [
+    "is_admin",
+    "can_edit",
+    "owner_id",
+    "membership"
+   ],
+   "actors": [
+    "owner_or_editor",
+    "record_member",
+    "scope_holder"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.06,
+    "hard_delete_nodes": 0.02,
+    "manage_users": 0.02,
+    "manage_teams": 0.05,
+    "create_tags": 0.28,
+    "edit_deadline": 0.03,
+    "tag_media": 0.93,
+    "manage_events": 0.07,
+    "manage_event_widgets": 0.03,
+    "manage_purchases": 0.02,
+    "manage_event_types": 0.03,
+    "manage_event_locations": 0.03
+   },
+   "actor": "scope_holder",
+   "actor_probs": {
+    "owner_or_editor": 0.07,
+    "anyone_logged_in": 0,
+    "admin_only": 0,
+    "record_member": 0.07,
+    "branch_editor": 0,
+    "scope_holder": 0.86
+   },
+   "confidence": 0.83
+  },
+  "flags": [
+   "code has create_tags, jev p=0.28"
+  ]
+ },
+ "DELETE /api/attachments/{id}/tags/{tag}": {
+  "method": "DELETE",
+  "path": "/api/attachments/{id}/tags/{tag}",
+  "handler": "attachments::remove_tag",
+  "helpers": [
+   "common::id",
+   "attachments::one",
+   "attachments::place",
+   "attachments::can_tag",
+   "attachments::views"
+  ],
+  "actual_checks": {
+   "scopes": [
+    "tag_media"
+   ],
+   "markers": [
+    "is_admin",
+    "can_edit",
+    "owner_id",
+    "membership"
+   ],
+   "actors": [
+    "owner_or_editor",
+    "record_member",
+    "scope_holder"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.06,
+    "hard_delete_nodes": 0.03,
+    "manage_users": 0.03,
+    "manage_teams": 0.05,
+    "create_tags": 0.07,
+    "edit_deadline": 0.03,
+    "tag_media": 0.91,
+    "manage_events": 0.08,
+    "manage_event_widgets": 0.03,
+    "manage_purchases": 0.02,
+    "manage_event_types": 0.03,
+    "manage_event_locations": 0.03
+   },
+   "actor": "scope_holder",
+   "actor_probs": {
+    "owner_or_editor": 0.06,
+    "admin_only": 0,
+    "anyone_logged_in": 0,
+    "record_member": 0.04,
+    "branch_editor": 0,
+    "scope_holder": 0.9
+   },
+   "confidence": 0.88
+  },
+  "flags": []
+ },
+ "GET /api/tags": {
+  "method": "GET",
+  "path": "/api/tags",
+  "handler": "attachments::tags",
+  "helpers": [],
+  "actual_checks": {
+   "scopes": [],
+   "markers": [
+    "session_only"
+   ],
+   "actors": [
+    "anyone_logged_in"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.13,
+    "hard_delete_nodes": 0.02,
+    "manage_users": 0.04,
+    "manage_teams": 0.05,
+    "create_tags": 0.1,
+    "edit_deadline": 0.04,
+    "tag_media": 0.11,
+    "manage_events": 0.08,
+    "manage_event_widgets": 0.05,
+    "manage_purchases": 0.03,
+    "manage_event_types": 0.09,
+    "manage_event_locations": 0.08
+   },
+   "actor": "anyone_logged_in",
+   "actor_probs": {
+    "owner_or_editor": 0,
+    "scope_holder": 0.13,
+    "branch_editor": 0,
+    "record_member": 0,
+    "anyone_logged_in": 0.84,
+    "admin_only": 0.03
+   },
+   "confidence": 0.8
+  },
+  "flags": []
+ },
+ "GET /api/admin": {
+  "method": "GET",
+  "path": "/api/admin",
+  "handler": "admin::get",
+  "helpers": [
+   "admin::can_manage",
+   "common::has_scope",
+   "admin::view",
+   "admin::group"
+  ],
+  "actual_checks": {
+   "scopes": [
+    "manage_users"
+   ],
+   "markers": [
+    "is_admin",
+    "can_manage"
+   ],
+   "actors": [
+    "scope_holder"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.12,
+    "hard_delete_nodes": 0.08,
+    "manage_users": 0.66,
+    "manage_teams": 0.17,
+    "create_tags": 0.07,
+    "edit_deadline": 0.09,
+    "tag_media": 0.04,
+    "manage_events": 0.13,
+    "manage_event_widgets": 0.1,
+    "manage_purchases": 0.08,
+    "manage_event_types": 0.12,
+    "manage_event_locations": 0.12
+   },
+   "actor": "scope_holder",
+   "actor_probs": {
+    "scope_holder": 0.87,
+    "anyone_logged_in": 0,
+    "record_member": 0,
+    "branch_editor": 0,
+    "owner_or_editor": 0,
+    "admin_only": 0.13
+   },
+   "confidence": 0.84
+  },
+  "flags": []
+ },
+ "GET /api/admin/activity": {
+  "method": "GET",
+  "path": "/api/admin/activity",
+  "handler": "admin::activity",
+  "helpers": [
+   "admin::can_manage",
+   "common::has_scope"
+  ],
+  "actual_checks": {
+   "scopes": [
+    "manage_users"
+   ],
+   "markers": [
+    "is_admin",
+    "can_manage"
+   ],
+   "actors": [
+    "scope_holder"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.08,
+    "hard_delete_nodes": 0.04,
+    "manage_users": 0.68,
+    "manage_teams": 0.17,
+    "create_tags": 0.03,
+    "edit_deadline": 0.08,
+    "tag_media": 0.03,
+    "manage_events": 0.1,
+    "manage_event_widgets": 0.05,
+    "manage_purchases": 0.04,
+    "manage_event_types": 0.05,
+    "manage_event_locations": 0.05
+   },
+   "actor": "scope_holder",
+   "actor_probs": {
+    "scope_holder": 0.92,
+    "branch_editor": 0,
+    "owner_or_editor": 0,
+    "record_member": 0,
+    "anyone_logged_in": 0,
+    "admin_only": 0.08
+   },
+   "confidence": 0.9
+  },
+  "flags": []
+ },
+ "POST /api/admin/users": {
+  "method": "POST",
+  "path": "/api/admin/users",
+  "handler": "admin::add_user",
+  "helpers": [
+   "admin::can_manage",
+   "common::has_scope",
+   "common::text",
+   "admin::view",
+   "admin::group",
+   "admin::get"
+  ],
+  "actual_checks": {
+   "scopes": [
+    "manage_users"
+   ],
+   "markers": [
+    "is_admin",
+    "can_manage"
+   ],
+   "actors": [
+    "scope_holder"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.05,
+    "hard_delete_nodes": 0.03,
+    "manage_users": 0.92,
+    "manage_teams": 0.12,
+    "create_tags": 0.03,
+    "edit_deadline": 0.03,
+    "tag_media": 0.03,
+    "manage_events": 0.06,
+    "manage_event_widgets": 0.03,
+    "manage_purchases": 0.03,
+    "manage_event_types": 0.04,
+    "manage_event_locations": 0.03
+   },
+   "actor": "scope_holder",
+   "actor_probs": {
+    "record_member": 0,
+    "scope_holder": 0.94,
+    "branch_editor": 0,
+    "owner_or_editor": 0,
+    "anyone_logged_in": 0,
+    "admin_only": 0.06
+   },
+   "confidence": 0.93
+  },
+  "flags": []
+ },
+ "PATCH /api/admin/users/{id}": {
+  "method": "PATCH",
+  "path": "/api/admin/users/{id}",
+  "handler": "admin::patch_user",
+  "helpers": [
+   "admin::can_manage",
+   "common::has_scope",
+   "common::id",
+   "admin::admin_only",
+   "admin::valid_scopes",
+   "admin::role_name",
+   "admin::node_name",
+   "common::tree",
+   "admin::get",
+   "admin::view",
+   "admin::group"
+  ],
+  "actual_checks": {
+   "scopes": [
+    "manage_users"
+   ],
+   "markers": [
+    "is_admin",
+    "require_admin",
+    "can_manage",
+    "owner_id"
+   ],
+   "actors": [
+    "admin_only",
+    "owner_or_editor",
+    "scope_holder"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.06,
+    "hard_delete_nodes": 0.03,
+    "manage_users": 0.69,
+    "manage_teams": 0.09,
+    "create_tags": 0.03,
+    "edit_deadline": 0.04,
+    "tag_media": 0.03,
+    "manage_events": 0.05,
+    "manage_event_widgets": 0.04,
+    "manage_purchases": 0.02,
+    "manage_event_types": 0.03,
+    "manage_event_locations": 0.03
+   },
+   "actor": "scope_holder",
+   "actor_probs": {
+    "record_member": 0,
+    "anyone_logged_in": 0,
+    "admin_only": 0.15,
+    "scope_holder": 0.85,
+    "branch_editor": 0,
+    "owner_or_editor": 0
+   },
+   "confidence": 0.81
+  },
+  "flags": []
+ },
+ "POST /api/admin/roles": {
+  "method": "POST",
+  "path": "/api/admin/roles",
+  "handler": "admin::create_role",
+  "helpers": [
+   "admin::admin_only",
+   "admin::write_role",
+   "common::text",
+   "admin::valid_scopes",
+   "admin::view",
+   "admin::group",
+   "admin::get"
+  ],
+  "actual_checks": {
+   "scopes": [],
+   "markers": [
+    "is_admin",
+    "require_admin",
+    "can_manage",
+    "owner_id"
+   ],
+   "actors": [
+    "admin_only",
+    "owner_or_editor"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.15,
+    "hard_delete_nodes": 0.07,
+    "manage_users": 0.62,
+    "manage_teams": 0.24,
+    "create_tags": 0.09,
+    "edit_deadline": 0.09,
+    "tag_media": 0.04,
+    "manage_events": 0.11,
+    "manage_event_widgets": 0.08,
+    "manage_purchases": 0.07,
+    "manage_event_types": 0.12,
+    "manage_event_locations": 0.1
+   },
+   "actor": "admin_only",
+   "actor_probs": {
+    "scope_holder": 0,
+    "branch_editor": 0,
+    "record_member": 0,
+    "owner_or_editor": 0,
+    "anyone_logged_in": 0,
+    "admin_only": 1
+   },
+   "confidence": 1
+  },
+  "flags": []
+ },
+ "PATCH /api/admin/roles/{id}": {
+  "method": "PATCH",
+  "path": "/api/admin/roles/{id}",
+  "handler": "admin::patch_role",
+  "helpers": [
+   "admin::admin_only",
+   "common::id",
+   "admin::role_name",
+   "admin::write_role",
+   "common::text",
+   "admin::valid_scopes",
+   "admin::view",
+   "admin::group",
+   "admin::get"
+  ],
+  "actual_checks": {
+   "scopes": [],
+   "markers": [
+    "is_admin",
+    "require_admin",
+    "can_manage",
+    "owner_id"
+   ],
+   "actors": [
+    "admin_only",
+    "owner_or_editor"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.13,
+    "hard_delete_nodes": 0.06,
+    "manage_users": 0.58,
+    "manage_teams": 0.21,
+    "create_tags": 0.07,
+    "edit_deadline": 0.1,
+    "tag_media": 0.04,
+    "manage_events": 0.1,
+    "manage_event_widgets": 0.07,
+    "manage_purchases": 0.06,
+    "manage_event_types": 0.1,
+    "manage_event_locations": 0.07
+   },
+   "actor": "admin_only",
+   "actor_probs": {
+    "owner_or_editor": 0,
+    "record_member": 0,
+    "branch_editor": 0,
+    "admin_only": 0.99,
+    "scope_holder": 0.01,
+    "anyone_logged_in": 0
+   },
+   "confidence": 0.99
+  },
+  "flags": []
+ },
+ "DELETE /api/admin/roles/{id}": {
+  "method": "DELETE",
+  "path": "/api/admin/roles/{id}",
+  "handler": "admin::delete_role",
+  "helpers": [
+   "admin::admin_only",
+   "common::id",
+   "admin::view",
+   "admin::group",
+   "admin::get"
+  ],
+  "actual_checks": {
+   "scopes": [],
+   "markers": [
+    "is_admin",
+    "require_admin",
+    "can_manage"
+   ],
+   "actors": [
+    "admin_only"
+   ]
+  },
+  "jev": {
+   "scopes": {
+    "edit_nodes": 0.14,
+    "hard_delete_nodes": 0.14,
+    "manage_users": 0.69,
+    "manage_teams": 0.3,
+    "create_tags": 0.04,
+    "edit_deadline": 0.07,
+    "tag_media": 0.03,
+    "manage_events": 0.1,
+    "manage_event_widgets": 0.05,
+    "manage_purchases": 0.04,
+    "manage_event_types": 0.1,
+    "manage_event_locations": 0.07
+   },
+   "actor": "admin_only",
+   "actor_probs": {
+    "record_member": 0,
+    "anyone_logged_in": 0,
+    "admin_only": 0.99,
+    "branch_editor": 0,
+    "scope_holder": 0.01,
+    "owner_or_editor": 0
+   },
+   "confidence": 0.98
+  },
+  "flags": []
+ }
+}

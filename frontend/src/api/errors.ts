@@ -90,6 +90,10 @@ export type ApiErrorCode =
   | "node_in_use"
   | "invalid_kind"
   | "invalid_location"
+  | "self_permissions"
+  | "grant_not_held"
+  | "grant_manage_users"
+  | "owner_change_denied"
   | "network";
 
 export const ERRORS = {
@@ -178,6 +182,10 @@ export const ERRORS = {
   node_in_use: "Bu öğe kullanımda (ör. bir etkinlik bu türü ya da yeri kullanıyor). Silmek yerine kapat.",
   invalid_kind: "Seçilen etkinlik türü geçersiz ya da kapalı.",
   invalid_location: "Seçilen yer geçersiz ya da kapalı.",
+  self_permissions: "Kendi yetkilerini değiştiremezsin. Bir yöneticiden iste.",
+  grant_not_held: "Yalnız kendinde olan yetkiyi, rolü ya da dalı verip alabilirsin.",
+  grant_manage_users: "Kişi yönetimi yetkisini yalnız bir yönetici verip alabilir.",
+  owner_change_denied: "Sorumluyu yalnız mevcut sorumlu, birimin dal yetkilisi ya da yönetici değiştirebilir. Sorumlusuz kaydı kendin üstlenebilirsin.",
   network: "Sunucuya ulaşılamadı. Bağlantını kontrol et.",
 } satisfies Record<ApiErrorCode, string>;
 

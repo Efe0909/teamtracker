@@ -20,6 +20,7 @@
 | `72-node-turleri.md` | node_type enum + tür projeksiyonları (teams/pillar), yaşam döngüsü — **tasarım** |
 | `73-etkinlik.md` | etkinlik planlama: liste + etkinlik sayfası, ilişkisel widget'lar, tür şablonu, satın alımlar, OTF — **uygulandı** |
 | `74-referans-veri.md` | operational kökler (`key`), shape (leaf/list/tree), attrs, kök başına slot şeması, etkinlik türleri düğüm olarak, paylaşılan tree seçici — **tasarım** (72'nin kök kurallarını geçersiz kılar) |
+| `75-yetki.md` | yetki modeli: katmanlar, scope sözlüğü, 97 uçluk matris, kararlar (K1-K5) ve kapanan açıklar (A1-A5), 2026-10-03 — **uygulandı** |
 | `60-kaynak-uyarlama.md` | kaynak panoların çözümlemesi: veri hattı, ekran ekran uyarlama, alınmayacaklar |
 | `61-arastirma-sentezi.md` | IWS ve ekip araçları kaynak taraması — bizim ölçeğe uyan/uymayan pratikler |
 | `referans/` | kaynak arayüz dosyaları (`spec/referans/layout-a.html`) |

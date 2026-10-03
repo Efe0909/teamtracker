@@ -10,6 +10,9 @@ pub enum AppError {
     Unauthorized,
     /// Yetki yok. 403 yalniz DEGISTIREN uclarda (KNOW-47).
     Forbidden,
+    /// Yetki yok, nedeni ekranda soylenmeli (ornegin "grant_not_held"). Yine
+    /// 403: denetim ara katmani (`audit::forbidden`) bunu da yazar.
+    Denied(&'static str),
     NotFound,
     /// Girdi gecersiz; kod makine icin (ornegin "invalid_user_id").
     BadRequest(&'static str),
@@ -34,6 +37,7 @@ impl IntoResponse for AppError {
         let (status, code) = match &self {
             AppError::Unauthorized => (StatusCode::UNAUTHORIZED, "unauthorized"),
             AppError::Forbidden => (StatusCode::FORBIDDEN, "forbidden"),
+            AppError::Denied(c) => (StatusCode::FORBIDDEN, *c),
             AppError::NotFound => (StatusCode::NOT_FOUND, "not_found"),
             AppError::BadRequest(c) => (StatusCode::BAD_REQUEST, *c),
             AppError::Conflict(c) => (StatusCode::CONFLICT, *c),

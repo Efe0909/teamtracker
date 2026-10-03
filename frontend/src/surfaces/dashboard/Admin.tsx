@@ -11,6 +11,7 @@ import { ago, NOTIFY, SCOPE } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
 import { Icon } from "../../ui/icons";
 import { Button, Empty, Loading, Picker as UiPicker, Req, Segmented, Tag, ui, useToast, type Option } from "../../ui/ui";
+import { NodeTreePicker } from "../../features/nodes/NodePicker";
 import { AdminAvatar, EditableAvatar } from "../../features/profile/EditableAvatar";
 import { useStored } from "../../lib/stored";
 import { AdminActivity } from "./AdminActivity";
@@ -190,8 +191,6 @@ function PersonRow({ p, v, roleName, checked, onCheck }: {
   const direct = new Set(p.scopes.filter((r) => r.direct).map((r) => r.name));
   const grantable = v.scopes.filter((k) => !direct.has(k));
   const assignable = v.roles.filter((r) => !p.role_ids.includes(r.id));
-  // Dal izni yalniz Birimler'de anlamli (spec/74 §4.4): diger kokler scope'la yonetilir.
-  const branches = L.meta.nodes.filter((n) => n.root_key === "units" && !p.node_ids.includes(n.id));
 
   return (
     <li className={s.person}>
@@ -272,9 +271,11 @@ function PersonRow({ p, v, roleName, checked, onCheck }: {
                   onClick={() => run({ op: "revoke_node", value: id })}><Icon name="x" size={12} /></button>
               </span>
             ))}
-            <Grant label="Dal izni ver" empty="Ağaçta düğüm yok."
-              options={branches.map((n) => ({ value: n.id, label: n.name, depth: n.depth }))}
-          onPick={(id) => run({ op: "grant_node", value: id })} />
+            <NodeTreePicker rootKey="units" look="chip" label="Dal izni ver" value={null}
+              disabled={m.isPending} exclude={(n) => p.node_ids.includes(n.id)}
+              onChange={(id) => run({ op: "grant_node", value: id })}>
+              <Icon name="plus" size={13} /> Dal izni ver
+            </NodeTreePicker>
           </div>
         </div>
         <span className={s.dim}>Yapı kapsamları yalnız izinli dalda ve altında geçer.</span>
