@@ -110,7 +110,7 @@ export function Properties({ d }: { d: RecordDetail }) {
       <Row icon="lock" label="Erişim">
         {d.membership.can_decide ? (
           <Picker look="prop" label="Erişim kipi" busy={m.isPending} value={d.membership.mode}
-            options={(Object.keys(ACCESS) as AccessMode[]).map((v) => ({ value: v, label: ACCESS[v].label, hint: ACCESS[v].hint }))}
+            options={(Object.keys(ACCESS) as AccessMode[]).map((v) => ({ value: v, label: ACCESS[v].label, desc: ACCESS[v].hint }))}
             onChange={(v) => save({ field: "access_mode", value: v }, { field: "access_mode", value: d.membership.mode })} />
         ) : (
           <span className={s.propStatic}>{ACCESS[d.membership.mode].label}</span>

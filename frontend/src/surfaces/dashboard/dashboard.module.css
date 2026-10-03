@@ -165,6 +165,13 @@
 .navOn > svg {
   color: var(--acc-strong);
 }
+/* surukleme: tutulan soluk, birakma hedefinin ustunde vurgu cizgisi */
+.navDrag {
+  opacity: 0.5;
+}
+.navOver {
+  box-shadow: 0 -2px 0 var(--acc-strong);
+}
 .navMeta {
   font-size: var(--fs-xs);
   color: var(--dim);

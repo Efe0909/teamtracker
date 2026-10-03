@@ -22,6 +22,13 @@ const READY: { slug: string; icon: IconName; name: string; desc: string; route: 
     route: { name: "tasks", query: {} },
   },
   {
+    slug: "events",
+    icon: "calendar",
+    name: "Etkinlikler",
+    desc: "Toplantı, çalıştay, ziyaret: tarih, yer ve katılımcılar.",
+    route: { name: "events", query: {} },
+  },
+  {
     slug: "teams",
     icon: "teams",
     name: "Takımlar",

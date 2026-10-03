@@ -241,7 +241,7 @@ function PersonRow({ p, v, roleName, checked, onCheck }: {
           <span className={s.adminKey}>Kapsam</span>
           <div className={s.chips}>
             <Grant label="Kapsam ver" empty="Bütün kapsamlar zaten doğrudan verilmiş."
-              options={grantable.map((k) => ({ value: k, label: k, hint: SCOPE[k] ?? "" }))}
+              options={grantable.map((k) => ({ value: k, label: k, desc: SCOPE[k] ?? "" }))}
               onPick={(k) => run({ op: "grant_scope", value: k })} />
           </div>
         </div>

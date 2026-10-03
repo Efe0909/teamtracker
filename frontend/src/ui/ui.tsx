@@ -12,6 +12,7 @@ import {
   useCallback,
   useContext,
   useState,
+  type AnchorHTMLAttributes,
   type ButtonHTMLAttributes,
   type ReactElement,
   type ReactNode,
@@ -62,9 +63,18 @@ export function IconButton(
 }
 
 /** SPA baglantisi. Ctrl/cmd-tik yeni sekmede acar (tarayiciya birakilir). */
-export function Link(props: { href: string; className?: string; children: ReactNode; title?: string; "aria-current"?: "page" | undefined }) {
+export function Link(props: {
+  href: string;
+  className?: string;
+  children: ReactNode;
+  title?: string;
+  "aria-current"?: "page" | undefined;
+  /** Ek oznitelikler (suruklenebilir satir gibi); href/className/onClick Link'in kalir. */
+  extra?: Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "href" | "className" | "onClick" | "children"> | undefined;
+}) {
   return (
     <a
+      {...props.extra}
       href={props.href}
       className={props.className}
       title={props.title}
@@ -269,7 +279,10 @@ export interface Option<V> {
   label: string;
   /** Listede ve tetikte cizilecek zengin icerik (avatar, durum ikonu). */
   render?: ReactNode;
+  /** Kisa not, etiketin sagina (ornegin "sen"). */
   hint?: string;
+  /** Uzun aciklama: etiketin ALTINA, soluk ve satir kirarak. */
+  desc?: string;
   disabled?: boolean;
   /** Agac girintisi. */
   depth?: number;
@@ -327,17 +340,20 @@ export function Picker<V>(props: {
                   <Command.Item
                     key={i}
                     value={`${i}`}
-                    keywords={[o.label, o.hint ?? ""]}
+                    keywords={[o.label, o.hint ?? "", o.desc ?? ""]}
                     disabled={o.disabled === true || props.busy === true}
-                    className={s.popItem}
+                    className={cx(s.popItem, o.desc !== undefined && s.popItemDesc)}
                     data-on={on}
                     onSelect={() => {
                       setOpen(false);
                       if (!on) props.onChange(o.value);
                     }}
                   >
-                    <span className={s.popLabel} style={o.depth !== undefined ? { paddingLeft: o.depth * 14 } : undefined}>
-                      {o.render ?? o.label}
+                    <span className={s.popBody}>
+                      <span className={s.popLabel} style={o.depth !== undefined ? { paddingLeft: o.depth * 14 } : undefined}>
+                        {o.render ?? o.label}
+                      </span>
+                      {o.desc !== undefined && o.desc !== "" && <span className={s.popDesc}>{o.desc}</span>}
                     </span>
                     {o.hint !== undefined && <span className={s.popHint}>{o.hint}</span>}
                     <span className={s.popCheck}>{on && <Icon name="check" size={14} />}</span>
