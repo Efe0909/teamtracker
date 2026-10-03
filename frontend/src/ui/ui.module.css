@@ -592,6 +592,27 @@
   font-size: var(--fs-sm);
   white-space: nowrap;
 }
+/* etiket + (varsa) aciklama dikey yigin; aciklama satir kirar, tasmaz */
+.popBody {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+.popBody > .popLabel {
+  flex: none;
+}
+.popItemDesc {
+  padding-block: 6px;
+}
+.popDesc {
+  color: var(--dim);
+  font-size: var(--fs-sm);
+  font-weight: 400;
+  line-height: 1.35;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
 .popCheck {
   display: inline-grid;
   width: 14px;

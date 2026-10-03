@@ -3,10 +3,11 @@
 // Dar ekranda cubuk cekmeceye doner. ⌘K her yerden komut paletini acar.
 // Mobil yuze BAGLANTI YOK — bilincli ayrim (KNOW-153).
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { NotifySettings } from "../../features/profile/NotifySettings";
 import { ProfileDialog } from "../../features/profile/ProfileDialog";
 import { useLookup } from "../../lib/lookup";
+import { mergeOrder, moveTo } from "../../lib/order";
 import { useLocation } from "../../lib/router";
 import { useStored } from "../../lib/stored";
 import { setTheme, useTheme, type Theme } from "../../lib/theme";
@@ -152,10 +153,74 @@ function Sidebar({ route, onSearch, onFold }: { route: Route; onSearch: () => vo
   const [teamsOpen, setTeamsOpen] = useStored("nav.teams.open", true);
   const current = route.name === "team" || route.name === "pillar" ? route.id : null;
 
-  const item = (n: NavItem) => {
+  // Modul dugmeleri surukleyerek (ya da Alt+Yukari/Asagi) siralanir; sira cihazda hatirlanir.
+  const [savedOrder, setSavedOrder] = useStored<string[]>("nav.order", []);
+  const order = mergeOrder(savedOrder, NAV.map((n) => n.route.name));
+  const navByKey = new Map<string, NavItem>(NAV.map((n) => [n.route.name, n]));
+  const [dragKey, setDragKey] = useState<string | null>(null);
+  const [overKey, setOverKey] = useState<string | null>(null);
+  const refocus = useRef<string | null>(null);
+  // DOM tasininca odak dusebilir: klavye ile tasinan oge odagi geri alir.
+  useEffect(() => {
+    if (refocus.current === null) return;
+    document.getElementById(`nav-${refocus.current}`)?.focus();
+    refocus.current = null;
+  });
+  const drop = (from: string, to: string) => {
+    setSavedOrder(moveTo(order, from, to));
+    setDragKey(null);
+    setOverKey(null);
+  };
+
+  const item = (n: NavItem, movable = false) => {
     const on = n.match.includes(route.name);
+    const key = n.route.name;
     return (
-      <Link key={n.label} href={href(n.route)} className={cx(s.nav, on && s.navOn)} aria-current={on ? "page" : undefined}>
+      <Link
+        key={n.label}
+        href={href(n.route)}
+        className={cx(
+          s.nav,
+          on && s.navOn,
+          movable && dragKey === key && s.navDrag,
+          movable && dragKey !== null && dragKey !== key && overKey === key && s.navOver,
+        )}
+        aria-current={on ? "page" : undefined}
+        {...(movable ? { title: "Sürükle ya da Alt+↑/↓ ile sırala" } : {})}
+        extra={
+          movable
+            ? {
+                draggable: true,
+                id: `nav-${key}`,
+                onDragStart: (e) => {
+                  e.dataTransfer.effectAllowed = "move";
+                  setDragKey(key);
+                },
+                onDragEnd: () => {
+                  setDragKey(null);
+                  setOverKey(null);
+                },
+                onDragOver: (e) => {
+                  if (dragKey === null) return;
+                  e.preventDefault();
+                  setOverKey(key);
+                },
+                onDrop: (e) => {
+                  e.preventDefault();
+                  if (dragKey !== null) drop(dragKey, key);
+                },
+                onKeyDown: (e) => {
+                  if (!e.altKey || (e.key !== "ArrowUp" && e.key !== "ArrowDown")) return;
+                  e.preventDefault();
+                  const to = order[order.indexOf(key) + (e.key === "ArrowUp" ? -1 : 1)];
+                  if (to === undefined) return;
+                  refocus.current = key;
+                  setSavedOrder(moveTo(order, key, to));
+                },
+              }
+            : undefined
+        }
+      >
         <Icon name={n.icon} size={16} />
         <span>{n.label}</span>
       </Link>
@@ -183,7 +248,7 @@ function Sidebar({ route, onSearch, onFold }: { route: Route; onSearch: () => vo
 
       <div className={s.navGroup}>
         <span className={s.navHead}>Çalışma alanı</span>
-        {NAV.map(item)}
+        {order.flatMap((k) => navByKey.get(k) ?? []).map((n) => item(n, true))}
         {admin && item(ADMIN_NAV)}
       </div>
 

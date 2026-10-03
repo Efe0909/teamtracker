@@ -10,6 +10,7 @@ import type { Attachment, CardView, RecordDetail, SignupAnswer } from "../../api
 import { CARD, CARD_TYPES, type CardType, isCardType, whenLabel } from "../../lib/cards";
 import { useLookup } from "../../lib/lookup";
 import { useStored } from "../../lib/stored";
+import { DateTimeField } from "../../ui/DateField";
 import { Icon } from "../../ui/icons";
 import { Avatar, Button, cx, Dialog, IconButton, Menu, MenuItem, ui, useToast } from "../../ui/ui";
 import { Attachments, ImagePicker } from "../media/Media";
@@ -241,6 +242,9 @@ function CardForm({ c, type, onClose }: { c: CardView; type: CardType; onClose: 
               {f.kind === "textarea" ? (
                 <textarea className={`${ui.input} ${ui.ghost}`} rows={3} value={vals[f.key] ?? ""}
                   placeholder={f.placeholder} onChange={(e) => set(f.key, e.target.value)} />
+              ) : f.kind === "datetime-local" ? (
+                <DateTimeField aria-label={f.label} placeholder="Tarih ve saat seç" clearable value={(vals[f.key] ?? "") === "" ? null : (vals[f.key] ?? null)}
+                  onChange={(v) => set(f.key, v ?? "")} />
               ) : (
                 <input className={`${ui.input} ${ui.ghost}`} type={f.kind} min={f.kind === "number" ? 1 : undefined}
                   placeholder={f.placeholder} value={vals[f.key] ?? ""} onChange={(e) => set(f.key, e.target.value)} />

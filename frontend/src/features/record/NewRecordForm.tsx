@@ -97,7 +97,7 @@ export function NewRecordForm(props: {
           {team === null ? <><Icon name="plus" size={13} /> Takım</> : <TeamName team={L.team(team)} />}
         </Picker>
         <Picker look="chip" active={access !== "public"} label="Erişim" value={access} onChange={setAccess}
-          options={(Object.keys(ACCESS) as AccessMode[]).map((v) => ({ value: v, label: ACCESS[v].label, hint: ACCESS[v].hint }))}>
+          options={(Object.keys(ACCESS) as AccessMode[]).map((v) => ({ value: v, label: ACCESS[v].label, desc: ACCESS[v].hint }))}>
           <Icon name="lock" size={13} /> {ACCESS[access].label}
         </Picker>
         {/* Pillar ORTOGONAL (KNOW-261): kaydin atasi olmak zorunda degil, ayri secilir. */}

@@ -20,6 +20,7 @@ import { useLookup } from "../../lib/lookup";
 import { handle } from "../../lib/mentions";
 import { navigate } from "../../lib/router";
 import { useStored } from "../../lib/stored";
+import { DateField } from "../../ui/DateField";
 import { Icon, type IconName } from "../../ui/icons";
 import {
   Avatar, Button, cx, Dialog, Due, IconButton, KindTag, Link, Loading, Menu, MenuItem, MenuLabel, MenuSep, Picker, Popover,
@@ -269,7 +270,7 @@ function Prop({ icon, label, children }: { icon: IconName; label: string; childr
 
 /** Serbest alan (tarih, saat, yer, sayi): tik → kucuk form. Bos kaydetmek = kaldir. */
 function FieldEdit({ label, type, value, disabled, busy, onSave, children }: {
-  label: string; type: "date" | "time" | "text" | "number"; value: string | null; disabled: boolean; busy: boolean;
+  label: string; type: "time" | "text" | "number"; value: string | null; disabled: boolean; busy: boolean;
   onSave: (v: string | null) => void; children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -341,10 +342,10 @@ function Props({ e }: { e: EventDetail }) {
           </Prop>
           <Prop icon="tasks" label="Tür"><span className={r.propStatic}>{nodeName(L.meta.nodes, e.kind_id)}</span></Prop>
           <Prop icon="calendar" label="Ne zaman">
-            <FieldEdit label="Tarih" type="date" value={e.date} disabled={ro} busy={busy}
-              onSave={(v) => save({ field: "date", value: v })}>
+            <DateField aria-label="Tarih" className={r.dueTrigger} value={e.date} disabled={ro} busy={busy} clearable clearLabel="Kaldır"
+              onChange={(v) => save({ field: "date", value: v })}>
               {e.date === null ? muted(ro ? "Tarih yok (havuzda)" : "Tarih ekle") : whenFmt.format(parseDay(e.date))}
-            </FieldEdit>
+            </DateField>
             {/* Tarihsiz etkinligin saati olmaz (sema check'i). */}
             {e.date !== null && (!ro || e.start_time !== null) && (
               <FieldEdit label="Başlangıç saati" type="time" value={e.start_time} disabled={ro} busy={busy}
@@ -569,25 +570,12 @@ const dayText = (d: string | null, today: string) => (d === null ? "tarih yok" :
 /** Son tarih (yalniz `manage_events`). Varsayilan: etkinlikten 7 gun once, etkinlikle kayar. */
 function CheckpointDate({ id, date, today }: { id: string; date: string | null; today: string }) {
   const { run, busy } = useRun();
-  const [open, setOpen] = useState(false);
-  const [v, setV] = useState("");
+  // Temizle = varsayilana don (etkinlikten 7 gun once).
   return (
-    <Popover align="start" open={open}
-      onOpenChange={(o) => { setOpen(o); if (o) setV(date ?? ""); }}
-      trigger={<button type="button" className={r.editLink} aria-label="Son tarihi değiştir">{dayText(date, today)}</button>}>
-      <form className={r.dueForm} onSubmit={(ev) => {
-        ev.preventDefault();
-        if (v !== "") run(eventOps.checkpointDate(id, v), () => setOpen(false));
-      }}>
-        <input className={ui.input} type="date" value={v} onChange={(ev) => setV(ev.target.value)} aria-label="Son tarih" autoFocus />
-        <div className={ui.dact}>
-          <Button size="sm" disabled={busy} onClick={() => run(eventOps.checkpointDate(id, null), () => setOpen(false))}>
-            Varsayılan (7 gün önce)
-          </Button>
-          <Button type="submit" variant="primary" size="sm" disabled={busy || v === ""}>Kaydet</Button>
-        </div>
-      </form>
-    </Popover>
+    <DateField aria-label="Son tarih" className={r.editLink} value={date} busy={busy} clearable clearLabel="Varsayılan (7 gün önce)"
+      onChange={(v) => run(eventOps.checkpointDate(id, v))}>
+      {dayText(date, today)}
+    </DateField>
   );
 }
 
@@ -610,7 +598,8 @@ function AddCheckpoint({ e }: { e: EventDetail }) {
         }}>
         <input className={ui.input} value={label} onChange={(ev) => setLabel(ev.target.value)} aria-label="Checkpoint adı"
           placeholder="Checkpoint adı" maxLength={200} required autoFocus />
-        <input className={ui.input} type="date" value={date} onChange={(ev) => setDate(ev.target.value)} aria-label="Tarih (boşsa etkinlikten 7 gün önce)" title="Boş bırakılırsa etkinlikten 7 gün önce" />
+        <DateField aria-label="Tarih (boşsa etkinlikten 7 gün önce)" placeholder="Tarih (boşsa 7 gün önce)" value={date === "" ? null : date}
+          onChange={(v) => setDate(v ?? "")} clearable />
         <div className={ui.dact}>
           <Button type="submit" variant="primary" size="sm" disabled={busy || label.trim() === ""}>Ekle</Button>
         </div>

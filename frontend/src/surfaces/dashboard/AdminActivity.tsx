@@ -8,9 +8,10 @@ import type { PersonUse } from "../../api/types";
 import { ago, formatDay } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
 import {
-  matrix, MATRIX_WEEKS, monthLabels, personRow, sortPeople, stats, STREAK_MIN, WINDOW_DAYS, type SortDir, type SortKey,
+  matrix, MATRIX_WEEKS, monthLabels, personRow, sortPeople, stats, STREAK_MIN, WINDOW_DAYS, type PersonRow, type SortKey,
 } from "../../lib/usage";
-import { Icon } from "../../ui/icons";
+import { useSort, type Accessors } from "../../lib/sort";
+import { SortTh } from "../../ui/SortTh";
 import { Avatar, cx, Empty, IconButton, Loading } from "../../ui/ui";
 import s from "./dashboard.module.css";
 
@@ -25,23 +26,31 @@ const COLS: { key: SortKey; label: string; title?: string }[] = [
   { key: "contrib30", label: "Katkı · 30 gün", title: "Son 30 günde gönderilen mesaj + kayıt, alan, eylem değişikliği" },
 ];
 
+const SORT: Accessors<PersonRow> = {
+  name: (r) => r.name,
+  login: (r) => r.login,
+  seen: (r) => r.seen,
+  activeDays30: (r) => r.activeDays30,
+  minutes7: (r) => r.minutes7,
+  contrib30: (r) => r.contrib30,
+};
+
 export function AdminActivity() {
   const L = useLookup();
   const q = useAdminActivity();
-  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "seen", dir: "desc" });
   const [search, setSearch] = useState("");
   const [picked, setPicked] = useState<string | null>(null);
-  if (q.data === undefined) return <Loading />;
-
   const today = new Date();
   const needle = search.trim().toLocaleLowerCase("tr");
-  const rows = sortPeople(
-    q.data.map((u) => personRow(u, L.user(u.user_id)?.name ?? "?", today))
+  // Baslik siralamasi kapaliyken taban sira: son hareket yeniden eskiye.
+  const base = sortPeople(
+    (q.data ?? []).map((u) => personRow(u, L.user(u.user_id)?.name ?? "?", today))
       .filter((r) => r.name.toLocaleLowerCase("tr").includes(needle)),
-    sort.key, sort.dir);
+    "seen", "desc");
+  const sorter = useSort("activity", base, SORT);
+  const rows = sorter.rows;
+  if (q.data === undefined) return <Loading />;
   const sel: PersonUse | undefined = q.data.find((u) => u.user_id === (picked ?? rows[0]?.id));
-  // Ayni basliga tekrar: yon doner; yeni baslik: azalan baslar.
-  const by = (key: SortKey) => setSort(sort.key === key ? { key, dir: sort.dir === "desc" ? "asc" : "desc" } : { key, dir: "desc" });
 
   return (
     <div>
@@ -55,17 +64,9 @@ export function AdminActivity() {
         <table className={cx(s.surface, s.activityTable)}>
           <thead>
             <tr>
-              {COLS.map((c) => {
-                const on = sort.key === c.key;
-                return (
-                  <th key={c.key} aria-sort={on ? (sort.dir === "desc" ? "descending" : "ascending") : "none"}>
-                    <button type="button" className={s.sortBtn} data-on={on} title={c.title} onClick={() => by(c.key)}>
-                      {c.label}
-                      <Icon name={on && sort.dir === "asc" ? "up" : "down"} size={12} />
-                    </button>
-                  </th>
-                );
-              })}
+              {COLS.map((c) => (
+                <SortTh key={c.key} sorter={sorter} k={c.key} label={c.label} {...(c.title !== undefined ? { title: c.title } : {})} />
+              ))}
             </tr>
           </thead>
           <tbody>

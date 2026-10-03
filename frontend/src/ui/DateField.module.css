@@ -1,0 +1,122 @@
+/* Tarih alani: tetik + acilir takvim. Ham renk YOK — yalniz token. */
+
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--line-field);
+  border-radius: var(--r-md);
+  background: var(--panel);
+  color: var(--txt);
+  font-size: var(--fs-md);
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition:
+    border-color 0.12s var(--ease),
+    box-shadow 0.12s var(--ease);
+}
+.trigger:hover:not(:disabled) {
+  border-color: var(--acc);
+}
+.trigger:focus-visible {
+  outline: none;
+  border-color: var(--acc);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--acc) 22%, transparent);
+}
+.trigger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: var(--panel2);
+}
+.empty {
+  color: var(--dim);
+}
+
+.cal {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 252px;
+}
+.quick {
+  display: flex;
+  gap: 6px;
+}
+.quick > * {
+  flex: 1;
+}
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.month {
+  font-size: var(--fs-md);
+  font-weight: 600;
+  text-transform: capitalize;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+.dow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+  color: var(--dim);
+  font-size: var(--fs-xs);
+}
+.day {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--txt);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+.day:hover:not(:disabled) {
+  background: var(--tint);
+}
+.day:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: -2px;
+}
+.day:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+.out {
+  color: var(--dim);
+}
+.today {
+  border-color: var(--acc);
+}
+.day[data-on="true"] {
+  background: var(--acc-fill);
+  color: var(--on-acc);
+}
+.day[data-on="true"]:hover:not(:disabled) {
+  background: var(--acc-fill-hover);
+}
+.time {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-size: var(--fs-sm);
+  color: var(--dim);
+}
+.time > input {
+  flex: 1;
+}

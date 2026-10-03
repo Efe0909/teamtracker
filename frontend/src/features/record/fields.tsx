@@ -3,14 +3,15 @@
 // select yok (eski dialog kararinin amaci korunur, kutu kalabaligi gider).
 // Yetki API'den (`access`), on yuz karar vermez yalniz gosterir.
 
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { errorText } from "../../api/client";
 import { usePatchRecord } from "../../api/hooks";
 import type { AccessMode, IsoDate, RecordDetail, RecordPatch } from "../../api/types";
-import { isDone, KIND, PRIORITY, PRIORITY_ORDER, STATUS, STATUS_ORDER, toIsoDay } from "../../lib/labels";
+import { isDone, KIND, PRIORITY, PRIORITY_ORDER, STATUS, STATUS_ORDER } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
+import { DateField } from "../../ui/DateField";
 import { Icon, type IconName } from "../../ui/icons";
-import { Button, cx, Due, Picker, Popover, PriorityTag, Status, TeamName, Tip, ui, useToast, Who } from "../../ui/ui";
+import { cx, Due, Picker, PriorityTag, Status, TeamName, Tip, useToast, Who } from "../../ui/ui";
 import { NodeTreePicker } from "../nodes/NodePicker";
 import { ACCESS } from "./Join";
 import s from "./record.module.css";
@@ -110,7 +111,7 @@ export function Properties({ d }: { d: RecordDetail }) {
       <Row icon="lock" label="Erişim">
         {d.membership.can_decide ? (
           <Picker look="prop" label="Erişim kipi" busy={m.isPending} value={d.membership.mode}
-            options={(Object.keys(ACCESS) as AccessMode[]).map((v) => ({ value: v, label: ACCESS[v].label, hint: ACCESS[v].hint }))}
+            options={(Object.keys(ACCESS) as AccessMode[]).map((v) => ({ value: v, label: ACCESS[v].label, desc: ACCESS[v].hint }))}
             onChange={(v) => save({ field: "access_mode", value: v }, { field: "access_mode", value: d.membership.mode })} />
         ) : (
           <span className={s.propStatic}>{ACCESS[d.membership.mode].label}</span>
@@ -123,8 +124,8 @@ export function Properties({ d }: { d: RecordDetail }) {
   );
 }
 
-/** Tarih secici: hizli secimler + serbest tarih, acilir yuzeyde. Kayit ve
- *  eylem ayni bileseni kullanir. */
+/** Son tarih: tetik gecikme/bitti bicimiyle (`Due`), secim ortak `DateField`
+ *  takviminde. Kayit ve eylem ayni bileseni kullanir. */
 export function DueField(props: {
   value: IsoDate | null;
   done?: boolean;
@@ -133,51 +134,18 @@ export function DueField(props: {
   look?: "prop" | "bare";
   onSave: (v: IsoDate | null) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const [v, setV] = useState<string>(props.value ?? "");
-  const plus = (n: number) => {
-    const x = new Date();
-    x.setDate(x.getDate() + n);
-    return toIsoDay(x);
-  };
-  const pick = (x: IsoDate | null) => {
-    setOpen(false);
-    if (x !== props.value) props.onSave(x);
-  };
   return (
-    <Popover
-      open={open}
-      onOpenChange={(o) => {
-        setOpen(o);
-        if (o) setV(props.value ?? "");
-      }}
-      trigger={
-        <button type="button" className={cx(s.dueTrigger, props.look === "bare" && s.dueBare)} disabled={props.disabled === true}
-          aria-label={`Son tarih: ${props.value ?? "yok"}`}>
-          {props.value === null ? <span className={s.muted}>{props.disabled === true ? "Yok" : "Tarih ekle"}</span> : <Due date={props.value} done={props.done === true} />}
-        </button>
-      }
+    <DateField
+      aria-label="Son tarih"
+      className={cx(s.dueTrigger, props.look === "bare" && s.dueBare)}
+      value={props.value}
+      disabled={props.disabled === true}
+      busy={props.busy === true}
+      clearable
+      clearLabel="Kaldır"
+      onChange={props.onSave}
     >
-      <form
-        className={s.dueForm}
-        onSubmit={(e) => {
-          e.preventDefault();
-          pick(v === "" ? null : v);
-        }}
-      >
-        <div className={s.dueQuick}>
-          <Button size="sm" onClick={() => pick(plus(0))}>Bugün</Button>
-          <Button size="sm" onClick={() => pick(plus(1))}>Yarın</Button>
-          <Button size="sm" onClick={() => pick(plus(7))}>+1 hafta</Button>
-        </div>
-        <input className={ui.input} type="date" value={v} onChange={(e) => setV(e.target.value)} aria-label="Tarih" autoFocus />
-        <div className={ui.dact}>
-          {props.value !== null && (
-            <Button variant="ghost" size="sm" onClick={() => pick(null)}>Kaldır</Button>
-          )}
-          <Button type="submit" variant="primary" size="sm" disabled={props.busy === true}>Kaydet</Button>
-        </div>
-      </form>
-    </Popover>
+      {props.value === null ? <span className={s.muted}>{props.disabled === true ? "Yok" : "Tarih ekle"}</span> : <Due date={props.value} done={props.done === true} />}
+    </DateField>
   );
 }

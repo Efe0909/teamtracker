@@ -21,11 +21,11 @@ export type Route =
   | { name: "notFound" };
 
 export const QUERY_KEYS = [
-  "kind", "status", "priority", "team", "person", "node", "pillar", "search", "quick", "sort",
+  "kind", "status", "priority", "team", "person", "node", "pillar", "search", "quick",
 ] as const satisfies readonly (keyof RecordQuery)[];
 
 /** Etkinlik listesi filtreleri — gorevlerdeki gibi URL'de (KNOW-234). */
-export const EVENT_KEYS = ["tab", "kind", "priority", "person", "search", "sort"] as const;
+export const EVENT_KEYS = ["tab", "kind", "priority", "person", "search"] as const;
 export type EventQuery = { [K in (typeof EVENT_KEYS)[number]]?: string };
 
 function pick<K extends string>(url: URL, keys: readonly K[]): { [P in K]?: string } {

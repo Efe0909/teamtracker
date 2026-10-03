@@ -7,11 +7,13 @@ import { useEffect, useRef, useState } from "react";
 import { useRecords, type RecordQuery } from "../../api/hooks";
 import type { RecordSummary } from "../../api/types";
 import { resolveWidths, clampWidth } from "../../lib/columns";
+import { useSort } from "../../lib/sort";
 import { useStored } from "../../lib/stored";
 import { ago, isDone, KIND, PRIORITY, PRIORITY_ORDER, STATUS, STATUS_ORDER } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
 import { navigate } from "../../lib/router";
 import { Icon } from "../../ui/icons";
+import { SortTh } from "../../ui/SortTh";
 import {
   Avatar, Button, Dialog, Due, Empty, IconButton, KindTag, Link, Loading, Picker, PriorityTag, Segmented, Status, Tag, TeamName, ui, Who,
   type Option,
@@ -28,13 +30,6 @@ const QUICK = [
   { value: "overdue", label: "Geciken" },
   { value: "unassigned", label: "Atanmamış" },
 ] as const;
-
-const SORTS: Option<string>[] = [
-  { value: "", label: "Son hareket" },
-  { value: "date", label: "Son tarih" },
-  { value: "priority", label: "Öncelik" },
-  { value: "newest", label: "En yeni" },
-];
 
 type Key = keyof RecordQuery;
 
@@ -66,7 +61,7 @@ export function Tasks({ query }: { query: RecordQuery }) {
 
   const data = rows.data ?? [];
   const open = data.filter((r) => !isDone(r.status)).length;
-  const any = Object.keys(query).some((k) => k !== "quick" && k !== "sort");
+  const any = Object.keys(query).some((k) => k !== "quick");
 
   // Filtre cipi: bos deger "Hepsi"; secim varsa cip dolu ve degeri gosterir.
   const chip = (k: Key, label: string, options: Option<string>[]) => {
@@ -144,10 +139,6 @@ export function Tasks({ query }: { query: RecordQuery }) {
           {rows.isFetching ? "yükleniyor · " : ""}
           {open} açık · {data.length - open} kapalı
         </span>
-        <span className={s.filterSep} aria-hidden="true" />
-        <Picker look="bare" label="Sırala" value={query.sort ?? ""} options={SORTS} onChange={(v) => set({ sort: v })} align="end">
-          <Icon name="sliders" size={14} /> {SORTS.find((o) => o.value === (query.sort ?? ""))?.label}
-        </Picker>
       </div>
 
       {rows.data === undefined ? <Loading /> : <RecordTable rows={data} />}
@@ -179,12 +170,25 @@ const COLS: { key: ColKey; label: string; width: number }[] = [
 ];
 const DEFAULTS = Object.fromEntries(COLS.map((c) => [c.key, c.width])) as Record<ColKey, number>;
 
-export function RecordTable({ rows, showTeam = true }: { rows: RecordSummary[]; showTeam?: boolean }) {
+/** `sortKey`: siralama tablo basina saklanir; Gorevler ile takim sayfasi ayri hatirlar. */
+export function RecordTable({ rows, showTeam = true, sortKey = "records" }: {
+  rows: RecordSummary[]; showTeam?: boolean; sortKey?: string;
+}) {
   const L = useLookup();
   const [saved, setSaved] = useStored<Record<string, number>>("table.cols", {});
   const widths = resolveWidths(DEFAULTS, saved);
   const drag = useRef<{ key: ColKey; x: number; w: number } | null>(null);
   const cols = COLS.filter((c) => showTeam || c.key !== "team");
+  const sorter = useSort(sortKey, rows, {
+    title: (r) => r.title,
+    status: (r) => STATUS_ORDER.indexOf(r.status),
+    priority: (r) => PRIORITY_ORDER.indexOf(r.priority),
+    owner: (r) => L.user(r.owner_id)?.name,
+    due: (r) => r.due_date,
+    unit: (r) => L.path(r.unit_id).at(-1),
+    team: (r) => L.team(r.team_id)?.name,
+    updated: (r) => r.updated_at,
+  });
   // Surukleme: imlec yakalanir, birakinca genislik cihaza yazilir.
   const start = (key: ColKey) => (e: React.PointerEvent<HTMLSpanElement>) => {
     e.preventDefault();
@@ -212,17 +216,16 @@ export function RecordTable({ rows, showTeam = true }: { rows: RecordSummary[]; 
         <thead>
           <tr>
             {cols.map((c) => (
-              <th key={c.key} scope="col">
-                {c.label}
+              <SortTh key={c.key} sorter={sorter} k={c.key} label={c.label}>
                 <span className={s.colGrip} role="separator" aria-label={`${c.label} sütun genişliği`}
                   onPointerDown={start(c.key)} onPointerMove={move} onPointerUp={end} onPointerCancel={end}
                   onDoubleClick={() => setSaved(Object.fromEntries(Object.entries(saved).filter(([k]) => k !== c.key)))} />
-              </th>
+              </SortTh>
             ))}
           </tr>
         </thead>
         <tbody>
-          {rows.map((r) => {
+          {sorter.rows.map((r) => {
             const to = href({ name: "record", id: r.id });
             const path = L.path(r.unit_id);
             const owner = L.user(r.owner_id);

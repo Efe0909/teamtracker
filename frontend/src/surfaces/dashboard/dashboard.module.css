@@ -165,6 +165,13 @@
 .navOn > svg {
   color: var(--acc-strong);
 }
+/* surukleme: tutulan soluk, birakma hedefinin ustunde vurgu cizgisi */
+.navDrag {
+  opacity: 0.5;
+}
+.navOver {
+  box-shadow: 0 -2px 0 var(--acc-strong);
+}
 .navMeta {
   font-size: var(--fs-xs);
   color: var(--dim);
@@ -1603,32 +1610,6 @@ a.row:hover {
   font-variant-numeric: tabular-nums;
   color: var(--acc-strong);
   white-space: nowrap;
-}
-/* siralanir sutun basligi */
-.sortBtn {
-  appearance: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 0;
-  border: 0;
-  background: none;
-  font: inherit;
-  color: inherit;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.sortBtn > svg {
-  opacity: 0;
-}
-.sortBtn:hover > svg {
-  opacity: 0.5;
-}
-.sortBtn[data-on="true"] {
-  color: var(--txt);
-}
-.sortBtn[data-on="true"] > svg {
-  opacity: 1;
 }
 .matrixLegend {
   display: flex;

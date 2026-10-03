@@ -31,6 +31,9 @@
   appearance: none;
   position: relative;
   display: inline-flex;
+  /* flex satirinda (ekip karti) yanindaki metinle esnemesin: kalem avatarin dibinde kalsin */
+  align-self: flex-start;
+  flex: none;
   padding: 0;
   border: 0;
   background: none;

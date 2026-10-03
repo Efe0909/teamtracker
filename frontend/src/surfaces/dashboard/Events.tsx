@@ -12,8 +12,11 @@ import { NodeListPicker, NodeTreePicker, useNodesOf } from "../../features/nodes
 import { daysFromToday, parseDay, PRIORITY, PRIORITY_ORDER, toIsoDay } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
 import { navigate } from "../../lib/router";
+import { useSort } from "../../lib/sort";
 import { useStored } from "../../lib/stored";
+import { DateField } from "../../ui/DateField";
 import { Icon } from "../../ui/icons";
+import { SortTh } from "../../ui/SortTh";
 import {
   Button, cx, Dialog, Empty, IconButton, KindTag, Link, Loading, Picker, PriorityTag, Segmented, Status, Tag, ui, Who, type Option,
 } from "../../ui/ui";
@@ -30,12 +33,6 @@ const TABS = [
   { value: "pool", label: "Havuz" },
 ] as const;
 type Tab = (typeof TABS)[number]["value"];
-
-const SORTS: Option<string>[] = [
-  { value: "", label: "Tarih" },
-  { value: "priority", label: "Önem" },
-  { value: "links", label: "Bağlantı" },
-];
 
 function tabOf(e: EventSummary): Tab {
   if (e.date === null) return "pool";
@@ -85,9 +82,7 @@ export function Events({ query }: { query: EventQuery }) {
     .filter((e) => query.person === undefined || e.owner_id === (query.person === "me" ? L.me.id : query.person))
     .filter((e) => needle === "" || `${e.title} ${placeLabel(L.meta.nodes, e) ?? ""}`.toLocaleLowerCase("tr").includes(needle))
     .sort((a, b) => {
-      if (query.sort === "priority") return PRIORITY_ORDER.indexOf(a.priority) - PRIORITY_ORDER.indexOf(b.priority);
-      if (query.sort === "links") return b.record_ids.length - a.record_ids.length;
-      // Gecmis yeniden eskiye, planlanan yakindan uzaga.
+      // Varsayilan (baslik siralamasi kapaliyken): gecmis yeniden eskiye, planlanan yakindan uzaga.
       const d = (a.date ?? "").localeCompare(b.date ?? "");
       return tab === "past" ? -d : d;
     });
@@ -144,9 +139,6 @@ export function Events({ query }: { query: EventQuery }) {
               </button>
             )}
             <span className={s.grow} />
-            <Picker look="bare" label="Sırala" value={query.sort ?? ""} options={SORTS} onChange={(v) => set({ sort: v })} align="end">
-              <Icon name="sliders" size={14} /> {SORTS.find((o) => o.value === (query.sort ?? ""))?.label}
-            </Picker>
             <label className={s.search}>
               <Icon name="search" size={15} />
               <span className="visually-hidden">Ara</span>
@@ -171,6 +163,14 @@ const weekdayFmt = new Intl.DateTimeFormat("tr", { day: "numeric", month: "short
 
 function EventTable({ rows }: { rows: EventSummary[] }) {
   const L = useLookup();
+  const sorter = useSort("events", rows, {
+    title: (e) => e.title,
+    date: (e) => e.date,
+    status: (e) => Object.keys(EVENT_STATUS).indexOf(e.status),
+    priority: (e) => PRIORITY_ORDER.indexOf(e.priority),
+    owner: (e) => L.user(e.owner_id)?.name,
+    attendees: (e) => e.attendees,
+  });
   if (rows.length === 0) {
     return (
       <div className={s.tableWrap}>
@@ -191,16 +191,16 @@ function EventTable({ rows }: { rows: EventSummary[] }) {
         </colgroup>
         <thead>
           <tr>
-            <th scope="col">Etkinlik</th>
-            <th scope="col">Tarih</th>
-            <th scope="col">Durum</th>
-            <th scope="col">Önem</th>
-            <th scope="col">Sorumlu</th>
-            <th scope="col">Katılım</th>
+            <SortTh sorter={sorter} k="title" label="Etkinlik" />
+            <SortTh sorter={sorter} k="date" label="Tarih" />
+            <SortTh sorter={sorter} k="status" label="Durum" />
+            <SortTh sorter={sorter} k="priority" label="Önem" />
+            <SortTh sorter={sorter} k="owner" label="Sorumlu" />
+            <SortTh sorter={sorter} k="attendees" label="Katılım" />
           </tr>
         </thead>
         <tbody>
-          {rows.map((e) => { const place = placeLabel(L.meta.nodes, e); return (
+          {sorter.rows.map((e) => { const place = placeLabel(L.meta.nodes, e); return (
             // Satirin tamami tiklanir; klavye/ekran okuyucu icin baslik bir baglanti.
             <tr key={e.id} onClick={(x) => { if (!(x.target as HTMLElement).closest("a")) navigate(href({ name: "event", id: e.id })); }}>
               <td className={s.evCell}>
@@ -413,10 +413,10 @@ function NewEventForm({ onCancel }: { onCancel: () => void }) {
         <span>Birim <span className={ui.fieldHint}>— etkinliğin kaydı (sohbet + arşiv) burada açılır</span></span>
         <NodeTreePicker rootKey="units" label="Birim" value={unit} onChange={setUnit} placeholder="Birim seç" />
       </div>
-      <label className={ui.field}>
+      <div className={ui.field}>
         <span>Tarih <span className={ui.fieldHint}>— boş bırakılırsa havuza düşer</span></span>
-        <input className={ui.input} type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-      </label>
+        <DateField aria-label="Tarih" value={date === "" ? null : date} onChange={(v) => setDate(v ?? "")} clearable />
+      </div>
       <div className={s.evTemplate}>
         <span className={s.dim}>{nodeName(L.meta.nodes, kind)} şablonu otomatik yükler:</span>
         {tpl.widgets.length > 0 && (

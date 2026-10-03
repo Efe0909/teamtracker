@@ -1,0 +1,31 @@
+/* Siralanir sutun basligi. Ham renk YOK — yalniz token. */
+.btn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: 2px;
+}
+.btn > svg {
+  opacity: 0;
+}
+.btn:hover > svg,
+.btn:focus-visible > svg {
+  opacity: 0.5;
+}
+.btn[data-on="true"] {
+  color: var(--txt);
+}
+.btn[data-on="true"] > svg {
+  opacity: 1;
+}
