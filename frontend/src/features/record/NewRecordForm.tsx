@@ -11,6 +11,7 @@ import { KIND, PRIORITY, PRIORITY_ORDER } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
 import { Icon } from "../../ui/icons";
 import { Button, Picker, PriorityTag, TeamName, ui, Who } from "../../ui/ui";
+import { NodeTreePicker, useNodesOf } from "../nodes/NodePicker";
 import { ACCESS } from "./Join";
 import s from "./form.module.css";
 
@@ -24,7 +25,8 @@ export function NewRecordForm(props: {
   const [err, setErr] = useState<string | null>(null);
   const [kind, setKind] = useState<RecordKind>("issue");
   const [title, setTitle] = useState("");
-  const [unit, setUnit] = useState<string>(props.defaults?.unit_id ?? L.units[0]?.id ?? "");
+  const units = useNodesOf("units");
+  const [unit, setUnit] = useState<string>(props.defaults?.unit_id ?? units[0]?.id ?? "");
   const [team, setTeam] = useState<string | null>(props.defaults?.team_id ?? null);
   const [pillar, setPillar] = useState<string | null>(props.defaults?.pillar_id ?? null);
   const [cards, setCards] = useState<CardType[]>([]);
@@ -77,10 +79,9 @@ export function NewRecordForm(props: {
           options={PRIORITY_ORDER.map((v) => ({ value: v, label: PRIORITY[v], render: <PriorityTag priority={v} bare /> }))}>
           <PriorityTag priority={priority} bare />
         </Picker>
-        <Picker look="chip" active={unit !== ""} label="Birim" value={unit} onChange={setUnit} search
-          options={L.units.map((n) => ({ value: n.id, label: n.name, depth: n.depth }))}>
+        <NodeTreePicker rootKey="units" look="chip" label="Birim" value={unit === "" ? null : unit} onChange={setUnit}>
           <Icon name="tree" size={13} /> {L.node(unit)?.name ?? "Birim seç"}
-        </Picker>
+        </NodeTreePicker>
         <Picker look="chip" active label="Sorumlu" value={owner} onChange={setOwner}
           options={[
             { value: null, label: "Sorumlusuz" },

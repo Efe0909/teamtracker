@@ -26,7 +26,7 @@ it("bildirim ozeti gorunur, secilince toplu islem cubugu cikar", async () => {
   };
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => view }));
   const meta: Meta = {
-    me: { id: "a", is_admin: true, scopes: [], team_ids: [], profile_complete: true },
+    me: { id: "a", is_admin: true, scopes: [], team_ids: [], profile_complete: true, favorite_nodes: [] },
     users: [], teams: [], pillars: [], nodes: [],
   };
   render(

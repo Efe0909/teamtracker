@@ -13,9 +13,10 @@ import { useLookup } from "../../lib/lookup";
 import { navigate } from "../../lib/router";
 import { Icon } from "../../ui/icons";
 import {
-  Avatar, Button, Dialog, Due, Empty, KindTag, Link, Loading, Picker, PriorityTag, Segmented, Status, Tag, TeamName, ui, Who,
+  Avatar, Button, Dialog, Due, Empty, IconButton, KindTag, Link, Loading, Picker, PriorityTag, Segmented, Status, Tag, TeamName, ui, Who,
   type Option,
 } from "../../ui/ui";
+import { NodeTreePicker } from "../../features/nodes/NodePicker";
 import { NewRecordForm } from "../../features/record/NewRecordForm";
 import s from "./dashboard.module.css";
 import { href } from "./routes";
@@ -126,7 +127,10 @@ export function Tasks({ query }: { query: RecordQuery }) {
           ...L.meta.users.map((u) => ({ value: u.id, label: u.name, render: <Who user={u} /> })),
         ])}
         {chip("priority", "Öncelik", PRIORITY_ORDER.map((v) => ({ value: v, label: PRIORITY[v], render: <PriorityTag priority={v} bare /> })))}
-        {chip("node", "Birim", L.meta.nodes.map((n) => ({ value: n.id, label: n.name, depth: n.depth })))}
+        <NodeTreePicker rootKey="units" look="chip" label="Birim" value={query.node ?? null} onChange={(id) => set({ node: id })}>
+          {query.node === undefined ? <><Icon name="plus" size={13} /> Birim</> : <>Birim: <b>{L.node(query.node)?.name ?? "?"}</b></>}
+        </NodeTreePicker>
+        {query.node !== undefined && <IconButton icon="x" label="Birim süzgecini kaldır" onClick={() => set({ node: undefined })} />}
         {chip("team", "Takım", L.plainTeams.map((t) => ({ value: t.id, label: t.name, render: <TeamName team={t} /> })))}
         {chip("kind", "Tür", [{ value: "issue", label: KIND.issue }, { value: "task", label: KIND.task }])}
         {L.pillars.length > 0 &&

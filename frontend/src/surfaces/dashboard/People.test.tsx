@@ -19,7 +19,7 @@ const user = (id: string, name: string, over: Partial<MetaUser> = {}): MetaUser 
 it("kisi arar, telefon ve dogum gununu gosterir, bugun dogum gunu isaretlenir", async () => {
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => [] }));
   const meta: Meta = {
-    me: { id: "a", is_admin: false, scopes: [], team_ids: [], profile_complete: true },
+    me: { id: "a", is_admin: false, scopes: [], team_ids: [], profile_complete: true, favorite_nodes: [] },
     users: [
       user("a", "Ayşe", { phone: "0532 111 22 33" }),
       user("b", "Bora", { nickname: "Boro", birth_day: now.getDate(), birth_month: now.getMonth() + 1 }),

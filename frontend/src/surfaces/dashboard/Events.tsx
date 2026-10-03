@@ -7,7 +7,8 @@
 import { useEffect, useState } from "react";
 import { errorText } from "../../api/client";
 import { useCreateEvent, useEvents, useRecords } from "../../api/hooks";
-import type { EventKind, EventSummary, IsoDate, RecordSummary, Uuid } from "../../api/types";
+import type { EventSummary, IsoDate, RecordSummary, Uuid } from "../../api/types";
+import { NodeListPicker, NodeTreePicker, useNodesOf } from "../../features/nodes/NodePicker";
 import { daysFromToday, parseDay, PRIORITY, PRIORITY_ORDER, toIsoDay } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
 import { navigate } from "../../lib/router";
@@ -17,7 +18,7 @@ import {
   Button, cx, Dialog, Empty, IconButton, KindTag, Link, Loading, Picker, PriorityTag, Segmented, Status, Tag, ui, Who, type Option,
 } from "../../ui/ui";
 import s from "./dashboard.module.css";
-import { EVENT_KIND, EVENT_STATUS, EVENT_TEMPLATE, WIDGET } from "./eventModel";
+import { EVENT_STATUS, kindTemplate, nodeName, placeLabel, WIDGET } from "./eventModel";
 import { href, type EventQuery } from "./routes";
 import { ErrorScreen } from "../errors/ErrorScreen";
 
@@ -49,6 +50,11 @@ export function Events({ query }: { query: EventQuery }) {
   const [search, setSearch] = useState(query.search ?? "");
   const [rail, setRail] = useStored("events.rail", true);
   const tab: Tab = TABS.some((t) => t.value === query.tab) ? (query.tab as Tab) : "planned";
+  const kinds = useNodesOf("event_types").filter((n) => n.node_type === "option");
+  // `kind` bir tur dugumunun id'si. Taninmayan deger (eski enum "training" vb.) yok sayilir;
+  // pasif tur gecerli: eski etkinligin kirintisi onu suzer.
+  const kindNode = L.meta.nodes.find((n) => n.id === query.kind && n.root_key === "event_types" && n.node_type === "option");
+  const kindId = kindNode?.id;
 
   useEffect(() => {
     document.title = "Etkinlik Planlama — EkipTakip";
@@ -74,10 +80,10 @@ export function Events({ query }: { query: EventQuery }) {
   const needle = (query.search ?? "").toLocaleLowerCase("tr");
   const rows = events
     .filter((e) => tabOf(e) === tab)
-    .filter((e) => query.kind === undefined || e.kind === query.kind)
+    .filter((e) => kindId === undefined || e.kind_id === kindId)
     .filter((e) => query.priority === undefined || e.priority === query.priority)
     .filter((e) => query.person === undefined || e.owner_id === (query.person === "me" ? L.me.id : query.person))
-    .filter((e) => needle === "" || `${e.title} ${e.place ?? ""}`.toLocaleLowerCase("tr").includes(needle))
+    .filter((e) => needle === "" || `${e.title} ${placeLabel(L.meta.nodes, e) ?? ""}`.toLocaleLowerCase("tr").includes(needle))
     .sort((a, b) => {
       if (query.sort === "priority") return PRIORITY_ORDER.indexOf(a.priority) - PRIORITY_ORDER.indexOf(b.priority);
       if (query.sort === "links") return b.record_ids.length - a.record_ids.length;
@@ -85,10 +91,10 @@ export function Events({ query }: { query: EventQuery }) {
       const d = (a.date ?? "").localeCompare(b.date ?? "");
       return tab === "past" ? -d : d;
     });
-  const any = query.kind !== undefined || query.priority !== undefined || query.person !== undefined || needle !== "";
+  const any = kindId !== undefined || query.priority !== undefined || query.person !== undefined || needle !== "";
 
   const chip = (k: "kind" | "priority" | "person", label: string, options: Option<string>[]) => {
-    const v = query[k] ?? "";
+    const v = (k === "kind" ? kindId : query[k]) ?? "";
     const cur = options.find((o) => o.value === v);
     return (
       <Picker look="chip" label={label} active={v !== ""} value={v}
@@ -125,7 +131,8 @@ export function Events({ query }: { query: EventQuery }) {
 
           <div className={s.filters}>
             <Icon name="filter" size={15} />
-            {chip("kind", "Tür", (Object.keys(EVENT_KIND) as EventKind[]).map((k) => ({ value: k, label: EVENT_KIND[k] })))}
+            {chip("kind", "Tür", [...kinds, ...(kindNode !== undefined && !kinds.includes(kindNode) ? [kindNode] : [])]
+              .map((k) => ({ value: k.id, label: k.name })))}
             {chip("priority", "Önem", PRIORITY_ORDER.map((v) => ({ value: v, label: PRIORITY[v], render: <PriorityTag priority={v} bare /> })))}
             {chip("person", "Sorumlu", [
               { value: "me", label: "Ben" },
@@ -193,14 +200,14 @@ function EventTable({ rows }: { rows: EventSummary[] }) {
           </tr>
         </thead>
         <tbody>
-          {rows.map((e) => (
+          {rows.map((e) => { const place = placeLabel(L.meta.nodes, e); return (
             // Satirin tamami tiklanir; klavye/ekran okuyucu icin baslik bir baglanti.
             <tr key={e.id} onClick={(x) => { if (!(x.target as HTMLElement).closest("a")) navigate(href({ name: "event", id: e.id })); }}>
               <td className={s.evCell}>
                 <span className={s.evTitleRow}>
                   <Link href={href({ name: "event", id: e.id })} className={s.evTitle}>{e.title}</Link>
                   {/* Tur ve bagli kayit sayisi sabit sutunlarda: satirlar arasi hizali. */}
-                  <span className={s.evKindCol}><Tag tone="neutral">{EVENT_KIND[e.kind]}</Tag></span>
+                  <span className={s.evKindCol}><Tag tone="neutral">{nodeName(L.meta.nodes, e.kind_id)}</Tag></span>
                   <span className={s.evLinksCol}>
                     {e.record_ids.length > 0 && (
                       <span className={s.msgs} title={`${e.record_ids.length} bağlı kayıt`}>
@@ -209,7 +216,7 @@ function EventTable({ rows }: { rows: EventSummary[] }) {
                     )}
                   </span>
                 </span>
-                {e.place !== null && <span className={s.evPlace}><Icon name="venue" size={12} /> {e.place}</span>}
+                {place !== null && <span className={s.evPlace}><Icon name="venue" size={12} /> {place}</span>}
               </td>
               {/* Saat yalniz detayda; tabloda yer baslikta kalsin. */}
               <td className={s.nowrap}>
@@ -222,7 +229,7 @@ function EventTable({ rows }: { rows: EventSummary[] }) {
               <td><Who user={L.user(e.owner_id)} /></td>
               <td className={s.evNum}>{(e.attendees ?? 0) > 0 ? e.attendees : <span className={s.dim}>—</span>}</td>
             </tr>
-          ))}
+          ); })}
         </tbody>
       </table>
     </div>
@@ -272,6 +279,7 @@ const monthOnlyFmt = new Intl.DateTimeFormat("tr", { month: "long" });
 const WEEKDAYS = ["Pt", "Sa", "Ça", "Pe", "Cu", "Ct", "Pz"];
 
 function CalendarRail({ events, onClose }: { events: EventSummary[]; onClose: () => void }) {
+  const L = useLookup();
   const now = new Date();
   const [month, setMonth] = useState(() => new Date(now.getFullYear(), now.getMonth(), 1));
   const todayIso = toIsoDay(now);
@@ -354,7 +362,7 @@ function CalendarRail({ events, onClose }: { events: EventSummary[]; onClose: ()
                   </span>
                   <span className={s.evItemText}>
                     <Link href={href({ name: "event", id: e.id })}>{e.title}</Link>
-                    <span className={s.dim}>{[e.start_time, e.place].filter(Boolean).join(" · ")}</span>
+                    <span className={s.dim}>{[e.start_time, placeLabel(L.meta.nodes, e)].filter(Boolean).join(" · ")}</span>
                   </span>
                 </li>
               ))}
@@ -373,18 +381,21 @@ function CalendarRail({ events, onClose }: { events: EventSummary[]; onClose: ()
 function NewEventForm({ onCancel }: { onCancel: () => void }) {
   const L = useLookup();
   const create = useCreateEvent();
+  const kinds = useNodesOf("event_types").filter((n) => n.node_type === "option");
   const [title, setTitle] = useState("");
-  const [kind, setKind] = useState<EventKind>("meeting");
-  const [unit, setUnit] = useState("");
+  // Varsayilan: ilk tur (secilmeden once de sablon gorunsun).
+  const [picked, setKind] = useState<Uuid | null>(null);
+  const kind = picked ?? kinds[0]?.id ?? null;
+  const [unit, setUnit] = useState<Uuid | null>(null);
   const [date, setDate] = useState("");
-  const tpl = EVENT_TEMPLATE[kind];
-  const ready = title.trim() !== "" && unit !== "";
+  const tpl = kindTemplate(L.meta.nodes, kind);
+  const ready = title.trim() !== "" && unit !== null && kind !== null;
   return (
     <form className={ui.formStack} onSubmit={(e) => {
       e.preventDefault();
-      if (!ready || create.isPending) return;
+      if (!ready || kind === null || unit === null || create.isPending) return;
       create.mutate(
-        { title: title.trim(), kind, unit_id: unit, ...(date === "" ? {} : { date }) },
+        { title: title.trim(), kind_id: kind, unit_id: unit, ...(date === "" ? {} : { date }) },
         { onSuccess: (r) => navigate(href({ name: "event", id: r.id })) },
       );
     }}>
@@ -393,26 +404,21 @@ function NewEventForm({ onCancel }: { onCancel: () => void }) {
         <input className={ui.input} required maxLength={200} autoFocus placeholder="Örn. DC araba atölyesi"
           value={title} onChange={(e) => setTitle(e.target.value)} />
       </label>
-      <label className={ui.field}>
+      <div className={ui.field}>
         <span>Tür</span>
-        <select className={ui.input} value={kind} onChange={(e) => setKind(e.target.value as EventKind)}>
-          {(Object.keys(EVENT_KIND) as EventKind[]).map((k) => <option key={k} value={k}>{EVENT_KIND[k]}</option>)}
-        </select>
-      </label>
+        <NodeListPicker rootKey="event_types" label="Tür" value={kind} onChange={setKind} placeholder="Tür seç" />
+      </div>
       {/* Etkinligin kaydi ayni islemde acilir; kayit bir birimde durur (spec/73 §3a). */}
-      <label className={ui.field}>
+      <div className={ui.field}>
         <span>Birim <span className={ui.fieldHint}>— etkinliğin kaydı (sohbet + arşiv) burada açılır</span></span>
-        <select className={ui.input} required value={unit} onChange={(e) => setUnit(e.target.value)}>
-          <option value="" disabled>Birim seç</option>
-          {L.meta.nodes.map((n) => <option key={n.id} value={n.id}>{"  ".repeat(n.depth)}{n.name}</option>)}
-        </select>
-      </label>
+        <NodeTreePicker rootKey="units" label="Birim" value={unit} onChange={setUnit} placeholder="Birim seç" />
+      </div>
       <label className={ui.field}>
         <span>Tarih <span className={ui.fieldHint}>— boş bırakılırsa havuza düşer</span></span>
         <input className={ui.input} type="date" value={date} onChange={(e) => setDate(e.target.value)} />
       </label>
       <div className={s.evTemplate}>
-        <span className={s.dim}>{EVENT_KIND[kind]} şablonu otomatik yükler:</span>
+        <span className={s.dim}>{nodeName(L.meta.nodes, kind)} şablonu otomatik yükler:</span>
         {tpl.widgets.length > 0 && (
           <div className={s.evTemplateRow}>
             {tpl.widgets.map((w) => (

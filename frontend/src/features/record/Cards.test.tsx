@@ -25,7 +25,7 @@ it("bilinmeyen tur bozuk, toplanti alanlari ve cevaplari cizilir", () => {
     pinned: false,
     membership: { mode: "public", is_member: true, restricted: false, request: null, can_decide: false, requests: [] },
   } as unknown as RecordDetail;
-  const meta: Meta = { me: { id: "u", is_admin: false, scopes: [], team_ids: [], profile_complete: true }, users: [], teams: [], pillars: [], nodes: [] };
+  const meta: Meta = { me: { id: "u", is_admin: false, scopes: [], team_ids: [], profile_complete: true, favorite_nodes: [] }, users: [], teams: [], pillars: [], nodes: [] };
   render(
     <QueryClientProvider client={new QueryClient()}>
       <LookupProvider meta={meta}>

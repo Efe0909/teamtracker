@@ -14,6 +14,7 @@ import { useLookup } from "../../lib/lookup";
 import { Icon } from "../../ui/icons";
 import { Button, cx, Dialog, IconButton, Loading, Picker, ui, useToast, Who } from "../../ui/ui";
 import s from "./dashboard.module.css";
+import { placeLabel } from "./eventModel";
 
 const CONTACTS_MAX = 3;
 const RULES = "Kulüp mail adresinden, Word (.docx) olarak, etkinlikten en geç 3 iş günü önce gönderilmeli.";
@@ -208,7 +209,7 @@ function Form({ eventId, event, canEdit, view }: { eventId: Uuid; event: EventDe
             <dt>Etkinlik adı</dt><dd>{event.title}</dd>
             <dt>Tarih</dt><dd>{event.date === null ? "—" : formatDay(event.date)}</dd>
             <dt>Başlangıç</dt><dd>{event.start_time ?? "—"}</dd>
-            <dt>Yer</dt><dd>{event.place ?? "—"}</dd>
+            <dt>Yer</dt><dd>{placeLabel(L.meta.nodes, event) ?? "—"}</dd>
             <dt>Katılımcı sayısı</dt><dd>{event.attendees ?? "—"}</dd>
           </dl>
           <span className={r.muted}>Yukarıdakiler etkinlikten gelir; değiştirmek için etkinliği düzenleyin.</span>

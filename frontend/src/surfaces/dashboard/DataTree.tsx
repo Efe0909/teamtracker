@@ -1,29 +1,69 @@
-// Veri Yonetimi: yapinin (agacin) duzenlendigi ekran (R2-F05). Kaynak:
-// e02d71d `veri_yonetimi.html` + `fragments/agac.html` + dashboard.js.
+// Veri Yonetimi: referans veri agacinin duzenlendigi ekran (spec/74; once
+// R2-F05, e02d71d `veri_yonetimi.html` + `fragments/agac.html` + dashboard.js).
 //
 // Duz liste + girinti: sunucu Euler sirasinda veriyor, ic ice bilesen yok.
 // KATLAMA ve ARAMA ISTEMCIDE: butun satirlar zaten elde, her ok icin sunucuya
 // gitmek ayni agaci ikinci kez kurmak olurdu. Acik dallar state'te — yazmadan
 // sonra agac tazelenince kullanici yerini kaybetmez.
 //
-// Yetki SUNUCUDA: `can_*` bayraklari yalniz dugme gostermek icin, uc ayrica
-// kontrol ediyor. Tur listeleri de sunucudan: yerlesim kurali (ROOT_ONLY)
-// burada yeniden yazilmaz (KNOW-241).
+// Kokler YALNIZ gocle dogar: "kok ekle" yok, koke tasima yok. Kok ve
+// operational slot (`locked`) yalniz ad/aciklama degistirir.
+//
+// Yetki ve yerlesim SUNUCUDA: `can_*` bayraklari ve dugum basina
+// `child_types`/`child_fixed` yalniz dugme ve form gostermek icin; kok semasi
+// (src/refdata.rs) burada yeniden yazilmaz (KNOW-241).
 
 import { useEffect, useMemo, useState } from "react";
 import { errorText } from "../../api/client";
 import { useCreateNode, useDeleteNode, useNodeTree, usePatchNode } from "../../api/hooks";
-import type { MetaTeam, NodePatch, NodeType, TreeNode, TreeView, Uuid } from "../../api/types";
+import type { MetaTeam, NewNode, NodePatch, NodeType, Shape, TreeNode, TreeView, Uuid, WidgetType } from "../../api/types";
 import { NODE_TYPE } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
 import { Icon } from "../../ui/icons";
 import { Button, cx, Empty, Link, Loading, Picker, Req, Tag, ui, useToast } from "../../ui/ui";
 import { ErrorScreen } from "../errors/ErrorScreen";
 import s from "./dashboard.module.css";
+import d from "./datatree.module.css";
+import { WIDGET } from "./eventModel";
 import { href } from "./routes";
 
-/** Acik form: bir dugumun duzenleme ya da alt dugum paneli; `id` null = kok ekleme. */
-type Panel = { id: Uuid | null; kind: "edit" | "add" } | null;
+/** Acik form: bir dugumun duzenleme ya da alt dugum paneli. */
+type Panel = { id: Uuid; kind: "edit" | "add" } | null;
+
+const TYPE_LABEL: Record<NodeType, string> = NODE_TYPE;
+
+const SHAPE: Record<Shape, string> = { tree: "Ağaç", list: "Liste", leaf: "Yaprak" };
+
+/** Sablonda secilebilen widget'lar (`record` sablonda yok: spec/73 §3). */
+type TemplateWidget = Exclude<WidgetType, "record">;
+const TEMPLATE_WIDGETS: TemplateWidget[] = ["otf", "supplies"];
+
+/** Sunucunun reddetmeyen isaretleri (refdata.rs `warnings`). */
+const WARNING: Readonly<Partial<Record<string, string>>> = {
+  missing_slot: "Eksik bölüm: Adımlar ya da Widget'lar yok",
+  late_checkpoint: "Etkinlikten 7 günden daha az önce — hazırlık en geç 7 gün önce bitmeli",
+  unknown_widget: "Bilinmeyen widget türü",
+  unknown_slot: "Tanınmayan bölüm",
+  invalid_attrs: "Ayarları eksik ya da bozuk",
+};
+
+function offsetText(days: number): string {
+  return days === 0 ? "0 gün" : `${days < 0 ? "−" : "+"}${Math.abs(days)} gün`;
+}
+
+/** Satirda okunacak ayar: checkpoint gun farki ya da widget adi. */
+function attrText(n: TreeNode): string | null {
+  if (n.node_type === "checkpoint" && n.attrs.offset_days !== undefined) return offsetText(n.attrs.offset_days);
+  if (n.node_type === "widget" && n.attrs.widget !== undefined) return WIDGET[n.attrs.widget].label;
+  return null;
+}
+
+/** Formdaki ayar alanlarindan attrs; ayarsiz tur icin undefined. */
+function attrsFor(type: NodeType, offset: string, widget: TemplateWidget): TreeNode["attrs"] | undefined {
+  if (type === "checkpoint") return { offset_days: Number(offset) };
+  if (type === "widget") return { widget };
+  return undefined;
+}
 
 export function DataTree() {
   const q = useNodeTree();
@@ -99,7 +139,7 @@ function TreeScreen({ tree }: { tree: TreeView }) {
   const visible = tree.nodes.filter(
     (n) => ancestors(n).every((a) => open.has(a)) && (shown === null || shown.has(n.id)),
   );
-  const canWrite = tree.can_add_root || tree.nodes.some((n) => n.can_edit);
+  const canWrite = tree.nodes.some((n) => n.can_edit);
 
   const setActive = (n: TreeNode) =>
     patch.mutate(
@@ -111,25 +151,14 @@ function TreeScreen({ tree }: { tree: TreeView }) {
     <div className={s.page}>
       <div className={s.pageHead}>
         <h1>Veri Yönetimi</h1>
-        {tree.can_add_root && (
-          <Button
-            variant="primary"
-            aria-expanded={panel?.id === null}
-            onClick={() => setPanel(panel?.id === null ? null : { id: null, kind: "add" })}
-          >
-            <Icon name="plus" size={18} /> Kök düğüm
-          </Button>
-        )}
       </div>
       <p className={s.lead}>
-        Yapı burada düzenlenir: düğüm ekle, adlandır, açıklama yaz, taşı, pasifleştir. Değişiklik anında
-        uygulanır ve ağaç yeniden kurulur.
+        Kökler (Birimler, Etkinlik Türleri, Etkinlik Yerleri) koddan gelir; yalnız adları ve açıklamaları
+        değişir. Birimler serbest bir ağaç: türü ve yapıyı sen seçersin. Etkinlik Türleri ve Etkinlik Yerleri
+        yönetilen listeler: türü sistem atar, her etkinlik türünün Adımlar ve Widget'lar bölümleri
+        kendiliğinden açılır. Değişiklik anında uygulanır.
       </p>
       {!canWrite && <p className={s.lead}>Yapıyı değiştirmek için editör yetkisi gerekiyor. Yöneticine söyle.</p>}
-
-      {panel?.id === null && (
-        <AddForm parent={null} types={tree.root_types} onClose={() => setPanel(null)} />
-      )}
 
       <div className={s.treeBar}>
         <input
@@ -146,7 +175,7 @@ function TreeScreen({ tree }: { tree: TreeView }) {
       </div>
 
       {tree.nodes.length === 0 ? (
-        <Empty title="Henüz düğüm yok.">Yapının en üstünden başla — örneğin bir bölüm ya da etkinlik.</Empty>
+        <Empty title="Henüz düğüm yok.">Kökler göçle gelir — sunucu henüz kurulmamış olabilir.</Empty>
       ) : visible.length === 0 ? (
         <Empty title="Bu aramayla eşleşen düğüm yok." />
       ) : (
@@ -155,6 +184,7 @@ function TreeScreen({ tree }: { tree: TreeView }) {
             const isOpen = open.has(n.id);
             const editing = panel?.id === n.id && panel.kind === "edit";
             const adding = panel?.id === n.id && panel.kind === "add";
+            const attr = attrText(n);
             return (
               <li
                 key={n.id}
@@ -179,7 +209,32 @@ function TreeScreen({ tree }: { tree: TreeView }) {
                     <span className={s.leaf} aria-hidden="true" />
                   )}
                   <span className={s.tname}>{n.name}</span>
-                  <Tag tone="neutral">{NODE_TYPE[n.node_type]}</Tag>
+                  {n.locked !== null && (
+                    <span
+                      className={d.lock}
+                      role="img"
+                      aria-label={`${n.name}: kilitli`}
+                      title={
+                        n.locked === "root"
+                          ? "Kök — koddan gelir; yalnız ad ve açıklama değişir"
+                          : "Sistem bölümü — yalnız ad ve açıklama değişir"
+                      }
+                    >
+                      <Icon name="lock" size={14} />
+                    </span>
+                  )}
+                  <Tag tone="neutral">
+                    {n.locked === "root" ? "Kök" : n.locked === "operational" ? "Bölüm" : TYPE_LABEL[n.node_type]}
+                  </Tag>
+                  {attr !== null && <span className={d.attr}>{attr}</span>}
+                  {n.warnings.map((w) => {
+                    const text = WARNING[w] ?? w;
+                    return (
+                      <span key={w} className={d.warn} role="img" aria-label={text} title={text}>
+                        <Icon name="alert" size={16} />
+                      </span>
+                    );
+                  })}
                   {/* Bu birimde calisan takimlar (team_nodes, spec/22). */}
                   {(teamsAt.get(n.id) ?? []).map((t) => (
                     <Link key={t.id} href={href({ name: "team", id: t.id })} className={s.tteam}>
@@ -209,38 +264,42 @@ function TreeScreen({ tree }: { tree: TreeView }) {
                       >
                         <Icon name="edit" size={18} />
                       </button>
-                      <button
-                        type="button"
-                        className={ui.iconBtn}
-                        aria-label={`${n.name}: alt düğüm ekle`}
-                        aria-expanded={adding}
-                        title="Alt düğüm ekle"
-                        onClick={() => setPanel(adding ? null : { id: n.id, kind: "add" })}
-                      >
-                        <Icon name="plus" size={18} />
-                      </button>
+                      {/* Bos child_types = buraya eklenmez (yaprak, option'in kendisi, pasif...). */}
+                      {n.child_types.length > 0 && (
+                        <button
+                          type="button"
+                          className={ui.iconBtn}
+                          aria-label={`${n.name}: alt düğüm ekle`}
+                          aria-expanded={adding}
+                          title="Alt düğüm ekle"
+                          onClick={() => setPanel(adding ? null : { id: n.id, kind: "add" })}
+                        >
+                          <Icon name="plus" size={18} />
+                        </button>
+                      )}
                       {/* Silmez, PASIFLESTIRIR: gundelik "bu artik kullanilmiyor" isinin
                           dogru araci — gecmis korunur, geri alinir. Kalici silme
-                          duzenleme panelinin icinde (spec/72 §6). */}
-                      <button
-                        type="button"
-                        className={ui.iconBtn}
-                        aria-label={`${n.name}: ${n.is_active ? "pasifleştir" : "yeniden aç"}`}
-                        title={n.is_active ? "Pasifleştir" : "Yeniden aç"}
-                        disabled={patch.isPending}
-                        onClick={() => setActive(n)}
-                      >
-                        <Icon name={n.is_active ? "off" : "restore"} size={18} />
-                      </button>
+                          duzenleme panelinin icinde (spec/72 §6). Kok/slot kapatilmaz. */}
+                      {n.locked === null && (
+                        <button
+                          type="button"
+                          className={ui.iconBtn}
+                          aria-label={`${n.name}: ${n.is_active ? "pasifleştir" : "yeniden aç"}`}
+                          title={n.is_active ? "Pasifleştir" : "Yeniden aç"}
+                          disabled={patch.isPending}
+                          onClick={() => setActive(n)}
+                        >
+                          <Icon name={n.is_active ? "off" : "restore"} size={18} />
+                        </button>
+                      )}
                     </span>
                   )}
                 </div>
                 {n.description !== null && <div className={s.tdesc}>{n.description}</div>}
-                {editing && <EditForm node={n} tree={tree} onClose={() => setPanel(null)} />}
+                {editing && <EditForm node={n} tree={tree} byId={byId} onClose={() => setPanel(null)} />}
                 {adding && (
                   <AddForm
                     parent={n}
-                    types={tree.child_types}
                     onClose={(added) => {
                       setPanel(null);
                       // Yeni dugum gorunsun: ustu acilir.
@@ -257,13 +316,49 @@ function TreeScreen({ tree }: { tree: TreeView }) {
   );
 }
 
-function AddForm(props: { parent: TreeNode | null; types: NodeType[]; onClose: (added: boolean) => void }) {
+/** Ture bagli ayar alanlari: checkpoint gun farki, widget turu (koddaki liste). */
+function AttrsFields(props: {
+  type: NodeType;
+  offset: string;
+  setOffset: (v: string) => void;
+  widget: TemplateWidget;
+  setWidget: (v: TemplateWidget) => void;
+}) {
+  if (props.type === "checkpoint") {
+    return (
+      <label className={ui.field}>
+        <span>Etkinlikten kaç gün önce/sonra<Req /></span>
+        <input className={ui.input} type="number" step={1} min={-365} max={365} required value={props.offset}
+          onChange={(e) => props.setOffset(e.target.value)} placeholder="ör. -7" />
+        <span className={ui.fieldHint}>Eksi = etkinlikten önce (ör. -7). Hazırlık en geç 7 gün önce bitmeli.</span>
+      </label>
+    );
+  }
+  if (props.type === "widget") {
+    return (
+      <div className={ui.field}>
+        <span>Widget</span>
+        <Picker label="Widget" value={props.widget} onChange={props.setWidget}
+          options={TEMPLATE_WIDGETS.map((w) => ({ value: w, label: WIDGET[w].label }))} />
+      </div>
+    );
+  }
+  return null;
+}
+
+function AddForm(props: { parent: TreeNode; onClose: (added: boolean) => void }) {
   const m = useCreateNode();
+  const { parent } = props;
+  // Sabit kural: tur ve shape sunucudan, formda sorulmaz.
+  const fixed = parent.child_fixed;
   const [name, setName] = useState("");
-  const [type, setType] = useState<NodeType>(props.types[0] ?? "generic");
+  const [type, setType] = useState<NodeType>(parent.child_types[0] ?? "generic");
+  const [shape, setShape] = useState<Shape>("tree");
   const [desc, setDesc] = useState("");
+  const [offset, setOffset] = useState("-7");
+  const [widget, setWidget] = useState<TemplateWidget>("otf");
   const [err, setErr] = useState<string | null>(null);
-  const child = props.parent !== null;
+  const nameLabel = fixed ? `${TYPE_LABEL[type]} adı` : "Alt düğüm adı";
 
   return (
     <form
@@ -271,34 +366,43 @@ function AddForm(props: { parent: TreeNode | null; types: NodeType[]; onClose: (
       onSubmit={(e) => {
         e.preventDefault();
         setErr(null);
-        m.mutate(
-          {
-            name,
-            node_type: type,
-            parent_id: props.parent?.id ?? null,
-            description: desc.trim() === "" ? null : desc,
-          },
-          { onSuccess: () => props.onClose(true), onError: (x) => setErr(errorText(x)) },
-        );
+        const body: NewNode = { name, parent_id: parent.id, description: desc.trim() === "" ? null : desc };
+        if (!fixed) {
+          body.node_type = type;
+          body.shape = shape;
+        }
+        const attrs = attrsFor(type, offset, widget);
+        if (attrs !== undefined) body.attrs = attrs;
+        m.mutate(body, { onSuccess: () => props.onClose(true), onError: (x) => setErr(errorText(x)) });
       }}
     >
       {err !== null && <p className={ui.error} role="alert">{err}</p>}
       <div className={ui.grid2}>
         <label className={ui.field}>
-          <span>{child ? "Alt düğüm adı" : "Düğüm adı"}<Req /></span>
+          <span>{nameLabel}<Req /></span>
           <input className={ui.input} value={name} onChange={(e) => setName(e.target.value)} required maxLength={200}
-            autoFocus placeholder={child ? "alt düğüm adı" : "düğüm adı (ör. Maliye)"} />
+            autoFocus placeholder={nameLabel.toLocaleLowerCase("tr")} />
         </label>
-        <div className={ui.field}>
-          <span>Tür</span>
-          <Picker label="Tür" value={type} onChange={setType}
-            options={props.types.map((t) => ({ value: t, label: NODE_TYPE[t] }))} />
-        </div>
+        {!fixed && (
+          <div className={ui.field}>
+            <span>Tür</span>
+            <Picker label="Tür" value={type} onChange={setType}
+              options={parent.child_types.map((t) => ({ value: t, label: TYPE_LABEL[t] }))} />
+          </div>
+        )}
+        {!fixed && (
+          <div className={ui.field}>
+            <span>Yapı</span>
+            <Picker label="Yapı" value={shape} onChange={setShape}
+              options={(["tree", "list", "leaf"] as const).map((x) => ({ value: x, label: SHAPE[x] }))} />
+          </div>
+        )}
+        <AttrsFields type={type} offset={offset} setOffset={setOffset} widget={widget} setWidget={setWidget} />
       </div>
       <label className={ui.field}>
         Açıklama
         <textarea className={ui.input} rows={2} value={desc} onChange={(e) => setDesc(e.target.value)}
-          placeholder={child ? "açıklama (isteğe bağlı)" : "açıklama — bu düğüm ne kapsıyor?"} />
+          placeholder="açıklama (isteğe bağlı)" />
       </label>
       <div className={ui.dact}>
         <Button onClick={() => props.onClose(false)}>Vazgeç</Button>
@@ -310,27 +414,55 @@ function AddForm(props: { parent: TreeNode | null; types: NodeType[]; onClose: (
   );
 }
 
-function EditForm({ node, tree, onClose }: { node: TreeNode; tree: TreeView; onClose: () => void }) {
+function EditForm(props: { node: TreeNode; tree: TreeView; byId: ReadonlyMap<Uuid, TreeNode>; onClose: () => void }) {
+  const { node, tree, byId, onClose } = props;
   const m = usePatchNode();
   const del = useDeleteNode();
   const [name, setName] = useState(node.name);
   const [type, setType] = useState<NodeType>(node.node_type);
-  const [parent, setParent] = useState<string>(node.parent_id ?? "");
+  const [shape, setShape] = useState<Shape>(node.shape);
+  const [parent, setParent] = useState<Uuid>(node.parent_id ?? "");
   const [desc, setDesc] = useState(node.description ?? "");
+  const [offset, setOffset] = useState(String(node.attrs.offset_days ?? -7));
+  const initialWidget = node.attrs.widget;
+  const [widget, setWidget] = useState<TemplateWidget>(
+    initialWidget !== undefined && initialWidget !== "record" ? initialWidget : "otf",
+  );
   const [err, setErr] = useState<string | null>(null);
-  // Tur listesi dugumun bulundugu yere gore, sunucudan (Python `d.types`).
-  const types = node.parent_id === null ? tree.root_types : tree.child_types;
   const onError = (x: unknown) => setErr(errorText(x));
+
+  // Kok ve slot: yalniz ad/aciklama (spec/74 §4.1-4.2).
+  const locked = node.locked !== null;
+  // Tur ve shape yalniz serbest kokte (Birimler) secilir; sabit kurallarda sunucunun.
+  const free = !locked && node.root_key === "units";
+  const up = node.parent_id === null ? undefined : byId.get(node.parent_id);
+  // Tur secenekleri ustun kuralindan (sunucu); ust yetkisizse yalniz mevcut tur.
+  const types = up !== undefined && up.child_types.length > 0 ? up.child_types : [node.node_type];
+  const isUnder = (x: TreeNode) => {
+    for (let p = x.parent_id; p !== null; p = byId.get(p)?.parent_id ?? null) if (p === node.id) return true;
+    return false;
+  };
+  // Tasima hedefi: ayni kok, kurali bu turu kabul eden, kendi alt agaci degil.
+  // Yaklasik — son soz sunucuda (type_not_allowed, move_cycle).
+  const targets = tree.nodes.filter(
+    (x) =>
+      x.id === node.parent_id ||
+      (x.id !== node.id && (x.root_key ?? x.key) === node.root_key && x.child_types.includes(type) && !isUnder(x)),
+  );
 
   const save = () => {
     // Yalniz degisen alanlar: verilmeyen alan sunucuda DEGISMEZ.
     const p: NodePatch = {};
     if (name !== node.name) p.name = name;
-    if (type !== node.node_type) p.node_type = type;
-    const d = desc.trim() === "" ? null : desc.trim();
-    if (d !== node.description) p.description = d;
-    const target = parent === "" ? null : parent;
-    if (target !== node.parent_id) p.parent_id = target;
+    const dsc = desc.trim() === "" ? null : desc.trim();
+    if (dsc !== node.description) p.description = dsc;
+    if (!locked) {
+      if (type !== node.node_type) p.node_type = type;
+      if (shape !== node.shape) p.shape = shape;
+      if (parent !== "" && parent !== node.parent_id) p.parent_id = parent;
+      const a = attrsFor(type, offset, widget);
+      if (a !== undefined && JSON.stringify(a) !== JSON.stringify(node.attrs)) p.attrs = a;
+    }
     if (Object.keys(p).length === 0) {
       onClose();
       return;
@@ -360,41 +492,44 @@ function EditForm({ node, tree, onClose }: { node: TreeNode; tree: TreeView; onC
       }}
     >
       {err !== null && <p className={ui.error} role="alert">{err}</p>}
+      {locked && <p className={ui.fieldHint}>Kod tarafından yönetilir: yalnız ad ve açıklama değişir.</p>}
       <div className={ui.grid2}>
         <label className={ui.field}>
           <span>Ad<Req /></span>
           <input className={ui.input} value={name} onChange={(e) => setName(e.target.value)} required maxLength={200} autoFocus />
         </label>
+        {free && (
+          <div className={ui.field}>
+            <span>Tür</span>
+            <Picker label="Tür" value={type} onChange={setType} disabled={types.length <= 1}
+              options={types.map((t) => ({ value: t, label: TYPE_LABEL[t] }))} />
+          </div>
+        )}
+        {free && (
+          <div className={ui.field}>
+            <span>Yapı</span>
+            <Picker label="Yapı" value={shape} onChange={setShape}
+              options={(["tree", "list", "leaf"] as const).map((x) => ({ value: x, label: SHAPE[x] }))} />
+          </div>
+        )}
+        {!locked && (
+          <AttrsFields type={type} offset={offset} setOffset={setOffset} widget={widget} setWidget={setWidget} />
+        )}
+      </div>
+      {!locked && (
         <div className={ui.field}>
-          <span>Tür</span>
-          {/* Kilitliyse DISABLED: tur gonderilmez, sunucu da reddeder (type_locked). */}
-          <Picker label="Tür" value={type} onChange={setType} disabled={!node.can_retype}
-            options={types.map((t) => ({ value: t, label: NODE_TYPE[t] }))} />
-          {/* Neden kilitli: title yalniz fareyle gorunuyordu, dokunmatikte/klavyede hic. */}
-          {!node.can_retype && (
-            <span className={ui.fieldHint}>Türe bağlı veri var — önce o bağ çözülmeli.</span>
-          )}
+          <span>Üst düğüm</span>
+          <Picker label="Üst düğüm" value={parent} onChange={setParent} search
+            options={targets.map((x) => ({ value: x.id, label: x.name, depth: x.depth }))} />
         </div>
-      </div>
-      <div className={ui.field}>
-        <span>Üst düğüm</span>
-        {/* Koke cikarmak ve ustu duzenlenemeyen yere tasimak sunucuda reddedilir;
-            burada yalniz sunucunun verdigi bayraklarla soluk cizilir. */}
-        <Picker label="Üst düğüm" value={parent} onChange={setParent} search
-          options={[
-            { value: "", label: "Kök (üst düğüm yok)", disabled: !tree.can_add_root && node.parent_id !== null },
-            ...tree.nodes
-              .filter((x) => x.id !== node.id)
-              .map((x) => ({ value: x.id, label: x.name, depth: x.depth, disabled: !x.can_edit && x.id !== node.parent_id })),
-          ]} />
-      </div>
+      )}
       <label className={ui.field}>
         Açıklama
         <textarea className={ui.input} rows={2} value={desc} onChange={(e) => setDesc(e.target.value)}
           placeholder="açıklama — bu düğüm ne kapsıyor?" />
       </label>
       <div className={ui.dact}>
-        {node.can_hard_delete && (
+        {node.can_hard_delete && !locked && (
           <Button variant="danger" className={s.tdelete} onClick={hardDelete} disabled={del.isPending}>
             Kalıcı sil
           </Button>

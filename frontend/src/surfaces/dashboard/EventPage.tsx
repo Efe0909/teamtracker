@@ -11,6 +11,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { ApiError, errorText } from "../../api/client";
 import { eventOps, useEvent, useEventWrite, useRecord, useRecords } from "../../api/hooks";
 import type { CheckpointAction, EventDetail, EventStatus, Uuid } from "../../api/types";
+import { NodeListPicker } from "../../features/nodes/NodePicker";
 import { NewRecordForm } from "../../features/record/NewRecordForm";
 import { BallLine } from "../../features/record/parts";
 import r from "../../features/record/record.module.css";
@@ -26,7 +27,7 @@ import {
 } from "../../ui/ui";
 import { ErrorScreen } from "../errors/ErrorScreen";
 import s from "./dashboard.module.css";
-import { EVENT_KIND, EVENT_STATUS, WIDGET, WIDGET_TYPES } from "./eventModel";
+import { EVENT_STATUS, nodeName, placeLabel, WIDGET, WIDGET_TYPES } from "./eventModel";
 import { Otf } from "./Otf";
 import { Purchases } from "./Purchases";
 import { href } from "./routes";
@@ -82,7 +83,7 @@ function EventView({ e }: { e: EventDetail }) {
       <nav className={s.crumb} aria-label="Konum">
         <Link href={href({ name: "events", query: {} })}>Etkinlikler</Link>
         <Icon name="chevron" size={13} />
-        <Link href={href({ name: "events", query: { kind: e.kind, ...(e.date === null ? { tab: "pool" } : {}) } })}>{EVENT_KIND[e.kind]}</Link>
+        <Link href={href({ name: "events", query: { kind: e.kind_id, ...(e.date === null ? { tab: "pool" } : {}) } })}>{nodeName(L.meta.nodes, e.kind_id)}</Link>
         <Icon name="chevron" size={13} />
         <b>{e.title}</b>
       </nav>
@@ -308,6 +309,7 @@ function Props({ e }: { e: EventDetail }) {
   const ro = !e.can_edit;
   const save = (p: Parameters<typeof eventOps.patch>[1]) => run(eventOps.patch(e.id, p));
   const muted = (t: string) => <span className={r.muted}>{t}</span>;
+  const place = placeLabel(L.meta.nodes, e);
   // Kayitla AYNI anahtar: birinde katlayinca obur yuzde de katli — gecis zıplamasin.
   const [open, setOpen] = useStored("record.props.open", true);
   return (
@@ -337,7 +339,7 @@ function Props({ e }: { e: EventDetail }) {
               }))}
               onChange={(v) => save({ field: "status", value: v })} />
           </Prop>
-          <Prop icon="tasks" label="Tür"><span className={r.propStatic}>{EVENT_KIND[e.kind]}</span></Prop>
+          <Prop icon="tasks" label="Tür"><span className={r.propStatic}>{nodeName(L.meta.nodes, e.kind_id)}</span></Prop>
           <Prop icon="calendar" label="Ne zaman">
             <FieldEdit label="Tarih" type="date" value={e.date} disabled={ro} busy={busy}
               onSave={(v) => save({ field: "date", value: v })}>
@@ -352,10 +354,14 @@ function Props({ e }: { e: EventDetail }) {
             )}
           </Prop>
           <Prop icon="venue" label="Yer">
-            <FieldEdit label="Yer" type="text" value={e.place} disabled={ro} busy={busy}
-              onSave={(v) => save({ field: "place", value: v })}>
-              {e.place ?? muted("Belirsiz")}
-            </FieldEdit>
+            {/* Listeden yer ya da "Diger…" metni; biri yazilinca sunucu digerini temizler (spec/74 §5b). */}
+            {ro ? <span className={r.propStatic}>{place ?? muted("Belirsiz")}</span> : (
+              <NodeListPicker rootKey="event_locations" look="prop" label="Yer" value={e.location_id} disabled={busy}
+                onChange={(v) => save({ field: "location_id", value: v })}
+                text={{ value: e.place, onText: (t) => save({ field: "place", value: t.trim() === "" ? null : t.trim() }) }}>
+                {place ?? muted("Belirsiz")}
+              </NodeListPicker>
+            )}
           </Prop>
           <Prop icon="prHigh" label="Önem">
             <Picker look="prop" label="Önem" disabled={ro} busy={busy} value={e.priority}

@@ -9,6 +9,7 @@ import { teamOps, useRecords, useTeam, useTeamMember, useTeams, useTeamWrite } f
 import type { TeamRole, TeamView, Uuid } from "../../api/types";
 import { Chat } from "../../features/chat/Chat";
 import { ChatBell } from "../../features/chat/ChatBell";
+import { NodeTreePicker } from "../../features/nodes/NodePicker";
 import { NewRecordForm } from "../../features/record/NewRecordForm";
 import { TEAM_COLORS } from "../../lib/colors";
 import { TEAM_ROLE } from "../../lib/labels";
@@ -18,7 +19,6 @@ import { Icon } from "../../ui/icons";
 import { Avatar, Button, Dialog, Empty, IconButton, Link, Loading, Picker, Segmented, ui, useToast, Who } from "../../ui/ui";
 import { ErrorScreen } from "../errors/ErrorScreen";
 import { Banner } from "./Banner";
-import { UnitPicker } from "./UnitPicker";
 import { ArrangeButton, useRowLimit, useWidgetOrder, Widget, type WidgetMove } from "./Widget";
 import s from "./dashboard.module.css";
 import { href } from "./routes";
@@ -307,8 +307,11 @@ function NodeRows({ teamId, editing }: { teamId: Uuid; editing: boolean }) {
       )}
       {rows.more}
       {editing && (
-        <UnitPicker units={L.units} linked={linked} disabled={m.isPending}
-          onLink={(n) => m.mutate(teamOps.link(teamId, n), { onError: fail })} />
+        <div className={s.unitPicker}>
+          <NodeTreePicker rootKey="units" label="Birime bağla" placeholder="Birime bağla…" value={null}
+            disabled={m.isPending} exclude={(n) => linked.includes(n.id)}
+            onChange={(n) => m.mutate(teamOps.link(teamId, n), { onError: fail })} />
+        </div>
       )}
     </>
   );

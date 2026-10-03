@@ -1,0 +1,68 @@
+/* Referans veri secicileri: ui.module.css'in pop* siniflarina ek (yildiz, ok, grup). */
+
+.caret,
+.star {
+  appearance: none;
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--dim);
+  cursor: pointer;
+}
+.caret:hover,
+.star:hover {
+  color: var(--txt);
+}
+.caret svg {
+  transition: transform 0.12s;
+}
+.caret[aria-expanded="true"] svg {
+  transform: rotate(90deg);
+}
+.leaf {
+  flex: none;
+  width: 20px;
+}
+.starOn,
+.starOn:hover {
+  color: var(--warn);
+}
+.starOn svg {
+  fill: currentColor;
+}
+/* Fareyle: bos yildiz yalniz satirin ustundeyken. Dokunmatikte hep gorunur. */
+@media (hover: hover) {
+  .star:not(.starOn) {
+    opacity: 0;
+  }
+  [data-selected="true"] > .star,
+  .star:focus-visible {
+    opacity: 1;
+  }
+}
+.group [cmdk-group-heading] {
+  padding: 6px 8px 2px;
+  color: var(--dim);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+}
+.sep {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--line);
+}
+.text {
+  display: flex;
+  gap: 6px;
+  padding: 4px;
+}
+.text input {
+  flex: 1;
+  min-width: 0;
+}
