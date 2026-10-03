@@ -102,10 +102,12 @@ ok "$(jq '.users|length' <<<"$R")" 7 "users"
 ok "$(jq '.teams|length' <<<"$R")" 5 "teams (3 sade + 2 pillar takimi)"
 ok "$(jq -c '[.pillars[]|.name]' <<<"$R")" '["Güvenlik","Kalite"]' "pillars sort_order, ad"
 ok "$(jq -c '.pillars[0]|keys' <<<"$R")" '["color","description","id","is_active","name","sort_order","team_id"]' "MetaPillar alanlari"
-ok "$(jq -c '.teams[0]|keys' <<<"$R")" '["chat_id","color","description","id","name","node_ids","pillar_id"]' "MetaTeam alanlari (node_id yok)"
+ok "$(jq -c '.teams[0]|keys' <<<"$R")" '["banner_id","chat_id","color","description","id","name","node_ids","pillar_id"]' "MetaTeam alanlari (node_id yok)"
 ok "$(jq '[.teams[]|select(.pillar_id!=null)]|length' <<<"$R")" 2 "pillar takimlari pillar_id tasir"
 ok "$(jq '[.teams[]|select(.name=="Satın Alım")|.node_ids|length][0]' <<<"$R")" 2 "team_nodes: Satin Alim iki dugumde"
-ok "$(jq -c '[.nodes[].node_type]|unique' <<<"$R")" '["cell","generic","machine","operational","step"]' "agacta team/pillar turu yok"
+ok "$(jq -c '[.nodes[].node_type]|unique' <<<"$R")" '["cell","checkpoint","generic","machine","operational","option","step","widget"]' "agacta team/pillar turu yok"
+ok "$(jq -c '[.nodes[]|select(.parent_id==null).key]' <<<"$R")" '["units","event_types","event_locations"]' "kokler key ile (spec/74)"
+ok "$(jq -c '.me.favorite_nodes' <<<"$R")" '[]' "favoriler bos"
 ok "$(jq '[.nodes[]|select(.depth==0)]|length > 0' <<<"$R")" true "agac koku"
 ok "$(jq '.users[0]|has("email")' <<<"$R")" false "e-posta sizmaz"
 
@@ -178,7 +180,7 @@ ok "$(w n POST "$NT" /api/records "{\"kind\":\"task\",\"title\":\"x\",\"unit_id\
 t home_teams_notifications
 ok "$(g w /api/home | jq '.counts|has("overdue_records")')" true "sayaclar"
 ok "$(g w /api/teams | jq length)" 5 "takimlar"
-ok "$(g w /api/notifications | jq 'map(select(.actor_id=="'"$SELIN"'"))|length')" 0 "kendi hareketim yok"
+ok "$(g w /api/notifications | jq '.items|map(select(.actor_id=="'"$SELIN"'"))|length')" 0 "kendi hareketim yok"
 ok "$(w w POST "$WT" /api/pins/uydurma '' | jq -r .error)" not_found "bilinmeyen pin"
 
 # --- veri yonetimi: agac uclari (R2-F05, spec/72) ---------------------------
@@ -207,21 +209,29 @@ t node_read_open_to_all
 BOS=$(DB "insert into users (email,name) values ('bos@ekiptakip.local','Yetkisiz') returning id" | head -1)
 curl -s -c "$J/bos" -o /dev/null "$B/api/auth/dev-login?user_id=$BOS"
 R=$(g bos /api/nodes)
-ok "$(jq -r .can_add_root <<<"$R")" false "kok ekleyemez"
 ok "$(jq -c '[.nodes[].can_edit]|unique' <<<"$R")" '[false]' "hicbir dugumde duzenleyemez"
 ok "$(jq -c '[.nodes[].can_hard_delete]|unique' <<<"$R")" '[false]' "kalici silemez"
+ok "$(jq -c '[.nodes[].child_types|length]|unique' <<<"$R")" '[0]' "hicbir yere ekleyemez"
 
-t node_root_only_admin
+t node_roots_code_only
+# spec/74: kokler yalniz gocle; admin dahil kimse kok yaratamaz/tasiyamaz/kapatamaz.
+UNITS=$(DB "select id from nodes where key='units'")
+TYPES=$(DB "select id from nodes where key='event_types'")
+PLACES=$(DB "select id from nodes where key='event_locations'")
+ok "$(DB "select count(*) from nodes where parent_id is null")" 3 "uc kok (units, event_types, event_locations)"
+ok "$(DB "select parent_id from nodes where id='$ROOT1'")" "$UNITS" "eski kok Birimler altinda"
+ok "$(DB "select node_type from nodes where id='$ROOT1'")" generic "elle operational generic oldu"
+ok "$(w w POST "$WT" /api/nodes '{"name":"Selin kok denemesi","node_type":"generic","parent_id":null}' | jq -r .error)" root_locked "admin bile kok yaratamaz"
+ok "$(w w PATCH "$WT" "/api/nodes/$UNITS" '{"is_active":false}' | jq -r .error)" root_locked "kok kapatilamaz"
+ok "$(w w DELETE "$WT" "/api/nodes/$UNITS" '' | jq -r .error)" root_locked "kok silinemez"
+R=$(w w PATCH "$WT" "/api/nodes/$UNITS" '{"name":"Birimlerimiz"}')
+ok "$(jq -r ".nodes[]|select(.id==\"$UNITS\").name" <<<"$R")" Birimlerimiz "kokun adi degisir"
+ok "$(jq -r ".nodes[]|select(.id==\"$UNITS\").key" <<<"$R")" units "key sabit"
+w w PATCH "$WT" "/api/nodes/$UNITS" '{"name":"Birimler"}' >/dev/null
 SE2=$(DB "select count(*) from security_events where event_type='permission_denied'")
-ok "$(wc_ e POST "$ET" /api/nodes '{"name":"Efe kok denemesi","node_type":"generic","parent_id":null}')" 403 "editor ama admin degil: kok ekleyemez"
+ok "$(wc_ e POST "$ET" /api/nodes "{\"name\":\"Efe dal disi\",\"node_type\":\"generic\",\"parent_id\":\"$URETIM\"}")" 403 "dal izni olmayan yere ekleyemez"
 ok "$(DB "select count(*) from security_events where event_type='permission_denied'")" "$((SE2+1))" "403 denetime yazildi"
 ok "$(DB "select detail from security_events where event_type='permission_denied' order by created_at desc limit 1")" "POST /api/nodes" "detay"
-ok "$(wc_ e PATCH "$ET" "/api/nodes/$BUTCEN" '{"parent_id":null}')" 403 "kendi dalindaki dugumu bile koke tasiyamaz"
-R=$(w w POST "$WT" /api/nodes '{"name":"Selin kok denemesi","node_type":"generic","parent_id":null}')
-ok "$(jq -r ".nodes[]|select(.name==\"Selin kok denemesi\").depth" <<<"$R")" 0 "admin kok ekler"
-R=$(w w PATCH "$WT" "/api/nodes/$ILETISIM" '{"parent_id":null}')
-ok "$(jq -r ".nodes[]|select(.id==\"$ILETISIM\").parent_id" <<<"$R")" null "admin koke tasir"
-w w PATCH "$WT" "/api/nodes/$ILETISIM" "{\"parent_id\":\"$ROOT1\"}" >/dev/null   # eski yerine geri
 
 t node_branch_scope_iki_yonlu
 # Efe'nin Malzeme Temini'nde yetkisi var; Uretim Hatti A'da yok. Kaynakta
@@ -232,9 +242,36 @@ ok "$(DB "select parent_id from nodes where id='$TEDARIK'")" "$MALZEME" "tasinma
 t node_move_cycle
 ok "$(w w PATCH "$WT" "/api/nodes/$MALZEME" "{\"parent_id\":\"$BUTCEN\"}" | jq -r .error)" move_cycle "kendi cocugunun altina"
 
-t node_root_only_type
-ok "$(w w POST "$WT" /api/nodes "{\"name\":\"Yeni Hücre\",\"node_type\":\"cell\",\"parent_id\":\"$MALZEME\"}" | jq -r .error)" root_only "cell yalniz kokte (ekleme)"
-ok "$(w w PATCH "$WT" "/api/nodes/$ILETISIM" '{"node_type":"cell"}' | jq -r .error)" root_only "cell yalniz kokte (tur degisimi)"
+t node_types_per_root
+# Tur kurallari kok semasindan (refdata.rs): Birimler'de cell artik her yerde.
+R=$(w w POST "$WT" /api/nodes "{\"name\":\"Yeni Hücre\",\"node_type\":\"cell\",\"parent_id\":\"$MALZEME\"}")
+ok "$(jq -r ".nodes[]|select(.name==\"Yeni Hücre\").node_type" <<<"$R")" cell "cell kok-yalniz degil"
+ok "$(w w POST "$WT" /api/nodes "{\"name\":\"Yer\",\"node_type\":\"location\",\"parent_id\":\"$MALZEME\"}" | jq -r .error)" type_not_allowed "Birimler'e location girmez"
+ok "$(w w POST "$WT" /api/nodes "{\"name\":\"X\",\"node_type\":\"checkpoint\",\"parent_id\":\"$TYPES\"}" | jq -r .error)" type_not_allowed "Etkinlik Turleri'ne yalniz option"
+ok "$(w w PATCH "$WT" "/api/nodes/$ILETISIM" "{\"parent_id\":\"$PLACES\"}" | jq -r .error)" type_not_allowed "kokler arasi tasima yok"
+ok "$(jq -c ".nodes[]|select(.id==\"$UNITS\").child_types" <<<"$R")" '["cell","machine","task","step","generic"]' "Birimler tur listesi"
+
+t node_event_types
+# Yeni tur: sunucu option yapar ve slotlarini (steps, widgets) yaratir.
+R=$(w w POST "$WT" /api/nodes "{\"name\":\"Atölye\",\"parent_id\":\"$TYPES\"}")
+ATOLYE=$(jq -r '.nodes[]|select(.name=="Atölye").id' <<<"$R")
+ok "$(jq -r ".nodes[]|select(.id==\"$ATOLYE\").node_type" <<<"$R")" option "tur sunucudan"
+ok "$(jq -c "[.nodes[]|select(.parent_id==\"$ATOLYE\").attrs.slot]" <<<"$R")" '["steps","widgets"]' "slotlar otomatik"
+STEPS=$(jq -r ".nodes[]|select(.parent_id==\"$ATOLYE\" and .attrs.slot==\"steps\").id" <<<"$R")
+ok "$(w w DELETE "$WT" "/api/nodes/$STEPS" '' | jq -r .error)" operational_locked "slot silinmez"
+R=$(w w POST "$WT" /api/nodes "{\"name\":\"Mekan\",\"parent_id\":\"$STEPS\",\"attrs\":{\"offset_days\":-3}}")
+ok "$(jq -c '.nodes[]|select(.name=="Mekan" and .node_type=="checkpoint").warnings' <<<"$R")" '["late_checkpoint"]' "7 gun kurali reddetmez, uyarir"
+ok "$(w w POST "$WT" /api/nodes "{\"name\":\"Y\",\"parent_id\":\"$STEPS\",\"attrs\":{\"offset_days\":\"x\"}}" | jq -r .error)" invalid_attrs "attrs dogrulanir"
+ok "$(w n POST "$NT" /api/nodes "{\"name\":\"Deniz turu\",\"parent_id\":\"$TYPES\"}" | jq -r .error)" forbidden "manage_event_types yok"
+DB "insert into user_scopes (user_id,scope) values ('$DENIZ','manage_event_types')" >/dev/null
+ok "$(wc_ n POST "$NT" /api/nodes "{\"name\":\"Deniz turu\",\"parent_id\":\"$TYPES\"}")" 200 "scope ile ekler (dal izni gerekmez)"
+DB "delete from user_scopes where user_id='$DENIZ' and scope='manage_event_types'" >/dev/null
+ok "$(w w POST "$WT" /api/records "{\"kind\":\"task\",\"title\":\"x\",\"unit_id\":\"$ATOLYE\"}" | jq -r .error)" unit_outside_units "tur birim degil"
+
+t node_favorites
+ok "$(w w PUT "$WT" "/api/nodes/$MALZEME/favorite" '' | jq -c .)" "[\"$MALZEME\"]" "favori eklenir"
+ok "$(g w /api/meta | jq -c .me.favorite_nodes)" "[\"$MALZEME\"]" "meta'da"
+ok "$(w w DELETE "$WT" "/api/nodes/$MALZEME/favorite" '' | jq -c .)" "[]" "favori cikar"
 
 t node_inactive_parent
 w w PATCH "$WT" "/api/nodes/$SALON" '{"is_active":false}' >/dev/null
@@ -257,11 +294,8 @@ ok "$(w w POST "$WT" /api/nodes "{\"name\":\"Kalite Takımı\",\"node_type\":\"t
 ok "$(wc_ w POST "$WT" /api/nodes "{\"name\":\"Kalite\",\"node_type\":\"pillar\",\"parent_id\":null}")" 400 "pillar turu 400"
 ok "$(w w PATCH "$WT" "/api/nodes/$ULASIM" '{"node_type":"team"}' | jq -r .error)" invalid_type "tur degisimi team"
 R=$(g w /api/nodes)
-ok "$(jq -c '.root_types' <<<"$R")" '["cell","machine","task","step","operational","generic"]' "root_types"
-ok "$(jq -c '.child_types' <<<"$R")" '["machine","task","step","operational","generic"]' "child_types"
 ok "$(jq -r ".nodes[]|select(.id==\"$BUTCEN\").delete_counts.teams" <<<"$R")" 1 "delete_counts.teams (Maliye bagi)"
 ok "$(jq -r ".nodes[]|select(.id==\"$ROOT1\").delete_counts.teams" <<<"$R")" 4 "alt agac toplami (4 seed bagi)"
-ok "$(jq -r ".nodes[]|select(.id==\"$ULASIM\").can_retype" <<<"$R")" true "tur kilidi yok"
 
 t node_hard_delete
 ok "$(wc_ n DELETE "$NT" "/api/nodes/$ETIKET" '')" 200 "bos (virgin) dugumu yalniz edit ile siler"

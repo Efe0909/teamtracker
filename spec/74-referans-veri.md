@@ -1,7 +1,9 @@
 # 74 — Referans veri: operational kökler, shape, slot şemaları
 
-**Durum: tasarım — gözden geçirilmeyi bekliyor.** Görüşme: Efe, 2026-10-03
-(İngilizce yapıldı; terimler bilerek çevrilmedi). Kod yok.
+**Durum: uygulanıyor** (Efe onayladı, 2026-10-03). Görüşme İngilizce yapıldı;
+terimler bilerek çevrilmedi. Göç `backend/migrations/011_reference_data.sql`,
+şemalar `backend/src/refdata.rs`, uçlar `backend/src/api/nodes.rs`, seçiciler
+`frontend/src/features/nodes/NodePicker.tsx`.
 
 `72-node-turleri.md` bu konuda **eski**: `ROOT_ONLY = {cell}` ve "kök serbest"
 varsayımları burada geçersiz. 72 ile çelişen her yerde bu belge kazanır;
@@ -192,6 +194,19 @@ Kökü `tree` olan her seçici aynı bileşeni kullanır; ilki birim seçici
 - `PUT/DELETE /api/nodes/{id}/favorite`.
 - Yeni hata kodları: `root_locked`, `operational_locked`, `shape_violation`,
   `type_not_allowed`, `invalid_attrs`, `unit_outside_units`.
+
+## 7b. Uygulama notları
+
+- Slotları kod adla değil `attrs.slot` (`steps` / `widgets`) ile tanır; slotun
+  adı değiştirilebilir.
+- Rust'ta `option` türü `NodeType::Choice` (`Option` adı std `Option`'u gölgeler);
+  veritabanında ve API'de `option`.
+- Tohum (`seed.sql`) kökleri silmez: `users` TRUNCATE edilmez (cascade
+  `nodes`'u boşaltırdı), yalnız Birimler'in içi yeniden kurulur.
+- `PATCH /api/nodes/{id}` `parent_id: null` kabul etmez (kök yaratılmaz);
+  kökler arası taşıma `type_not_allowed`.
+- Kullanımda olan tür/yer silinmek istenirse FK `node_in_use` döner; emekliye
+  ayırmak pasifleştirmektir.
 
 ## 8. Yayın sırası
 
