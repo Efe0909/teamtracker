@@ -1,15 +1,16 @@
-//! Veri yonetimi: yapinin (agacin) duzenlendigi uclar (spec/72, R2-F05).
+//! Veri yonetimi: referans veri agaci (spec/74; once spec/72, R2-F05).
 //!
-//! Yazma uclari agacin GUNCEL halini dondurur (Python her yazmadan sonra
-//! agac parcasini yeniden ciziyordu): on yuz ikinci bir GET atmaz. Her yazma
-//! sonrasi `rebuild_tree` — kismi guncelleme YOK (KNOW-179).
+//! Kokler YALNIZ gocle dogar (`key` tasir) ve burada yalniz adi/aciklamasi
+//! degisir. `operational` dugumler kodun slotlaridir (ad/aciklama disinda
+//! kilitli). Hangi turun nereye girdigini, shape'i, attrs'i ve yetkiyi kok
+//! semasi soyler (src/refdata.rs); shape ayrica DB tetikleyicisiyle de korunur.
 //!
-//! YETKI iki parcali (`db::scope::NodeAccess`): `edit_nodes` yetenegi + o
-//! dalda `user_node_scopes` izni. Kok islemleri yalniz admin. Kontrol UCUN
-//! KENDISINDE; okuma yanitindaki `can_*` bayraklari yalniz dugme icin.
+//! Yazma uclari agacin GUNCEL halini dondurur: on yuz ikinci bir GET atmaz.
+//! Her yazma sonrasi `rebuild_tree` — kismi guncelleme YOK (KNOW-179).
 //!
-//! Okuma herkese acik: yapi zaten `/api/meta`'da herkese gidiyor, ekran
-//! yetkisiz kullaniciya salt okunur cizilir (Python `/outcome-tree`).
+//! YETKI kok semasina gore (`NodeAccess::node`): Birimler `edit_nodes` + dal
+//! izni, Etkinlik Turleri `manage_event_types`, Etkinlik Yerleri
+//! `manage_event_locations`. Okuma herkese acik.
 
 use std::collections::HashMap;
 
@@ -27,9 +28,11 @@ use crate::{
     db::{
         nodes::{self as deps, Deps},
         scope::{NodeAccess, NodeScope},
+        tree::TreeIndex,
     },
     error::{AppError, Result},
-    models::enums::NodeType,
+    models::enums::{NodeType, Shape},
+    refdata::{self, ChildRule},
     state::AppState,
 };
 
@@ -40,12 +43,6 @@ const TEXT_MAX: usize = 4000;
 
 #[derive(Serialize)]
 pub struct TreeView {
-    /// Kok dugum eklemek / koke tasimak (yalniz admin).
-    can_add_root: bool,
-    /// YERLESIM KURALI TEK YERDE (KNOW-241): on yuz ROOT_ONLY'yi yeniden
-    /// yazmaz, kok ve alt dugum formlari tur listesini buradan alir.
-    root_types: Vec<NodeType>,
-    child_types: Vec<NodeType>,
     /// Euler turu sirasinda; girinti `depth` ile.
     nodes: Vec<NodeView>,
 }
@@ -56,23 +53,34 @@ struct NodeView {
     parent_id: Option<Uuid>,
     name: String,
     node_type: NodeType,
+    /// Yalniz kokte dolu.
+    key: Option<String>,
+    /// Kokunun key'i (seciciler bununla suzer).
+    root_key: Option<String>,
+    shape: Shape,
+    attrs: Value,
     /// Agac indeksine GIRMEZ, yalniz bu ekranda okunur.
     description: Option<String>,
     is_active: bool,
     depth: u32,
-    /// Kayit sayisi DEGIL dogrudan alt dugum sayisi: kapali bir dalda
-    /// "altinda ne kadar var" isine yarar (Python e74ca50, kullanici istegi).
+    /// Dogrudan alt dugum sayisi.
     child_count: i64,
-    /// Bu dugumde `edit_nodes` + dal izni var mi.
+    /// root = kok (yalniz ad/aciklama), operational = kod slotu (yalniz
+    /// ad/aciklama), null = serbest.
+    locked: Option<&'static str>,
+    /// Bu dugumu duzenleyebilir mi (kok semasinin yetkisi).
     can_edit: bool,
-    /// Tur kilidi KALKTI (takim projeksiyonu yok, spec/22); alan on yuz
-    /// uyumu icin duruyor, hep true.
-    can_retype: bool,
+    /// Altina eklenebilecek turler; bos = eklenemez. `child_fixed` ise tur ve
+    /// shape sunucudan (formda tur secimi yok).
+    child_types: Vec<NodeType>,
+    child_fixed: bool,
     /// Bos (virgin) dugumu duzenleyebilen siler; bagimlisi olan icin ayrica
-    /// `hard_delete_nodes` (spec/72 §6.2).
+    /// sert silme yetkisi (Birimler'de `hard_delete_nodes`).
     can_hard_delete: bool,
     /// Kalici silme onayi NE GOTURECEGINI sayar — alt agacin toplami.
     delete_counts: DeleteCounts,
+    /// Reddetmeyen isaretler: missing_slot, late_checkpoint, unknown_widget...
+    warnings: Vec<&'static str>,
 }
 
 #[derive(Serialize, Default, Clone, Copy)]
@@ -89,6 +97,16 @@ pub async fn tree(State(st): State<AppState>, CurrentUser(me): CurrentUser) -> R
     Ok(Json(view(&st, &access).await?))
 }
 
+fn locked(n: &crate::db::tree::Node) -> Option<&'static str> {
+    if n.key.is_some() {
+        Some("root")
+    } else if n.node_type == NodeType::Operational {
+        Some("operational")
+    } else {
+        None
+    }
+}
+
 async fn view(st: &AppState, access: &NodeAccess) -> Result<TreeView> {
     let deps = deps::deps_by_node(&st.pool).await?;
     let descriptions: HashMap<Uuid, String> =
@@ -97,8 +115,7 @@ async fn view(st: &AppState, access: &NodeAccess) -> Result<TreeView> {
 
     let tree = common::tree(st);
     // Alt agac toplamlari TEK gecis: Euler sirasinin tersinde cocuk her zaman
-    // ustunden once gelir, toplami ustune eklenir. Dugum basina alt agac
-    // taramak O(n^2) olurdu.
+    // ustunden once gelir, toplami ustune eklenir.
     let mut totals: HashMap<Uuid, (i64, DeleteCounts)> = HashMap::new();
     for &id in tree.order().iter().rev() {
         let own = deps.get(&id).copied().unwrap_or_default();
@@ -118,32 +135,41 @@ async fn view(st: &AppState, access: &NodeAccess) -> Result<TreeView> {
     }
 
     let nodes = tree.order().iter().filter_map(|id| tree.get(*id)).map(|n| {
-        let can_edit = access.on(&tree, n.id, NodeScope::Edit);
+        let can_edit = access.node(&tree, n.id, NodeScope::Edit);
         let (size, mut counts) = totals.get(&n.id).copied().unwrap_or_default();
         counts.children = size - 1;
+        let rule = if n.is_active { refdata::child_rule(&tree, n) } else { ChildRule::Closed };
+        let (child_types, child_fixed) = match rule {
+            ChildRule::Free(types) => (types.to_vec(), false),
+            ChildRule::Fixed(t, _) => (vec![t], true),
+            ChildRule::Closed => (Vec::new(), false),
+        };
+        let lock = locked(n);
         NodeView {
             id: n.id,
             parent_id: n.parent_id,
             name: n.name.clone(),
             node_type: n.node_type,
+            key: n.key.clone(),
+            root_key: tree.root_key(n.id).map(String::from),
+            shape: n.shape,
+            attrs: n.attrs.clone(),
             description: descriptions.get(&n.id).cloned(),
             is_active: n.is_active,
             depth: n.depth,
             child_count: deps.get(&n.id).map_or(0, |d: &Deps| d.children),
+            locked: lock,
             can_edit,
-            can_retype: true,
-            can_hard_delete: can_edit
-                && (deps::is_virgin(&deps, n.id) || access.on(&tree, n.id, NodeScope::HardDelete)),
+            child_types: if can_edit { child_types } else { Vec::new() },
+            child_fixed,
+            can_hard_delete: can_edit && lock.is_none()
+                && (deps::is_virgin(&deps, n.id) || access.node(&tree, n.id, NodeScope::HardDelete)),
             delete_counts: counts,
+            warnings: refdata::warnings(&tree, n),
         }
     }).collect();
 
-    Ok(TreeView {
-        can_add_root: access.root(),
-        root_types: NodeType::ALL.to_vec(),
-        child_types: NodeType::ALL.iter().copied().filter(|t| !t.is_root_only()).collect(),
-        nodes,
-    })
+    Ok(TreeView { nodes })
 }
 
 // --- ekleme ----------------------------------------------------------------
@@ -151,18 +177,22 @@ async fn view(st: &AppState, access: &NodeAccess) -> Result<TreeView> {
 #[derive(Deserialize)]
 pub struct NewNode {
     name: String,
-    /// Metin gelir, `parse_type` enum'a cevirir: `team`/`pillar` gibi artik
-    /// olmayan tur `invalid_type` olsun, `invalid_body` degil.
-    node_type: String,
-    /// null = kok.
+    /// Serbest kokte (Birimler) zorunlu; sabit kurallarda verilmezse sunucu
+    /// atar, verilirse kuralla ayni olmali.
     #[serde(default)]
+    node_type: Option<String>,
+    /// Kok yaratilmaz (yalniz goc): zorunlu.
     parent_id: Option<Uuid>,
     #[serde(default)]
     description: Option<String>,
+    /// Serbest kokte istege bagli (varsayilan tree); sabit kurallarda sunucudan.
+    #[serde(default)]
+    shape: Option<Shape>,
+    #[serde(default)]
+    attrs: Option<Value>,
 }
 
 fn name_of(raw: String) -> Result<String> {
-    // Adsiz dugum agacta okunmaz olur.
     common::text(Some(raw), NAME_MAX, "invalid_name")?.ok_or(AppError::BadRequest("invalid_name"))
 }
 
@@ -170,57 +200,107 @@ fn parse_type(raw: String) -> Result<NodeType> {
     serde_json::from_value(Value::String(raw)).map_err(|_| AppError::BadRequest("invalid_type"))
 }
 
+/// `list` ebeveynin cocuklari ayni turde olmali (tetikleyicinin ayni kurali,
+/// burada anlasilir kodla).
+fn list_fits(tree: &TreeIndex, parent: Uuid, t: NodeType, except: Option<Uuid>) -> bool {
+    tree.get(parent).is_none_or(|p| p.shape != Shape::List)
+        || tree.children(parent).iter().filter(|c| Some(**c) != except)
+            .filter_map(|c| tree.get(*c)).all(|c| c.node_type == t)
+}
+
+/// Shape degisimi mevcut cocuklara uymali.
+fn shape_fits(tree: &TreeIndex, id: Uuid, shape: Shape) -> bool {
+    let kids: Vec<NodeType> = tree.children(id).iter().filter_map(|c| tree.get(*c)).map(|c| c.node_type).collect();
+    match shape {
+        Shape::Leaf => kids.is_empty(),
+        Shape::List => kids.windows(2).all(|w| w[0] == w[1]),
+        Shape::Tree => true,
+    }
+}
+
+fn attrs_for(t: NodeType, raw: Option<Value>) -> Result<Value> {
+    refdata::validate_attrs(t, &raw.unwrap_or_else(|| json!({}))).map_err(AppError::BadRequest)
+}
+
 pub async fn create(
     State(st): State<AppState>, CurrentUser(me): CurrentUser, Body(b): Body<NewNode>,
 ) -> Result<Json<TreeView>> {
-    let node_type = parse_type(b.node_type)?;
     let name = name_of(b.name)?;
     let description = common::text(b.description, TEXT_MAX, "invalid_description")?;
+    let wanted = b.node_type.map(parse_type).transpose()?;
+    let parent_id = b.parent_id.ok_or(AppError::Conflict("root_locked"))?;
     let access = NodeAccess::load(&st.pool, &me).await?;
     let _write = st.structure.lock().await;
-    let parent_name = {
+    let (node_type, shape, parent_name) = {
         let tree = common::tree(&st);
-        match b.parent_id {
-            None if !access.root() => return Err(AppError::Forbidden),
-            None => {}
-            Some(p) => {
-                let parent = tree.get(p).ok_or(AppError::BadRequest("invalid_parent"))?;
-                // Alt dugum eklemek USTTE yetki ister.
-                if !access.on(&tree, p, NodeScope::Edit) {
-                    return Err(AppError::Forbidden);
-                }
-                if !parent.is_active {
-                    return Err(AppError::BadRequest("inactive_parent"));
-                }
-                if node_type.is_root_only() {
-                    return Err(AppError::BadRequest("root_only"));
-                }
-            }
+        let parent = tree.get(parent_id).ok_or(AppError::BadRequest("invalid_parent"))?;
+        // Alt dugum eklemek USTTE yetki ister.
+        if !access.node(&tree, parent_id, NodeScope::Edit) {
+            return Err(AppError::Forbidden);
         }
-        b.parent_id.map(|p| tree.name(p).to_string())
+        if !parent.is_active {
+            return Err(AppError::BadRequest("inactive_parent"));
+        }
+        let (node_type, shape) = match refdata::child_rule(&tree, parent) {
+            ChildRule::Closed => return Err(AppError::BadRequest("type_not_allowed")),
+            ChildRule::Free(types) => {
+                let t = wanted.ok_or(AppError::BadRequest("invalid_type"))?;
+                if !types.contains(&t) {
+                    return Err(AppError::BadRequest("type_not_allowed"));
+                }
+                (t, b.shape.unwrap_or(Shape::Tree))
+            }
+            ChildRule::Fixed(t, shape) => {
+                if wanted.is_some_and(|w| w != t) {
+                    return Err(AppError::BadRequest("type_not_allowed"));
+                }
+                (t, shape)
+            }
+        };
+        if !list_fits(&tree, parent_id, node_type, None) {
+            return Err(AppError::BadRequest("shape_violation"));
+        }
+        (node_type, shape, parent.name.clone())
     };
+    let attrs = attrs_for(node_type, b.attrs)?;
 
     let mut tx = st.pool.begin().await?;
     // Kardeslerin SONUNA: sira elle verilmiyor, ekleme sirasi korunuyor.
-    sqlx::query(
-        "insert into nodes (parent_id, name, node_type, description, created_by, sort_order)
-         values ($1, $2, $3, $4, $5,
-                 coalesce((select max(sort_order) from nodes
-                            where parent_id is not distinct from $1), -1) + 1)")
-        .bind(b.parent_id).bind(&name).bind(node_type).bind(&description).bind(me.id)
-        .execute(&mut *tx).await?;
-    log(&mut tx, me.id, "node_created", &name, parent_name.as_deref(),
-        json!({ "node_type": node_type })).await?;
+    let id: Uuid = sqlx::query_scalar(
+        "insert into nodes (parent_id, name, node_type, description, created_by, shape, attrs, sort_order)
+         values ($1, $2, $3, $4, $5, $6, $7,
+                 coalesce((select max(sort_order) from nodes where parent_id = $1), -1) + 1)
+         returning id")
+        .bind(parent_id).bind(&name).bind(node_type).bind(&description).bind(me.id)
+        .bind(shape).bind(&attrs)
+        .fetch_one(&mut *tx).await.map_err(shape_error)?;
+    // Yeni etkinlik turu: slotlari ayni islemde (spec/74 §5).
+    if node_type == NodeType::Choice {
+        for (i, (slot_name, slot)) in refdata::OPTION_SLOTS.iter().enumerate() {
+            sqlx::query(
+                "insert into nodes (parent_id, name, node_type, shape, attrs, created_by, sort_order)
+                 values ($1, $2, 'operational', 'list', $3, $4, $5)")
+                .bind(id).bind(*slot_name).bind(json!({ "slot": slot })).bind(me.id).bind(i as i32)
+                .execute(&mut *tx).await?;
+        }
+    }
+    log(&mut tx, me.id, "node_created", &name, Some(&parent_name), json!({ "node_type": node_type })).await?;
     tx.commit().await?;
     st.rebuild_tree().await?;
     Ok(Json(view(&st, &access).await?))
 }
 
+/// Tetikleyicinin `shape_violation` istisnasi anlasilir koda.
+fn shape_error(e: sqlx::Error) -> AppError {
+    match &e {
+        sqlx::Error::Database(d) if d.message().starts_with("shape_violation") => AppError::Conflict("shape_violation"),
+        _ => e.into(),
+    }
+}
+
 // --- duzenleme -------------------------------------------------------------
 
-/// Verilmeyen alan DEGISMEZ. `description` ve `parent_id` icin "yok" ile
-/// "null" AYRI: null aciklamayi siler / dugumu koke cikarir (Python
-/// `update_node`: None=dokunma, bos metin=sil).
+/// Verilmeyen alan DEGISMEZ. `description` icin "yok" ile "null" AYRI.
 #[derive(Deserialize)]
 pub struct NodePatch {
     #[serde(default)]
@@ -229,21 +309,25 @@ pub struct NodePatch {
     node_type: Option<String>,
     #[serde(default, deserialize_with = "common::present")]
     description: Option<Option<String>>,
-    #[serde(default, deserialize_with = "common::present")]
-    parent_id: Option<Option<Uuid>>,
-    /// Pasiflestir / geri ac. Yikici degil, ek yetenek istemez (spec/72 §6).
+    /// Yalniz baska bir dugumun altina (kok yaratilmaz).
+    #[serde(default)]
+    parent_id: Option<Uuid>,
     #[serde(default)]
     is_active: Option<bool>,
+    #[serde(default)]
+    shape: Option<Shape>,
+    #[serde(default)]
+    attrs: Option<Value>,
 }
 
-/// Degisiklik sonrasi satirin tamami — tek UPDATE, tek islem. Python once
-/// guncelleyip SONRA tasiyordu ve tasima reddi sessizce yutuluyordu.
 struct Next {
     name: String,
     node_type: NodeType,
     description: Option<String>,
     parent_id: Option<Uuid>,
     is_active: bool,
+    shape: Shape,
+    attrs: Value,
 }
 
 pub async fn patch(
@@ -264,46 +348,69 @@ pub async fn patch(
     let (next, changes) = {
         let tree = common::tree(&st);
         let node = tree.get(id).ok_or(AppError::NotFound)?;
-        if !access.on(&tree, id, NodeScope::Edit) {
+        if !access.node(&tree, id, NodeScope::Edit) {
             return Err(AppError::Forbidden);
         }
         let next = Next {
             name: name.unwrap_or_else(|| node.name.clone()),
             node_type: new_type.unwrap_or(node.node_type),
             description: description.unwrap_or_else(|| current_description.clone()),
-            parent_id: p.parent_id.unwrap_or(node.parent_id),
+            parent_id: p.parent_id.or(node.parent_id),
             is_active: p.is_active.unwrap_or(node.is_active),
+            shape: p.shape.unwrap_or(node.shape),
+            attrs: match p.attrs {
+                Some(a) => attrs_for(new_type.unwrap_or(node.node_type), Some(a))?,
+                None => node.attrs.clone(),
+            },
         };
+        let structural = next.node_type != node.node_type || next.parent_id != node.parent_id
+            || next.is_active != node.is_active || next.shape != node.shape || next.attrs != node.attrs;
+        // Kok ve slot: yalniz ad/aciklama (spec/74 §4.1-4.2).
+        if let (Some(lock), true) = (locked(node), structural) {
+            return Err(AppError::Conflict(if lock == "root" { "root_locked" } else { "operational_locked" }));
+        }
         if next.parent_id != node.parent_id {
-            match next.parent_id {
-                // Koke cikarmak da kok islemi: yalniz admin.
-                None if !access.root() => return Err(AppError::Forbidden),
-                None => {}
-                Some(target) => {
-                    let t = tree.get(target).ok_or(AppError::BadRequest("invalid_parent"))?;
-                    // Hedef dalda da yetki: yoksa yetkili oldugu dugumu
-                    // yetkisiz oldugu bir dala tasiyabilirdi.
-                    if !access.on(&tree, target, NodeScope::Edit) {
-                        return Err(AppError::Forbidden);
-                    }
-                    if !t.is_active {
-                        return Err(AppError::BadRequest("inactive_parent"));
-                    }
-                    // DONGU KORUMASI: hedef tasinanin alt agacinda (kendisi
-                    // dahil) olamaz; olsaydi agac halkaya donerdi.
-                    if tree.is_descendant(target, id) {
-                        return Err(AppError::BadRequest("move_cycle"));
-                    }
+            let target = next.parent_id.ok_or(AppError::Conflict("root_locked"))?;
+            let t = tree.get(target).ok_or(AppError::BadRequest("invalid_parent"))?;
+            // Hedef dalda da yetki; kokler arasi tasima yok.
+            if !access.node(&tree, target, NodeScope::Edit) {
+                return Err(AppError::Forbidden);
+            }
+            if t.root != node.root {
+                return Err(AppError::BadRequest("type_not_allowed"));
+            }
+            if !t.is_active {
+                return Err(AppError::BadRequest("inactive_parent"));
+            }
+            // DONGU KORUMASI: hedef tasinanin alt agacinda olamaz.
+            if tree.is_descendant(target, id) {
+                return Err(AppError::BadRequest("move_cycle"));
+            }
+        }
+        // Tur ve yer kok semasina uymali (yeni ebeveynin kurali).
+        if next.node_type != node.node_type || next.parent_id != node.parent_id {
+            let parent = next.parent_id.and_then(|pid| tree.get(pid)).ok_or(AppError::Conflict("root_locked"))?;
+            if !refdata::child_rule(&tree, parent).allows(next.node_type) {
+                return Err(AppError::BadRequest("type_not_allowed"));
+            }
+            if let Some(pid) = next.parent_id {
+                if !list_fits(&tree, pid, next.node_type, Some(id)) {
+                    return Err(AppError::Conflict("shape_violation"));
                 }
             }
         }
-        // Yerlesim YENI tur ve YENI yere gore (spec/72 §7).
-        if next.node_type.is_root_only() && next.parent_id.is_some() {
-            return Err(AppError::BadRequest("root_only"));
+        // Shape yalniz serbest kokte (Birimler) secilir; sabit kurallarda sunucunun.
+        if next.shape != node.shape {
+            let free = node.parent_id.and_then(|pid| tree.get(pid))
+                .is_some_and(|pa| matches!(refdata::child_rule(&tree, pa), ChildRule::Free(_)));
+            if !free {
+                return Err(AppError::BadRequest("type_not_allowed"));
+            }
+            if !shape_fits(&tree, id, next.shape) {
+                return Err(AppError::Conflict("shape_violation"));
+            }
         }
-        // Gecmis icin (alan, once, sonra). Ust dugum ADIYLA yazilir: satir
-        // dugumden uzun yasar, kimlik tek basina "bir sey" demekten oteye
-        // gitmez. Karsilastirma kimlikle — ayni adli iki ust de ayri tasima.
+        // Gecmis icin (alan, once, sonra). Ust dugum ADIYLA yazilir.
         let label = |p: Option<Uuid>| p.map(|p| tree.name(p).to_string());
         let mut changes: Vec<(&str, Value, Value)> = Vec::new();
         if next.name != node.name {
@@ -321,10 +428,14 @@ pub async fn patch(
         if next.is_active != node.is_active {
             changes.push(("is_active", json!(node.is_active), json!(next.is_active)));
         }
+        if next.shape != node.shape {
+            changes.push(("shape", json!(node.shape), json!(next.shape)));
+        }
+        if next.attrs != node.attrs {
+            changes.push(("attrs", node.attrs.clone(), next.attrs.clone()));
+        }
         (next, changes)
     };
-    // Degisen bir sey yoksa yazma da gecmis de yok (Python ayni duruma
-    // pasiflestirmeyi gecmise tekrar yazmiyordu).
     if changes.is_empty() {
         return Ok(Json(view(&st, &access).await?));
     }
@@ -332,11 +443,11 @@ pub async fn patch(
     let mut tx = st.pool.begin().await?;
     sqlx::query(
         "update nodes set name = $2, node_type = $3, description = $4, parent_id = $5,
-                          is_active = $6
+                          is_active = $6, shape = $7, attrs = $8
           where id = $1")
         .bind(id).bind(&next.name).bind(next.node_type).bind(&next.description)
-        .bind(next.parent_id).bind(next.is_active)
-        .execute(&mut *tx).await?;
+        .bind(next.parent_id).bind(next.is_active).bind(next.shape).bind(&next.attrs)
+        .execute(&mut *tx).await.map_err(shape_error)?;
     for (field, from, to) in changes {
         log(&mut tx, me.id, "node_changed", &next.name, Some(field),
             json!({ "from": from, "to": to })).await?;
@@ -348,15 +459,8 @@ pub async fn patch(
 
 // --- gecmis (R2-F07) ------------------------------------------------------
 //
-// Agac gecmisi `activity`'ye, AYRI TABLO YOK ("ne oldu" sorusunun tek
-// kaynagi). `chat_id` NULL: dugumun sohbeti yok ve bu satirlar hicbir akista
-// cizilmez — denetim kaydi (spec/21 §6; Python'da da `feed_of` node
-// olaylarini hic okumuyordu). Etiketler denormalize: dugum silinse de satir
-// okunur kalir. `activity` dugum bagimliligi SAYILMAZ (db/nodes.rs) — yoksa
-// hicbir dugum virgin olamazdi.
-//
-// Fiiller: node_created (hedef=ust adi, detay=tur), node_changed (hedef=alan,
-// detay={from,to}), node_deleted (detay=alt dugum sayisi).
+// Agac gecmisi `activity`'ye, AYRI TABLO YOK. `chat_id` NULL: denetim kaydi.
+// Fiiller: node_created, node_changed (hedef=alan, detay={from,to}), node_deleted.
 
 async fn log(
     tx: &mut Tx<'_>, actor: Uuid, verb: &str, subject: &str, target: Option<&str>, detail: Value,
@@ -374,10 +478,9 @@ type Tx<'a> = sqlx::Transaction<'a, sqlx::Postgres>;
 
 // --- kalici silme ----------------------------------------------------------
 
-/// KALICI silme — gundelik is bu degil, pasiflestirme. Dugum ALT AGACIYLA
-/// gider; kayitlar (`records.unit_id`) ve dal izinleri cascade ile birlikte.
-/// Iki kademe (spec/72 §6.2): bos dugumu o dalda duzenleyebilen siler,
-/// bagimlisi olan icin ayrica `hard_delete_nodes` (yine dal bagimli).
+/// KALICI silme — gundelik is pasiflestirme. Kok ve slot silinmez. Birimler'de
+/// iki kademe (spec/72 §6.2); scope'lu koklerde ayni scope. Etkinligin
+/// kullandigi tur/yer FK ile korunur (`node_in_use`).
 pub async fn delete(
     State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>,
 ) -> Result<Json<TreeView>> {
@@ -388,20 +491,53 @@ pub async fn delete(
     let (name, descendants) = {
         let tree = common::tree(&st);
         let node = tree.get(id).ok_or(AppError::NotFound)?;
-        if !access.on(&tree, id, NodeScope::Edit)
-            || !(deps::is_virgin(&deps, id) || access.on(&tree, id, NodeScope::HardDelete))
+        if let Some(lock) = locked(node) {
+            return Err(AppError::Conflict(if lock == "root" { "root_locked" } else { "operational_locked" }));
+        }
+        if !access.node(&tree, id, NodeScope::Edit)
+            || !(deps::is_virgin(&deps, id) || access.node(&tree, id, NodeScope::HardDelete))
         {
             return Err(AppError::Forbidden);
         }
-        // Ad ve alt agac SILMEDEN ONCE: satir gidince gecmis "bir sey
-        // silindi" demekten oteye gidemezdi.
         (node.name.clone(), tree.subtree(id).len().saturating_sub(1))
     };
     let mut tx = st.pool.begin().await?;
-    // Bagli takim baglari (team_nodes) cascade ile gider; takimlar kalir.
-    sqlx::query("delete from nodes where id = $1").bind(id).execute(&mut *tx).await?;
+    sqlx::query("delete from nodes where id = $1").bind(id).execute(&mut *tx).await
+        .map_err(|e| match &e {
+            sqlx::Error::Database(d) if d.is_foreign_key_violation() => AppError::Conflict("node_in_use"),
+            _ => e.into(),
+        })?;
     log(&mut tx, me.id, "node_deleted", &name, None, json!({ "descendants": descendants })).await?;
     tx.commit().await?;
     st.rebuild_tree().await?;
     Ok(Json(view(&st, &access).await?))
+}
+
+// --- favoriler (seciciler, spec/74 §6) ---------------------------------------
+
+/// Kisi basina favori dugum (IDEMPOTENT). Yalniz okunabilir dugum yeter:
+/// herkes kendi secicisini duzenler.
+pub async fn favorite(
+    State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>,
+) -> Result<Json<Vec<Uuid>>> {
+    let id = common::id(&raw)?;
+    if common::tree(&st).get(id).is_none() {
+        return Err(AppError::NotFound);
+    }
+    sqlx::query("insert into node_favorites (user_id, node_id) values ($1, $2) on conflict do nothing")
+        .bind(me.id).bind(id).execute(&st.pool).await?;
+    favorites_of(&st, me.id).await
+}
+
+pub async fn unfavorite(
+    State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>,
+) -> Result<Json<Vec<Uuid>>> {
+    sqlx::query("delete from node_favorites where user_id = $1 and node_id = $2")
+        .bind(me.id).bind(common::id(&raw)?).execute(&st.pool).await?;
+    favorites_of(&st, me.id).await
+}
+
+async fn favorites_of(st: &AppState, user: Uuid) -> Result<Json<Vec<Uuid>>> {
+    Ok(Json(sqlx::query_scalar("select node_id from node_favorites where user_id = $1 order by created_at")
+        .bind(user).fetch_all(&st.pool).await?))
 }

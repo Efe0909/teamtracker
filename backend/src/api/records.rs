@@ -250,7 +250,10 @@ pub(crate) async fn check_team(pool: &PgPool, id: Option<Uuid>) -> Result<()> {
 pub(crate) fn check_unit(st: &AppState, id: Uuid) -> Result<()> {
     let tree = common::tree(st);
     match tree.get(id) {
-        Some(n) if n.is_active => Ok(()),
+        // Birim Birimler kokunun ALTINDA olmali (spec/74 §4.7): etkinlik
+        // turu ya da yeri birim degil.
+        Some(n) if n.is_active && crate::refdata::under(&tree, id, crate::refdata::UNITS) => Ok(()),
+        Some(n) if n.is_active => Err(AppError::BadRequest("unit_outside_units")),
         _ => Err(AppError::BadRequest("invalid_unit")),
     }
 }

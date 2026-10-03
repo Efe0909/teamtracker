@@ -14,8 +14,6 @@ export interface Lookup {
   path: (id: Uuid) => string[];
   can: (scope: string) => boolean;
   pillar: (id: Uuid | null | undefined) => MetaPillar | undefined;
-  /** Kayit acilabilecek birimler: aktif dugumler (agac yalniz yapi, spec/22). */
-  units: MetaNode[];
   /** Secilebilir pillar'lar: aktif olanlar, sort_order sirasiyla. */
   pillars: MetaPillar[];
   /** Sıradan takimlar: bir pillar'in OZEL takimi olmayanlar. */
@@ -61,7 +59,6 @@ export function LookupProvider({ meta, children }: { meta: Meta; children: React
       path,
       can: (scope) => meta.me.is_admin || meta.me.scopes.includes(scope),
       pillar: (id) => (id == null ? undefined : pillars.get(id)),
-      units: meta.nodes.filter((n) => n.is_active),
       pillars: meta.pillars.filter((p) => p.is_active),
       plainTeams: meta.teams.filter((t) => t.pillar_id === null),
     };

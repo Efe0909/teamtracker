@@ -81,6 +81,15 @@ export type ApiErrorCode =
   | "otf_no_source"
   | "otf_review_needs_edit"
   | "otf_unreviewed"
+  | "root_locked"
+  | "operational_locked"
+  | "shape_violation"
+  | "type_not_allowed"
+  | "invalid_attrs"
+  | "unit_outside_units"
+  | "node_in_use"
+  | "invalid_kind"
+  | "invalid_location"
   | "network";
 
 export const ERRORS = {
@@ -160,6 +169,15 @@ export const ERRORS = {
   otf_no_source: "Kopyalanacak başka bir OTF formu yok.",
   otf_review_needs_edit: "Kopyalanan formda en az bir alanı bu etkinliğe göre güncellemeden gözden geçirildi işaretlenemez.",
   otf_unreviewed: "Form başka bir etkinlikten kopyalandı; indirmeden önce gözden geçirip işaretle.",
+  root_locked: "Kök düğümler kodla gelir: yalnız adı ve açıklaması değişir; taşınamaz, kapatılamaz, silinemez.",
+  operational_locked: "Bu düğüm sistemin yapısının parçası: yalnız adı ve açıklaması değişir.",
+  shape_violation: "Bu düğümün yapısına uymuyor (yaprak düğüme alt düğüm eklenemez; listede bütün öğeler aynı türde olmalı).",
+  type_not_allowed: "Bu tür buraya eklenemez ya da taşınamaz.",
+  invalid_attrs: "Düğüm ayarları geçersiz.",
+  unit_outside_units: "Seçilen düğüm bir birim değil (Birimler altında olmalı).",
+  node_in_use: "Bu öğe kullanımda (ör. bir etkinlik bu türü ya da yeri kullanıyor). Silmek yerine kapat.",
+  invalid_kind: "Seçilen etkinlik türü geçersiz ya da kapalı.",
+  invalid_location: "Seçilen yer geçersiz ya da kapalı.",
   network: "Sunucuya ulaşılamadı. Bağlantını kontrol et.",
 } satisfies Record<ApiErrorCode, string>;
 

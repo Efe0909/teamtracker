@@ -27,10 +27,11 @@ use crate::{
     auth::CurrentUser,
     error::{AppError, Result},
     models::{
-        enums::{EventKind, EventStatus, MaterialType, Priority, RecordKind, WidgetType},
+        enums::{EventStatus, MaterialType, NodeType, Priority, RecordKind, WidgetType},
         record::Record,
         user::User,
     },
+    refdata,
     state::AppState,
 };
 
@@ -48,8 +49,8 @@ const PRICE_MAX: f64 = 9_999_999_999.99;
 /// kayitlari (ikiz HARIC: ikiz widget olamaz).
 macro_rules! event_cols {
     () => {
-        "e.id, e.record_id, e.title, e.kind, e.status, e.priority, e.owner_id, e.date,
-         to_char(e.start_time, 'HH24:MI') as start_time, e.place, e.attendees, e.description,
+        "e.id, e.record_id, e.title, e.kind_id, e.status, e.priority, e.owner_id, e.date,
+         to_char(e.start_time, 'HH24:MI') as start_time, e.location_id, e.place, e.attendees, e.description,
          e.created_by, e.created_at, e.updated_at,
          coalesce((select array_agg(w.record_id order by w.position) from event_widgets w
                     where w.event_id = e.id and w.record_id is not null), '{}') as record_ids"
@@ -61,13 +62,16 @@ pub struct EventRow {
     id: Uuid,
     record_id: Uuid,
     title: String,
-    kind: EventKind,
+    /// Etkinlik Turleri'ndeki `option` dugumu (adi `/api/meta` nodes'tan).
+    kind_id: Uuid,
     status: EventStatus,
     priority: Priority,
     owner_id: Option<Uuid>,
     date: Option<NaiveDate>,
     /// "HH:MM"
     start_time: Option<String>,
+    /// Etkinlik Yerleri'ndeki `location`; yoksa `place` metni (kampus disi / tek seferlik).
+    location_id: Option<Uuid>,
     place: Option<String>,
     attendees: Option<i32>,
     description: Option<String>,
@@ -245,44 +249,33 @@ async fn require_scope(st: &AppState, me: &User, scope: &str) -> Result<()> {
 
 // --- tur sablonu -----------------------------------------------------------
 
-/// Yeni etkinlige kopyalanan widget'lar ve checkpoint'ler (gun farki, 0 =
-/// etkinlik gunu). Kopya OLUSTURMA aninda: sablon degisirse eski etkinlik
-/// degismez. On yuzdeki `EVENT_TEMPLATE` yalniz onizleme; kaynak burasi.
-type Template = (&'static [WidgetType], &'static [(&'static str, i16)]);
+// Sablon artik VERI (spec/74 §5): Etkinlik Turleri kokunde her `option`'in
+// `steps` slotundaki checkpoint'ler (attrs.offset_days) ve `widgets`
+// slotundaki widget'lar. Kopya OLUSTURMA aninda (refdata::template): tur
+// sonradan duzenlenirse eski etkinlik degismez.
 
-/// Varsayilan kural (Efe, 2026-10-02): butun hazirlik etkinlikten en gec bu
-/// kadar gun once biter. Sablonda bundan gec checkpoint yok; elle eklenen
-/// tarihsiz checkpoint da buraya duser. Farkli tarih `manage_events` ister.
-const DEADLINE_DAYS: i16 = 7;
+/// Varsayilan son tarih: etkinlikten bu kadar gun once (refdata::DEADLINE_DAYS).
+/// Elle eklenen tarihsiz checkpoint buraya duser; farkli tarih `manage_events` ister.
+const DEADLINE_DAYS: i16 = refdata::DEADLINE_DAYS as i16;
 
-fn template(kind: EventKind) -> Template {
-    match kind {
-        // Kampuste yapilan turler OTF ister (universite talep formu, api/otf.rs).
-        EventKind::Meeting => (&[WidgetType::Otf], &[
-            ("Gündem toplandı", -10), ("OTF gönderildi", -7), ("Davet gönderildi", -7),
-        ]),
-        EventKind::Training => (&[WidgetType::Otf, WidgetType::Supplies], &[
-            ("Eğitmen kesinleşti", -21), ("Mekan ayarlandı", -14), ("OTF gönderildi", -7), ("Malzeme hazır", -7),
-        ]),
-        EventKind::Social => (&[WidgetType::Otf], &[
-            ("Bütçe onayı", -21), ("Mekan ayarlandı", -14), ("OTF gönderildi", -7), ("Duyuru", -7),
-        ]),
-        EventKind::Visit => (&[], &[("Ziyaret onayı", -21), ("Ulaşım ayarlandı", -7)]),
-        EventKind::Conference => (&[WidgetType::Supplies], &[
-            ("Başvuru", -45), ("Stand kesinleşti", -30), ("Tanıtım", -10), ("Malzeme hazır", -7),
-        ]),
+/// Etkinlik turu: Etkinlik Turleri kokunun altindaki aktif bir `option`.
+fn check_kind(st: &AppState, id: Uuid) -> Result<()> {
+    let tree = common::tree(st);
+    match tree.get(id) {
+        Some(n) if n.is_active && n.node_type == NodeType::Choice
+            && refdata::under(&tree, id, refdata::EVENT_TYPES) => Ok(()),
+        _ => Err(AppError::BadRequest("invalid_kind")),
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn template_checkpoints_end_a_week_before() {
-        for k in [EventKind::Meeting, EventKind::Training, EventKind::Social, EventKind::Visit, EventKind::Conference] {
-            assert!(template(k).1.iter().all(|(_, d)| *d <= -DEADLINE_DAYS), "{k:?}");
-        }
+/// Etkinlik yeri: Etkinlik Yerleri kokunun altindaki aktif bir `location`.
+fn check_location(st: &AppState, id: Option<Uuid>) -> Result<()> {
+    let Some(id) = id else { return Ok(()) };
+    let tree = common::tree(st);
+    match tree.get(id) {
+        Some(n) if n.is_active && n.node_type == NodeType::Location
+            && refdata::under(&tree, id, refdata::EVENT_LOCATIONS) => Ok(()),
+        _ => Err(AppError::BadRequest("invalid_location")),
     }
 }
 
@@ -291,7 +284,8 @@ mod tests {
 #[derive(Deserialize)]
 pub struct NewEvent {
     title: String,
-    kind: EventKind,
+    /// Etkinlik Turleri'ndeki `option` dugumu.
+    kind_id: Uuid,
     /// Ikiz kaydin birimi.
     unit_id: Uuid,
     #[serde(default)]
@@ -314,6 +308,9 @@ pub async fn create(
     let title = common::text(Some(b.title), TITLE_MAX, "invalid_title")?
         .ok_or(AppError::BadRequest("invalid_title"))?;
     records::check_unit(&st, b.unit_id)?;
+    check_kind(&st, b.kind_id)?;
+    // Sablon kilit altinda okunur, kilit await'ten once birakilir (state.rs).
+    let (checkpoints, widgets) = refdata::template(&common::tree(&st), b.kind_id);
     let priority = b.priority.unwrap_or(Priority::Medium);
     let status = if b.date.is_some() { EventStatus::Planning } else { EventStatus::Idea };
 
@@ -328,21 +325,21 @@ pub async fn create(
     records::log(&mut tx, chat_id, me.id, "created", &title, None,
         records::change(serde_json::Value::Null, me.id)).await?;
     let id: Uuid = sqlx::query_scalar(
-        "insert into events (record_id, title, kind, status, priority, owner_id, date, created_by)
+        "insert into events (record_id, title, kind_id, status, priority, owner_id, date, created_by)
          values ($1, $2, $3, $4, $5, $6, $7, $6) returning id")
-        .bind(record_id).bind(&title).bind(b.kind).bind(status).bind(priority).bind(me.id).bind(b.date)
+        .bind(record_id).bind(&title).bind(b.kind_id).bind(status).bind(priority).bind(me.id).bind(b.date)
         .fetch_one(&mut *tx).await?;
     sqlx::query("insert into event_participants (event_id, user_id) values ($1, $2)")
         .bind(id).bind(me.id).execute(&mut *tx).await?;
-    let (widgets, checkpoints) = template(b.kind);
     for (i, w) in widgets.iter().enumerate() {
-        sqlx::query("insert into event_widgets (event_id, widget_type, position) values ($1, $2, $3)")
+        sqlx::query("insert into event_widgets (event_id, widget_type, position) values ($1, $2, $3)
+                     on conflict do nothing")
             .bind(id).bind(*w).bind(i as i16).execute(&mut *tx).await?;
     }
     for (i, (label, offset)) in checkpoints.iter().enumerate() {
         sqlx::query(
             "insert into event_checkpoints (event_id, label, offset_days, position) values ($1, $2, $3, $4)")
-            .bind(id).bind(*label).bind(*offset).bind(i as i16).execute(&mut *tx).await?;
+            .bind(id).bind(label).bind(*offset).bind(i as i16).execute(&mut *tx).await?;
     }
     tx.commit().await?;
     Ok(Json(Created { id, record_id }))
@@ -361,6 +358,9 @@ pub enum EventPatch {
     Date(Option<NaiveDate>),
     /// "HH:MM"
     StartTime(Option<String>),
+    /// Listeden yer; secilince metin yer temizlenir.
+    LocationId(Option<Uuid>),
+    /// Serbest metin yer (Diger…); yazilinca liste yeri temizlenir.
     Place(Option<String>),
     Attendees(Option<i32>),
     Description(Option<String>),
@@ -458,11 +458,27 @@ pub async fn patch(
             log_change(&mut tx, &twin, &me, "start_time", json(&ev.start_time),
                 json(t.map(|t| t.format("%H:%M").to_string()))).await?;
         }
+        // Yer tek: liste yeri YA DA metin; biri yazilinca obur temizlenir.
+        // Gecmise ad yazilir (dugum adi sonradan degisse de satir okunur kalsin).
+        EventPatch::LocationId(v) => {
+            check_location(&st, v)?;
+            let (from, to) = {
+                let tree = common::tree(&st);
+                let name = |id: Option<Uuid>| id.map(|i| tree.name(i).to_string());
+                (name(ev.location_id).or(ev.place.clone()), name(v))
+            };
+            set("update events set location_id = $2,
+                    place = case when $2::uuid is null then place end, updated_at = now() where id = $1")
+                .bind(v).execute(&mut *tx).await?;
+            log_change(&mut tx, &twin, &me, "place", json(from), json(to)).await?;
+        }
         EventPatch::Place(v) => {
             let v = common::text(v, TITLE_MAX, "invalid_place")?;
-            set("update events set place = $2, updated_at = now() where id = $1")
+            let from = ev.location_id.map(|i| common::tree(&st).name(i).to_string()).or(ev.place.clone());
+            set("update events set place = $2,
+                    location_id = case when $2::text is null then location_id end, updated_at = now() where id = $1")
                 .bind(&v).execute(&mut *tx).await?;
-            log_change(&mut tx, &twin, &me, "place", json(&ev.place), json(&v)).await?;
+            log_change(&mut tx, &twin, &me, "place", json(from), json(&v)).await?;
         }
         EventPatch::Attendees(v) => {
             if v.is_some_and(|n| !(0..=100_000).contains(&n)) {

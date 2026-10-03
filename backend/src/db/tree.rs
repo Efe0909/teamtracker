@@ -13,7 +13,7 @@ use std::collections::HashMap;
 
 use uuid::Uuid;
 
-use crate::models::enums::NodeType;
+use crate::models::enums::{NodeType, Shape};
 
 #[derive(Debug, Clone)]
 pub struct Node {
@@ -23,6 +23,13 @@ pub struct Node {
     pub node_type: NodeType,
     pub sort_order: i32,
     pub is_active: bool,
+    /// Yalniz kokte dolu (spec/74): kod koku bununla bulur.
+    pub key: Option<String>,
+    pub shape: Shape,
+    /// Ture gore sunucunun dogruladigi ek alanlar (refdata.rs).
+    pub attrs: serde_json::Value,
+    /// Dugumun koku — kok semasi (refdata) buna gore secilir. `build()` doldurur.
+    pub root: Uuid,
     /// Euler turu girisi — `build()` dolduruyor.
     pub tin: u32,
     /// Euler turu cikisi.
@@ -42,6 +49,9 @@ pub struct NodeRow {
     pub node_type: NodeType,
     pub sort_order: i32,
     pub is_active: bool,
+    pub key: Option<String>,
+    pub shape: Shape,
+    pub attrs: serde_json::Value,
 }
 
 #[derive(Debug, Default)]
@@ -65,8 +75,8 @@ impl TreeIndex {
             ix.nodes.insert(r.id, Node {
                 id: r.id, parent_id: r.parent_id, name: r.name,
                 node_type: r.node_type, sort_order: r.sort_order,
-                is_active: r.is_active,
-                tin: 0, tout: 0, depth: 0,
+                is_active: r.is_active, key: r.key, shape: r.shape, attrs: r.attrs,
+                root: r.id, tin: 0, tout: 0, depth: 0,
             });
         }
 
@@ -103,13 +113,15 @@ impl TreeIndex {
                 counter += 1;
                 continue;
             }
-            let depth = match ix.nodes[&id].parent_id {
-                Some(p) if ix.nodes.contains_key(&p) => ix.nodes[&p].depth + 1,
-                _ => 0,
+            // Ebeveyn cocuktan ONCE ziyaret edilir: derinligi ve koku hazir.
+            let (depth, root) = match ix.nodes[&id].parent_id {
+                Some(p) if ix.nodes.contains_key(&p) => (ix.nodes[&p].depth + 1, ix.nodes[&p].root),
+                _ => (0, id),
             };
             if let Some(n) = ix.nodes.get_mut(&id) {
                 n.tin = counter;
                 n.depth = depth;
+                n.root = root;
             }
             counter += 1;
             ix.order.push(id);
@@ -178,6 +190,21 @@ impl TreeIndex {
             .collect()
     }
 
+    /// `key`'i verilen kok (spec/74: kod koku adla degil key ile bulur).
+    pub fn root_by_key(&self, key: &str) -> Option<&Node> {
+        self.roots.iter().filter_map(|id| self.nodes.get(id)).find(|n| n.key.as_deref() == Some(key))
+    }
+
+    /// Dugumun kokunun key'i (kok disi, key'siz eski kok icin None).
+    pub fn root_key(&self, id: Uuid) -> Option<&str> {
+        self.nodes.get(&id).and_then(|n| self.nodes.get(&n.root)).and_then(|r| r.key.as_deref())
+    }
+
+    /// Dogrudan cocuklar, ekran sirasinda.
+    pub fn children(&self, id: Uuid) -> &[Uuid] {
+        self.children.get(&id).map_or(&[], |v| v.as_slice())
+    }
+
     pub fn roots(&self) -> &[Uuid] { &self.roots }
     pub fn order(&self) -> &[Uuid] { &self.order }
     pub fn len(&self) -> usize { self.nodes.len() }
@@ -193,6 +220,7 @@ mod tests {
             id: Uuid::from_u128(id as u128),
             parent_id: parent.map(|p| Uuid::from_u128(p as u128)),
             name: name.into(), node_type: t, sort_order: 0, is_active: true,
+            key: None, shape: Shape::Tree, attrs: serde_json::json!({}),
         }
     }
     fn u(id: u8) -> Uuid { Uuid::from_u128(id as u128) }

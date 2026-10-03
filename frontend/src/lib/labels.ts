@@ -3,7 +3,7 @@
 // `Record<Birlik, string>`: yeni durum eklenip etiketi yazilmazsa derleme duser.
 
 import type {
-  ActionStatus, EventKind, EventStatus, IsoDate, IsoTime, NodeType, Priority, RecordKind, RecordStatus, TeamRole,
+  ActionStatus, EventStatus, IsoDate, IsoTime, NodeType, Priority, RecordKind, RecordStatus, TeamRole,
 } from "../api/types";
 
 export const STATUS: Record<RecordStatus, string> = {
@@ -30,14 +30,6 @@ export const PRIORITY: Record<Priority, string> = {
 
 export const KIND: Record<RecordKind, string> = { issue: "Hata", task: "Görev" };
 
-export const EVENT_KIND: Record<EventKind, string> = {
-  meeting: "Toplantı",
-  training: "Eğitim",
-  social: "Sosyal",
-  visit: "Saha ziyareti",
-  conference: "Konferans",
-};
-
 export const EVENT_STATUS: Record<EventStatus, { label: string; tone: "info" | "ok" | "neutral" | "critical" }> = {
   idea: { label: "Fikir", tone: "neutral" },
   planning: { label: "Planlanıyor", tone: "info" },
@@ -55,6 +47,12 @@ export const NODE_TYPE: Record<NodeType, string> = {
   step: "Adım",
   operational: "Operational",
   generic: "Genel",
+  // Etkinlik Turleri / Yerleri (spec/74). `checkpoint` sablon adimi — birimlerdeki
+  // `step`'le ayni etiket; ikisi ayni agacta hic bulunmaz.
+  option: "Seçenek",
+  checkpoint: "Adım",
+  widget: "Widget",
+  location: "Yer",
 };
 
 /** Kapsam anahtari -> ne yapmaya izin verdigi (Python `SCOPES` degerleri).
@@ -69,6 +67,8 @@ export const SCOPE: Readonly<Partial<Record<string, string>>> = {
   tag_media: "Ekleri etiketle — katıldığın sohbetlerdeki görsellere etiket ekle/çıkar",
   // Etkinlik modulu (spec/73 §5, §3) — Rust'ta henuz yok.
   manage_events: "Etkinlikleri yönet — her etkinliği düzenle, checkpoint ekle/sil/tarihini değiştir",
+  manage_event_types: "Etkinlik türlerini yönet — tür ekle, adımlarını ve widget'larını düzenle (Veri Yönetimi)",
+  manage_event_locations: "Etkinlik yerlerini yönet — yer listesini düzenle (Veri Yönetimi)",
   manage_event_widgets: "Etkinlik widget'larını düzenle — şablondan gelen widget'ları ekle/kaldır",
   manage_purchases: "Satın alımları yönet — adım ilerlet, tedarikçi ve fiyat yaz",
 };

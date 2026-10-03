@@ -18,7 +18,7 @@ it("geri sayim: kalan sure ve kapandi", () => {
 const user = (id: string, name: string) => ({ id, name, color: null, is_admin: false, last_seen_at: null,
   nickname: null, phone: null, avatar_id: null, birth_day: null, birth_month: null, birth_year: null });
 const META: Meta = {
-  me: { id: "a", is_admin: false, scopes: [], team_ids: [], profile_complete: true },
+  me: { id: "a", is_admin: false, scopes: [], team_ids: [], profile_complete: true, favorite_nodes: [] },
   users: [user("a", "Ayşe"), user("b", "Bora")], teams: [], pillars: [], nodes: [],
 };
 const poll: CardView = {

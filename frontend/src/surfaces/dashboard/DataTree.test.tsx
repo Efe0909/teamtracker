@@ -1,13 +1,13 @@
-// R2-F05: Veri Yonetimi ekrani (spec/90-geri-tasima.md). Yerlesim kurali
-// SUNUCUDA (KNOW-241): bu testler ekranin `can_*` bayraklarina ve
-// root_types/child_types listelerine harfiyen uydugunu, kendi kuralini
-// uydurmadigini dogruluyor.
+// Veri Yonetimi ekrani (spec/74; once R2-F05). Yerlesim kurali SUNUCUDA
+// (KNOW-241): bu testler ekranin `can_*`, `locked`, dugum basina
+// `child_types`/`child_fixed` ve `warnings` alanlarina harfiyen uydugunu,
+// kendi kuralini uydurmadigini dogruluyor.
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ERRORS } from "../../api/errors";
-import type { Meta, TreeView } from "../../api/types";
+import type { Meta, TreeNode, TreeView } from "../../api/types";
 import { LookupProvider } from "../../lib/lookup";
 import { DataTree } from "./DataTree";
 
@@ -18,40 +18,54 @@ async function pickerOptions(label: string): Promise<string[]> {
   return opts.map((o) => o.textContent ?? "");
 }
 
-function node(over: Partial<TreeView["nodes"][number]> & { id: string; name: string }): TreeView["nodes"][number] {
+function node(over: Partial<TreeNode> & { id: string; name: string }): TreeNode {
   return {
-    parent_id: null,
+    parent_id: "units",
     node_type: "generic",
+    key: null,
+    root_key: "units",
+    shape: "tree",
+    attrs: {},
     description: null,
     is_active: true,
-    depth: 0,
+    depth: 1,
     child_count: 0,
+    locked: null,
     can_edit: false,
-    can_retype: true,
+    child_types: [],
+    child_fixed: false,
     can_hard_delete: false,
+    warnings: [],
     delete_counts: { children: 0, records: 0, permissions: 0, teams: 0 },
     ...over,
   };
 }
 
+/** Birimler koku: kilitli, serbest kural. */
+function unitsRoot(over: Partial<TreeNode> = {}): TreeNode {
+  return node({
+    id: "units", name: "Birimler", parent_id: null, node_type: "operational", key: "units", depth: 0,
+    locked: "root", can_edit: true, child_types: ["cell", "machine", "task", "step", "generic"], ...over,
+  });
+}
+
 /** GET her zaman `tree`; diger metodlar `onWrite` ile (varsayilan: hic çağrılmaz). */
 function stubFetch(tree: TreeView, onWrite?: (method: string, url: string, body: unknown) => unknown) {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
-      const method = init?.method ?? "GET";
-      if (method === "GET") {
-        return { ok: true, status: 200, json: async () => tree } as Response;
-      }
-      const body = init?.body !== undefined ? JSON.parse(init.body as string) : undefined;
-      const result = onWrite?.(method, url, body) ?? { ok: true, status: 200, json: async () => tree };
-      return result as Response;
-    }),
-  );
+  const f = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+    const method = init?.method ?? "GET";
+    if (method === "GET") {
+      return { ok: true, status: 200, json: async () => tree } as Response;
+    }
+    const body = init?.body !== undefined ? JSON.parse(init.body as string) : undefined;
+    const result = onWrite?.(method, url, body) ?? { ok: true, status: 200, json: async () => tree };
+    return result as Response;
+  });
+  vi.stubGlobal("fetch", f);
+  return f;
 }
 
 const META: Meta = {
-  me: { id: "u1", is_admin: false, scopes: [], team_ids: [], profile_complete: true },
+  me: { id: "u1", is_admin: false, scopes: [], team_ids: [], profile_complete: true, favorite_nodes: [] },
   users: [],
   teams: [{ id: "t1", name: "Maliye", description: null, color: null, chat_id: "c1", node_ids: ["n1"], pillar_id: null, banner_id: null }],
   pillars: [],
@@ -76,15 +90,9 @@ afterEach(() => {
 
 describe("salt okunur (butun bayraklar false)", () => {
   it("duzenle/ekle/kalici sil dugmesi hic cizilmez", async () => {
-    stubFetch({
-      can_add_root: false,
-      root_types: ["cell"],
-      child_types: ["generic"],
-      nodes: [node({ id: "n1", name: "Kök Düğüm", can_edit: false, can_hard_delete: false })],
-    });
+    stubFetch({ nodes: [unitsRoot({ can_edit: false, child_types: [] })] });
     renderTree();
-    await screen.findByText("Kök Düğüm");
-    expect(screen.queryByRole("button", { name: /Kök düğüm/ })).toBeNull();
+    await screen.findByText("Birimler");
     expect(screen.queryByLabelText(/düzenle/)).toBeNull();
     expect(screen.queryByLabelText(/alt düğüm ekle/)).toBeNull();
     expect(screen.queryByText(/Kalıcı sil/)).toBeNull();
@@ -92,45 +100,105 @@ describe("salt okunur (butun bayraklar false)", () => {
   });
 });
 
-describe("tur secenekleri SUNUCUDAN gelir, yerel enum'dan degil (KNOW-241)", () => {
-  it("alt dugum ekleme formu yalniz child_types'taki turleri listeler", async () => {
-    // child_types kasten kisitli: gercek NodeType enum'unda 'machine', 'step'
-    // gibi baska turler de var ama ekran ONLARI GOSTERMEMELI.
+describe("kokler koddan gelir (spec/74 §4.1)", () => {
+  it("kok dugum ekleme dugmesi yok", async () => {
+    stubFetch({ nodes: [unitsRoot()] });
+    renderTree();
+    await screen.findByText("Birimler");
+    expect(screen.queryByRole("button", { name: /Kök düğüm/ })).toBeNull();
+  });
+
+  it("kilitli kokte kilit isareti var; pasiflestirme, tasima, kalici silme yok", async () => {
+    // can_hard_delete kasten true: kilitli dugumde yine de cizilmemeli.
+    stubFetch({ nodes: [unitsRoot({ can_hard_delete: true })] });
+    renderTree();
+    await screen.findByText("Birimler");
+    expect(screen.getByLabelText("Birimler: kilitli")).toBeTruthy();
+    expect(screen.queryByLabelText(/Birimler: pasifleştir/)).toBeNull();
+    fireEvent.click(screen.getByLabelText("Birimler: düzenle"));
+    await screen.findByText(/yalnız ad ve açıklama değişir\./);
+    expect(screen.queryByRole("button", { name: /^Üst düğüm:/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Tür:/ })).toBeNull();
+    expect(screen.queryByText(/Kalıcı sil/)).toBeNull();
+  });
+});
+
+describe("ekleme formu dugumun child_types/child_fixed'ine uyar (KNOW-241)", () => {
+  it("serbest dal: tur yalniz child_types'tan, yapi varsayilan Agac", async () => {
+    // child_types kasten kisitli: ekran baska turleri GOSTERMEMELI.
     stubFetch({
-      can_add_root: false,
-      root_types: ["cell"],
-      child_types: ["machine"],
-      nodes: [node({ id: "n1", name: "Üretim Hattı", can_edit: true, child_count: 0 })],
+      nodes: [unitsRoot({ child_count: 1 }), node({ id: "n1", name: "Üretim Hattı", can_edit: true, child_types: ["machine"] })],
     });
     renderTree();
-    await screen.findByText("Üretim Hattı");
-    fireEvent.click(screen.getByLabelText(/Üretim Hattı: alt düğüm ekle/));
+    fireEvent.click(await screen.findByLabelText("Birimler: alt düğümleri aç"));
+    fireEvent.click(await screen.findByLabelText(/Üretim Hattı: alt düğüm ekle/));
+    expect(screen.getByRole("button", { name: /^Yapı:/ }).textContent).toContain("Ağaç");
     expect(await pickerOptions("Tür")).toEqual(["Makine"]);
   });
 
-  it("kok ekleme formu yalniz root_types'taki turleri listeler", async () => {
+  it("child_types bos: ekle dugmesi yok", async () => {
+    stubFetch({ nodes: [unitsRoot({ child_types: [] })] });
+    renderTree();
+    await screen.findByText("Birimler");
+    expect(screen.getByLabelText("Birimler: düzenle")).toBeTruthy();
+    expect(screen.queryByLabelText(/Birimler: alt düğüm ekle/)).toBeNull();
+  });
+
+  it("child_fixed: tur/yapi sorulmaz; checkpoint gun farkini gonderir, tur gondermez", async () => {
+    let sent: unknown;
+    stubFetch(
+      {
+        nodes: [
+          node({
+            id: "steps", name: "Adımlar", node_type: "operational", root_key: "event_types", parent_id: null,
+            depth: 0, shape: "list", locked: "operational", attrs: { slot: "steps" }, can_edit: true,
+            child_types: ["checkpoint"], child_fixed: true,
+          }),
+        ],
+      },
+      (method, _url, body) => {
+        if (method === "POST") sent = body;
+        return undefined;
+      },
+    );
+    renderTree();
+    fireEvent.click(await screen.findByLabelText("Adımlar: alt düğüm ekle"));
+    expect(screen.queryByRole("button", { name: /^Tür:/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Yapı:/ })).toBeNull();
+    fireEvent.change(screen.getByLabelText(/^Adım adı/), { target: { value: "OTF gönderildi" } });
+    fireEvent.change(screen.getByLabelText(/Etkinlikten kaç gün önce\/sonra/), { target: { value: "-10" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ekle" }));
+    await waitFor(() => expect(sent).toBeDefined());
+    expect(sent).toEqual({ name: "OTF gönderildi", parent_id: "steps", description: null, attrs: { offset_days: -10 } });
+  });
+});
+
+describe("satir: ayar ve uyari", () => {
+  it("checkpoint gun farki satirda, uyari tooltip'i Turkce", async () => {
     stubFetch({
-      can_add_root: true,
-      root_types: ["operational", "step"],
-      child_types: ["generic"],
-      nodes: [],
+      nodes: [
+        node({
+          id: "cp", name: "Son hazırlık", node_type: "checkpoint", root_key: "event_types", parent_id: null,
+          depth: 0, shape: "leaf", attrs: { offset_days: -3 }, warnings: ["late_checkpoint"],
+        }),
+      ],
     });
     renderTree();
-    await screen.findByRole("button", { name: /Kök düğüm/ });
-    fireEvent.click(screen.getByRole("button", { name: /Kök düğüm/ }));
-    expect(await pickerOptions("Tür")).toEqual(["Operational", "Adım"]);
+    await screen.findByText("Son hazırlık");
+    expect(screen.getByText("−3 gün")).toBeTruthy();
+    const w = screen.getByTitle(/en geç 7 gün önce bitmeli/);
+    expect(w.getAttribute("aria-label")).toBe(
+      "Etkinlikten 7 günden daha az önce — hazırlık en geç 7 gün önce bitmeli",
+    );
   });
 });
 
 describe("arama: eslesenler + ustleri gorunur, geri kalani gizli", () => {
   it("eslesmeyen dal gizlenir, eslesen ve onun ustu gorunur", async () => {
     stubFetch({
-      can_add_root: false,
-      root_types: ["cell"],
-      child_types: ["generic"],
       nodes: [
-        node({ id: "r1", name: "Alfa Birimi", depth: 0 }),
-        node({ id: "r2", name: "Beta Birimi", depth: 0, child_count: 1 }),
+        node({ id: "r1", name: "Alfa Birimi", depth: 0, parent_id: null }),
+        node({ id: "r2", name: "Beta Birimi", depth: 0, parent_id: null, child_count: 1 }),
         node({ id: "c1", name: "Hedef Görevi", parent_id: "r2", depth: 1 }),
       ],
     });
@@ -150,24 +218,15 @@ describe("arama: eslesenler + ustleri gorunur, geri kalani gizli", () => {
 
 describe("API hata kodu Turkce metne cevrilir (api/errors.ts)", () => {
   it("invalid_name kodu ERRORS.invalid_name metnini gosterir", async () => {
-    stubFetch(
-      {
-        can_add_root: true,
-        root_types: ["generic"],
-        child_types: ["generic"],
-        nodes: [],
-      },
-      (method) => {
-        if (method === "POST") {
-          return { ok: false, status: 400, json: async () => ({ error: "invalid_name" }) } as Response;
-        }
-        return undefined;
-      },
-    );
+    stubFetch({ nodes: [unitsRoot()] }, (method) => {
+      if (method === "POST") {
+        return { ok: false, status: 400, json: async () => ({ error: "invalid_name" }) } as Response;
+      }
+      return undefined;
+    });
     renderTree();
-    await screen.findByRole("button", { name: /Kök düğüm/ });
-    fireEvent.click(screen.getByRole("button", { name: /Kök düğüm/ }));
-    fireEvent.change(await screen.findByLabelText("Düğüm adı"), { target: { value: "x" } });
+    fireEvent.click(await screen.findByLabelText("Birimler: alt düğüm ekle"));
+    fireEvent.change(await screen.findByLabelText(/^Alt düğüm adı/), { target: { value: "x" } });
     fireEvent.click(screen.getByRole("button", { name: "Ekle" }));
     await waitFor(() => expect(screen.getByRole("alert").textContent).toBe(ERRORS.invalid_name));
   });
@@ -176,10 +235,10 @@ describe("API hata kodu Turkce metne cevrilir (api/errors.ts)", () => {
 describe("takim baglari (team_nodes, spec/22)", () => {
   it("dugumde calisan takim satirda gorunur", async () => {
     stubFetch({
-      can_add_root: false,
-      root_types: ["cell"],
-      child_types: ["generic"],
-      nodes: [node({ id: "n1", name: "Bütçe Onayı" }), node({ id: "n2", name: "Sevkiyat" })],
+      nodes: [
+        node({ id: "n1", name: "Bütçe Onayı", parent_id: null, depth: 0 }),
+        node({ id: "n2", name: "Sevkiyat", parent_id: null, depth: 0 }),
+      ],
     });
     renderTree();
     await screen.findByText("Bütçe Onayı");

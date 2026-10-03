@@ -11,6 +11,7 @@ import { isDone, KIND, PRIORITY, PRIORITY_ORDER, STATUS, STATUS_ORDER, toIsoDay 
 import { useLookup } from "../../lib/lookup";
 import { Icon, type IconName } from "../../ui/icons";
 import { Button, cx, Due, Picker, Popover, PriorityTag, Status, TeamName, Tip, ui, useToast, Who } from "../../ui/ui";
+import { NodeTreePicker } from "../nodes/NodePicker";
 import { ACCESS } from "./Join";
 import s from "./record.module.css";
 
@@ -94,8 +95,7 @@ export function Properties({ d }: { d: RecordDetail }) {
           onChange={(v) => save({ field: "team_id", value: v }, { field: "team_id", value: r.team_id })} />
       </Row>
       <Row icon="tree" label="Birim">
-        <Picker look="prop" label="Birim" disabled={ro} busy={m.isPending} value={r.unit_id} search
-          options={L.units.map((n) => ({ value: n.id, label: n.name, depth: n.depth }))}
+        <NodeTreePicker rootKey="units" look="prop" label="Birim" disabled={ro || m.isPending} value={r.unit_id}
           onChange={(v) => save({ field: "unit_id", value: v }, { field: "unit_id", value: r.unit_id })} />
       </Row>
       {/* Pillar ORTOGONAL: agacta degil, ayri tablo (spec/22); birimden bagimsiz secilir. */}

@@ -1,0 +1,21 @@
+/* Veri Yonetimi'ne ozgu isaretler (spec/74): kilit, uyari, satir ici ayar. */
+
+.lock {
+  display: inline-flex;
+  color: var(--dim);
+}
+
+.warn {
+  display: inline-flex;
+  color: var(--warn);
+  cursor: help;
+}
+
+.attr {
+  padding: 0 6px;
+  border-radius: 5px;
+  background: var(--panel2);
+  color: var(--dim);
+  font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
+}

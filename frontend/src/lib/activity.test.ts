@@ -7,7 +7,7 @@ import { describe as sentence } from "./activity";
 import type { Lookup } from "./lookup";
 
 const meta: Meta = {
-  me: { id: "u1", is_admin: false, scopes: [], team_ids: [], profile_complete: true },
+  me: { id: "u1", is_admin: false, scopes: [], team_ids: [], profile_complete: true, favorite_nodes: [] },
   users: [],
   teams: [],
   pillars: [{ id: "p1", name: "Kalite", description: null, color: null, team_id: "t9", is_active: true, sort_order: 0 }],

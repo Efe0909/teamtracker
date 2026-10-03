@@ -51,38 +51,23 @@ sql_enum!(
     /// yapi, her aktif dugum birimdir.
     /// Buradaki `Task`, `RecordKind::Task` ile AYNI SEY DEGIL: biri agacta
     /// yapisal bir seviye, digeri kaydin turu.
+    /// Hangi turun nerede olabilecegini KOK SEMASI soyler (src/refdata.rs,
+    /// spec/74): Birimler'de cell/machine/task/step/generic, Etkinlik
+    /// Turleri'nde option/checkpoint/widget, Etkinlik Yerleri'nde location.
+    /// `operational` = kodun yarattigi slot (kokler + otomatik slotlar).
     NodeType {
         Cell => "cell", Machine => "machine",
         Task => "task", Step => "step", Operational => "operational", Generic => "generic",
+        // `option` Rust'ta Choice: `Option` adi derive kodundaki std Option'u golgeler.
+        Choice => "option", Checkpoint => "checkpoint", Widget => "widget", Location => "location",
     }
 );
 
-impl NodeType {
-    /// Ekranda gorunen TURKCE etiket. Anahtar Ingilizce, etiket Turkce
-    /// (CLAUDE.md "Kod dili").
-    pub fn label(self) -> &'static str {
-        match self {
-            NodeType::Cell => "Cell",               // IWS hucresi / operasyonel birim
-            NodeType::Machine => "Makine",          // atomik fonksiyonel birim
-            NodeType::Task => "Görev",
-            NodeType::Step => "Adım",
-            NodeType::Operational => "Operational", // davranis YOK — IWS kabi
-            NodeType::Generic => "Genel",           // davranis YOK — notr yer tutucu
-        }
-    }
-
-    pub const ALL: &'static [NodeType] = &[
-        NodeType::Cell, NodeType::Machine,
-        NodeType::Task, NodeType::Step, NodeType::Operational, NodeType::Generic,
-    ];
-
-    pub fn is_root_only(self) -> bool {
-        Self::ROOT_ONLY.contains(&self)
-    }
-
-    /// Yalniz KOKTE durabilen turler.
-    pub const ROOT_ONLY: &'static [NodeType] = &[NodeType::Cell];
-}
+sql_enum!(
+    /// `nodes.shape`: cocuklara izin. leaf = cocuk yok; list = butun cocuklar
+    /// ayni turde (cocuklarin kendi alt agaci olabilir); tree = serbest.
+    Shape { Leaf => "leaf", List => "list", Tree => "tree" }
+);
 
 sql_enum!(
     /// `team_members.role` — takim ICINDEKI konum. `roles` tablosu (yetki
@@ -100,14 +85,6 @@ sql_enum!(
     /// katilim kart blob'unda duruyor, ayri tablo yok (KNOW-281).
     /// Havuz kartinda yalniz `Yes` anlamli — `Maybe`/`No` cizilmez.
     SignupAnswer { Yes => "yes", Maybe => "maybe", No => "no" }
-);
-
-sql_enum!(
-    /// `events.kind` (spec/73). Tur, yeni etkinlige yuklenecek sablonu secer.
-    EventKind {
-        Meeting => "meeting", Training => "training", Social => "social",
-        Visit => "visit", Conference => "conference",
-    }
 );
 
 sql_enum!(

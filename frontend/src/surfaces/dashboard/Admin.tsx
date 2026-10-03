@@ -190,7 +190,8 @@ function PersonRow({ p, v, roleName, checked, onCheck }: {
   const direct = new Set(p.scopes.filter((r) => r.direct).map((r) => r.name));
   const grantable = v.scopes.filter((k) => !direct.has(k));
   const assignable = v.roles.filter((r) => !p.role_ids.includes(r.id));
-  const branches = L.meta.nodes.filter((n) => !p.node_ids.includes(n.id));
+  // Dal izni yalniz Birimler'de anlamli (spec/74 §4.4): diger kokler scope'la yonetilir.
+  const branches = L.meta.nodes.filter((n) => n.root_key === "units" && !p.node_ids.includes(n.id));
 
   return (
     <li className={s.person}>

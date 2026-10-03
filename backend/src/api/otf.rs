@@ -159,8 +159,10 @@ struct EventInfo {
 
 async fn event_info(pool: &PgPool, id: Uuid) -> Result<EventInfo> {
     sqlx::query_as(
-        "select title, date, to_char(start_time, 'HH24:MI') as start_time, place, attendees
-           from events where id = $1")
+        // Yer: listeden secildiyse dugum adi, yoksa metin (spec/74 §5b).
+        "select e.title, e.date, to_char(e.start_time, 'HH24:MI') as start_time,
+                coalesce(n.name, e.place) as place, e.attendees
+           from events e left join nodes n on n.id = e.location_id where e.id = $1")
         .bind(id).fetch_optional(pool).await?.ok_or(AppError::NotFound)
 }
 
