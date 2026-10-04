@@ -11,6 +11,7 @@
 | `20-sema.md` | veri şeması; bugün ne kurulu, ne bekliyor |
 | `21-sema-v2.md` | Rust portunun hedef şeması: `events` bölünmesi, ek sahipliği, kart blobu — **tasarım** |
 | `30-mobil.md` | mobil site çözümlemesi (kaynak ekranlardan uyarlama) |
+| `31-mobil-parite.md` | mobil arayüz paritesi ve geliştirme planı (`app.` yüzü) — **taslak** |
 | `40-push.md` | web push: hazır olan, eksik olan, denemeden çıkan dersler |
 | `50-yapi.md` | repo yapısı, iki site ayrımı, ayrık veritabanı yolu |
 | `60-kaynak-uyarlama.md` | kaynak panoların çözümlemesi |
@@ -37,6 +38,7 @@ Kaynak sistemden uyarlanacak ekranlar. Sıra, `app.py` içindeki `MODULES` kayd�
 |---|---|---|---|---|---|---|
 | — | Görev Yöneticisi | `gorevler` | var (git'te değil) | `referans/layout-a.html`, `60` 2.2 | — | **yazıldı** — v2 düzeni `60` 2.2 |
 | 30 | Mobil site (cep) | `app.<alan>` | var (git'te değil) | `spec/30-mobil.md` | — | **yazıldı** |
+| 31 | Mobil parite & plan | `app.<alan>` | yok | `spec/31-mobil-parite.md` | — | **taslak** |
 | 60 | Kart eylem şeridi | (`gorevler` kartı) | var (git'te değil) | `60-kaynak-uyarlama.md` 2.4 | — | **yazıldı** — sıradaki iş |
 | 60 | Ekipler | `ekipler` | var (git'te değil) | `60-kaynak-uyarlama.md` 2.5 | — | **yazıldı** — liste + takım sayfası + duvar |
 | | Kazanım Ağacı | `kazanim-agaci` | var (git'te değil) | `60-kaynak-uyarlama.md` 2.6 | | bekliyor |

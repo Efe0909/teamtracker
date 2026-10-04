@@ -176,6 +176,45 @@ ok "$(g w "/api/chats/$BCHAT/feed" | jq -r '.items[-1].body')" "sozlesme testi" 
 ok "$(w w POST "$WT" "/api/chats/$VCHAT/messages" "{\"body\":\"y\",\"reply_to_id\":\"$M\"}" | jq -r .error)" invalid_reply "sohbet disina yanit yok"
 ok "$(w w POST "$WT" "/api/chats/$BCHAT/messages" '{"body":"   "}' | jq -r .error)" invalid_body "bos mesaj"
 
+# Gelen kutusu: iliski tek satir, gizlilik ve yalniz MESAJ zamani.
+t chat_inbox
+ok "$(code "$B/api/chats/inbox")" 401 "oturumsuz"
+IT=$(DB "select team_id from team_members where user_id='$DENIZ' order by team_id limit 1")
+IC1=91000000-0000-0000-0000-000000000001
+IC2=91000000-0000-0000-0000-000000000002
+IC3=91000000-0000-0000-0000-000000000003
+IC4=91000000-0000-0000-0000-000000000004
+IC5=91000000-0000-0000-0000-000000000005
+IC6=91000000-0000-0000-0000-000000000006
+DB "insert into chats(id) values ('$IC1'),('$IC2'),('$IC3'),('$IC4'),('$IC5'),('$IC6');
+    insert into records(id,chat_id,unit_id,kind,title,created_by,owner_id,team_id,access_mode) values
+      ('$IC1','$IC1','$UNIT','task','Inbox owner','$SELIN','$DENIZ',null,'private'),
+      ('$IC2','$IC2','$UNIT','task','Inbox creator','$DENIZ',null,null,'private'),
+      ('$IC3','$IC3','$UNIT','task','Inbox participant','$SELIN',null,null,'private'),
+      ('$IC4','$IC4','$UNIT','task','Inbox team','$SELIN',null,'$IT','private'),
+      ('$IC5','$IC5','$UNIT','task','Inbox unrelated','$SELIN',null,null,'private'),
+      ('$IC6','$IC6','$UNIT','task','Inbox empty','$DENIZ','$DENIZ','$IT','private');
+    insert into record_participants(record_id,user_id) values ('$IC3','$DENIZ'),('$IC6','$DENIZ');
+    insert into messages(id,chat_id,author_id,body,created_at) values
+      ('92000000-0000-0000-0000-000000000001','$IC1','$SELIN','old','2099-01-02'),
+      ('92000000-0000-0000-0000-000000000002','$IC1','$DENIZ','latest','2099-01-02'),
+      ('92000000-0000-0000-0000-000000000003','$IC2','$DENIZ','creator','2099-01-02'),
+      ('92000000-0000-0000-0000-000000000004','$IC3','$DENIZ','participant','2099-01-03');
+    insert into activity(chat_id,actor_id,verb,subject_label,detail,created_at)
+      values ('$IC1','$SELIN','field_changed','Inbox owner','{\"from\":\"a\",\"to\":\"b\"}','2099-01-04');" >/dev/null
+R=$(g n /api/chats/inbox)
+ok "$(jq -c '.[0]|keys' <<<"$R")" '["can_post","chat_id","kind","last_actor_id","last_message","record_id","team_id","title","updated_at"]' "sozlesme, sahte unread yok"
+ok "$(jq -c '[.[]|select(.title|startswith("Inbox "))|.chat_id]' <<<"$R")" "[\"$IC3\",\"$IC1\",\"$IC2\",\"$IC4\",\"$IC6\"]" "mesaj sirasi, baglar, tekillik"
+ok "$(jq -r ".[]|select(.chat_id==\"$IC1\")|.last_message" <<<"$R")" latest "esit zamanda id; faaliyet degil"
+ok "$(jq -r ".[]|select(.chat_id==\"$IC1\")|.last_actor_id" <<<"$R")" "$DENIZ" "son mesajin yazari"
+ok "$(jq -r ".[]|select(.chat_id==\"$IC4\")|.record_id+\"|\"+.team_id" <<<"$R")" "$IC4|$IT" "kayit navigasyonu"
+ok "$(jq -r ".[]|select(.kind==\"team\" and .team_id==\"$IT\")|(.record_id==null and .can_post)" <<<"$R")" true "takim navigasyonu"
+ok "$(jq '[.[]|select(.title|startswith("Inbox "))|.can_post]|all' <<<"$R")" true "iliskililer yazabilir"
+ok "$(jq ".[]|select(.chat_id==\"$IC6\")|(.last_message==null and .updated_at==null)" <<<"$R")" true "mesajsiz sohbet"
+ok "$(g n "/api/chats/$IC5/feed" | jq -r .error)" forbidden "iliskisiz gizli sohbet sizmaz"
+DB "delete from records where id in ('$IC1','$IC2','$IC3','$IC4','$IC5','$IC6');
+    delete from chats where id in ('$IC1','$IC2','$IC3','$IC4','$IC5','$IC6');" >/dev/null
+
 t create_record_open_to_all
 # Kayit acmak herkese, her birimde acik (kullanici karari, spec/90 G1): UNIT
 # Deniz'in dali (Uretim Hatti A) DISINDA ve yine 200.
@@ -612,6 +651,10 @@ ok "$(w w POST "$WT" "/api/chats/$VCHAT/messages" "{\"body\":\"\",\"attachment_i
 MID=$(w n POST "$NT" "/api/chats/$VCHAT/messages" "{\"body\":\"\",\"attachment_ids\":[\"$A1\"]}" | jq -r .id)
 ok "$(g n "/api/chats/$VCHAT/feed" | jq -r ".attachments[\"$MID\"][0].id")" "$A1" "akista mesajin eki"
 ok "$(w w POST "$WT" "/api/chats/$VCHAT/messages" "{\"body\":\"x\",\"attachment_ids\":[\"$A1\"]}" | jq -r .error)" invalid_attachment "ek iki kez baglanmaz"
+ok "$(w n POST "$NT" "/api/chats/$BCHAT/messages" "{\"body\":\"\",\"attachment_ids\":[\"$A1\"]}" | jq -r .error)" invalid_attachment "kamera eki baska hedefte tekrar kullanilmaz"
+A2=$(up n "$NT" "$J/px.png" | jq -r .id)
+M2=$(w n POST "$NT" "/api/chats/$BCHAT/messages" "{\"body\":\"\",\"attachment_ids\":[\"$A2\"]}" | jq -r .id)
+ok "$(g n "/api/chats/$BCHAT/feed" | jq -r ".attachments[\"$M2\"][0].id")" "$A2" "ayni fotograf hedefe bagimsiz yuklenir"
 
 t attachment_tags
 ok "$(wc_ n POST "$NT" "/api/attachments/$A1/tags" '{"name":"İstanbul"}')" 403 "tag_media yoksa 403"

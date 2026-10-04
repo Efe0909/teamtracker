@@ -496,6 +496,18 @@ export interface Feed {
   attachments: Partial<Record<Uuid, Attachment[]>>;
 }
 
+export interface InboxChat {
+  chat_id: Uuid;
+  title: string;
+  kind: "team" | "record";
+  last_message: string | null;
+  last_actor_id: Uuid | null;
+  record_id: Uuid | null;
+  team_id: Uuid | null;
+  can_post: boolean;
+  updated_at: IsoTime | null;
+}
+
 // --- ana sayfa, takimlar, bildirimler ---------------------------------------
 
 export interface Home {

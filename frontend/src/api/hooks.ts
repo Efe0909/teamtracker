@@ -22,6 +22,7 @@ import type {
   OtfView,
   WidgetType,
   Feed,
+  InboxChat,
   Home,
   Meta,
   MyAction,
@@ -55,6 +56,7 @@ export const keys = {
   recordsAll: ["records"] as const,
   record: (id: Uuid) => ["record", id] as const,
   feed: (chat: Uuid) => ["feed", chat] as const,
+  inbox: ["inbox"] as const,
   teams: ["teams"] as const,
   team: (id: Uuid) => ["team", id] as const,
   notifications: ["notifications"] as const,
@@ -116,6 +118,14 @@ export function useFeed(chat: Uuid | undefined) {
     queryFn: () => request<Feed>("GET", `/api/chats/${chat ?? ""}/feed`),
     enabled: chat !== undefined,
     refetchInterval: 15_000,
+  });
+}
+
+export function useInbox() {
+  return useQuery({
+    queryKey: keys.inbox,
+    queryFn: () => request<InboxChat[]>("GET", "/api/chats/inbox"),
+    refetchInterval: 30_000,
   });
 }
 
@@ -390,6 +400,34 @@ export function useCardWrite() {
   });
 }
 
+export function useSendMessage() {
+  const qc = useQueryClient();
+  return useMutation({
+    retry: false,
+    mutationFn: async ({ chat, ...message }: { chat: Uuid; body: string; reply_to_id: Uuid | null; attachment_ids: Uuid[] }) => {
+      try {
+        return await request<{ id: Uuid }>("POST", `/api/chats/${chat}/messages`, message);
+      } catch (error) {
+        // Yanit kaybolduysa ayni ekle ikinci mesaj gonderme. Ek tek mesaja aittir.
+        if (message.attachment_ids.length > 0) {
+          try {
+            const feed = await request<Feed>("GET", `/api/chats/${chat}/feed`);
+            const linked = Object.entries(feed.attachments).find(([, attachments]) =>
+              message.attachment_ids.every((id) => attachments?.some((attachment) => attachment.id === id)));
+            if (linked !== undefined) return { id: linked[0] };
+          } catch { /* asil gonderim hatasini koru */ }
+        }
+        throw error;
+      }
+    },
+    onSuccess: (_, message) => {
+      void qc.invalidateQueries({ queryKey: keys.feed(message.chat) });
+      void qc.invalidateQueries({ queryKey: keys.recordsAll });
+      void qc.invalidateQueries({ queryKey: keys.inbox });
+    },
+  });
+}
+
 export function usePostMessage(chat: Uuid) {
   const qc = useQueryClient();
   return useMutation({
@@ -398,6 +436,7 @@ export function usePostMessage(chat: Uuid) {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: keys.feed(chat) });
       void qc.invalidateQueries({ queryKey: keys.recordsAll });
+      void qc.invalidateQueries({ queryKey: keys.inbox });
     },
   });
 }

@@ -11,15 +11,17 @@ const EVENT = "ekiptakip:navigate";
 
 function subscribe(cb: () => void): () => void {
   window.addEventListener("popstate", cb);
+  window.addEventListener("hashchange", cb);
   window.addEventListener(EVENT, cb);
   return () => {
     window.removeEventListener("popstate", cb);
+    window.removeEventListener("hashchange", cb);
     window.removeEventListener(EVENT, cb);
   };
 }
 
 function snapshot(): string {
-  return location.pathname + location.search;
+  return location.pathname + location.search + location.hash;
 }
 
 /** Guncel yol + sorgu. Degisince bilesen yeniden cizilir. */

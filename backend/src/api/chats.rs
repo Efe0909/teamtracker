@@ -59,6 +59,51 @@ pub struct Feed {
     attachments: HashMap<Uuid, Vec<AttachView>>,
 }
 
+#[derive(Serialize, sqlx::FromRow)]
+pub struct InboxChat {
+    chat_id: Uuid,
+    title: String,
+    kind: String, // "team" | "record"
+    record_id: Option<Uuid>,
+    team_id: Option<Uuid>,
+    can_post: bool,
+    last_message: Option<String>,
+    last_actor_id: Option<Uuid>,
+    updated_at: Option<DateTime<Utc>>,
+}
+
+pub async fn inbox(
+    State(st): State<AppState>, CurrentUser(me): CurrentUser,
+) -> Result<Json<Vec<InboxChat>>> {
+    // Kisisel gelen kutusu: admin/dal izniyle gorulebilen HER sohbet degil,
+    // iliskili olduklarim. Bu iliskilerin hepsi mevcut yazma kuralini saglar.
+    // Okunmamis bilgisi yok: notifications_seen_at sohbet okuma zamani degil.
+    let rows: Vec<InboxChat> = sqlx::query_as(
+        r#"WITH my_chats AS (
+          SELECT t.chat_id, t.name as title, 'team' as kind,
+                 null::uuid as record_id, t.id as team_id
+          FROM teams t
+          WHERE EXISTS (SELECT 1 FROM team_members m WHERE m.team_id = t.id AND m.user_id = $1)
+          UNION ALL
+          SELECT r.chat_id, r.title, 'record' as kind, r.id as record_id, r.team_id
+          FROM records r
+          WHERE r.owner_id = $1 OR r.created_by = $1
+             OR EXISTS (SELECT 1 FROM record_participants p WHERE p.record_id = r.id AND p.user_id = $1)
+             OR EXISTS (SELECT 1 FROM team_members m WHERE m.team_id = r.team_id AND m.user_id = $1)
+        )
+        SELECT c.chat_id, c.title, c.kind, c.record_id, c.team_id, true as can_post,
+               m.body as last_message, m.author_id as last_actor_id, m.created_at as updated_at
+        FROM my_chats c
+        LEFT JOIN LATERAL (
+          SELECT body, author_id, created_at FROM messages WHERE chat_id = c.chat_id
+          ORDER BY created_at DESC, id DESC LIMIT 1
+        ) m ON true
+        ORDER BY m.created_at DESC NULLS LAST, c.chat_id"#
+    ).bind(me.id).fetch_all(&st.pool).await?;
+
+    Ok(Json(rows))
+}
+
 async fn chat_exists(st: &AppState, chat: Uuid) -> Result<()> {
     let ok: Option<i32> = sqlx::query_scalar("select 1 from chats where id = $1")
         .bind(chat).fetch_optional(&st.pool).await?;

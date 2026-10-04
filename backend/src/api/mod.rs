@@ -78,6 +78,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/material-providers/{id}", delete(events::delete_provider))
         .route("/api/chats/{id}/feed", get(chats::feed))
         .route("/api/chats/{id}/messages", post(chats::post))
+        .route("/api/chats/inbox", get(chats::inbox))
         .route("/api/teams", get(home::teams).post(teams::create_team))
         .route("/api/teams/{id}",
             get(home::team).patch(teams::patch_team).delete(teams::delete_team))
