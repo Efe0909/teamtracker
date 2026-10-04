@@ -59,6 +59,53 @@ pub struct Feed {
     attachments: HashMap<Uuid, Vec<AttachView>>,
 }
 
+#[derive(Serialize, sqlx::FromRow)]
+pub struct InboxChat {
+    chat_id: Uuid,
+    title: String,
+    kind: String, // "team" | "record"
+    last_message: Option<String>,
+    last_actor_id: Option<Uuid>,
+    is_activity: bool,
+    updated_at: Option<DateTime<Utc>>,
+    unread: bool,
+}
+
+pub async fn inbox(
+    State(st): State<AppState>, CurrentUser(me): CurrentUser,
+) -> Result<Json<Vec<InboxChat>>> {
+    let seen: Option<DateTime<Utc>> = sqlx::query_scalar("select notifications_seen_at from users where id = $1")
+        .bind(me.id).fetch_one(&st.pool).await?;
+
+    let rows: Vec<InboxChat> = sqlx::query_as(
+        r#"WITH my_chats AS (
+          SELECT t.chat_id, t.name as title, 'team' as kind
+          FROM teams t
+          JOIN team_members m ON m.team_id = t.id
+          WHERE m.user_id = $1
+          UNION ALL
+          SELECT r.chat_id, r.title, 'record' as kind
+          FROM records r
+          JOIN record_participants p ON p.record_id = r.id
+          WHERE p.user_id = $1
+        ),
+        latest_msgs AS (
+          SELECT DISTINCT ON (chat_id) chat_id, body, actor_id, created_at, kind = 'activity' as is_activity
+          FROM chat_feed
+          WHERE chat_id IN (SELECT chat_id FROM my_chats)
+          ORDER BY chat_id, created_at DESC
+        )
+        SELECT c.chat_id, c.title, c.kind, m.body as last_message, m.actor_id as last_actor_id,
+               COALESCE(m.is_activity, false) as is_activity, m.created_at as updated_at,
+               COALESCE(m.created_at > $2, false) as unread
+        FROM my_chats c
+        LEFT JOIN latest_msgs m ON m.chat_id = c.chat_id
+        ORDER BY m.created_at DESC NULLS LAST"#
+    ).bind(me.id).bind(seen).fetch_all(&st.pool).await?;
+
+    Ok(Json(rows))
+}
+
 async fn chat_exists(st: &AppState, chat: Uuid) -> Result<()> {
     let ok: Option<i32> = sqlx::query_scalar("select 1 from chats where id = $1")
         .bind(chat).fetch_optional(&st.pool).await?;

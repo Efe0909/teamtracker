@@ -4,9 +4,10 @@
 import type { Uuid } from "../../api/types";
 
 export type Route =
-  | { name: "todo"; done: boolean }
-  | { name: "search"; q: string }
   | { name: "actions" }
+  | { name: "teams" }
+  | { name: "chats" }
+  | { name: "search"; q: string }
   | { name: "notifications" }
   | { name: "record"; id: Uuid }
   | { name: "team"; id: Uuid }
@@ -16,10 +17,11 @@ export type Route =
 export function parse(url: URL): Route {
   const seg = url.pathname.split("/").filter(Boolean);
   const [a, b] = seg;
-  if (seg.length === 0) return { name: "todo", done: url.searchParams.get("tab") === "done" };
+  if (seg.length === 0) return { name: "actions" };
   if (seg.length === 1) {
     if (a === "search") return { name: "search", q: url.searchParams.get("q") ?? "" };
-    if (a === "actions") return { name: "actions" };
+    if (a === "teams") return { name: "teams" };
+    if (a === "chats") return { name: "chats" };
     if (a === "notifications") return { name: "notifications" };
     if (a === "new") return { name: "new" };
   }
@@ -32,12 +34,14 @@ export function parse(url: URL): Route {
 
 export function href(r: Route): string {
   switch (r.name) {
-    case "todo":
-      return r.done ? "/?tab=done" : "/";
+    case "actions":
+      return "/";
     case "search":
       return r.q === "" ? "/search" : `/search?q=${encodeURIComponent(r.q)}`;
-    case "actions":
-      return "/actions";
+    case "teams":
+      return "/teams";
+    case "chats":
+      return "/chats";
     case "notifications":
       return "/notifications";
     case "record":

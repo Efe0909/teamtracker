@@ -22,6 +22,7 @@ import type {
   OtfView,
   WidgetType,
   Feed,
+  InboxChat,
   Home,
   Meta,
   MyAction,
@@ -54,6 +55,7 @@ export const keys = {
   recordsAll: ["records"] as const,
   record: (id: Uuid) => ["record", id] as const,
   feed: (chat: Uuid) => ["feed", chat] as const,
+  inbox: ["inbox"] as const,
   teams: ["teams"] as const,
   team: (id: Uuid) => ["team", id] as const,
   notifications: ["notifications"] as const,
@@ -115,6 +117,14 @@ export function useFeed(chat: Uuid | undefined) {
     queryFn: () => request<Feed>("GET", `/api/chats/${chat ?? ""}/feed`),
     enabled: chat !== undefined,
     refetchInterval: 15_000,
+  });
+}
+
+export function useInbox() {
+  return useQuery({
+    queryKey: keys.inbox,
+    queryFn: () => request<InboxChat[]>("GET", "/api/chats/inbox"),
+    refetchInterval: 30_000,
   });
 }
 

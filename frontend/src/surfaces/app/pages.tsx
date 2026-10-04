@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { NotifySettings } from "../../features/profile/NotifySettings";
-import { useMarkSeen, useMyActions, useNotifications, useRecords } from "../../api/hooks";
+import { useMarkSeen, useMyActions, useNotifications, useRecords, useInbox } from "../../api/hooks";
 import type { MyAction, RecordSummary } from "../../api/types";
 import { NewRecordForm } from "../../features/record/NewRecordForm";
 import { describe } from "../../lib/activity";
@@ -64,74 +64,6 @@ export function RecordList({ rows, empty }: { rows: RecordSummary[] | undefined;
       {rows.map((r) => (
         <RecordCard key={r.id} r={r} />
       ))}
-    </>
-  );
-}
-
-// --- yapilacaklar ----------------------------------------------------------
-
-const HINT_KEY = "hint:a2hs";
-
-function readHint(): boolean {
-  // Ana ekrandan aciksa ipucu anlamsiz. `navigator.standalone` yalniz iOS'ta;
-  // display-mode sorgusu digerleri (ve yeni iOS) icin.
-  const standalone =
-    matchMedia("(display-mode: standalone)").matches ||
-    ("standalone" in navigator && navigator.standalone === true);
-  if (standalone) return false;
-  try {
-    return localStorage.getItem(HINT_KEY) !== "off";
-  } catch {
-    return true;
-  }
-}
-
-export function TodoPage({ done }: { done: boolean }) {
-  const rows = useRecords({ quick: "mine", done: done ? "true" : "false", sort: "activity" });
-  const [hint, setHint] = useState(readHint);
-  return (
-    <>
-      <TopBar title="Yapılacaklar" />
-      <div className={s.stickyBar}>
-        <Segmented
-          label="Kayıtlar"
-          value={done ? "done" : "open"}
-          onChange={(v) => navigate(href({ name: "todo", done: v === "done" }), { replace: true })}
-          options={[
-            { value: "open", label: "Yapılacak" },
-            { value: "done", label: "Tamamlandı" },
-          ]}
-        />
-      </div>
-      <div className={s.pad}>
-        {hint && (
-          // Kapatilabilir (spec/16 P2 #15); uygulama olarak aciksa hic gorunmez.
-          <div className={s.hint} role="note">
-            <p>
-              <b>Ana ekrana ekle:</b> Safari'de Paylaş → Ana Ekrana Ekle. Uygulama gibi açılır.
-            </p>
-            <button
-              type="button"
-              className={ui.iconBtn}
-              aria-label="İpucunu kapat"
-              onClick={() => {
-                setHint(false);
-                try {
-                  localStorage.setItem(HINT_KEY, "off");
-                } catch {
-                  /* depolama kapali */
-                }
-              }}
-            >
-              <Icon name="x" size={18} />
-            </button>
-          </div>
-        )}
-        <RecordList
-          rows={rows.data}
-          empty={done ? "Kapanan kaydın yok." : "Sana atanan, açtığın ya da dahil olduğun açık kayıt yok."}
-        />
-      </div>
     </>
   );
 }
@@ -269,11 +201,37 @@ function bucket(a: MyAction): string {
 const BUCKETS = ["Geciken", "Bu hafta", "Sonra", "Tarihsiz"];
 
 export function ActionsPage() {
+  const L = useLookup();
   const q = useMyActions();
+  const recs = useRecords({ quick: "mine", done: "false", sort: "activity" });
+  const [openRecords, setOpenRecords] = useState(false);
+  const myRecords = recs.data?.filter(r => r.owner_id === L.me.id) ?? [];
+
   return (
     <>
-      <TopBar title="Eylemlerim" />
+      <TopBar title="Eylemler" />
       <div className={s.pad}>
+        {myRecords.length > 0 && (
+          <div style={{ marginBottom: "var(--s-4)" }}>
+            <button
+              type="button"
+              className={s.card}
+              onClick={() => setOpenRecords(!openRecords)}
+              style={{ background: "var(--tint)", padding: "var(--s-2) var(--s-3)", minHeight: 40 }}
+            >
+              <span className={s.cardBody} style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontWeight: 600 }}>Sahibi Olduğum Kayıtlar ({myRecords.length})</span>
+                <Icon name={openRecords ? "up" : "down"} size={16} />
+              </span>
+            </button>
+            {openRecords && (
+              <div style={{ marginTop: "var(--s-2)", display: "flex", flexDirection: "column", gap: "var(--s-2)" }}>
+                {myRecords.map(r => <RecordCard key={r.id} r={r} />)}
+              </div>
+            )}
+          </div>
+        )}
+        
         {q.data === undefined ? (
           <Loading />
         ) : q.data.length === 0 ? (
@@ -376,6 +334,74 @@ export function NewPage() {
       <TopBar title="Yeni kayıt" back />
       <div className={s.pad}>
         <NewRecordForm onCreated={(id) => navigate(href({ name: "record", id }), { replace: true })} />
+      </div>
+    </>
+  );
+}
+
+// --- takimlar --------------------------------------------------------------
+
+export function TeamsListPage() {
+  const L = useLookup();
+  const myTeams = L.meta.teams.filter(t => L.me.team_ids.includes(t.id));
+  return (
+    <>
+      <TopBar title="Takımlar" />
+      <div className={s.pad}>
+        {myTeams.length === 0 ? (
+          <Empty title="Takımın yok">Henüz bir takıma dahil değilsin.</Empty>
+        ) : (
+          myTeams.map(t => (
+            <Link key={t.id} href={href({ name: "team", id: t.id })} className={s.card}>
+              <span className={s.cardBody}>
+                <span className={s.cardTitle}>{t.name}</span>
+                {t.description && <span className={s.cardPath}>{t.description}</span>}
+              </span>
+              <span className={s.chev}>
+                <Icon name="chevron" size={20} />
+              </span>
+            </Link>
+          ))
+        )}
+      </div>
+    </>
+  );
+}
+
+// --- konusmalar ------------------------------------------------------------
+
+export function ChatsPage() {
+  const q = useInbox();
+  return (
+    <>
+      <TopBar title="Konuşmalar" />
+      <div className={s.pad}>
+        {q.data === undefined ? (
+          <Loading />
+        ) : q.data.length === 0 ? (
+          <Empty title="Sohbet yok">Dahil olduğun takım veya kayıt sohbeti bulunmuyor.</Empty>
+        ) : (
+          q.data.map(c => {
+            const to = c.kind === "team" ? href({ name: "team", id: c.chat_id }) : href({ name: "record", id: c.chat_id });
+            return (
+              <Link key={c.chat_id} href={to} className={cx(s.card, c.unread && s.cardUnread)}>
+                <span className={s.cardBody}>
+                  <span className={s.cardTags}>
+                    <Tag tone="neutral">{c.kind === "team" ? "Takım" : "Kayıt"}</Tag>
+                  </span>
+                  <span className={s.cardTitle} style={{ fontWeight: c.unread ? 700 : 500 }}>{c.title}</span>
+                  {c.last_message && (
+                    <span className={s.cardPath} style={{ color: c.unread ? "var(--txt)" : "var(--dim)" }}>
+                      {c.last_message}
+                    </span>
+                  )}
+                  {c.updated_at && <span className={s.cardMeta}>{ago(c.updated_at)}</span>}
+                </span>
+                {c.unread && <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--acc-strong)" }} />}
+              </Link>
+            );
+          })
+        )}
       </div>
     </>
   );
