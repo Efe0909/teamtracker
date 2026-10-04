@@ -13,6 +13,7 @@ import { Icon } from "../../ui/icons";
 import { Button, Dialog, Picker, PriorityTag, TeamName, ui, Who } from "../../ui/ui";
 import { NodeTreePicker, useNodesOf } from "../nodes/NodePicker";
 import { ACCESS } from "./Join";
+import { QualityNote } from "./QualityNote";
 import s from "./form.module.css";
 
 export function NewRecordForm(props: {
@@ -67,7 +68,7 @@ export function NewRecordForm(props: {
           placeholder="Açıklama: ne yapılacak, neden, kim için?" rows={4} aria-label="Açıklama" />
         <small className={ui.fieldHint}>{desc.trim().length}/30 karakter</small>
       </div>
-      {L.meta.external_off?.includes("decision") && <p className={ui.fieldHint}>Kalite kontrolü kapalı (dış servis devre dışı)</p>}
+      <QualityNote />
 
       <div className={s.chips} role="group" aria-label="Özellikler">
         <Picker look="chip" active label="Tür" value={kind} onChange={setKind}

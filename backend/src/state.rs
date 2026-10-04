@@ -67,19 +67,19 @@ impl AppState {
         let http = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(10))
             .build()?;
-        // Dis servis kapisi TEK: `external_on` (EKIPTAKIP_EXTERNAL_OFF + anahtar).
+        // Dis servis kapisi TEK: `external_on` (manifest external_off + anahtar).
         let vapid = cfg.external_on(Service::Push)
             .then(|| crate::webpush::Vapid::new(&cfg.vapid_private, &cfg.vapid_sub)).flatten().map(Arc::new);
         if vapid.is_none() {
-            tracing::info!("web push kapali (VAPID_PRIVATE yok/bozuk ya da EKIPTAKIP_EXTERNAL_OFF)");
+            tracing::info!("web push kapali (VAPID_PRIVATE yok/bozuk ya da manifest external_off)");
         }
         let mailer = cfg.external_on(Service::Resend)
             .then(|| crate::mail::Resend::new(&cfg)).flatten().map(Arc::new);
         if mailer.is_none() {
-            tracing::info!("posta kapali (RESEND_API_KEY yok ya da EKIPTAKIP_EXTERNAL_OFF): yalniz kuyruga yazilir");
+            tracing::info!("posta kapali (RESEND_API_KEY yok ya da manifest external_off): yalniz kuyruga yazilir");
         }
         if !cfg.external_on(Service::Decision) {
-            tracing::info!("kalite kontrolu kapali (OPENROUTER_API_KEY yok ya da EKIPTAKIP_EXTERNAL_OFF): yalniz uzunluk kurali");
+            tracing::info!("kalite kontrolu kapali (OPENROUTER_API_KEY yok ya da manifest external_off): yalniz uzunluk kurali");
         }
         Ok(AppState {
             vapid,

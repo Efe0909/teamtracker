@@ -49,8 +49,12 @@ pub struct Config {
     /// Karar modeli (spec/76): anahtar bos ise kalite kontrolu KAPALI.
     pub decision_key: String,
     pub decision_model: String,
-    /// `EKIPTAKIP_EXTERNAL_OFF`: elle kapatilan dis servisler (KNOW-358).
+    /// Manifest `external_off`: elle kapatilan dis servisler (KNOW-358).
     pub external_off: Vec<String>,
+
+    /// Manifest: uygulama surumu ve gelistirici e-postasi (`/api/meta`).
+    pub version: String,
+    pub contact_email: String,
 
     pub env: Env,
 }
@@ -67,13 +71,45 @@ impl Service {
     }
 }
 
-/// "all" ya da virgullu liste; bosluk ve buyuk harf onemsiz.
-fn parse_off(raw: &str) -> Vec<String> {
-    raw.split(',').map(|s| s.trim().to_lowercase()).filter(|s| !s.is_empty()).collect()
-}
-
 fn listed(off: &[String], s: Service) -> bool {
     off.iter().any(|o| o == "all" || o == s.key())
+}
+
+/// Gizli OLMAYAN ayarlar (`backend/manifest.json`). Sirlar agenix ortam
+/// dosyasinda kalir; bunlar ise degisince sifrelemeyle ugrasilmasin diye
+/// burada. Varsayilan gomulu kopya; `EKIPTAKIP_MANIFEST` bir dosya yolu
+/// verirse (NixOS modulu `manifest` secenegi) ikili yeniden derlenmeden o okunur.
+#[derive(serde::Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct Manifest {
+    pub version: String,
+    /// Gelistirici iletisimi: web push `sub` varsayilani ve kisisel veri notundaki adres.
+    pub contact_email: String,
+    /// `all` ya da `decision` | `resend` | `push`; bilinmeyen ad acilisi durdurur.
+    pub external_off: Vec<String>,
+    pub decision_model: String,
+}
+
+const EMBEDDED_MANIFEST: &str = include_str!("../manifest.json");
+
+impl Manifest {
+    pub fn load() -> Result<Self, String> {
+        let raw = match var("EKIPTAKIP_MANIFEST").as_str() {
+            "" => EMBEDDED_MANIFEST.to_string(),
+            path => std::fs::read_to_string(path)
+                .map_err(|e| format!("EKIPTAKIP_MANIFEST okunamadi ({path}): {e}"))?,
+        };
+        Self::parse(&raw)
+    }
+
+    fn parse(raw: &str) -> Result<Self, String> {
+        let mut m: Manifest = serde_json::from_str(raw).map_err(|e| format!("manifest.json gecersiz: {e}"))?;
+        m.external_off = m.external_off.iter().map(|s| s.trim().to_lowercase()).collect();
+        if let Some(bad) = m.external_off.iter().find(|o| *o != "all" && !Service::ALL.iter().any(|s| s.key() == *o)) {
+            return Err(format!("manifest.json external_off: bilinmeyen servis '{bad}'"));
+        }
+        Ok(m)
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -127,6 +163,7 @@ impl Config {
             v => v.parse().map_err(|_| format!("EKIPTAKIP_BIND gecersiz: {v}"))?,
         };
 
+        let manifest = Manifest::load()?;
         let database_url = env::var("DATABASE_URL")
             .map_err(|_| "DATABASE_URL tanimli degil".to_string())?;
 
@@ -151,16 +188,17 @@ impl Config {
             mail_api_url: Some(var("RESEND_API_URL")).filter(|s| !s.is_empty())
                 .unwrap_or_else(|| "https://api.resend.com/emails".into()),
             vapid_sub: Some(var("VAPID_SUB")).filter(|s| !s.is_empty())
-                .unwrap_or_else(|| "mailto:yonetici@polonyum.com".into()),
+                .unwrap_or_else(|| format!("mailto:{}", manifest.contact_email)),
             bootstrap_admins_file: Some(var("EKIPTAKIP_BOOTSTRAP_ADMINS_FILE")).filter(|s| !s.is_empty()),
             club_name: Some(var("EKIPTAKIP_CLUB_NAME")).filter(|s| !s.is_empty())
                 .unwrap_or_else(|| "ÖzÜ Maker Kulübü".into()),
             club_code: Some(var("EKIPTAKIP_CLUB_CODE")).filter(|s| !s.is_empty())
                 .unwrap_or_else(|| "OZUMAKER".into()),
             decision_key: var("OPENROUTER_API_KEY"),
-            decision_model: Some(var("EKIPTAKIP_DECISION_MODEL")).filter(|s| !s.is_empty())
-                .unwrap_or_else(|| "respan/span-01-lite".into()),
-            external_off: parse_off(&var("EKIPTAKIP_EXTERNAL_OFF")),
+            decision_model: manifest.decision_model,
+            external_off: manifest.external_off,
+            version: manifest.version,
+            contact_email: manifest.contact_email,
             env,
         })
     }
@@ -206,14 +244,30 @@ impl Config {
 mod tests {
     use super::*;
 
+    fn manifest(off: &str) -> Result<Manifest, String> {
+        Manifest::parse(&format!(
+            r#"{{"version":"1.2.3","contact_email":"a@b.c","external_off":{off},"decision_model":"m"}}"#))
+    }
+
     #[test]
     fn dis_servis_listesi() {
-        let off = parse_off(" Decision , push,,");
+        let off = manifest(r#"[" Decision ","push"]"#).unwrap().external_off;
         assert_eq!(off, ["decision", "push"]);
         assert!(listed(&off, Service::Decision) && listed(&off, Service::Push));
         assert!(!listed(&off, Service::Resend));
-        let all = parse_off("ALL");
+        let all = manifest(r#"["ALL"]"#).unwrap().external_off;
         assert!(Service::ALL.iter().all(|s| listed(&all, *s)));
-        assert!(parse_off("").is_empty());
+        assert!(manifest("[]").unwrap().external_off.is_empty());
+        // Yazim hatasi sessizce "acik" birakmaz.
+        assert!(manifest(r#"["desicion"]"#).is_err());
+    }
+
+    /// Gomulu manifest gecerli ve surum tek yerde: Cargo.toml + package.json ayni.
+    #[test]
+    fn gomulu_manifest_ve_surum_tutarli() {
+        let m = Manifest::parse(EMBEDDED_MANIFEST).unwrap();
+        assert_eq!(m.version, env!("CARGO_PKG_VERSION"), "manifest.json ile Cargo.toml surumu ayristi");
+        let pkg: serde_json::Value = serde_json::from_str(include_str!("../../frontend/package.json")).unwrap();
+        assert_eq!(pkg["version"], m.version.as_str(), "manifest.json ile package.json surumu ayristi");
     }
 }

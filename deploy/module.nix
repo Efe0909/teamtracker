@@ -48,6 +48,17 @@ in
       '';
     };
 
+    manifest = lib.mkOption {
+      type = lib.types.nullOr lib.types.path;
+      default = null;
+      description = ''
+        Gizli olmayan ayarlar (surum, iletisim e-postasi, kapali dis servisler,
+        karar modeli) — backend/manifest.json bicimi. Verilmezse ikilideki
+        gomulu kopya kullanilir; verilirse yeniden derlemeden yalniz bu dosya
+        degisir. Sirlar yine `environmentFile`'da.
+      '';
+    };
+
     port = lib.mkOption {
       type = lib.types.port;
       default = 8000;
@@ -110,6 +121,8 @@ in
         # sqlx'te `Configuration(EmptyHost)` ile acilista patliyor. Kullanici
         # sorgu parametresi olarak verilir.
         DATABASE_URL = "postgresql:///ekiptakip?host=/run/postgresql&user=ekiptakip";
+      } // lib.optionalAttrs (cfg.manifest != null) {
+        EKIPTAKIP_MANIFEST = toString cfg.manifest;
       } // lib.optionalAttrs (cfg.bootstrapAdminsFile != null) {
         # %d = systemd kimlik dizini ($CREDENTIALS_DIRECTORY), yalniz bu servis okur.
         EKIPTAKIP_BOOTSTRAP_ADMINS_FILE = "%d/bootstrap-admins";

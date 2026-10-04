@@ -6,6 +6,7 @@
 //! Servis kapali/erisilemez ise SESSIZCE gecer (uyari loga): uzunluk kurali
 //! yine de API'de.
 
+use serde::Serialize;
 use serde_json::{json, Value};
 
 use crate::{config::Service, error::AppError, state::AppState};
@@ -83,37 +84,78 @@ fn verdict(kind: Kind, resp: &Value) -> Option<Verdict> {
     Some(if reasons.is_empty() { Verdict::Pass } else { Verdict::Low { reasons } })
 }
 
-pub async fn assess(st: &AppState, kind: Kind, state: &str) -> Verdict {
-    if !st.cfg.external_on(Service::Decision) {
-        return Verdict::Skipped;
+/// Yanitta gorunen karar: `outcome` (pass | low | skipped), modelin kendi
+/// `model`/`provider` alanlari ve soru basina `answers` (noul = evet olasiligi).
+/// Saklanmaz; yalniz degerlendirmeyi tetikleyen PATCH yanitinda doner.
+#[derive(Debug, Serialize, PartialEq)]
+pub struct Quality {
+    pub outcome: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provider: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub answers: Option<Value>,
+    pub reasons: Vec<&'static str>,
+}
+
+impl Quality {
+    fn skipped(model: Option<String>) -> Self {
+        Quality { outcome: "skipped", model, provider: None, answers: None, reasons: vec![] }
     }
+
+    fn of(v: &Verdict, resp: &Value) -> Self {
+        let text = |k: &str| resp.get(k).and_then(Value::as_str).map(String::from);
+        let (outcome, reasons) = match v {
+            Verdict::Pass => ("pass", vec![]),
+            Verdict::Low { reasons } => ("low", reasons.clone()),
+            Verdict::Skipped => ("skipped", vec![]),
+        };
+        Quality { outcome, model: text("model"), provider: text("provider"),
+                  answers: resp.get("answers").cloned(), reasons }
+    }
+}
+
+pub async fn assess(st: &AppState, kind: Kind, state: &str) -> (Verdict, Quality) {
+    if !st.cfg.external_on(Service::Decision) {
+        return (Verdict::Skipped, Quality::skipped(None));
+    }
+    // Model istenip cevap alinamadi: sahte guven uretme, yalniz istenen modeli soyle.
+    let skipped = || (Verdict::Skipped, Quality::skipped(Some(st.cfg.decision_model.clone())));
     let sent = st.http.post(URL).bearer_auth(&st.cfg.decision_key).timeout(TIMEOUT)
         .json(&body(&st.cfg.decision_model, kind, state)).send().await;
     let resp: Value = match sent {
         Ok(r) if r.status().is_success() => match r.json().await {
             Ok(v) => v,
-            Err(e) => { tracing::warn!("karar modeli: bozuk yanit: {e}"); return Verdict::Skipped; }
+            Err(e) => { tracing::warn!("karar modeli: bozuk yanit: {e}"); return skipped(); }
         },
-        Ok(r) => { tracing::warn!("karar modeli: HTTP {}", r.status()); return Verdict::Skipped; }
-        Err(e) => { tracing::warn!("karar modeli: erisilemedi: {e}"); return Verdict::Skipped; }
+        Ok(r) => { tracing::warn!("karar modeli: HTTP {}", r.status()); return skipped(); }
+        Err(e) => { tracing::warn!("karar modeli: erisilemedi: {e}"); return skipped(); }
     };
     let answers = resp.get("answers").map(Value::to_string).unwrap_or_default();
     tracing::debug!("karar modeli: {answers}");
-    verdict(kind, &resp).unwrap_or_else(|| {
-        tracing::warn!("karar modeli: beklenmeyen yanit bicimi");
-        Verdict::Skipped
-    })
+    match verdict(kind, &resp) {
+        Some(v) => { let q = Quality::of(&v, &resp); (v, q) }
+        None => { tracing::warn!("karar modeli: beklenmeyen yanit bicimi"); skipped() }
+    }
 }
 
 /// Uclarin kapisi. Zayif + override yok -> 422. Zayif + override -> `Some(reasons)`:
 /// cagiran `quality_override` olgusunu kaydin akisina yazar. Gerisi `None`.
+/// Karari yanita da koyacak cagiranlar `gate_with`'i kullanir.
 pub async fn gate(
     st: &AppState, kind: Kind, state: &str, override_: bool,
 ) -> Result<Option<Vec<&'static str>>, AppError> {
+    gate_with(st, kind, state, override_).await.map(|(r, _)| r)
+}
+
+pub async fn gate_with(
+    st: &AppState, kind: Kind, state: &str, override_: bool,
+) -> Result<(Option<Vec<&'static str>>, Quality), AppError> {
     match assess(st, kind, state).await {
-        Verdict::Low { reasons } if override_ => Ok(Some(reasons)),
-        Verdict::Low { reasons } => Err(AppError::LowQuality(reasons)),
-        Verdict::Pass | Verdict::Skipped => Ok(None),
+        (Verdict::Low { reasons }, q) if override_ => Ok((Some(reasons), q)),
+        (Verdict::Low { reasons }, _) => Err(AppError::LowQuality(reasons)),
+        (Verdict::Pass | Verdict::Skipped, q) => Ok((None, q)),
     }
 }
 
@@ -138,6 +180,22 @@ mod tests {
         // Eksik soru ya da hata govdesi: karar yok (Skipped).
         assert_eq!(verdict(Kind::Entry, &json!({ "answers": { "specific": { "noul": 0.9 } } })), None);
         assert_eq!(verdict(Kind::Closing, &json!({ "error": { "message": "x" } })), None);
+    }
+
+    #[test]
+    fn yanit_karari_model_ve_olasiliklari_tasir() {
+        let r = json!({ "model": "typesafe/jev-1.13-20260917", "provider": "TypeSafe",
+            "answers": { "specific": { "type": "noul", "noul": 0.04 }, "context": { "type": "noul", "noul": 0.9 } } });
+        let v = verdict(Kind::Entry, &r).expect("karar");
+        let q = Quality::of(&v, &r);
+        assert_eq!((q.outcome, q.reasons.as_slice()), ("low", ["specific"].as_slice()));
+        let j = serde_json::to_value(&q).expect("json");
+        assert_eq!(j["model"], "typesafe/jev-1.13-20260917");
+        assert_eq!(j["provider"], "TypeSafe");
+        assert_eq!(j["answers"]["specific"]["noul"], 0.04);
+        // Atlanan karar uydurma guven tasimaz.
+        let j = serde_json::to_value(Quality::skipped(None)).expect("json");
+        assert_eq!(j, json!({ "outcome": "skipped", "reasons": [] }));
     }
 
     #[test]

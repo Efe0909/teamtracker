@@ -36,6 +36,7 @@ import type {
   NotifyPrefs,
   PillarPatch,
   RecordDetail,
+  RecordPatched,
   RecordPatch,
   RecordSummary,
   ProfilePatch,
@@ -166,8 +167,9 @@ function afterRecordWrite(qc: QueryClient, d: RecordDetail) {
 export function usePatchRecord(id: Uuid) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (p: RecordPatch) => request<RecordDetail>("PATCH", `/api/records/${id}`, p),
-    onSuccess: (d) => afterRecordWrite(qc, d),
+    mutationFn: (p: RecordPatch) => request<RecordPatched>("PATCH", `/api/records/${id}`, p),
+    // Onbellege kalite girmez: GET'te yok, bayat karar kayitla yasamasin.
+    onSuccess: ({ quality: _, ...d }) => afterRecordWrite(qc, d),
   });
 }
 

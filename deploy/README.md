@@ -86,10 +86,16 @@ Rust API yapılandırması NixOS secrets/env üzerinden sağlanır; anahtarlar l
 | Değişken | Kullanım | Varsayılan / kapalı davranış |
 |---|---|---|
 | `OPENROUTER_API_KEY` | Kalite denetimi | Yoksa karar servisi kapalı; uzunluk kuralları sürer |
-| `EKIPTAKIP_DECISION_MODEL` | OpenRouter model adı | `respan/span-01-lite` |
-| `EKIPTAKIP_EXTERNAL_OFF` | Virgüllü `decision`, `resend`, `push` listesi veya `all` | Boş liste |
+Gizli olmayan ayarlar şifreli ortam dosyasında DEĞİL, `backend/manifest.json`'da:
 
-Kapalı servisler `/api/meta.external_off` ile istemciye bildirilir. Kayıt metinlerinin OpenRouter'a gönderilmesi KVKK aktarım değerlendirmesi gerektirir; kalite denetimini kapatmak için `EKIPTAKIP_EXTERNAL_OFF=decision` ayarla. Bkz. `spec/76-bilgi-yogunlugu.md`.
+| Alan | Kullanım |
+|---|---|
+| `version` | Uygulama sürümü (`/api/meta.version`); `Cargo.toml` ve `frontend/package.json` ile aynı olmak zorunda, test denetler |
+| `contact_email` | Geliştirici e-postası (`/api/meta.contact_email`, web push `sub` varsayılanı) |
+| `external_off` | `decision`, `resend`, `push` listesi ya da `["all"]`; bilinmeyen ad açılışı durdurur |
+| `decision_model` | OpenRouter model adı |
+
+Varsayılan, ikiliye gömülü kopya. Yeniden derlemeden değiştirmek için `services.ekiptakip.manifest = ./manifest.json;` (aynı biçimde dosya, `~/nix`'te) — `EKIPTAKIP_MANIFEST` olarak verilir. Kapalı servisler `/api/meta.external_off` ile istemciye bildirilir. Kayıt metinlerinin OpenRouter'a gönderilmesi KVKK aktarım değerlendirmesi gerektirir; kalite denetimini kapatmak için manifestte `"external_off": ["decision"]` yaz. Bkz. `spec/76-bilgi-yogunlugu.md`.
 
 ## Devamı
 

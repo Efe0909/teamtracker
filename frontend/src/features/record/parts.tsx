@@ -10,6 +10,7 @@ import { useStored } from "../../lib/stored";
 import { Icon } from "../../ui/icons";
 import { Avatar, Button, cx, Dialog, IconButton, KindTag, Picker, Popover, PriorityTag, Status, ui, useToast, Who, type Option } from "../../ui/ui";
 import { DueField } from "./fields";
+import { QualityNote } from "./QualityNote";
 import s from "./record.module.css";
 
 // --- baslik ----------------------------------------------------------------
@@ -60,7 +61,6 @@ export function RecordHead({ d, showPath = true, titleExtra }: { d: RecordDetail
 }
 
 function TextEdit({ d, field, onClose }: { d: RecordDetail; field: "title" | "description"; onClose: () => void }) {
-  const L = useLookup();
   const m = usePatchRecord(d.record.id);
   const [v, setV] = useState((field === "title" ? d.record.title : d.record.description) ?? "");
   const [err, setErr] = useState<string | null>(null);
@@ -94,7 +94,7 @@ function TextEdit({ d, field, onClose }: { d: RecordDetail; field: "title" | "de
             rows={8} autoFocus placeholder="Ne oldu, nerede, ne zaman?" />
         )}
         <small className={ui.fieldHint}>{Array.from(v.trim()).length}/{field === "title" ? 5 : 30} karakter</small>
-        {L.meta.external_off?.includes("decision") && <p className={ui.fieldHint}>Kalite kontrolü kapalı (dış servis devre dışı)</p>}
+        <QualityNote />
         <div className={ui.dact}>
           <Button onClick={onClose}>Vazgeç</Button>
           <Button type="submit" variant="primary" aria-busy={m.isPending}
@@ -363,7 +363,7 @@ export function ActionList({ d }: { d: RecordDetail }) {
             <textarea className={ui.input} rows={5} value={closingNote} onChange={(e) => setClosingNote(e.target.value)} />
             <small className={ui.fieldHint}>{Array.from(closingNote.trim()).length}/30 karakter</small>
           </label>
-          {L.meta.external_off?.includes("decision") && <p className={ui.fieldHint}>Kalite kontrolü kapalı (dış servis devre dışı)</p>}
+          <QualityNote />
           <div className={ui.dact}>
             <Button onClick={() => setClosingAction(null)}>Vazgeç</Button>
             <Button variant="primary" disabled={patch.isPending || Array.from(closingNote.trim()).length < 30} onClick={() => submitCloseAction()}>Kapat</Button>

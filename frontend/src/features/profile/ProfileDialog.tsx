@@ -4,6 +4,7 @@
 import { useRef, useState } from "react";
 import { errorText, upload } from "../../api/client";
 import { usePatchProfile } from "../../api/hooks";
+import { privacyUrl } from "../../api/session";
 import type { Attachment } from "../../api/types";
 import { useLookup } from "../../lib/lookup";
 import { Icon } from "../../ui/icons";
@@ -114,6 +115,10 @@ function ProfileForm({ onDone }: { onDone: () => void }) {
             value={year} onChange={(e) => setYear(e.target.value)} />
         </div>
       </fieldset>
+      <p className={ui.fieldHint}>
+        Telefon ve doğum günün yalnız ekip arkadaşlarına görünür; nasıl saklandığını{" "}
+        <a href={privacyUrl()} target="_blank" rel="noreferrer">Gizlilik sayfasında</a> okuyabilirsin.
+      </p>
       <div className={ui.dact}>
         <Button type="submit" variant="primary" disabled={m.isPending || busy}>Kaydet</Button>
       </div>

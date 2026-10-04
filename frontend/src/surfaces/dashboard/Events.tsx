@@ -9,6 +9,7 @@ import { ApiError, errorText } from "../../api/client";
 import { useCreateEvent, useEvents, useRecords } from "../../api/hooks";
 import type { EventSummary, IsoDate, RecordSummary, Uuid } from "../../api/types";
 import { NodeListPicker, NodeTreePicker, useNodesOf } from "../../features/nodes/NodePicker";
+import { QualityNote } from "../../features/record/QualityNote";
 import { daysFromToday, parseDay, PRIORITY, PRIORITY_ORDER, toIsoDay } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
 import { navigate } from "../../lib/router";
@@ -420,7 +421,7 @@ function NewEventForm({ onCancel }: { onCancel: () => void }) {
           placeholder="Ne yapılacak, neden, kim için?" aria-label="Açıklama" />
         <small className={ui.fieldHint}>{Array.from(description.trim()).length}/30 karakter</small>
       </label>
-      {L.meta.external_off?.includes("decision") && <p className={ui.fieldHint}>Kalite kontrolü kapalı (dış servis devre dışı)</p>}
+      <QualityNote />
       <div className={ui.field}>
         <span>Tür</span>
         <NodeListPicker rootKey="event_types" label="Tür" value={kind} onChange={setKind} placeholder="Tür seç" />
