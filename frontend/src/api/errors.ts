@@ -101,6 +101,9 @@ export type ApiErrorCode =
   | "closing_note_required"
   | "closing_note_too_short"
   | "invalid_closing_note"
+  | "quality_questions_mismatch"
+  | "quality_text_invalid"
+  | "quality_min_invalid"
   | "low_quality";
 
 export const ERRORS = {
@@ -200,6 +203,9 @@ export const ERRORS = {
   closing_note_required: "Kapatırken en az 30 karakterlik kapanış notu yaz.",
   closing_note_too_short: "Kapanış notu en az 30 karakter olmalı.",
   invalid_closing_note: "Kapanış notu çok uzun.",
+  quality_questions_mismatch: "Soru listesi bozuk: üç soru da bulunmalı.",
+  quality_text_invalid: "Sorular ve ölçütler boş olamaz; soru en çok 3000, ölçüt en çok 400 karakter.",
+  quality_min_invalid: "Eşik 0,05 ile 0,95 arasında olmalı.",
   low_quality: "Metin yeterli bilgi içermiyor.",
 } satisfies Record<ApiErrorCode, string>;
 

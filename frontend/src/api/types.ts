@@ -688,3 +688,28 @@ export interface PersonUse {
    *  eylem, katilma, takim). `minutes` sekmenin acik kaldigi dakika. */
   days: { day: string; requests: number; minutes: number; messages: number; changes: number }[];
 }
+
+// --- kalite kapisi ayarlari (Rust api/quality.rs, spec/76) --------------------
+
+export interface QuestionCfg {
+  instructions: string;
+  yes: string;
+  no: string;
+  /** Evet olasiligi bunun altindaysa metin zayif. */
+  min: number;
+}
+
+/** Soru adlari sabit: specific, context, closing_justified. */
+export interface QualityConfig {
+  questions: Record<string, QuestionCfg>;
+}
+
+export interface QualityView {
+  config: QualityConfig;
+  defaults: QualityConfig;
+  customized: boolean;
+  updated_at: string | null;
+  updated_by: Uuid | null;
+  /** false: anahtar yok ya da manifest'te kapali; "Dene" bos doner. */
+  service_on: boolean;
+}

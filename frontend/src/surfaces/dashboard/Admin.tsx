@@ -15,6 +15,7 @@ import { NodeTreePicker } from "../../features/nodes/NodePicker";
 import { AdminAvatar, EditableAvatar } from "../../features/profile/EditableAvatar";
 import { useStored } from "../../lib/stored";
 import { AdminActivity } from "./AdminActivity";
+import { AdminQuality } from "./AdminQuality";
 import { ErrorScreen } from "../errors/ErrorScreen";
 import s from "./dashboard.module.css";
 
@@ -31,7 +32,7 @@ export function Admin() {
 
 function AdminScreen({ v }: { v: AdminView }) {
   const roleName = new Map(v.roles.map((r) => [r.id, r.name]));
-  const [tab, setTab] = useState<"people" | "activity">("people");
+  const [tab, setTab] = useState<"people" | "activity" | "quality">("people");
   const [peopleOpen, setPeopleOpen] = useStored("admin.people.open", true);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   return (
@@ -40,13 +41,20 @@ function AdminScreen({ v }: { v: AdminView }) {
         <div className={s.pageTitle}>
           <h1>Yönetim</h1>
           <p className={s.pageSub}>
-            {tab === "activity" ? "Kim ne zaman uğruyor, ne kadar iş çıkarıyor." : "Kim girebilir, neyi değiştirebilir."}
+            {tab === "activity" ? "Kim ne zaman uğruyor, ne kadar iş çıkarıyor."
+              : tab === "quality" ? "Kayıt ve kapanış notlarını tartan modelin soruları ve eşikleri."
+              : "Kim girebilir, neyi değiştirebilir."}
           </p>
         </div>
       </div>
       <Segmented label="Yönetim bölümü" value={tab} onChange={setTab}
-        options={[{ value: "people", label: "Kişiler ve roller" }, { value: "activity", label: "Aktivite" }]} />
-      {tab === "activity" ? <AdminActivity /> : <>
+        options={[
+          { value: "people", label: "Kişiler ve roller" },
+          { value: "activity", label: "Aktivite" },
+          // Soru metni kayıt kararlarını değiştirir: yalnız admin görür (uç da 403 verir).
+          ...(v.is_admin ? [{ value: "quality" as const, label: "Kalite kapısı" }] : []),
+        ]} />
+      {tab === "quality" ? <AdminQuality /> : tab === "activity" ? <AdminActivity /> : <>
       <h2 className={s.sectionTitle}>Kişi ekle</h2>
       <AddUser />
       <h2 className={s.sectionTitle}>

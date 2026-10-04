@@ -385,6 +385,15 @@ ok "$(g e /api/admin | jq -r .is_admin)" false "manage_users okur"
 ok "$(wc_ e POST "$ET" /api/admin/roles '{"name":"x","scopes":[]}')" 403 "manage_users rol tanimlayamaz"
 ok "$(wc_ e PATCH "$ET" "/api/admin/users/$DENIZ" "$(U admin true)")" 403 "manage_users admin yapamaz"
 ok "$(wc_ e PATCH "$ET" "/api/admin/users/$SELIN" "$(U active false)")" 403 "manage_users admini kapatamaz"
+# Kalite kapisi ayari (spec/76): yalniz admin okur/yazar, sorular sabit.
+ok "$(g e /api/admin/quality | jq -r .error)" forbidden "manage_users kalite ayarini okuyamaz"
+ok "$(g w /api/admin/quality | jq -r .customized)" false "kalite: varsayilan calisiyor"
+QC=$(g w /api/admin/quality | jq -c '.config | .questions.specific.min = 0.3')
+ok "$(w w PUT "$WT" /api/admin/quality "$QC" | jq -r '[.config.questions.specific.min, .customized] | @csv')" "0.3,true" "kalite esigi kaydedildi"
+ok "$(w w PUT "$WT" /api/admin/quality '{"questions":{}}' | jq -r .error)" quality_questions_mismatch "eksik soru reddedilir"
+ok "$(w w PUT "$WT" /api/admin/quality "$(jq -c '.questions.context.min = 2' <<<"$QC")" | jq -r .error)" quality_min_invalid "gecersiz esik reddedilir"
+ok "$(wc_ e PUT "$ET" /api/admin/quality "$QC")" 403 "manage_users kalite ayarini yazamaz"
+ok "$(w w DELETE "$WT" /api/admin/quality '' | jq -r .customized)" false "kalite: varsayilana donus"
 ok "$(w w PATCH "$WT" "/api/admin/users/$EFE" "$(U grant_scope '"yok_boyle"')" | jq -r .error)" invalid_scope "gecersiz kapsam"
 
 t admin_grant_limits
