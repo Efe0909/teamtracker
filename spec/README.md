@@ -1,5 +1,10 @@
 # spec/ — uyarlanacak ekranların çözümlemesi
 
+> **Güncel durum:** aşağıdaki yazım kuralları ilk (Python/HTMX) dönemin ekran çözümleme
+> brief'idir; `app.py`, `static/app.css` gibi yollar `references/python/` altına taşındı.
+> Çalışan yığın Rust + React'tir: başlangıç noktası kök `README.md`; ön yüz kuralları
+> `16-on-yuz.md`, sınırlar `15-sinirlar.md`, bilgi yoğunluğu `76-bilgi-yogunlugu.md`.
+
 Mevcut sistemden alınan ekran görüntüleri burada **yapıya** çevrilir: ne gördüğümüz değil,
 ne kuracağımız yazılır. Her ekran iki çıktı verir:
 

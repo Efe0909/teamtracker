@@ -1,108 +1,166 @@
-# deploy/ — üç ortam
+# deploy/ — yayına alma
 
-Bu dizin artık **elle kurulum** anlatmıyor. Makine yapılandırması ayrı bir depoda
-(`~/nix`, github:Efe0909/nix) ve **reproducible**: nginx, systemd birimi, sırlar,
-tünel — hepsi orada Nix ifadesi olarak duruyor. Buradaki dosyalar yalnızca
-uygulamanın kendi sözleşmesini (konteyner yığını, medya dizini, tünel/Access
-ayarları) tarif eder.
+Makine yapılandırması bu depoda **değil**: `~/nix` (github:Efe0909/nix), NixOS,
+reproducible. Orada nginx, systemd birimi, sırlar (agenix) ve tünel var. Bu depo
+yalnız uygulamanın sözleşmesini taşır: `module.nix` (NixOS modülü), `release.nix`
+(release pini), `cloudflare-dashboard.md`.
 
 | Ortam | Nerede | Ne çalıştırır |
 |---|---|---|
-| **Yerel geliştirme** | bu depo | Docker'da Postgres + `cargo run` + `npm run dev` (sahte kimlik) |
-| **VM testi** | `~/nix` → `.#vmtest` | gerçek NixOS, gerçek nginx/cloudflared/Google girişi |
+| **Yerel geliştirme** | bu depo | `make dev` — Docker'da Postgres + `cargo run` + `npm run dev`, sahte kimlik |
+| **VM** (192.168.64.8) | `~/nix` → `.#teamtracker0.2` | aynı VM'de 0.2 (Rust + React); `.#teamtracker0.1` eski Python+Docker |
 | **Üretim** | `~/nix` → `.#evsunucu` | Raspberry Pi, aynı yapılandırma |
 
-VM testi ile üretim **aynı** `configuration.nix`'i paylaşır; fark yalnızca
-Pi'ye özgü donanım modülü (device tree, bootloader) ve hangi modüllerin import
-edildiği. Yani VM'de geçen bir şey Pi'de de büyük ölçüde geçer — kasıtlı.
+**Hedef makine derlemez.** Ne VM ne Pi `cargo`/`npm` çalıştırır; ikili ve ön yüz Mac'te
+derlenir, GitHub release'e yüklenir, makine hazır tarball'i indirir.
 
 ---
 
-## 1. Yerel geliştirme (ajan oturumları dahil)
+## 1. Ayar nerede durur?
 
-Kökteki `README.md` → "Çalıştır" (Rust API + Vite). Arşivdeki Python (alpha-0.1)
-`references/python/` içinden `make up` ile kalkar.
-
----
-
-## 2. VM testi (NixOS)
-
-> Bu bölüm ve §3 alpha-0.1'in Docker yığınını anlatır (`~/nix` `.#teamtracker0.1`,
-> `e02d71d`'ye pinli). 0.2 yayın akışı: kökteki `README.md` → "Yayına alma".
-
-Yapılandırma `~/nix`'te. Uygulamanın sürümü **flake input** olarak pinli, yani
-VM'de shell açıp `git pull` yapılmaz:
-
-```bash
-cd ~/nix
-nix flake update teamtracker          # teamtracker'ı main'in ucuna al
-git commit -am "teamtracker: <sha>"   # kilit dosyası commit edilir
-nixos-rebuild switch --flake .#vmtest # VM'de (ya da --target-host ile uzaktan)
-```
-
-`~/nix`'te bu iş için duran modüller:
-
-| modül | ne yapar |
-|---|---|
-| `modules/ekiptakip-app.nix` | agenix sırrı + `docker compose` yığınını koşan systemd birimi |
-| `modules/ekiptakip-media.nix` | medya dizini (uid 10001), `EKIPTAKIP_MEDIA_DIR`, `RequiresMountsFor` |
-| `modules/nginx/ekiptakip.nix` | iki vhost, `127.0.0.1:8000`'e proxy, `real_ip` |
-| `modules/cloudflared.nix` | tünel |
-
-`modules/ekiptakip-media.nix`'in **kaynağı bu depodadır**:
-[`nix-ekiptakip-media.nix`](../references/python/deploy/nix-ekiptakip-media.nix). Depolar ayrı olduğu için
-kopyalanarak taşınıyor — burada değiştirirsen `~/nix`'e de taşımayı unutma
-(iki kopya sessizce ayrışırsa belirti üretimde çıkar).
-
----
-
-## 3. Üretim (Raspberry Pi)
-
-Aynı akış, farklı hedef:
-
-```bash
-nixos-rebuild switch --flake .#evsunucu --target-host efe@evsunucu --use-remote-sudo
-```
-
-Pi'de shell açmak gerekmiyor; gerekiyorsa bir yerde declarative olmayan bir şey
-var demektir.
-
-Zincir her iki hedefte de aynı:
-
-```
-telefon ──https──> Cloudflare ──tünel──> cloudflared ──> nginx :80 ──> uvicorn 127.0.0.1:8000
-                    (TLS burada biter)                   (server_name)   (--workers 1)
-```
-
-`--workers 1` **şart**: ağaç indeksi (`TreeIndex`) süreç belleğinde tutuluyor.
-İkinci bir işçi kendi bayat ağacıyla kalır.
-
----
-
-## Dış servisler
-
-Rust API yapılandırması NixOS secrets/env üzerinden sağlanır; anahtarlar loglanmaz.
-
-| Değişken | Kullanım | Varsayılan / kapalı davranış |
+| Ne | Nerede | Değişince ne gerekir |
 |---|---|---|
-| `OPENROUTER_API_KEY` | Kalite denetimi | Yoksa karar servisi kapalı; uzunluk kuralları sürer |
-Gizli olmayan ayarlar şifreli ortam dosyasında DEĞİL, `backend/manifest.json`'da:
+| **Sırlar** (Google anahtarları, `EKIPTAKIP_SECRET_KEY`, `OPENROUTER_API_KEY`, `RESEND_API_KEY`, VAPID, alan adları) | `~/nix/secrets/ekiptakip-env.age` (agenix) | şifreli dosyayı düzenle → `~/nix` commit → rebuild |
+| **Gizli olmayan ayarlar** (sürüm, iletişim e-postası, kapalı dış servisler, karar modeli) | [`backend/manifest.json`](../backend/manifest.json) | dosyayı düzenle → yeni release (§2) |
+| Aynı ayarlar, **release çıkarmadan** | `~/nix`'te bir `manifest.json` + `services.ekiptakip.manifest = ./manifest.json;` | `~/nix` commit → rebuild |
 
-| Alan | Kullanım |
+`manifest.json` alanları:
+
+| Alan | Anlam |
 |---|---|
-| `version` | Uygulama sürümü (`/api/meta.version`); `Cargo.toml` ve `frontend/package.json` ile aynı olmak zorunda, test denetler |
-| `contact_email` | Geliştirici e-postası (`/api/meta.contact_email`, web push `sub` varsayılanı) |
-| `external_off` | `decision`, `resend`, `push` listesi ya da `["all"]`; bilinmeyen ad açılışı durdurur |
+| `version` | `/api/meta.version`, profil penceresinin altında görünür. `backend/Cargo.toml` ve `frontend/package.json` ile **aynı olmak zorunda** — `cargo test` denetler |
+| `contact_email` | geliştirici e-postası (`/api/meta.contact_email`; `VAPID_SUB` yoksa web push `sub` varsayılanı) |
+| `external_off` | kapatılan dış servisler: `"decision"`, `"resend"`, `"push"` ya da `["all"]`. Bilinmeyen ad **açılışı durdurur** |
 | `decision_model` | OpenRouter model adı |
 
-Varsayılan, ikiliye gömülü kopya. Yeniden derlemeden değiştirmek için `services.ekiptakip.manifest = ./manifest.json;` (aynı biçimde dosya, `~/nix`'te) — `EKIPTAKIP_MANIFEST` olarak verilir. Kapalı servisler `/api/meta.external_off` ile istemciye bildirilir. Kayıt metinlerinin OpenRouter'a gönderilmesi KVKK aktarım değerlendirmesi gerektirir; kalite denetimini kapatmak için manifestte `"external_off": ["decision"]` yaz. Bkz. `spec/76-bilgi-yogunlugu.md`.
+Sürümü yükseltmek: üç yeri (`manifest.json`, `Cargo.toml`, `package.json`) aynı değere
+çek; `cargo update -p ekiptakip --offline` ve `npm install --package-lock-only` kilit
+dosyalarını eşler. Testler tutarsızlığı yakalar.
+
+### Sırrı düzenlemek
+
+```bash
+cd ~/nix/secrets
+nix run github:ryantm/agenix -- -e ekiptakip-env.age -i ~/.ssh/id_ed25519
+```
+
+Alıcılar `secrets.nix`'te (admin, ssh, vmtest, evsunucu). Sırrı çıktıya, komut
+satırı argümanına, commit'e **yazma**; depo public.
+
+### Dış servisler
+
+| Servis | Anahtar (sır) | Anahtar yoksa / `external_off`'taysa |
+|---|---|---|
+| `decision` — kalite denetimi (OpenRouter) | `OPENROUTER_API_KEY` | yalnız uzunluk kuralı (başlık ≥ 5, açıklama ≥ 30 karakter) çalışır |
+| `resend` — davet postası | `RESEND_API_KEY` | posta `mail_outbox`'ta bekler |
+| `push` — web push | `VAPID_PRIVATE` | bildirim listesi çalışır, push gitmez |
+
+Kapalı servisler `/api/meta.external_off` ile ön yüze bildirilir (formlarda "kapalı"
+notu görünür). Kayıt metinleri OpenRouter'a gider; kişisel veri OpenRouter
+tarafındaki redact kurallarıyla maskelenir, formlardaki not ve `frontend/privacy.html`
+bunu söyler. Ayrıntı: `spec/76-bilgi-yogunlugu.md`.
+
+---
+
+## 2. Yeni sürüm çıkarmak
+
+Sırayla, hepsi **`main`** üzerinde. `~/nix`'teki `teamtracker-alpha02` girdisi
+`github:Efe0909/teamtracker` (main'in ucu) olduğu için pin main'de değilse Pi onu görmez.
+
+**Önkoşul:** PR merge edildi ve yerel `main` güncel (`git switch main && git pull`);
+çalışma ağacı temiz; `gh auth status` Efe0909; `nix` kurulu (`zig` ve `cargo-zigbuild`
+komut içinde `nix shell` ile gelir). Merge'i Efe yapar.
+
+```bash
+# 0. İsteğe bağlı ama önerilir: yerelde bir kez
+(cd backend && cargo clippy --all-targets && cargo test)
+(cd frontend && npm run build && npm test)
+
+# 1. Dene: derler, tarball + hash üretir; yükleme YOK, dosya yazılmaz
+DRY_RUN=1 backend/tools/release.sh
+
+# 2. Gerçek: GitHub release'e yükler, deploy/release.nix'i yazar
+backend/tools/release.sh
+git add deploy/release.nix && git commit -m "release: <tag>" && git push
+
+# 3. ~/nix: yeni pini çek
+cd ~/nix && nix flake update teamtracker-alpha02
+git commit -am "teamtracker-alpha02: <tag>" && git push
+
+# 4. Önce VM
+sudo nixos-rebuild switch --flake .#teamtracker0.2     # VM'de (geri: .#teamtracker0.1)
+
+# 5. Sonra Pi — VM doğrulaması geçince
+```
+
+`release.sh` ne yapar: `npm ci && npm run build`, her hedef için
+(`aarch64-linux` Pi/VM, `x86_64-linux` VDS) statik musl ikili derler, ikili + `frontend/dist`
+tarball'ını `rust-<sha>` etiketli prerelease olarak yükler, **yükleme başarılıysa**
+`deploy/release.nix`'e url + hash yazar. `release.nix` üretilmiş dosyadır, elle düzenleme.
+
+### Pi'ye uygulamak
+
+Pi'de `~/nix` klonu yok; yapılandırma GitHub'dan çekilir. Yukarıda `~/nix`'i **push'ladıktan**
+sonra Pi'de (SSH bağlantısı kopsa da iş sürsün diye `systemd-run` altında):
+
+```bash
+sudo systemd-run --unit=rebuild --setenv=PATH=/run/current-system/sw/bin \
+  nixos-rebuild switch --flake github:Efe0909/nix/<~/nix commit sha>#evsunucu
+journalctl -u rebuild -f
+```
+
+Commit sha'yı vermek önbellekteki eski `main` ucunu çekmeyi önler.
+
+### Doğrulama
+
+1. `systemctl status ekiptakip` — aktif; `journalctl -u ekiptakip -n 50`'de göç hatası yok, `dinleniyor` satırı var.
+2. Tarayıcıda giriş → profil penceresinin altındaki sürüm `manifest.json`'daki ile aynı.
+3. Anahtar eklendiyse: yeni kayıt açma formunda "Kalite kontrolü kapalı" notu **yok**, kişisel veri notu var.
+4. Davet postası: Yönetim → Kişi ekle → ~15 sn içinde mail. Gelmezse
+   `select to_email, attempts, error from mail_outbox order by created_at desc limit 5;`
+
+### Geri dönüş
+
+`~/nix`'te `flake.lock` değişikliğini geri al (`git revert`), commit + push, aynı
+`nixos-rebuild switch`. Göçler ileri yönlüdür (yeni tablo/sütun, veri silmez); eski ikili
+yeni sütunları yok sayar, veri kaybı olmaz. 0.1'e dönüş (yalnız VM): `.#teamtracker0.1`.
+
+### Sık takılanlar
+
+| Belirti | Neden |
+|---|---|
+| `calisma agaci temiz degil` | `release.sh` HEAD'in sha'sını etiketler; önce commit'le |
+| Pi eski sürümde kaldı | `release.nix` main'e push'lanmadı ya da `nix flake update` unutuldu |
+| Release yüklendi ama `release.nix` değişmedi | yükleme sırasında patladı; aynı komutu tekrar çalıştır (aynı sha'ya yeni etiket gerekirse eskisini `gh release delete`) |
+| Açılışta `manifest.json external_off: bilinmeyen servis` | yazım hatası (`decision`, `resend`, `push`, `all`) |
+| `cargo test`: "surumu ayristi" | manifest / Cargo.toml / package.json sürümleri farklı |
+| Açılışta `EKIPTAKIP_SECRET_KEY yayinda zorunlu` | env dosyasında eksik/kısa anahtar; yayında sahte kimlik de reddedilir |
+
+---
+
+## 3. Zincir
+
+```
+telefon ──https──> Cloudflare ──tünel──> cloudflared ──> nginx :80 ──> ekiptakip 127.0.0.1:8000
+                    (TLS burada biter)                   (server_name)   (yalnız /api, JSON)
+```
+
+nginx `webRoot`'u (React derlemesi) statik verir ve `/api/`'yi Rust'a vekiller. Host'un
+ilk etiketi yüzü seçer: `app.` mobil, `dashboard.` masaüstü, apex karşılama; bilinmeyen
+host `444`. Zon `polonyum.com`. Veritabanı yerel PostgreSQL, unix soketinde peer
+kimlik doğrulaması — parola yok. Ağaç indeksi süreç belleğinde olduğundan tek süreç çalışır.
+
+Medya `services.ekiptakip.mediaDir` altında (varsayılan `/var/lib/ekiptakip/media`).
+İlk yönetici listesi `bootstrapAdminsFile` ile (agenix sırrı, `LoadCredential`), her
+açılışta bu e-postalar aktif admin yapılır.
+
+---
 
 ## Devamı
 
-- [`DOCKER.md`](../references/python/deploy/DOCKER.md) — (0.1) konteyner yığını, agenix sırları, medya dizini,
-  günlük işler (`docker compose` komutları).
-- [`cloudflare-dashboard.md`](cloudflare-dashboard.md) — tünel panelden
-  yönetiliyorsa public hostname + Access politikası.
+- [`cloudflare-dashboard.md`](cloudflare-dashboard.md) — tünel panelden yönetiliyorsa public hostname + Access politikası.
+- [`release-handoff-alpha-2.1.md`](release-handoff-alpha-2.1.md) — alpha-2.1'e özel devir notu (tarihî).
+- `references/python/deploy/DOCKER.md` — (0.1) konteyner yığını.
 - `spec/70-guvenlik.md` — tehdit modeli, kimlik, CSRF, denetim izi.
 
 ## Bu kurulumun kapatmadıkları
@@ -111,15 +169,9 @@ Varsayılan, ikiliye gömülü kopya. Yeniden derlemeden değiştirmek için `se
   tutuyor, ekler de orada. Disk arızası her görseli götürür ve Postgres yedeği
   var olmayan dosyalara işaret eden satırları sağlam tutar.
 - **Cloudflare Access AÇIK DEĞİL** (2026-09-10'da doğrulandı: public hostname'e
-  giden istek Access'e değil, doğrudan uygulamaya düşüyor — `curl` ile bakınca
-  401 gövdesi `giriş gerekli`, yani `LoginGate`; `cf-access-*` başlığı yok).
-
-  Bu bir zamanlar **bloke edici** bir eksikti: uygulamanın kendi kimliği yokken
-  (`uid` çerezi imzasız, CSRF yok) Access dışarısıyla açık uygulama arasındaki
-  tek şeydi. Artık öyle değil — Google girişi, davetli listesi, imzalı oturum,
-  CSRF kapısı ve giriş hız sınırı var. Access bugün **ek katman**, tek kapı değil.
-
-  Yine de kapalı olmasının bedeli var: kimliksiz trafik origin'e ulaşıyor, yani
-  herkes `/login`'i yoklayabiliyor, hız sınırı bütçesini yiyebiliyor, ve
-  uygulamada ileride çıkacak bir kimlik hatası doğrudan internete açık oluyor.
+  giden istek doğrudan uygulamaya düşüyor — `curl` ile bakınca 401 gövdesi
+  `giriş gerekli`, yani uygulamanın kendi kapısı). Access bugün **ek katman**, tek kapı
+  değil: uygulamanın Google girişi, davetli listesi, imzalı oturumu, CSRF kapısı ve giriş
+  hız sınırı var. Kapalı olmasının bedeli: kimliksiz trafik origin'e ulaşıyor, herkes
+  `/login`'i yoklayabiliyor, ileride çıkacak bir kimlik hatası doğrudan internete açık.
   Açmaya karar verirsen: [`cloudflare-dashboard.md`](cloudflare-dashboard.md) §3.

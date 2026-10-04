@@ -18,13 +18,18 @@ Sınır ve gerekçe: `spec/15-sinirlar.md`.
 - **Faz 1** — hiyerarşi, kayıtlar, kart içi sohbet, alan değişiklikleri, mobil yüz. Tamam.
 - **Faz 2** — gerçek kimlik: Google OAuth (PKCE), davetli listesi, imzalı oturum, CSRF,
   giriş hız sınırı. **Geldi.** Sahte kimlik yalnız yerelde; yayında açılışı reddettirir.
-- Üstüne: yönetim paneli, medya ekleri, kart blokları (medya/toplantı/havuz).
+- Üstüne: yönetim paneli, medya ekleri, kart blokları (medya/toplantı/havuz), etkinlikler
+  (OTF formu dahil), erişim kipleri, bildirimler (web push + Resend davet postası),
+  bilgi yoğunluğu kapısı (uzunluk + OpenRouter karar modeli, `spec/76`).
 - Python'daki özelliklerin 0.2'ye taşınma envanteri: `spec/90-geri-tasima.md`.
 
 alpha-0.1 (Python + FastAPI + HTMX) **arşivlendi**: `references/python/`. Çalışan
 yığın değil, davranışın başvurusu — bkz. [Arşiv](#arşiv-alpha-01-python).
 
 ## Çalıştır
+
+Tek komut: `make dev` — Postgres, API ve web; boş veritabanında tohumu yükler, tarayıcıyı açar.
+Elle:
 
 ```bash
 docker compose up -d                                    # Postgres (ekiptakip-db)
@@ -49,7 +54,7 @@ docker exec ekiptakip-db createdb -U ekiptakip ekiptakip_alpha02
 | Komut | Ne |
 |---|---|
 | `cargo clippy --all-targets` | `unwrap`/`expect`/`panic!`/`todo!`/`unsafe` derlemeyi düşürür |
-| `cargo test` | birim: ağaç, filtre, hız sınırı |
+| `cargo test` | birim: ağaç, filtre, hız sınırı, karar modeli yanıtı, manifest/sürüm tutarlılığı |
 | `npm run build` | CSS Modules tipleri + ham renk denetimi + `tsc` strict + Vite |
 | `npm test` | vitest + testing-library |
 | `backend/tools/local_test.sh` | JSON sözleşmesi yerelde: atılıp yıkılan DB + iki süreç |
@@ -59,13 +64,16 @@ docker exec ekiptakip-db createdb -U ekiptakip ekiptakip_alpha02
 
 Hedef makine **derlemez**. `backend/tools/release.sh` Mac'te derler (statik musl ikili +
 `frontend/dist`), GitHub release'e yükler, `deploy/release.nix`'i pinler; makine
-yapılandırması `~/nix`'te (NixOS, `flake.nix` → `nixosModules.default`). Ayrıntı:
-`deploy/README.md`.
+yapılandırması `~/nix`'te (NixOS, `flake.nix` → `nixosModules.default`).
+
+Ayar iki yerde: **sırlar** `~/nix`'teki agenix dosyasında, **gizli olmayanlar** (sürüm,
+iletişim e-postası, kapalı dış servisler, karar modeli) [`backend/manifest.json`](backend/manifest.json)'da.
+Adım adım yayın, Pi'ye uygulama, doğrulama ve geri dönüş: [`deploy/README.md`](deploy/README.md).
 
 ## Yapı
 
 ```
-backend/     Rust JSON API — src/, migrations/, seed.sql, tools/ (test, release, import)
+backend/     Rust JSON API — src/, migrations/, manifest.json, seed.sql, tools/ (test, release, import)
 frontend/    React + TS — api/ (istemci, tipler), ui/, features/, surfaces/; renk yalnız tokens.css
 deploy/      NixOS modülü, release pini, Cloudflare notları
 spec/        kararlar, şema (v2: 21-sema-v2.md), ön yüz (16-on-yuz.md), güvenlik
@@ -83,7 +91,8 @@ references/  python/ — arşivlenmiş alpha-0.1
 | Neden böyle yazıldı? | `spec/10-kararlar.md` |
 | Kimlik, yetki, tehdit modeli | `spec/70-guvenlik.md` |
 | Python'dan ne taşındı, ne bırakıldı | `spec/90-geri-tasima.md` |
-| Yayına alma, Cloudflare | `deploy/README.md` |
+| Yayına alma, ayarlar, Cloudflare | `deploy/README.md` |
+| Bilgi yoğunluğu kapısı, kalite kararı, KVKK | `spec/76-bilgi-yogunlugu.md` |
 
 ## Bilgi güvenliği
 
