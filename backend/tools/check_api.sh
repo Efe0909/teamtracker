@@ -478,13 +478,26 @@ w w PATCH "$WT" "/api/admin/users/$DENIZ" "$(U admin false)" >/dev/null
 ok "$(DB "select count(*) from security_events where event_type in ('admin_granted','admin_revoked')")" 4 "her degisim denetimde"
 
 t admin_roles
-ROL=$(w w POST "$WT" /api/admin/roles '{"name":"Yapici","scopes":["edit_deadline"]}' | jq -r '.roles[]|select(.name=="Yapici").id')
+R=$(w w POST "$WT" /api/admin/roles '{"name":"Yapici","color":"#e5484d","scopes":["edit_deadline","edit_nodes"],"node_ids":["'"$MALZEME"'"]}')
+ROL=$(jq -r '.roles[]|select(.name=="Yapici").id' <<<"$R")
+ok "$(jq -r '.roles[]|select(.name=="Yapici").color' <<<"$R")" '#e5484d' "rol rengi"
+ok "$(jq -r '.roles[]|select(.name=="Yapici").node_ids[0]' <<<"$R")" "$MALZEME" "rol dali"
 ok "$(w w POST "$WT" /api/admin/roles '{"name":"Yapici","scopes":[]}' | jq -r .error)" role_exists "ayni ad"
 ok "$(w w POST "$WT" /api/admin/roles '{"name":"Z","scopes":["yok"]}' | jq -r .error)" invalid_scope "gecersiz kapsam"
-# A1: rolun BUTUN scope'lari atayanda olmali; manage_users iceren rol hic.
+ok "$(w w POST "$WT" /api/admin/roles '{"name":"Renk","color":"red","scopes":[]}' | jq -r .error)" invalid_color "gecersiz rol rengi"
+ok "$(w w POST "$WT" /api/admin/roles '{"name":"Dali","node_ids":["00000000-0000-0000-0000-000000000000"]}' | jq -r .error)" invalid_parent "gecersiz rol dali"
+# A1: rolun BUTUN scope ve dal izinleri atayanda olmali; manage_users iceren rol hic.
 ok "$(w e PATCH "$ET" "/api/admin/users/$DENIZ" "$(U grant_role "\"$ROL\"")" | jq -r .error)" grant_not_held "rolun scope'u atayanda yok"
 w w PATCH "$WT" "/api/admin/users/$EFE" "$(U grant_scope '"edit_deadline"')" >/dev/null
 ok "$(wc_ e PATCH "$ET" "/api/admin/users/$DENIZ" "$(U grant_role "\"$ROL\"")")" 200 "manage_users kendinde olani ATAYABILIR"
+ok "$(g n /api/nodes | jq -r ".nodes[]|select(.id==\"$TEDARIK\").can_edit")" true "rol dali duzenleme verir"
+ok "$(g n /api/meta | jq -r ".users[]|select(.id==\"$DENIZ\").roles[]|select(.id==\"$ROL\").color")" '#e5484d' "meta rol rengi"
+ROL2=$(w w POST "$WT" /api/admin/roles '{"name":"Operasyon","color":"#5b8cff","scopes":["edit_nodes"],"node_ids":["'"$MALZEME"'"]}' | jq -r '.roles[]|select(.name=="Operasyon").id')
+ok "$(wc_ e PATCH "$ET" "/api/admin/users/$DENIZ" "$(U grant_role \"$ROL2\")")" 200 "ikinci rol de atanabilir"
+ok "$(g w /api/admin | jq -r ".people[]|select(.id==\"$DENIZ\").role_ids|length")" 2 "birden fazla rol"
+ok "$(g w /api/admin | jq -c ".people[]|select(.id==\"$DENIZ\").scopes[]|select(.name==\"edit_nodes\")|[.direct,(.via_roles|length)]")" '[true,2]' "rol scope tek satir"
+ROLWIDE=$(w w POST "$WT" /api/admin/roles '{"name":"Genis dal","scopes":["edit_nodes"],"node_ids":["'"$URETIM"'"]}' | jq -r '.roles[]|select(.name=="Genis dal").id')
+ok "$(w e PATCH "$ET" "/api/admin/users/$ZEYNEP" "$(U grant_role \"$ROLWIDE\")" | jq -r .error)" grant_not_held "sahip olmadigi rol dali"
 ROLMU=$(w w POST "$WT" /api/admin/roles '{"name":"Kisi yonetimi","scopes":["manage_users"]}' | jq -r '.roles[]|select(.name=="Kisi yonetimi").id')
 ok "$(w e PATCH "$ET" "/api/admin/users/$ZEYNEP" "$(U grant_role "\"$ROLMU\"")" | jq -r .error)" grant_manage_users "manage_users iceren rol verilemez"
 ok "$(wc_ w PATCH "$WT" "/api/admin/users/$ZEYNEP" "$(U grant_role "\"$ROLMU\"")")" 200 "admin verir"
@@ -496,6 +509,8 @@ ok "$(g w /api/admin | jq -c ".people[]|select(.id==\"$DENIZ\").scopes[]|select(
 ok "$(g n /api/meta | jq -r '.me.scopes|index("edit_deadline")!=null')" true "rol duzenlemesi aninda yansir"
 w w DELETE "$WT" "/api/admin/roles/$ROL" '' >/dev/null
 ok "$(g n /api/meta | jq -c '[.me.scopes|index("edit_deadline"), (index("create_tags")!=null)]')" "[null,true]" "rol gitti, dogrudan verilen kaldi"
+w w DELETE "$WT" "/api/admin/roles/$ROL2" '' >/dev/null
+ok "$(g n /api/nodes | jq -r ".nodes[]|select(.id==\"$TEDARIK\").can_edit")" false "son rol silinince dal izni kalkar"
 
 t admin_branch_scope
 # Python'da dal izninin arayuzu yoktu; edit_nodes dalsiz ise yaramaz.

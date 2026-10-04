@@ -66,6 +66,16 @@ export function People() {
                   <div className={s.personInfo}>
                     <b>{u.name}</b>
                     {u.nickname !== null && <span className={s.dim}>“{u.nickname}”</span>}
+                    {u.roles.length > 0 && (
+                      <div className={s.roleBadges} role="group" aria-label="Roller">
+                        {u.roles.map((r) => (
+                          <span key={r.id} className={s.roleBadge} style={{ borderColor: r.color ?? undefined }}>
+                            <span className={s.roleDot} style={{ backgroundColor: r.color ?? "var(--dim)" }} />
+                            {r.name}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                     {u.phone !== null && <a href={`tel:${u.phone.replace(/[^\d+]/g, "")}`}>{u.phone}</a>}
                     {b !== null && (
                       <span className={s.dim}>

@@ -31,7 +31,7 @@ export function Admin() {
 }
 
 function AdminScreen({ v }: { v: AdminView }) {
-  const roleName = new Map(v.roles.map((r) => [r.id, r.name]));
+  const roleById = new Map(v.roles.map((r) => [r.id, r]));
   const [tab, setTab] = useState<"people" | "activity" | "quality">("people");
   const [peopleOpen, setPeopleOpen] = useStored("admin.people.open", true);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -70,7 +70,7 @@ function AdminScreen({ v }: { v: AdminView }) {
           {selected.size > 0 && <BulkBar v={v} selected={selected} onClear={() => setSelected(new Set())} />}
           <ul className={`${s.surface} ${s.adminList}`}>
             {v.people.map((p) => (
-              <PersonRow key={p.id} p={p} v={v} roleName={roleName} checked={selected.has(p.id)}
+              <PersonRow key={p.id} p={p} v={v} roleById={roleById} checked={selected.has(p.id)}
                 onCheck={(on) => setSelected((prev) => {
                   const next = new Set(prev);
                   if (on) next.add(p.id); else next.delete(p.id);
@@ -188,8 +188,8 @@ function BulkBar({ v, selected, onClear }: { v: AdminView; selected: Set<string>
   );
 }
 
-function PersonRow({ p, v, roleName, checked, onCheck }: {
-  p: AdminPerson; v: AdminView; roleName: Map<string, string>; checked: boolean; onCheck: (on: boolean) => void;
+function PersonRow({ p, v, roleById, checked, onCheck }: {
+  p: AdminPerson; v: AdminView; roleById: Map<string, AdminRole>; checked: boolean; onCheck: (on: boolean) => void;
 }) {
   const L = useLookup();
   const toast = useToast();
@@ -197,6 +197,9 @@ function PersonRow({ p, v, roleName, checked, onCheck }: {
   const run = (op: UserOp) =>
     m.mutate(adminOps.user(p.id, op), { onError: (e) => toast({ text: errorText(e), error: true }) });
   const direct = new Set(p.scopes.filter((r) => r.direct).map((r) => r.name));
+  const roleScopes = new Set(v.roles.filter((r) => p.role_ids.includes(r.id)).flatMap((r) => r.scopes));
+  const visibleScopes = p.scopes.filter((r) => !roleScopes.has(r.name));
+  const hiddenDirect = p.scopes.filter((r) => r.direct && roleScopes.has(r.name));
   const grantable = v.scopes.filter((k) => !direct.has(k));
   const assignable = v.roles.filter((r) => !p.role_ids.includes(r.id));
 
@@ -223,15 +226,12 @@ function PersonRow({ p, v, roleName, checked, onCheck }: {
       <div className={s.chips}>
         {p.is_admin ? (
           <span className={s.dim}>Yönetici bütün kapsamlara sahip.</span>
-        ) : p.scopes.length === 0 ? (
-          <span className={s.dim}>Kapsam yok.</span>
+        ) : visibleScopes.length === 0 ? (
+          <span className={s.dim}>{roleScopes.size > 0 ? "Diğer kapsamlar rollerden geliyor." : "Kapsam yok."}</span>
         ) : (
-          p.scopes.map((r) => (
+          visibleScopes.map((r) => (
             <span key={r.name} className={s.chip} title={SCOPE[r.name] ?? r.name}>
               {r.name}
-              {r.via_roles.length > 0 && (
-                <span className={s.dim}>· {r.via_roles.map((id) => roleName.get(id) ?? "?").join(", ")} rolünden</span>
-              )}
               {r.direct && (
                 <button type="button" className={s.chipX} aria-label={`${r.name} kapsamını al`}
                   onClick={() => run({ op: "revoke_scope", value: r.name })}>✕</button>
@@ -253,16 +253,36 @@ function PersonRow({ p, v, roleName, checked, onCheck }: {
           </div>
         </div>
 
+        {hiddenDirect.length > 0 && (
+          <div className={s.adminRow}>
+            <span className={s.adminKey}>Rolde de olan doğrudan kapsam</span>
+            <div className={s.chips}>
+              {hiddenDirect.map((r) => (
+                <span key={r.name} className={s.chip}>
+                  {r.name}
+                  <button type="button" className={s.chipX} aria-label={`${r.name} doğrudan kapsamını al`}
+                    onClick={() => run({ op: "revoke_scope", value: r.name })}><Icon name="x" size={12} /></button>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className={s.adminRow}>
           <span className={s.adminKey}>Roller</span>
           <div className={s.chips}>
-            {p.role_ids.map((id) => (
-              <span key={id} className={s.chip}>
-                {roleName.get(id) ?? "?"}
-                <button type="button" className={s.chipX} aria-label={`${roleName.get(id) ?? "?"} rolünü al`}
-                  onClick={() => run({ op: "revoke_role", value: id })}><Icon name="x" size={12} /></button>
-              </span>
-            ))}
+            {p.role_ids.map((id) => {
+              const role = roleById.get(id);
+              return (
+                <span key={id} className={s.chip} style={{ borderColor: role?.color ?? undefined }}>
+                  {role?.color !== null && role?.color !== undefined &&
+                    <span className={s.roleDot} style={{ backgroundColor: role.color }} />}
+                  {role?.name ?? "?"}
+                  <button type="button" className={s.chipX} aria-label={`${role?.name ?? "?"} rolünü al`}
+                    onClick={() => run({ op: "revoke_role", value: id })}><Icon name="x" size={12} /></button>
+                </span>
+              );
+            })}
             <Grant label="Rol ver" empty="Verilecek rol yok."
               options={assignable.map((r) => ({ value: r.id, label: r.name }))}
               onPick={(id) => run({ op: "grant_role", value: id })} />
@@ -321,6 +341,7 @@ function Grant(props: {
 }
 
 function Roles({ v }: { v: AdminView }) {
+  const L = useLookup();
   const members = (r: AdminRole) => v.people.filter((p) => p.role_ids.includes(r.id)).length;
   return (
     <>
@@ -331,12 +352,18 @@ function Roles({ v }: { v: AdminView }) {
           {v.roles.map((r) => (
             <li key={r.id} className={s.person}>
               <div className={s.personHead}>
-                <b>{r.name}</b>
+                <b className={s.roleBadge} style={{ borderColor: r.color ?? undefined }}>
+                  {r.color !== null && <span className={s.roleDot} style={{ backgroundColor: r.color }} />}
+                  {r.name}
+                </b>
                 <span className={s.dim}>{members(r)} kişi</span>
               </div>
               <div className={s.chips}>
                 {r.scopes.length === 0 ? <span className={s.dim}>Kapsam yok.</span> : r.scopes.map((k) => (
                   <span key={k} className={s.chip} title={SCOPE[k] ?? k}>{k}</span>
+                ))}
+                {r.node_ids.map((id) => (
+                  <span key={id} className={s.chip} title="Dal izni">{L.path(id).join(" › ")}</span>
                 ))}
               </div>
               {v.is_admin && (
@@ -360,9 +387,12 @@ function Roles({ v }: { v: AdminView }) {
 }
 
 function RoleForm({ v, role, members }: { v: AdminView; role: AdminRole | null; members: number }) {
+  const L = useLookup();
   const m = useAdminWrite();
   const [name, setName] = useState(role?.name ?? "");
+  const [color, setColor] = useState(role?.color ?? "#5b8cff");
   const [scopes, setScopes] = useState<ReadonlySet<string>>(() => new Set(role?.scopes ?? []));
+  const [nodeIds, setNodeIds] = useState<ReadonlySet<string>>(() => new Set(role?.node_ids ?? []));
   const [err, setErr] = useState<string | null>(null);
   const done = { onError: (x: unknown) => setErr(errorText(x)) };
   return (
@@ -372,12 +402,17 @@ function RoleForm({ v, role, members }: { v: AdminView; role: AdminRole | null; 
         e.preventDefault();
         setErr(null);
         const list = [...scopes];
-        m.mutate(role === null ? adminOps.createRole(name, list) : adminOps.patchRole(role.id, name, list), {
+        const nodes = [...nodeIds];
+        m.mutate(role === null
+          ? adminOps.createRole(name, color, list, nodes)
+          : adminOps.patchRole(role.id, name, color, list, nodes), {
           ...done,
           onSuccess: () => {
             if (role === null) {
               setName("");
+              setColor("#5b8cff");
               setScopes(new Set());
+              setNodeIds(new Set());
             }
           },
         });
@@ -387,6 +422,10 @@ function RoleForm({ v, role, members }: { v: AdminView; role: AdminRole | null; 
       <label className={ui.field}>
         <span>Rol adı<Req /></span>
         <input className={ui.input} value={name} onChange={(e) => setName(e.target.value)} required maxLength={200} />
+      </label>
+      <label className={ui.field}>
+        <span>Rol rengi</span>
+        <input className={ui.input} type="color" value={color} onChange={(e) => setColor(e.target.value)} />
       </label>
       <fieldset className={`${ui.field} ${s.scopeSet}`}>
         <legend>Kapsamlar <span className={ui.fieldHint}>— {scopes.size} / {v.scopes.length} seçili</span></legend>
@@ -407,6 +446,27 @@ function RoleForm({ v, role, members }: { v: AdminView; role: AdminRole | null; 
           ))}
         </div>
       </fieldset>
+      <div className={s.adminRow}>
+        <span className={s.adminKey}>Dal izinleri</span>
+        <div className={s.chips}>
+          {[...nodeIds].map((id) => (
+            <span key={id} className={s.chip}>
+              {L.path(id).join(" › ")}
+              <button type="button" className={s.chipX} aria-label="Rol dal iznini al"
+                onClick={() => setNodeIds((prev) => {
+                  const next = new Set(prev);
+                  next.delete(id);
+                  return next;
+                })}><Icon name="x" size={12} /></button>
+            </span>
+          ))}
+          <NodeTreePicker rootKey="units" look="chip" label="Rol dal izni ver" value={null}
+            disabled={m.isPending} exclude={(n) => nodeIds.has(n.id)}
+            onChange={(id) => setNodeIds((prev) => new Set(prev).add(id))}>
+            <Icon name="plus" size={13} /> Dal izni ekle
+          </NodeTreePicker>
+        </div>
+      </div>
       <div className={ui.dact}>
         {role !== null && (
           <Button variant="danger" onClick={() => {

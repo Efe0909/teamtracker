@@ -551,9 +551,10 @@ export function useAdminWrite() {
 export const adminOps = {
   addUser: (email: string, name: string) => ({ method: "POST" as const, path: "/users", body: { email, name } }),
   user: (id: Uuid, op: UserOp) => ({ method: "PATCH" as const, path: `/users/${id}`, body: op }),
-  createRole: (name: string, scopes: string[]) => ({ method: "POST" as const, path: "/roles", body: { name, scopes } }),
-  patchRole: (id: Uuid, name: string, scopes: string[]) =>
-    ({ method: "PATCH" as const, path: `/roles/${id}`, body: { name, scopes } }),
+  createRole: (name: string, color: string, scopes: string[], node_ids: Uuid[]) =>
+    ({ method: "POST" as const, path: "/roles", body: { name, color, scopes, node_ids } }),
+  patchRole: (id: Uuid, name: string, color: string, scopes: string[], node_ids: Uuid[]) =>
+    ({ method: "PATCH" as const, path: `/roles/${id}`, body: { name, color, scopes, node_ids } }),
   deleteRole: (id: Uuid) => ({ method: "DELETE" as const, path: `/roles/${id}` }),
 };
 

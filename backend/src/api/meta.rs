@@ -49,6 +49,28 @@ struct MeInfo {
 }
 
 #[derive(Serialize, sqlx::FromRow)]
+struct UserRow {
+    id: Uuid,
+    name: String,
+    color: Option<String>,
+    is_admin: bool,
+    last_seen_at: Option<DateTime<Utc>>,
+    nickname: Option<String>,
+    phone: Option<String>,
+    avatar_id: Option<Uuid>,
+    birth_day: Option<i16>,
+    birth_month: Option<i16>,
+    birth_year: Option<i16>,
+}
+
+#[derive(Serialize)]
+struct RoleBadge {
+    id: Uuid,
+    name: String,
+    color: String,
+}
+
+#[derive(Serialize)]
 struct UserOut {
     id: Uuid,
     name: String,
@@ -61,6 +83,7 @@ struct UserOut {
     birth_day: Option<i16>,
     birth_month: Option<i16>,
     birth_year: Option<i16>,
+    roles: Vec<RoleBadge>,
 }
 
 #[derive(Serialize, sqlx::FromRow)]
@@ -111,11 +134,30 @@ pub async fn meta(State(st): State<AppState>, CurrentUser(me): CurrentUser) -> R
     let profile_complete: bool = sqlx::query_scalar(
         "select coalesce(btrim(phone), '') <> '' from users where id = $1")
         .bind(me.id).fetch_one(&st.pool).await?;
-    let users = sqlx::query_as(
+    let user_rows: Vec<UserRow> = sqlx::query_as(
         "select id, name, color, is_admin, last_seen_at, nickname, phone, avatar_id,
                 birth_day, birth_month, birth_year
            from users where is_active order by name")
         .fetch_all(&st.pool).await?;
+    let role_rows: Vec<(Uuid, Uuid, String, String)> = sqlx::query_as(
+        "select ur.user_id, r.id, r.name, r.color
+           from user_roles ur join roles r on r.id = ur.role_id
+           join users u on u.id = ur.user_id
+          where u.is_active order by r.name")
+        .fetch_all(&st.pool).await?;
+    let mut roles = std::collections::HashMap::<Uuid, Vec<RoleBadge>>::new();
+    for (user_id, id, name, color) in role_rows {
+        roles.entry(user_id).or_default().push(RoleBadge { id, name, color });
+    }
+    let users = user_rows.into_iter().map(|u| {
+        let role_badges = roles.remove(&u.id).unwrap_or_default();
+        UserOut {
+            id: u.id, name: u.name, color: u.color, is_admin: u.is_admin,
+            last_seen_at: u.last_seen_at, nickname: u.nickname, phone: u.phone,
+            avatar_id: u.avatar_id, birth_day: u.birth_day, birth_month: u.birth_month,
+            birth_year: u.birth_year, roles: role_badges,
+        }
+    }).collect();
     let teams = sqlx::query_as(
         "select t.id, t.name, t.description, t.color, t.chat_id,
                 array(select n.node_id from team_nodes n where n.team_id = t.id

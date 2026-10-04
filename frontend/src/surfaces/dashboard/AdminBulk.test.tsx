@@ -18,7 +18,7 @@ const person = (id: string, name: string, over: Partial<AdminPerson> = {}): Admi
 
 it("bildirim ozeti gorunur, secilince toplu islem cubugu cikar", async () => {
   const view: AdminView = {
-    is_admin: true, scopes: [], roles: [{ id: "r1", name: "Yapıcı", scopes: [] }],
+    is_admin: true, scopes: [], roles: [{ id: "r1", name: "Yapıcı", color: "#5b8cff", scopes: [], node_ids: [] }],
     people: [
       person("a", "Ayşe", { notify_level: "mentions", quiet_start: 22, quiet_end: 7, push_devices: 2, chat_overrides: 1 }),
       person("b", "Bora"),

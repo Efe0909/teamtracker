@@ -13,7 +13,7 @@ afterEach(() => {
 const now = new Date();
 const user = (id: string, name: string, over: Partial<MetaUser> = {}): MetaUser => ({
   id, name, color: null, is_admin: false, last_seen_at: null, nickname: null, phone: null, avatar_id: null,
-  birth_day: null, birth_month: null, birth_year: null, ...over,
+  birth_day: null, birth_month: null, birth_year: null, roles: [], ...over,
 });
 
 it("kisi arar, telefon ve dogum gununu gosterir, bugun dogum gunu isaretlenir", async () => {
@@ -21,7 +21,10 @@ it("kisi arar, telefon ve dogum gununu gosterir, bugun dogum gunu isaretlenir", 
   const meta: Meta = {
     me: { id: "a", is_admin: false, scopes: [], team_ids: [], profile_complete: true, favorite_nodes: [] },
     users: [
-      user("a", "Ayşe", { phone: "0532 111 22 33" }),
+      user("a", "Ayşe", {
+        phone: "0532 111 22 33",
+        roles: [{ id: "r1", name: "Yapıcı", color: "#e5484d" }],
+      }),
       user("b", "Bora", { nickname: "Boro", birth_day: now.getDate(), birth_month: now.getMonth() + 1 }),
     ],
     teams: [], pillars: [], nodes: [],
@@ -32,6 +35,7 @@ it("kisi arar, telefon ve dogum gununu gosterir, bugun dogum gunu isaretlenir", 
     </QueryClientProvider>,
   );
   expect(screen.getByText("0532 111 22 33")).toBeTruthy();
+  expect(screen.getByText("Yapıcı")).toBeTruthy();
   expect(screen.getByText(/bugün!/)).toBeTruthy();
   fireEvent.change(screen.getByLabelText("Kişi ara"), { target: { value: "boro" } });
   expect(screen.queryByText("Ayşe")).toBeNull();

@@ -17,8 +17,8 @@ import { MobileEventStrip, TeamPage } from "./RecordPage";
 const META: Meta = {
   me: { id: "u1", is_admin: false, scopes: [], team_ids: ["t1"], profile_complete: true, favorite_nodes: [] },
   users: [
-    { id: "u1", name: "Efe Tester", nickname: "efe", color: null, is_admin: false, last_seen_at: null, phone: "5551234567", avatar_id: null, birth_day: null, birth_month: null, birth_year: null },
-    { id: "u2", name: "Ahmet Yılmaz", nickname: "ahmet", color: null, is_admin: false, last_seen_at: null, phone: null, avatar_id: null, birth_day: null, birth_month: null, birth_year: null },
+    { id: "u1", name: "Efe Tester", nickname: "efe", color: null, is_admin: false, last_seen_at: null, phone: "5551234567", avatar_id: null, birth_day: null, birth_month: null, birth_year: null, roles: [] },
+    { id: "u2", name: "Ahmet Yılmaz", nickname: "ahmet", color: null, is_admin: false, last_seen_at: null, phone: null, avatar_id: null, birth_day: null, birth_month: null, birth_year: null, roles: [] },
   ],
   teams: [
     { id: "t1", name: "Yazılım Ekibi", description: "Ön yüz ve arka yüz", color: null, chat_id: "c1", node_ids: [], pillar_id: null, banner_id: null },
