@@ -53,6 +53,9 @@ pub struct AppState {
     pub vapid: Option<Arc<crate::webpush::Vapid>>,
     /// Resend istemcisi; yoksa posta kuyrukta bekler.
     pub mailer: Option<Arc<crate::mail::Resend>>,
+    /// Kalite kapisinin sorulari ve esikleri (`quality_config`); yonetimden
+    /// degisince burasi da guncellenir. Kilit await boyunca tutulmaz.
+    pub quality: Arc<RwLock<crate::decision::QualityConfig>>,
 }
 
 impl FromRef<AppState> for Key {
@@ -81,9 +84,11 @@ impl AppState {
         if !cfg.external_on(Service::Decision) {
             tracing::info!("kalite kontrolu kapali (OPENROUTER_API_KEY yok ya da manifest external_off): yalniz uzunluk kurali");
         }
+        let quality = Arc::new(RwLock::new(crate::decision::load(&pool).await));
         Ok(AppState {
             vapid,
             mailer,
+            quality,
             pending_requests: Arc::default(),
             pool,
             key: crate::auth::key_from(&cfg),

@@ -11,7 +11,13 @@
 
 ## Karar modeli
 
-`POST https://openrouter.ai/api/alpha/decisions`, `OPENROUTER_API_KEY` ve manifestteki `decision_model` kullanır. Varsayılan model `respan/span-01-lite`; zaman aşımı 3 saniye. Yalnız `noul` soruları gönderilir; state düz metindir. Kayıt/etkinlikte sorular somut eylem/sonuç (`specific`) ve bağlam (`context`); kapanışta yapılan iş/sonuç/gerekçe (`closing_justified`). Herhangi bir evet olasılığı 0.5'in altındaysa API 422 `low_quality` ve başarısız soru kodları döndürür.
+`POST https://openrouter.ai/api/alpha/decisions`, `OPENROUTER_API_KEY` ve manifestteki `decision_model` kullanır. Varsayılan model `respan/span-01-lite`; zaman aşımı 3 saniye. Yalnız `noul` soruları gönderilir; state düz metindir. Kayıt/etkinlikte sorular somut eylem/sonuç (`specific`) ve bağlam (`context`); kapanışta yapılan iş/sonuç/gerekçe (`closing_justified`). Herhangi bir sorunun evet olasılığı **kendi eşiğinin** (`min`, varsayılan 0.5) altındaysa API 422 `low_quality` ve başarısız soru kodları döndürür.
+
+### Soru metinleri ve eşikler yönetimden ayarlanır
+
+Soru **adları** sabittir (`specific`, `context`, `closing_justified`; kod bunlara bağlanır). Her sorunun yönergesi (`instructions`), evet/hayır ölçütü (`yes`, `no`) ve eşiği (`min`) `quality_config` tablosunda (tek satır, göç 014) durur; Yönetim → **Kalite kapısı** sekmesinden (yalnız admin) düzenlenir ve kaydedilince hemen geçerli olur, release ya da yeniden başlatma gerekmez. Satır yoksa `decision::QualityConfig::defaults()` geçerlidir ("Varsayılana dön" satırı siler). Değişiklik `security_events`'e `quality_config_changed` / `quality_config_reset` olarak yazılır, metin yazılmaz.
+
+Uçlar (hepsi admin): `GET|PUT|DELETE /api/admin/quality`, `POST /api/admin/quality/try` (kaydedilmemiş taslakla tek deneme; kayıt akışına yazmaz). Doğrulama: üç soru da bulunmalı, yönerge ≤ 3000, ölçüt ≤ 400 karakter, eşik 0,05–0,95; bilinmeyen alan reddedilir. Varsayılan yönergeler Türkçe yazımı (aksansız, kısaltmalı) cezalandırmaz ve "somut bir şey söylüyor mu" ölçütüne dayanır; TASK-370 ölçümü genel gevşetmenin boş laf geçişini artırdığını gösterdi (kapanışta `bad` geçişi), bu yüzden değişikliği "Dene" kutusuyla örneklerle doğrula.
 
 Ön yüz Türkçe gerekçelerle “Düzenle” ve “Yine de gönder” seçeneklerini sunar. `quality_override: true` ile tekrar gönderim kabul edilir; override kayıt sohbeti etkinlik akışında görünür. Ağ/HTTP/yanıt hatası, zaman aşımı, anahtar yokluğu veya kill switch kalite denetimini atlar ve `tracing::warn` üretir; uzunluk denetimi sürer.
 
@@ -28,7 +34,7 @@ Başlık, açıklama ve kapanış notu kalite değerlendirmesi için cihazdan Op
 ## Yapılandırma
 
 - `OPENROUTER_API_KEY`: isteğe bağlı karar servisi anahtarı.
-- `backend/manifest.json`: `decision_model` (varsayılan `respan/span-01-lite`), `external_off`, `version`, `contact_email` — gizli değil, şifreli dosyada tutulmaz.
+- `backend/manifest.json`: `decision_model` (varsayılan `respan/span-01-lite`; soru metinleri ve eşikler DB'de, yukarıya bak), `external_off`, `version`, `contact_email` — gizli değil, şifreli dosyada tutulmaz.
 
 ## Test
 

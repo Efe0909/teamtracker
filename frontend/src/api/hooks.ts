@@ -9,6 +9,9 @@ import { qs, request } from "./client";
 import type {
   ActionPatch,
   AdminView,
+  Quality,
+  QualityConfig,
+  QualityView,
   Attachment,
   CheckpointAction,
   EventDetail,
@@ -65,6 +68,7 @@ export const keys = {
   myActions: ["my-actions"] as const,
   nodes: ["nodes"] as const,
   admin: ["admin"] as const,
+  quality: ["admin", "quality"] as const,
   tags: ["tags"] as const,
   events: ["events"] as const,
   event: (id: Uuid) => ["event", id] as const,
@@ -611,5 +615,28 @@ export function useAdminActivity() {
   return useQuery({
     queryKey: keys.adminActivity,
     queryFn: () => request<PersonUse[]>("GET", "/api/admin/activity"),
+  });
+}
+
+// --- kalite kapisi ayarlari (yalniz admin) -------------------------------------
+
+export function useQualityConfig() {
+  return useQuery({ queryKey: keys.quality, queryFn: () => request<QualityView>("GET", "/api/admin/quality") });
+}
+
+export function useQualityWrite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (cfg: QualityConfig | null) =>
+      cfg === null ? request<QualityView>("DELETE", "/api/admin/quality") : request<QualityView>("PUT", "/api/admin/quality", cfg),
+    onSuccess: (v) => qc.setQueryData(keys.quality, v),
+  });
+}
+
+/** Kaydetmeden tek deneme: taslak sorularla modele sorar. */
+export function useQualityTry() {
+  return useMutation({
+    mutationFn: (b: { kind: "entry" | "closing"; state: string; config: QualityConfig }) =>
+      request<Quality>("POST", "/api/admin/quality/try", b),
   });
 }

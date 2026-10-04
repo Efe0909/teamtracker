@@ -17,6 +17,7 @@ mod nodes;
 mod notify;
 mod otf;
 mod profile;
+mod quality;
 mod records;
 mod teams;
 
@@ -109,6 +110,8 @@ pub fn router() -> Router<AppState> {
         .route("/api/tags", get(attachments::tags))
         .route("/api/admin", get(admin::get))
         .route("/api/admin/activity", get(admin::activity))
+        .route("/api/admin/quality", get(quality::get).put(quality::put).delete(quality::reset))
+        .route("/api/admin/quality/try", post(quality::try_it))
         .route("/api/admin/users", post(admin::add_user))
         .route("/api/admin/users/{id}", patch(admin::patch_user))
         .route("/api/admin/roles", post(admin::create_role))
