@@ -36,6 +36,7 @@ function detail(createdBy: string): RecordDetail {
       due_date: null,
       created_at: new Date(Date.now() - 5 * 60_000).toISOString(),
       updated_at: new Date().toISOString(),
+      closing_note: null,
     },
     actions: [],
     participants: [],

@@ -136,6 +136,8 @@ export function TeamForm(props: {
   const noun = props.kind === "team" ? "takım" : "pillar";
   const path = props.kind === "team" ? "/api/teams" : "/api/pillars";
   const body = { name: name.trim(), description: desc.trim() === "" ? null : desc, color };
+  const nameValid = Array.from(name.trim()).length >= 5 || name.trim() === init?.name;
+  const descValid = desc.trim() === "" || Array.from(desc.trim()).length >= 30 || desc.trim() === (init?.description ?? "");
 
   return (
     <Dialog open onClose={props.onClose} title={init === undefined ? `Yeni ${noun}` : `${props.kind === "team" ? "Takımı" : "Pillar'ı"} düzenle`}
@@ -153,11 +155,13 @@ export function TeamForm(props: {
         {err !== null && <p className={ui.error} role="alert">{err}</p>}
         <input className={ui.titleInput} value={name} onChange={(e) => setName(e.target.value)} required maxLength={200}
           autoFocus placeholder={props.kind === "team" ? "Takım adı — ör. Maliye" : "Pillar adı — ör. Kalite"} aria-label="Ad" />
+        <small className={ui.fieldHint}>{Array.from(name.trim()).length}/5 karakter</small>
         <div className={ui.propForm}>
           <label className={ui.propField}>
             <span className={ui.propLabel}><Icon name="edit" size={14} /> Açıklama</span>
             <textarea className={`${ui.input} ${ui.ghost}`} rows={3} value={desc} onChange={(e) => setDesc(e.target.value)}
               placeholder={props.kind === "team" ? "Takım ne iş yapar?" : "Bu pillar neyi kapsar?"} />
+            <small className={ui.fieldHint}>{Array.from(desc.trim()).length}/30 karakter · isteğe bağlı</small>
           </label>
           <div className={ui.propField}>
             <span className={ui.propLabel}><Icon name="stOpen" size={14} /> Renk</span>
@@ -167,7 +171,7 @@ export function TeamForm(props: {
         {props.extra}
         <div className={ui.dact}>
           <Button onClick={props.onClose}>Vazgeç</Button>
-          <Button type="submit" variant="primary" aria-busy={m.isPending} disabled={m.isPending || name.trim() === ""}>
+          <Button type="submit" variant="primary" aria-busy={m.isPending} disabled={m.isPending || !nameValid || !descValid}>
             {m.isPending ? "Kaydediliyor…" : init === undefined ? "Oluştur" : "Kaydet"}
           </Button>
         </div>

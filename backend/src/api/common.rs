@@ -58,10 +58,38 @@ where
     T::deserialize(d).map(Some)
 }
 
+/// Bilgi yogunlugu tabani (spec/76): ad/baslik ve aciklama alt siniri, kirpilmis
+/// Unicode karakter. Yalniz YENI yazimda sorulur; eski kisa veri duzenlenene dek kalir.
+pub const NAME_MIN: usize = 5;
+pub const DESC_MIN: usize = 30;
+
+/// `None` (bos alan) gecer; zorunlulugu cagiran ayrica sorar.
+pub fn min_chars(s: Option<&str>, min: usize, code: &'static str) -> Result<(), AppError> {
+    match s {
+        Some(s) if s.trim().chars().count() < min => Err(AppError::BadRequest(code)),
+        _ => Ok(()),
+    }
+}
+
 /// Serbest metin girdisi: bosluk kirpilir, bos ise None, sinir asilirsa 400.
 pub fn text(raw: Option<String>, max: usize, code: &'static str) -> Result<Option<String>, AppError> {
     match raw.map(|s| s.trim().to_string()).filter(|s| !s.is_empty()) {
         Some(s) if s.chars().count() > max => Err(AppError::BadRequest(code)),
         other => Ok(other),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn alt_sinir_unicode_karakter_sayar() {
+        // "Çiçek" 5 karakter, 8 bayt: bayt degil karakter sayilir.
+        assert!(min_chars(Some("Çiçek"), NAME_MIN, "x").is_ok());
+        assert!(min_chars(Some("  Çiçe  "), NAME_MIN, "x").is_err());
+        assert!(min_chars(None, NAME_MIN, "x").is_ok());
+        assert!(min_chars(Some(&"ı".repeat(29)), DESC_MIN, "x").is_err());
+        assert!(min_chars(Some(&"ı".repeat(30)), DESC_MIN, "x").is_ok());
     }
 }

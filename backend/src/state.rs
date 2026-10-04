@@ -15,7 +15,7 @@ use axum_extra::extract::cookie::Key;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::{config::Config, db::tree::{NodeRow, TreeIndex}, ratelimit::RateLimit};
+use crate::{config::{Config, Service}, db::tree::{NodeRow, TreeIndex}, ratelimit::RateLimit};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -67,13 +67,19 @@ impl AppState {
         let http = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(10))
             .build()?;
-        let vapid = crate::webpush::Vapid::new(&cfg.vapid_private, &cfg.vapid_sub).map(Arc::new);
+        // Dis servis kapisi TEK: `external_on` (EKIPTAKIP_EXTERNAL_OFF + anahtar).
+        let vapid = cfg.external_on(Service::Push)
+            .then(|| crate::webpush::Vapid::new(&cfg.vapid_private, &cfg.vapid_sub)).flatten().map(Arc::new);
         if vapid.is_none() {
-            tracing::info!("VAPID_PRIVATE yok ya da bozuk: web push kapali");
+            tracing::info!("web push kapali (VAPID_PRIVATE yok/bozuk ya da EKIPTAKIP_EXTERNAL_OFF)");
         }
-        let mailer = crate::mail::Resend::new(&cfg).map(Arc::new);
+        let mailer = cfg.external_on(Service::Resend)
+            .then(|| crate::mail::Resend::new(&cfg)).flatten().map(Arc::new);
         if mailer.is_none() {
-            tracing::info!("RESEND_API_KEY yok: posta yalniz kuyruga yazilir");
+            tracing::info!("posta kapali (RESEND_API_KEY yok ya da EKIPTAKIP_EXTERNAL_OFF): yalniz kuyruga yazilir");
+        }
+        if !cfg.external_on(Service::Decision) {
+            tracing::info!("kalite kontrolu kapali (OPENROUTER_API_KEY yok ya da EKIPTAKIP_EXTERNAL_OFF): yalniz uzunluk kurali");
         }
         Ok(AppState {
             vapid,

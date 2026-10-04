@@ -14,6 +14,7 @@ mod csrf;
 // uclari geldikce kullanilacak; o zamana kadar olu kod uyarisi susturuldu.
 #[allow(dead_code)]
 mod db;
+mod decision;
 mod error;
 mod media;
 mod mentions;

@@ -86,6 +86,12 @@ export function describe(item: FeedItem | Notice, L: Lookup): string {
   switch (item.verb) {
     case "created":
       return "kaydı açtı";
+    case "quality_override":
+      return `kalite uyarısına rağmen ${field === "closing_note" ? "kapanış notunu" : "metni"} gönderdi`;
+    case "closing_note":
+      return field === "action"
+        ? `${item.subject_label ?? "Eylem"} kapatıldı: ${item.body ?? ""}`
+        : `Kapattı: ${item.body ?? ""}`;
     case "field_changed":
       return ch === null
         ? `${FIELD[field] ?? field} alanını değiştirdi`

@@ -94,7 +94,14 @@ export type ApiErrorCode =
   | "grant_not_held"
   | "grant_manage_users"
   | "owner_change_denied"
-  | "network";
+  | "network"
+  | "name_too_short"
+  | "title_too_short"
+  | "description_too_short"
+  | "closing_note_required"
+  | "closing_note_too_short"
+  | "invalid_closing_note"
+  | "low_quality";
 
 export const ERRORS = {
   unauthorized: "Oturumun kapanmış. Yeniden giriş yap.",
@@ -187,6 +194,13 @@ export const ERRORS = {
   grant_manage_users: "Kişi yönetimi yetkisini yalnız bir yönetici verip alabilir.",
   owner_change_denied: "Sorumluyu yalnız mevcut sorumlu, birimin dal yetkilisi ya da yönetici değiştirebilir. Sorumlusuz kaydı kendin üstlenebilirsin.",
   network: "Sunucuya ulaşılamadı. Bağlantını kontrol et.",
+  name_too_short: "Ad en az 5 karakter olmalı.",
+  title_too_short: "Başlık en az 5 karakter olmalı.",
+  description_too_short: "Açıklama en az 30 karakter olmalı.",
+  closing_note_required: "Kapatırken en az 30 karakterlik kapanış notu yaz.",
+  closing_note_too_short: "Kapanış notu en az 30 karakter olmalı.",
+  invalid_closing_note: "Kapanış notu çok uzun.",
+  low_quality: "Metin yeterli bilgi içermiyor.",
 } satisfies Record<ApiErrorCode, string>;
 
 export function isErrorCode(s: string): s is ApiErrorCode {

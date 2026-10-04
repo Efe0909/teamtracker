@@ -1,7 +1,7 @@
 // Kayit ekraninin baslik, "top kimde" satiri, salt okunur notu ve eylemleri.
 
 import { useState, type ReactNode } from "react";
-import { errorText } from "../../api/client";
+import { ApiError, errorText } from "../../api/client";
 import { useAddAction, useParticipant, usePin, usePatchAction, usePatchRecord } from "../../api/hooks";
 import type { Action, ActionPatch, RecordDetail } from "../../api/types";
 import { ACTION_STATUS, ACTION_STATUS_ORDER, ago, formatDay, isDone } from "../../lib/labels";
@@ -53,25 +53,35 @@ export function RecordHead({ d, showPath = true, titleExtra }: { d: RecordDetail
           </button>
         )}
       </div>
+      {r.status === "closed" && r.closing_note && <p className={s.muted}>Kapanış notu: {r.closing_note}</p>}
       {edit !== null && <TextEdit d={d} field={edit} onClose={() => setEdit(null)} />}
     </div>
   );
 }
 
 function TextEdit({ d, field, onClose }: { d: RecordDetail; field: "title" | "description"; onClose: () => void }) {
+  const L = useLookup();
   const m = usePatchRecord(d.record.id);
   const [v, setV] = useState((field === "title" ? d.record.title : d.record.description) ?? "");
   const [err, setErr] = useState<string | null>(null);
+  const [qualityReasons, setQualityReasons] = useState<string[] | null>(null);
+  const submit = (quality_override = false) => {
+    const patch = field === "title"
+      ? ({ field: "title", value: v } as const)
+      : ({ field: "description", value: v.trim() === "" ? null : v } as const);
+    m.mutate({ ...patch, quality_override }, {
+      onSuccess: onClose,
+      onError: (x) => x instanceof ApiError && x.code === "low_quality"
+        ? setQualityReasons(x.reasons) : setErr(errorText(x)),
+    });
+  };
   return (
     <Dialog open onClose={onClose} title={field === "title" ? "Başlığı düzenle" : "Açıklamayı düzenle"} wide>
       <form
         className={ui.formStack}
         onSubmit={(e) => {
           e.preventDefault();
-          const patch = field === "title"
-            ? ({ field: "title", value: v } as const)
-            : ({ field: "description", value: v.trim() === "" ? null : v } as const);
-          m.mutate(patch, { onSuccess: onClose, onError: (x) => setErr(errorText(x)) });
+          submit();
         }}
       >
         {err !== null && <p className={ui.error} role="alert">{err}</p>}
@@ -83,6 +93,8 @@ function TextEdit({ d, field, onClose }: { d: RecordDetail; field: "title" | "de
           <textarea className={ui.input} aria-labelledby="dlg-title" value={v} onChange={(e) => setV(e.target.value)}
             rows={8} autoFocus placeholder="Ne oldu, nerede, ne zaman?" />
         )}
+        <small className={ui.fieldHint}>{Array.from(v.trim()).length}/{field === "title" ? 5 : 30} karakter</small>
+        {L.meta.external_off?.includes("decision") && <p className={ui.fieldHint}>Kalite kontrolü kapalı (dış servis devre dışı)</p>}
         <div className={ui.dact}>
           <Button onClick={onClose}>Vazgeç</Button>
           <Button type="submit" variant="primary" aria-busy={m.isPending}
@@ -91,6 +103,13 @@ function TextEdit({ d, field, onClose }: { d: RecordDetail; field: "title" | "de
           </Button>
         </div>
       </form>
+      <Dialog open={qualityReasons !== null} onClose={() => setQualityReasons(null)} title="Kalite kontrolü uyarısı">
+        <p>Metin bazı ölçütlerde zayıf bulundu: {(qualityReasons ?? []).map((r) => ({ specific: "somut iş veya sonuç", context: "ekip için yeterli bağlam" }[r] ?? r)).join(", ")}.</p>
+        <div className={ui.dact}>
+          <Button onClick={() => setQualityReasons(null)}>Düzenle</Button>
+          <Button variant="primary" disabled={m.isPending} onClick={() => { setQualityReasons(null); submit(true); }}>Yine de gönder</Button>
+        </div>
+      </Dialog>
     </Dialog>
   );
 }
@@ -262,6 +281,9 @@ export function ActionList({ d }: { d: RecordDetail }) {
   const open = d.actions.filter((a) => !isDone(a.status));
   const done = d.actions.filter((a) => isDone(a.status));
   const ro = !d.access.can_edit;
+  const [closingAction, setClosingAction] = useState<Action | null>(null);
+  const [closingNote, setClosingNote] = useState("");
+  const [qualityReasons, setQualityReasons] = useState<string[] | null>(null);
 
   const change = (a: Action, p: ActionPatch, undo: ActionPatch, text: string) =>
     patch.mutate(
@@ -272,6 +294,15 @@ export function ActionList({ d }: { d: RecordDetail }) {
       },
     );
 
+  const submitCloseAction = (quality_override = false) => {
+    if (closingAction === null) return;
+    patch.mutate({ id: closingAction.id, patch: { field: "status", value: "closed", closing_note: closingNote, quality_override } }, {
+      onSuccess: () => { setClosingAction(null); setClosingNote(""); },
+      onError: (e) => e instanceof ApiError && e.code === "low_quality"
+        ? setQualityReasons(e.reasons) : toast({ text: errorText(e), error: true }),
+    });
+  };
+
   const owners: Option<string | null>[] = [
     { value: null, label: "Havuzda", render: <span className={s.muted}>Havuzda</span> },
     ...L.meta.users.map((u) => ({ value: u.id as string | null, label: u.name, render: <Who user={u} /> })),
@@ -281,10 +312,12 @@ export function ActionList({ d }: { d: RecordDetail }) {
     <li key={a.id} className={cx(s.action, isDone(a.status) && s.actionDone)}>
       <Picker look="bare" label={`${a.title} — durum`} disabled={ro} value={a.status}
         options={ACTION_STATUS_ORDER.map((v) => ({ value: v, label: ACTION_STATUS[v], render: <Status status={v} action /> }))}
-        onChange={(v) => change(a, { field: "status", value: v }, { field: "status", value: a.status }, "Durum değişti")}>
+        onChange={(v) => v === "closed" && a.status !== "closed"
+          ? (setClosingAction(a), setClosingNote(""))
+          : change(a, { field: "status", value: v }, { field: "status", value: a.status }, "Durum değişti")}>
         <Status status={a.status} action />
       </Picker>
-      <span className={s.actionTitle}>{a.title}</span>
+      <span className={s.actionTitle}>{a.title}{a.closing_note && <small className={s.muted}> · {a.closing_note}</small>}</span>
       <span className={s.actionMeta}>
         {!ro && !isDone(a.status) && a.owner_id === null && (
           // Havuzdaki eylemi tek dokunusla ustlen (spec/17 etki 8).
@@ -302,7 +335,7 @@ export function ActionList({ d }: { d: RecordDetail }) {
         </Picker>
         {!ro && !isDone(a.status) && (
           <IconButton icon="check" label={`${a.title} — bitti`}
-            onClick={() => change(a, { field: "status", value: "closed" }, { field: "status", value: a.status }, "Eylem kapatıldı")} />
+            onClick={() => { setClosingAction(a); setClosingNote(""); }} />
         )}
       </span>
     </li>
@@ -323,6 +356,27 @@ export function ActionList({ d }: { d: RecordDetail }) {
         {d.actions.length > 0 && <ul className={s.actions}>{[...open, ...done].map(row)}</ul>}
         {!ro && <AddAction d={d} />}
       </div>
+      <Dialog open={closingAction !== null} onClose={() => setClosingAction(null)} title="Eylemi kapat">
+        <div className={ui.formStack}>
+          <label className={ui.field}>
+            <span>Kapanış notu</span>
+            <textarea className={ui.input} rows={5} value={closingNote} onChange={(e) => setClosingNote(e.target.value)} />
+            <small className={ui.fieldHint}>{Array.from(closingNote.trim()).length}/30 karakter</small>
+          </label>
+          {L.meta.external_off?.includes("decision") && <p className={ui.fieldHint}>Kalite kontrolü kapalı (dış servis devre dışı)</p>}
+          <div className={ui.dact}>
+            <Button onClick={() => setClosingAction(null)}>Vazgeç</Button>
+            <Button variant="primary" disabled={patch.isPending || Array.from(closingNote.trim()).length < 30} onClick={() => submitCloseAction()}>Kapat</Button>
+          </div>
+        </div>
+        <Dialog open={qualityReasons !== null} onClose={() => setQualityReasons(null)} title="Kalite kontrolü uyarısı">
+          <p>Not zayıf bulundu: {(qualityReasons ?? []).map((r) => ({ closing_justified: "kapanış gerekçesi" }[r] ?? r)).join(", ")}.</p>
+          <div className={ui.dact}>
+            <Button onClick={() => setQualityReasons(null)}>Düzenle</Button>
+            <Button variant="primary" disabled={patch.isPending} onClick={() => { setQualityReasons(null); submitCloseAction(true); }}>Yine de gönder</Button>
+          </div>
+        </Dialog>
+      </Dialog>
     </section>
   );
 }

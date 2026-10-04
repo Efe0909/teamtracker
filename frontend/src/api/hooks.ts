@@ -261,7 +261,7 @@ export function useCreateEvent() {
 export type EventOp = { method: "POST" | "PATCH" | "PUT" | "DELETE"; path: string; body?: unknown };
 
 export const eventOps = {
-  patch: (id: Uuid, p: EventPatch): EventOp => ({ method: "PATCH", path: `/api/events/${id}`, body: p }),
+  patch: (id: Uuid, p: EventPatch, quality_override = false): EventOp => ({ method: "PATCH", path: `/api/events/${id}`, body: { ...p, quality_override } }),
   participant: (id: Uuid, user: Uuid, on: boolean, role: string | null = null): EventOp =>
     on ? { method: "PUT", path: `/api/events/${id}/participants/${user}`, body: { role } }
       : { method: "DELETE", path: `/api/events/${id}/participants/${user}` },
