@@ -11,21 +11,24 @@
 
 ## Karar modeli
 
-`POST https://openrouter.ai/api/alpha/decisions`, `OPENROUTER_API_KEY` ve `EKIPTAKIP_DECISION_MODEL` kullanır. Varsayılan model `respan/span-01-lite`; zaman aşımı 3 saniye. Yalnız `noul` soruları gönderilir; state düz metindir. Kayıt/etkinlikte sorular somut eylem/sonuç (`specific`) ve bağlam (`context`); kapanışta yapılan iş/sonuç/gerekçe (`closing_justified`). Herhangi bir evet olasılığı 0.5'in altındaysa API 422 `low_quality` ve başarısız soru kodları döndürür.
+`POST https://openrouter.ai/api/alpha/decisions`, `OPENROUTER_API_KEY` ve manifestteki `decision_model` kullanır. Varsayılan model `respan/span-01-lite`; zaman aşımı 3 saniye. Yalnız `noul` soruları gönderilir; state düz metindir. Kayıt/etkinlikte sorular somut eylem/sonuç (`specific`) ve bağlam (`context`); kapanışta yapılan iş/sonuç/gerekçe (`closing_justified`). Herhangi bir evet olasılığı 0.5'in altındaysa API 422 `low_quality` ve başarısız soru kodları döndürür.
 
 Ön yüz Türkçe gerekçelerle “Düzenle” ve “Yine de gönder” seçeneklerini sunar. `quality_override: true` ile tekrar gönderim kabul edilir; override kayıt sohbeti etkinlik akışında görünür. Ağ/HTTP/yanıt hatası, zaman aşımı, anahtar yokluğu veya kill switch kalite denetimini atlar ve `tracing::warn` üretir; uzunluk denetimi sürer.
 
 ## Dış servisler ve KVKK
 
-`EKIPTAKIP_EXTERNAL_OFF` virgülle ayrılmış `decision`, `resend`, `push` anahtarlarını ya da `all` değerini kabul eder. Anahtarı/yapılandırması olmayan servis de kapalı sayılır. Kapalı servisler `/api/meta.external_off` içinde döner. Kalite kapalıyken kayıt ve etkinlik formlarında, push kapalıyken bildirim ayarında açık bilgi gösterilir. `decision` kapatmak için `EKIPTAKIP_EXTERNAL_OFF=decision` kullan.
+Manifestteki (`backend/manifest.json`) `external_off` listesi `decision`, `resend`, `push` anahtarlarını ya da `"all"` değerini kabul eder; bilinmeyen ad açılışı durdurur. Anahtarı/yapılandırması olmayan servis de kapalı sayılır. Kapalı servisler `/api/meta.external_off` içinde döner. Kalite kapalıyken kayıt ve etkinlik formlarında, push kapalıyken bildirim ayarında açık bilgi gösterilir. `decision` kapatmak için manifestte `"external_off": ["decision"]` yaz.
+
+Kalite açıkken aynı metin alanlarının altında kişisel veri uyarısı durur (telefon, e-posta, adres, kişi adı yazma; OpenRouter tarafındaki redact kuralları bunları modele ulaşmadan maskeler) ve gizlilik sayfasına bağlanır. Profil penceresi (ilk girişteki telefon/doğum günü ekranı dahil) aynı sayfaya bağlanır.
+
+PATCH `/api/records/{id}` yanıtı, başlık/açıklama değişikliği ya da `closed`'a geçiş modeli çağırdıysa `quality` taşır: `outcome` (`pass` | `low` | `skipped`), modelin `model`/`provider` alanları, soru başına `answers.<ad>.noul` olasılığı ve `reasons`. Saklanmaz, GET'te yoktur. Servis kapalıyken `outcome: "skipped"`, uydurma güven yok.
 
 Başlık, açıklama ve kapanış notu kalite değerlendirmesi için cihazdan OpenRouter'a gider. Bu, yurt dışına kişisel veri aktarımı doğurabilir (DOC-324); veri minimizasyonu ve hukuki dayanak ayrıca değerlendirilmelidir. KVKK riski kabul edilmiyorsa `decision` servisini kapat.
 
 ## Yapılandırma
 
 - `OPENROUTER_API_KEY`: isteğe bağlı karar servisi anahtarı.
-- `EKIPTAKIP_DECISION_MODEL`: isteğe bağlı model adı, varsayılan `respan/span-01-lite`.
-- `EKIPTAKIP_EXTERNAL_OFF`: isteğe bağlı kill switch listesi (`all` veya virgüllü servis adları).
+- `backend/manifest.json`: `decision_model` (varsayılan `respan/span-01-lite`), `external_off`, `version`, `contact_email` — gizli değil, şifreli dosyada tutulmaz.
 
 ## Test
 

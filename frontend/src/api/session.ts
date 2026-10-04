@@ -54,6 +54,11 @@ export function surfaceUrl(dest: Dest, path = "/"): string {
   return `${location.protocol}//${dest}.${apexHost()}${path}`;
 }
 
+/** Gizlilik sayfasi yalniz apex'te (statik); app/dashboard'dan oraya gider. */
+export function privacyUrl(): string {
+  return `${location.protocol}//${apexHost()}/privacy`;
+}
+
 export function welcomeUrl(): string {
   return `${location.protocol}//${apexHost()}/welcome`;
 }

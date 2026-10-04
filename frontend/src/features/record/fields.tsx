@@ -10,6 +10,7 @@ import type { AccessMode, IsoDate, RecordDetail, RecordPatch } from "../../api/t
 import { isDone, KIND, PRIORITY, PRIORITY_ORDER, STATUS, STATUS_ORDER } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
 import { DateField } from "../../ui/DateField";
+import { QualityNote } from "./QualityNote";
 import { Icon, type IconName } from "../../ui/icons";
 import { Button, cx, Dialog, Due, Picker, PriorityTag, Status, TeamName, Tip, ui, useToast, Who } from "../../ui/ui";
 import { NodeTreePicker } from "../nodes/NodePicker";
@@ -137,7 +138,7 @@ export function Properties({ d }: { d: RecordDetail }) {
             <textarea className={ui.input} rows={5} value={closingNote} onChange={(e) => setClosingNote(e.target.value)} />
             <small className={ui.fieldHint}>{Array.from(closingNote.trim()).length}/30 karakter</small>
           </label>
-          {L.meta.external_off?.includes("decision") && <p className={ui.fieldHint}>Kalite kontrolü kapalı (dış servis devre dışı)</p>}
+          <QualityNote />
           <div className={ui.dact}>
             <Button onClick={() => setClosing(false)}>Vazgeç</Button>
             <Button variant="primary" disabled={m.isPending || Array.from(closingNote.trim()).length < 30} onClick={() => submitClose()}>Kapat</Button>

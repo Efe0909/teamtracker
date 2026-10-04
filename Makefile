@@ -1,6 +1,7 @@
 # Yerel gelistirme (alpha-0.2): Postgres Docker'da, API cargo run, web vite.
 #
 #   make dev     hepsini ac + tarayicida http://localhost:5173 (Ctrl-C ikisini durdurur)
+#   make down    Postgres konteynerini kapat (veri kalir)
 #   make seed    tohumu yeniden yukle — VAROLAN VERIYI SILER (yalniz yerel DB)
 #
 # Bos veritabaninda `dev` tohumu kendisi yukler; kullanici varsa dokunmaz.
@@ -10,7 +11,12 @@ URL  := postgresql://ekiptakip:ekiptakip@127.0.0.1:5432/$(DB)
 PSQL := docker exec -i ekiptakip-db psql -U ekiptakip -d $(DB) -q
 BIN  := backend/target/debug/ekiptakip
 
-.PHONY: dev db api web seed seed-fresh
+.PHONY: dev db api web seed seed-fresh down
+
+# Postgres konteynerini durdurur ve siler; VERI korunur (volume kalir).
+# Veriyi de silmek icin: docker compose -p teamtracker down -v
+down:
+	@docker compose -p teamtracker down
 
 dev: db frontend/node_modules
 	@n=$$($(PSQL) -tAc 'select count(*) from users' 2>/dev/null); [ "$${n:-0}" != 0 ] || $(MAKE) seed-fresh

@@ -187,6 +187,8 @@ ok "$(w n POST "$NT" /api/records "{\"kind\":\"task\",\"title\":\"Gecerli baslik
 LEGACY=$(DB "with c as (insert into chats default values returning id) insert into records (unit_id,chat_id,kind,title,description,created_by) select '$UNIT',id,'task','Old','x','$DENIZ' from c returning id" | head -1)
 w n PATCH "$NT" "/api/records/$LEGACY" '{"field":"priority","value":"low"}' >/dev/null
 ok "$(DB "select priority from records where id='$LEGACY'")" low "degismeyen eski kisa alan denetlenmez"
+ok "$(w n PATCH "$NT" "/api/records/$NEW" '{"field":"priority","value":"high"}' | jq -r 'has("quality")')" false "oncelik degisikliginde quality yok"
+ok "$(w n PATCH "$NT" "/api/records/$NEW" '{"field":"description","value":"Sozlesme taslagi hazirlanacak ve hukuk ekibiyle paylasilarak son kez gozden gecirilecek."}' | jq -c '.quality')" '{"outcome":"skipped","reasons":[]}' "kapali servis: quality skipped, uydurma guven yok"
 ok "$(w n PATCH "$NT" "/api/records/$NEW" '{"field":"status","value":"closed"}' | jq -r .error)" closing_note_required "kapanis notu zorunlu"
 ok "$(w n PATCH "$NT" "/api/records/$NEW" '{"field":"status","value":"closed","closing_note":"Kisa not"}' | jq -r .error)" closing_note_too_short "kisa kapanis notu"
 NOTE='Sozlesme taslagi hazirlandi ve yoneticiye inceleme icin gonderildi.'

@@ -30,6 +30,9 @@ pub struct Meta {
     /// Kapali dis servisler (decision | resend | push): on yuz ilgili yerde
     /// acik uyari gosterir (spec/76, KNOW-358).
     external_off: Vec<&'static str>,
+    /// Manifest'ten (backend/manifest.json).
+    version: String,
+    contact_email: String,
 }
 
 #[derive(Serialize)]
@@ -142,5 +145,6 @@ pub async fn meta(State(st): State<AppState>, CurrentUser(me): CurrentUser) -> R
     Ok(Json(Meta {
         me: MeInfo { id: me.id, is_admin: me.is_admin, scopes, team_ids, profile_complete, favorite_nodes },
         users, teams, pillars, nodes, external_off: st.cfg.external_off_keys(),
+        version: st.cfg.version.clone(), contact_email: st.cfg.contact_email.clone(),
     }))
 }

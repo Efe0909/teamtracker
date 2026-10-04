@@ -341,16 +341,16 @@ pub(crate) async fn log_override(
     }
 }
 
-/// `closed`'a gecis: not zorunlu, >= 30, model tartar. Donen: (not, override nedenleri).
+/// `closed`'a gecis: not zorunlu, >= 30, model tartar. Donen: (not, override nedenleri, karar).
 async fn closing(
     st: &AppState, note: Option<String>, context: &str, override_: bool,
-) -> Result<(String, Option<Vec<&'static str>>)> {
+) -> Result<(String, Option<Vec<&'static str>>, decision::Quality)> {
     let note = common::text(note, TEXT_MAX, "invalid_closing_note")?
         .ok_or(AppError::BadRequest("closing_note_required"))?;
     common::min_chars(Some(&note), common::DESC_MIN, "closing_note_too_short")?;
     let state = format!("{context}\nKapanış notu: {note}");
-    let reasons = decision::gate(st, decision::Kind::Closing, &state, override_).await?;
-    Ok((note, reasons))
+    let (reasons, quality) = decision::gate_with(st, decision::Kind::Closing, &state, override_).await?;
+    Ok((note, reasons, quality))
 }
 
 // --- yeni kayit ------------------------------------------------------------
@@ -467,13 +467,15 @@ pub struct RecordPatchBody {
 pub async fn patch(
     State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>,
     Body(body): Body<RecordPatchBody>,
-) -> Result<Json<Detail>> {
+) -> Result<Json<Patched>> {
     let rec = load(&st.pool, common::id(&raw)?).await?;
     require_edit(&st, &me, &rec).await?;
     let RecordPatchBody { patch: p, closing_note, quality_override } = body;
     // Kapanis notu (closed'a geciste dolu) ve model onayi atlandiysa nedenleri.
     let mut note: Option<String> = None;
     let mut reasons: Option<Vec<&'static str>> = None;
+    // Modelin bu istekteki karari: yalniz degerlendirme tetiklendiyse yanita girer.
+    let mut quality: Option<decision::Quality> = None;
 
     // (alan, sql, eski, yeni) — SQL SABIT, kullanici girdisi yalniz bind.
     let (field, sql, from, to): (&str, &str, serde_json::Value, serde_json::Value) = match p {
@@ -488,9 +490,9 @@ pub async fn patch(
                     return Err(AppError::Conflict("open_actions"));
                 }
                 if rec.status != "closed" {
-                    let (n, r) = closing(&st, closing_note, &format!("Kayıt: {}", rec.title),
+                    let (n, r, q) = closing(&st, closing_note, &format!("Kayıt: {}", rec.title),
                         quality_override).await?;
-                    (note, reasons) = (Some(n), r);
+                    (note, reasons, quality) = (Some(n), r, Some(q));
                 }
             }
             ("status", "update records set status = $2 where id = $1",
@@ -551,8 +553,9 @@ pub async fn patch(
             // Yalniz DEGISEN alan sinanir: eski kisa veri duzenlenene dek kalir.
             if v != rec.title {
                 check_title(&v)?;
-                reasons = decision::gate(&st, decision::Kind::Entry,
+                let (r, q) = decision::gate_with(&st, decision::Kind::Entry,
                     &decision::entry_state(&v, rec.description.as_deref()), quality_override).await?;
+                (reasons, quality) = (r, Some(q));
             }
             ("title", "update records set title = $2 where id = $1", rec.title.clone().into(), v.into())
         }
@@ -560,8 +563,9 @@ pub async fn patch(
             let v = common::text(v, TEXT_MAX, "invalid_description")?;
             if v != rec.description {
                 check_description(v.as_deref())?;
-                reasons = decision::gate(&st, decision::Kind::Entry,
+                let (r, q) = decision::gate_with(&st, decision::Kind::Entry,
                     &decision::entry_state(&rec.title, v.as_deref()), quality_override).await?;
+                (reasons, quality) = (r, Some(q));
             }
             ("description", "update records set description = $2 where id = $1",
              serde_json::to_value(&rec.description).unwrap_or_default(),
@@ -599,7 +603,16 @@ pub async fn patch(
         tx.commit().await?;
     }
     let rec = load(&st.pool, rec.id).await?;
-    Ok(Json(detail_of(&st, &me, rec).await?))
+    Ok(Json(Patched { detail: detail_of(&st, &me, rec).await?, quality }))
+}
+
+/// PATCH yaniti: tazelenmis `Detail` + (varsa) kalite karari. GET'te `quality` yok.
+#[derive(Serialize)]
+pub struct Patched {
+    #[serde(flatten)]
+    detail: Detail,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    quality: Option<decision::Quality>,
 }
 
 type PgQuery<'q> = sqlx::query::Query<'q, Postgres, sqlx::postgres::PgArguments>;
@@ -703,7 +716,7 @@ pub async fn patch_action(
     // Model cagrisi islemden once (agda beklerken baglanti tutulmaz).
     let (note, reasons) = match p {
         ActionPatch::Status(ActionStatus::Closed) if !matches!(a.status, ActionStatus::Closed) => {
-            let (n, r) = closing(&st, closing_note,
+            let (n, r, _) = closing(&st, closing_note,
                 &format!("Eylem: {}\nKayıt: {}", a.title, rec.title), quality_override).await?;
             (Some(n), r)
         }

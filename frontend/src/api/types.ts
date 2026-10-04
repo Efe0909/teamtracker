@@ -94,6 +94,9 @@ export interface Meta {
   pillars: MetaPillar[];
   nodes: MetaNode[];
   external_off?: ("decision" | "resend" | "push")[];
+  /** Manifest (backend/manifest.json): uygulama surumu ve gelistirici e-postasi. */
+  version?: string;
+  contact_email?: string;
 }
 
 // --- kayitlar --------------------------------------------------------------
@@ -159,6 +162,20 @@ export interface RecordDetail {
   membership: Membership;
   /** Etkinligin ikiz kaydiysa etkinlik: Etkinlik | Kayit anahtari buradan. */
   event_id: Uuid | null;
+}
+
+/** Karar modelinin bir degerlendirmesi (spec/76). `noul` = evet olasiligi. */
+export interface Quality {
+  outcome: "pass" | "low" | "skipped";
+  model?: string;
+  provider?: string;
+  answers?: Record<string, { type: string; noul: number }>;
+  reasons: string[];
+}
+
+/** PATCH /api/records/{id}: kayit + (baslik, aciklama ya da kapanista) kalite karari. */
+export interface RecordPatched extends RecordDetail {
+  quality?: Quality;
 }
 
 // --- etkinlikler (Rust api/events.rs, spec/73) --------------------------------

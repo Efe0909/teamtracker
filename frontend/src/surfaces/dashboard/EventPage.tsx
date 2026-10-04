@@ -14,6 +14,7 @@ import type { CheckpointAction, EventDetail, EventStatus, Uuid } from "../../api
 import { NodeListPicker } from "../../features/nodes/NodePicker";
 import { NewRecordForm } from "../../features/record/NewRecordForm";
 import { BallLine } from "../../features/record/parts";
+import { QualityNote } from "../../features/record/QualityNote";
 import r from "../../features/record/record.module.css";
 import { ago, formatDay, isDone, parseDay, PRIORITY, PRIORITY_ORDER, toIsoDay } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
@@ -227,7 +228,6 @@ function Head({ e }: { e: EventDetail }) {
 /** parts.tsx TextEdit'in etkinlik karsiligi: baslik ya da aciklama. */
 function TextEdit({ e, field, onClose }: { e: EventDetail; field: "title" | "description"; onClose: () => void }) {
   const { run, busy } = useRun();
-  const L = useLookup();
   const [v, setV] = useState((field === "title" ? e.title : e.description) ?? "");
   const [qualityReasons, setQualityReasons] = useState<string[] | null>(null);
   const submit = (quality_override = false) => {
@@ -257,7 +257,7 @@ function TextEdit({ e, field, onClose }: { e: EventDetail; field: "title" | "des
             rows={8} autoFocus />
         )}
         <small className={ui.fieldHint}>{Array.from(v.trim()).length}/{field === "title" ? 5 : 30} karakter</small>
-        {L.meta.external_off?.includes("decision") && <p className={ui.fieldHint}>Kalite kontrolü kapalı (dış servis devre dışı)</p>}
+        <QualityNote />
         <div className={ui.dact}>
           <Button onClick={onClose}>Vazgeç</Button>
           <Button type="submit" variant="primary" aria-busy={busy} disabled={busy || (field === "title" && Array.from(v.trim()).length < 5) || (field === "description" && Array.from(v.trim()).length < 30 && v.trim() !== (e.description ?? ""))}>
