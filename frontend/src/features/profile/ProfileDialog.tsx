@@ -119,6 +119,7 @@ function ProfileForm({ onDone }: { onDone: () => void }) {
         Telefon ve doğum günün yalnız ekip arkadaşlarına görünür; nasıl saklandığını{" "}
         <a href={privacyUrl()} target="_blank" rel="noreferrer">Gizlilik sayfasında</a> okuyabilirsin.
       </p>
+      {L.meta.version !== undefined && <small className={ui.fieldHint}>EkipTakip v{L.meta.version}</small>}
       <div className={ui.dact}>
         <Button type="submit" variant="primary" disabled={m.isPending || busy}>Kaydet</Button>
       </div>
