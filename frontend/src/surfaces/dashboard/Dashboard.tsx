@@ -231,7 +231,7 @@ function Sidebar({ route, onSearch, onFold }: { route: Route; onSearch: () => vo
     <nav className={s.side} aria-label="Ana gezinme">
       <div className={s.sideTop}>
         <Brand />
-        <span className={s.ver}>alpha 0.2</span>
+        <span className={s.ver}>v{L.meta.version ?? __APP_VERSION__}</span>
         <span className={s.foldBtn}>
           <IconButton icon="back" label="Kenar çubuğunu daralt" onClick={onFold} />
         </span>

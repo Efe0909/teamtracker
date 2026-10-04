@@ -83,7 +83,7 @@ export function Welcome() {
 export function Foot() {
   return (
     <footer className="foot">
-      EkipTakip · alpha 0.2 · <a href="/privacy">Gizlilik</a> · <a href="/terms">Koşullar</a>
+      EkipTakip · v{__APP_VERSION__} ·<a href="/privacy">Gizlilik</a> · <a href="/terms">Koşullar</a>
     </footer>
   );
 }
