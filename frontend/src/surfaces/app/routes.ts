@@ -20,6 +20,7 @@ export function parse(url: URL): Route {
   if (seg.length === 0) return { name: "actions" };
   if (seg.length === 1) {
     if (a === "search") return { name: "search", q: url.searchParams.get("q") ?? "" };
+    if (a === "actions") return { name: "actions" };
     if (a === "teams") return { name: "teams" };
     if (a === "chats") return { name: "chats" };
     if (a === "notifications") return { name: "notifications" };

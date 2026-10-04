@@ -2,16 +2,16 @@
 
 import { useEffect, useRef, useState } from "react";
 import { NotifySettings } from "../../features/profile/NotifySettings";
-import { useMarkSeen, useMyActions, useNotifications, useRecords, useInbox } from "../../api/hooks";
+import { useMarkSeen, useMyActions, useNotifications, useRecords, useInbox, useTeams } from "../../api/hooks";
 import type { MyAction, RecordSummary } from "../../api/types";
 import { NewRecordForm } from "../../features/record/NewRecordForm";
 import { describe } from "../../lib/activity";
-import { ago, daysFromToday, isDone } from "../../lib/labels";
+import { ago, daysFromToday, isDone, TEAM_ROLE } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
 import { mentionsMe } from "../../lib/mentions";
 import { navigate } from "../../lib/router";
 import { Icon } from "../../ui/icons";
-import { Avatar, cx, Due, Empty, KindTag, Link, Loading, PriorityTag, Segmented, Status, Tag, ui } from "../../ui/ui";
+import { Avatar, cx, Due, Empty, KindTag, Link, Loading, PriorityTag, Status, Tag, ui } from "../../ui/ui";
 import s from "./app.module.css";
 import { TopBar } from "./MobileApp";
 import { href } from "./routes";
@@ -200,39 +200,43 @@ function bucket(a: MyAction): string {
 }
 const BUCKETS = ["Geciken", "Bu hafta", "Sonra", "Tarihsiz"];
 
+const HINT_KEY = "hint:a2hs";
+
+function readHint(): boolean {
+  if (matchMedia("(display-mode: standalone)").matches || ("standalone" in navigator && navigator.standalone === true)) return false;
+  try { return localStorage.getItem(HINT_KEY) !== "off"; } catch { return true; }
+}
+
+function InstallHint() {
+  const [visible, setVisible] = useState(readHint);
+  if (!visible) return null;
+  return <div className={s.hint} role="note">
+    <p><b>Ana ekrana ekle:</b> Safari'de Paylaş → Ana Ekrana Ekle. Uygulama gibi açılır.</p>
+    <button type="button" className={ui.iconBtn} aria-label="İpucunu kapat" onClick={() => {
+      setVisible(false);
+      try { localStorage.setItem(HINT_KEY, "off"); } catch { /* depolama kapali */ }
+    }}><Icon name="x" size={18} /></button>
+  </div>;
+}
+
 export function ActionsPage() {
   const L = useLookup();
   const q = useMyActions();
   const recs = useRecords({ quick: "mine", done: "false", sort: "activity" });
-  const [openRecords, setOpenRecords] = useState(false);
-  const myRecords = recs.data?.filter(r => r.owner_id === L.me.id) ?? [];
+  const myRecords = recs.data?.filter((r) => r.owner_id === L.me.id && !isDone(r.status));
 
   return (
     <>
       <TopBar title="Eylemler" />
       <div className={s.pad}>
-        {myRecords.length > 0 && (
-          <div style={{ marginBottom: "var(--s-4)" }}>
-            <button
-              type="button"
-              className={s.card}
-              onClick={() => setOpenRecords(!openRecords)}
-              style={{ background: "var(--tint)", padding: "var(--s-2) var(--s-3)", minHeight: 40 }}
-            >
-              <span className={s.cardBody} style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontWeight: 600 }}>Sahibi Olduğum Kayıtlar ({myRecords.length})</span>
-                <Icon name={openRecords ? "up" : "down"} size={16} />
-              </span>
-            </button>
-            {openRecords && (
-              <div style={{ marginTop: "var(--s-2)", display: "flex", flexDirection: "column", gap: "var(--s-2)" }}>
-                {myRecords.map(r => <RecordCard key={r.id} r={r} />)}
-              </div>
-            )}
+        <details className={s.disclosure}>
+          <summary><Icon name="pin" size={16} /> Sahibi olduğum açık kayıtlar{myRecords !== undefined && ` (${myRecords.length})`}</summary>
+          <div className={s.detailContent}>
+            {recs.error !== null ? <p role="alert">Kayıtlar yüklenemedi.</p> : <RecordList rows={myRecords} empty="Sahibi olduğun açık kayıt yok." />}
           </div>
-        )}
-        
-        {q.data === undefined ? (
+        </details>
+        <InstallHint />
+        {q.error !== null ? <p role="alert">Eylemler yüklenemedi.</p> : q.data === undefined ? (
           <Loading />
         ) : q.data.length === 0 ? (
           <Empty title="Açık eylemin yok">Sana atanan eylemler burada, son tarihe göre görünür.</Empty>
@@ -343,66 +347,56 @@ export function NewPage() {
 
 export function TeamsListPage() {
   const L = useLookup();
-  const myTeams = L.meta.teams.filter(t => L.me.team_ids.includes(t.id));
-  return (
-    <>
-      <TopBar title="Takımlar" />
-      <div className={s.pad}>
-        {myTeams.length === 0 ? (
-          <Empty title="Takımın yok">Henüz bir takıma dahil değilsin.</Empty>
-        ) : (
-          myTeams.map(t => (
-            <Link key={t.id} href={href({ name: "team", id: t.id })} className={s.card}>
-              <span className={s.cardBody}>
-                <span className={s.cardTitle}>{t.name}</span>
-                {t.description && <span className={s.cardPath}>{t.description}</span>}
-              </span>
-              <span className={s.chev}>
-                <Icon name="chevron" size={20} />
-              </span>
-            </Link>
-          ))
-        )}
-      </div>
-    </>
-  );
+  const q = useTeams();
+  const myTeams = L.meta.teams.filter((t) => L.meta.me.team_ids.includes(t.id));
+  return <>
+    <TopBar title="Takımlar" />
+    <div className={s.pad}>
+      {q.error !== null && <p role="alert">Üye bilgileri yüklenemedi.</p>}
+      {myTeams.length === 0 ? <Empty title="Takımın yok">Henüz bir takıma dahil değilsin.</Empty> : myTeams.map((team) => {
+        const view = q.data?.find((t) => t.id === team.id);
+        const members = view?.members ?? [];
+        const leads = members.filter((m) => m.role === "lead" || m.role === "mentor");
+        return <Link key={team.id} href={href({ name: "team", id: team.id })} className={s.card}>
+          <span className={s.teamMark}><Icon name="teams" size={24} /></span>
+          <span className={s.cardBody}>
+            <span className={s.cardTitle}>{team.name}</span>
+            {team.description !== null && <span className={s.cardPath}>{team.description}</span>}
+            {view !== undefined && <>
+              <span className={s.cardMeta}>{members.length} üye · {view.open_records} açık kayıt</span>
+              <span className={s.avatarRow}>{members.slice(0, 5).map((m) => <Avatar key={m.user_id} user={L.user(m.user_id)} size={26} />)}{members.length > 5 && <span>+{members.length - 5}</span>}</span>
+              <span className={s.cardPath}>{leads.length > 0 ? leads.map((m) => `${L.user(m.user_id)?.name ?? "?"} · ${TEAM_ROLE[m.role]}`).join(" / ") : members.slice(0, 3).map((m) => L.user(m.user_id)?.name ?? "?").join(", ")}</span>
+            </>}
+            {team.node_ids.length > 0 && <span className={s.cardPath}>{team.node_ids.map((id) => L.path(id).slice(-2).join(" › ")).join(" · ")}</span>}
+          </span>
+          <Icon name="chevron" size={20} />
+        </Link>;
+      })}
+    </div>
+  </>;
 }
 
 // --- konusmalar ------------------------------------------------------------
 
 export function ChatsPage() {
   const q = useInbox();
-  return (
-    <>
-      <TopBar title="Konuşmalar" />
-      <div className={s.pad}>
-        {q.data === undefined ? (
-          <Loading />
-        ) : q.data.length === 0 ? (
-          <Empty title="Sohbet yok">Dahil olduğun takım veya kayıt sohbeti bulunmuyor.</Empty>
-        ) : (
-          q.data.map(c => {
-            const to = c.kind === "team" ? href({ name: "team", id: c.chat_id }) : href({ name: "record", id: c.chat_id });
-            return (
-              <Link key={c.chat_id} href={to} className={cx(s.card, c.unread && s.cardUnread)}>
-                <span className={s.cardBody}>
-                  <span className={s.cardTags}>
-                    <Tag tone="neutral">{c.kind === "team" ? "Takım" : "Kayıt"}</Tag>
-                  </span>
-                  <span className={s.cardTitle} style={{ fontWeight: c.unread ? 700 : 500 }}>{c.title}</span>
-                  {c.last_message && (
-                    <span className={s.cardPath} style={{ color: c.unread ? "var(--txt)" : "var(--dim)" }}>
-                      {c.last_message}
-                    </span>
-                  )}
-                  {c.updated_at && <span className={s.cardMeta}>{ago(c.updated_at)}</span>}
-                </span>
-                {c.unread && <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--acc-strong)" }} />}
-              </Link>
-            );
-          })
-        )}
-      </div>
-    </>
-  );
+  const L = useLookup();
+  return <>
+    <TopBar title="Konuşmalar" />
+    <div className={s.inbox}>
+      {q.error !== null ? <p role="alert">Konuşmalar yüklenemedi.</p> : q.data === undefined ? <Loading /> : q.data.length === 0 ? <Empty title="Sohbet yok">Dahil olduğun takım veya kayıt sohbeti bulunmuyor.</Empty> : q.data.map((chat) => {
+        const id = chat.kind === "team" ? chat.team_id : chat.record_id;
+        if (id === null) return null;
+        const actor = L.user(chat.last_actor_id);
+        return <Link key={chat.chat_id} href={`${href({ name: chat.kind === "team" ? "team" : "record", id })}#chat`} className={s.inboxRow}>
+          <span className={s.teamMark}><Icon name={chat.kind === "team" ? "teams" : "chat"} size={24} /></span>
+          <span className={s.cardBody}>
+            <span className={s.inboxHeading}><span className={s.cardTitle}>{chat.title}</span>{chat.updated_at !== null && <time dateTime={chat.updated_at}>{ago(chat.updated_at)}</time>}</span>
+            <span className={s.cardPath}>{chat.last_message === null ? "Henüz mesaj yok" : `${actor?.name ?? "Sistem"}: ${chat.last_message.trim() === "" ? "Fotoğraf / ek" : chat.last_message}`}</span>
+            <span className={s.cardMeta}>{chat.kind === "team" ? "Takım" : "Kayıt"}</span>
+          </span>
+        </Link>;
+      })}
+    </div>
+  </>;
 }

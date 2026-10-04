@@ -477,9 +477,10 @@ export interface InboxChat {
   kind: "team" | "record";
   last_message: string | null;
   last_actor_id: Uuid | null;
-  is_activity: boolean;
+  record_id: Uuid | null;
+  team_id: Uuid | null;
+  can_post: boolean;
   updated_at: IsoTime | null;
-  unread: boolean;
 }
 
 // --- ana sayfa, takimlar, bildirimler ---------------------------------------

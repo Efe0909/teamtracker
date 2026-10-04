@@ -3,7 +3,7 @@
 
 import { type ReactNode, useEffect, useState } from "react";
 import { ApiError, errorText } from "../../api/client";
-import { eventOps, useEvent, useEventWrite, useFeed, useRecord, useRecords, useTeam } from "../../api/hooks";
+import { attachmentUrl, eventOps, useEvent, useEventWrite, useFeed, useRecord, useRecords, useTeam } from "../../api/hooks";
 import type { Uuid } from "../../api/types";
 import { Chat } from "../../features/chat/Chat";
 import { ChatBell } from "../../features/chat/ChatBell";
@@ -15,7 +15,7 @@ import { EVENT_STATUS, formatDay, TEAM_ROLE } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
 import { navigate, useLocation } from "../../lib/router";
 import { Icon } from "../../ui/icons";
-import { Avatar, cx, Loading, Tag, ui, useToast } from "../../ui/ui";
+import { Avatar, cx, Dialog, Loading, Tag, useToast } from "../../ui/ui";
 import { ErrorScreen } from "../errors/ErrorScreen";
 import s from "./app.module.css";
 import { TopBar } from "./MobileApp";
@@ -31,42 +31,30 @@ function ChatSheet(props: {
   tools?: ReactNode;
   prefill?: string | undefined;
 }) {
-  const [open, setOpen] = useState(() => location.hash === "#chat" || props.prefill !== undefined);
+  const loc = useLocation();
+  const [open, setOpen] = useState(() => loc.hash === "#chat" || props.prefill !== undefined);
+  useEffect(() => {
+    setOpen(loc.hash === "#chat" || props.prefill !== undefined);
+  }, [loc.href, props.chatId, props.prefill]);
+  const close = () => {
+    setOpen(false);
+    if (loc.hash === "#chat") navigate(`${loc.pathname}${loc.search}`, { replace: true });
+  };
   const feed = useFeed(props.chatId);
   const messages = feed.data?.items?.filter((i) => i.kind === "message").length ?? 0;
-  // Sayfa acikken govde kaymasin; Esc kapatir.
-  useEffect(() => {
-    if (!open) return;
-    document.body.style.overflow = "hidden";
-    const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
-    window.addEventListener("keydown", esc);
-    return () => {
-      document.body.style.overflow = "";
-      window.removeEventListener("keydown", esc);
-    };
-  }, [open]);
   return (
     <>
-      <button type="button" className={s.chatFab} onClick={() => setOpen(true)} aria-label={`Sohbeti aç, ${messages} mesaj`}>
+      <button type="button" className={s.chatFab} onClick={() => navigate(`${loc.pathname}${loc.search}#chat`)} aria-label={`Sohbeti aç, ${messages} mesaj`}>
         <Icon name="chat" size={26} />
         {messages > 0 && <span className={s.badge}>{messages}</span>}
       </button>
-      {open && (
-        <div className={s.sheet} role="dialog" aria-modal="true" aria-label="Sohbet">
-          <div className={s.sheetHead}>
-            <Icon name="chat" size={20} />
-            <span>{props.title}</span>
-            <ChatBell chatId={props.chatId} />
-            <button type="button" className={ui.iconBtn} onClick={() => setOpen(false)} aria-label="Sohbeti kapat">
-              <Icon name="x" size={22} />
-            </button>
-          </div>
-          <div className={s.sheetBody}>
-            <Chat chatId={props.chatId} canPost={props.canPost} lockedText={props.lockedText} empty={props.empty}
-              tools={props.tools} prefill={props.prefill} />
-          </div>
+      <Dialog open={open} onClose={close} title={props.title} fullScreen>
+        <div className={s.chatToolbar}><ChatBell chatId={props.chatId} /></div>
+        <div className={s.sheetBody}>
+          <Chat chatId={props.chatId} canPost={props.canPost} lockedText={props.lockedText} empty={props.empty}
+            tools={props.tools} prefill={props.prefill} />
         </div>
-      )}
+      </Dialog>
     </>
   );
 }
@@ -245,29 +233,45 @@ export function TeamPage({ id }: { id: Uuid }) {
     return (
       <>
         <TopBar title="Takım" back />
-        <ErrorScreen code="not_found" />
+        <ErrorScreen code={team === undefined || (q.error instanceof ApiError && q.error.code === "not_found") ? "not_found" : "network"} />
       </>
     );
   }
-  if (q.data === undefined) return <Loading />;
+  if (q.data === undefined) return <><TopBar title={team.name} back /><Loading /></>;
   const member = q.data.members.some((m) => m.user_id === L.me.id);
   return (
     <>
       <TopBar title={team.name} back />
       <div className={s.recordPad}>
-        {team.description !== null && <p style={{ margin: 0 }}>{team.description}</p>}
-        <ul className={s.members}>
-          {q.data.members.map((m) => (
-            <li key={m.user_id}>
-              <Avatar user={L.user(m.user_id)} size={26} />
-              {L.user(m.user_id)?.name ?? "?"} · {TEAM_ROLE[m.role]}
-            </li>
-          ))}
-        </ul>
+        <section className={s.teamIdentity} aria-label="Takım bilgileri">
+          {team.banner_id !== null && <img src={attachmentUrl(team.banner_id)} alt={`${team.name} kapak fotoğrafı`} className={s.teamBanner} />}
+          <div className={s.teamIdentityBody}>
+            <span className={s.teamMark}><Icon name="teams" size={24} /></span>
+            <div><h2>{team.name}</h2>{team.description !== null && <p>{team.description}</p>}<span className={s.cardMeta}>{q.data.members.length} üye · {team.node_ids.length} birim</span></div>
+          </div>
+        </section>
+        <details className={s.disclosure}>
+          <summary>Üyeler ({q.data.members.length})</summary>
+          <ul className={s.memberList}>
+            {q.data.members.map((m) => {
+              const user = L.user(m.user_id);
+              return <li key={m.user_id}>
+                <Avatar user={user} size={36} />
+                <span className={s.cardBody}><b>{user?.name ?? "?"}</b><span className={s.cardMeta}>{TEAM_ROLE[m.role]}{user?.nickname && ` · @${user.nickname}`}</span></span>
+                {user?.phone && <a href={`tel:${user.phone}`} className={s.phoneLink} aria-label={`${user.name} kişisini ara`}><Icon name="phone" size={18} /></a>}
+              </li>;
+            })}
+          </ul>
+        </details>
+        <details className={s.disclosure}>
+          <summary>Birimler ({team.node_ids.length})</summary>
+          <ul className={s.unitList}>{team.node_ids.map((nodeId) => <li key={nodeId}>{L.path(nodeId).join(" › ")}</li>)}</ul>
+          {team.node_ids.length === 0 && <p className={s.detailContent}>Bağlı birim yok.</p>}
+        </details>
         <h2 className={s.group} style={{ margin: "var(--s-2) 0 0" }}>
           Açık Kayıtlar ({recs.data?.length ?? q.data.open_records})
         </h2>
-        <RecordList rows={recs.data} empty="Takıma ait açık kayıt yok." />
+        {recs.error !== null ? <p role="alert">Kayıtlar yüklenemedi.</p> : <RecordList rows={recs.data} empty="Takıma ait açık kayıt yok." />}
       </div>
       <ChatSheet
         chatId={team.chat_id}

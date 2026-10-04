@@ -75,6 +75,16 @@ Etkinlikler sahada yürütülür; sahadaki personel checkpoint kontrolü yapabil
 
 ---
 
+### Faz 5: Günlük İş, Takımlar ve Sohbet Odaklı Gezinme
+
+Alt gezinme: **Eylemler | Takımlar | + | Konuşmalar | Bildirim**. Ayrı Yapılacaklar ve Ara sekmeleri kaldırılır; arama `+` menüsünden açılır. Ana sayfa Eylemler olur, `/actions` eski bağlantılar için çalışır.
+
+- **Eylemler:** kullanıcının `owner_id` olduğu açık `records`, en üstte katlanır bir bölümde görünür; ardından atanmış eylemler son tarihlerine göre gruplandırılır. Bu görsel sabitleme `record_pins` verisini değiştirmez. Ana ekrana ekleme ipucu korunur.
+- **Takımlar:** yalnız `meta.me.team_ids` içindeki takımlar; takım kimliği, üyeler ve açık kayıt bilgisi gösterilir. Detayda açık kayıtlar önceliklidir; üyeler ve bağlı birimler katlanabilir. Masaüstü yönetim ekranı mobilde kopyalanmaz.
+- **+ menüsü:** Arama, Yeni kayıt, Kamera. Kamera tarayıcının `accept="image/*" capture="environment"` dosya seçicisini kullanır; cihaz desteklemiyorsa normal fotoğraf seçimi mümkündür.
+- **Fotoğraf gönderimi:** önizleme, açıklama ve yazma yetkisi olan sohbetlerin çoklu seçimi. Her hedef için ayrı ek yüklenir ve mevcut mesaj ucu kullanılır; tek ek kimliği farklı sohbetlere yeniden bağlanmaz. Kısmi başarı görünür kalır; yeniden deneme başarılı hedeflere tekrar göndermez. İstekler ortak CSRF istemcisinden geçer.
+- **Konuşmalar:** ilgili kayıt ve takım sohbetleri, en son gerçek `messages` zamanına göre sıralanır; `activity` olayları mesaj önizlemesi ya da sıralama kaynağı değildir. Satırda başlık, son yazan, mesaj özeti ve zaman bulunur. Bağlantı `chat_id` yerine ilgili `record_id`/`team_id` ile sohbeti açar. Sohbet bazlı okunma damgası olmadığından bildirimlerin genel görüldü damgası okunmamış sohbet rozeti gibi sunulmaz.
+
 ## 4. Kabul Kriterleri ve Doğrulama
 
 1. **Tip Güvenliği & Testler:** `npm run build` ve `npm test` sıfır hatayla geçer.
@@ -83,3 +93,7 @@ Etkinlikler sahada yürütülür; sahadaki personel checkpoint kontrolü yapabil
    - `RecordPage` açıldığında özellikler katlanabilir; ekran kaydırmadan açık eylemler ve kartlar görünür.
    - `ChatSheet` başlığında zil ikonuyla bildirim durumu değiştirilebilir.
    - Etkinlik kayıtlarında `Etkinlik` rozeti görünür, checkpoint listesi izlenebilir.
+   - Eylemler kök sayfadır; `/actions` da aynı görünümü açar. Arama `+` menüsünden ulaşılır.
+   - Sahibi olunan açık kayıtlar katlanır üst bölümdedir; üye olunan takım listesi ve takım detayındaki kayıtlar ulaşılabilir.
+   - Konuşma satırı doğru kayıt/takım sohbetini açar; sonradan oluşan bir `activity`, son mesaj sırasını değiştirmez.
+   - Kamera fotoğrafı iki farklı sohbete bağımsız ek kimlikleriyle gönderir. İkinci gönderim başarısızsa başarılı birinci hedef yeniden gönderilmez; hata görünür kalır.

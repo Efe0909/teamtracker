@@ -247,13 +247,14 @@ export function Dialog(props: {
   title: string;
   hint?: string;
   wide?: boolean;
+  fullScreen?: boolean;
   children: ReactNode;
 }) {
   return (
     <RD.Root open={props.open} onOpenChange={(o) => !o && props.onClose()}>
       <RD.Portal>
         <RD.Overlay className={s.overlay} />
-        <RD.Content className={cx(s.dialog, props.wide === true && s.wide)} aria-describedby={undefined}>
+        <RD.Content className={cx(s.dialog, props.wide === true && s.wide, props.fullScreen === true && s.fullScreen)} aria-describedby={undefined}>
           <div className={s.dhead}>
             <RD.Title id="dlg-title">{props.title}</RD.Title>
             <RD.Close asChild>

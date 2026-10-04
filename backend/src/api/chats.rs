@@ -64,44 +64,42 @@ pub struct InboxChat {
     chat_id: Uuid,
     title: String,
     kind: String, // "team" | "record"
+    record_id: Option<Uuid>,
+    team_id: Option<Uuid>,
+    can_post: bool,
     last_message: Option<String>,
     last_actor_id: Option<Uuid>,
-    is_activity: bool,
     updated_at: Option<DateTime<Utc>>,
-    unread: bool,
 }
 
 pub async fn inbox(
     State(st): State<AppState>, CurrentUser(me): CurrentUser,
 ) -> Result<Json<Vec<InboxChat>>> {
-    let seen: Option<DateTime<Utc>> = sqlx::query_scalar("select notifications_seen_at from users where id = $1")
-        .bind(me.id).fetch_one(&st.pool).await?;
-
+    // Kisisel gelen kutusu: admin/dal izniyle gorulebilen HER sohbet degil,
+    // iliskili olduklarim. Bu iliskilerin hepsi mevcut yazma kuralini saglar.
+    // Okunmamis bilgisi yok: notifications_seen_at sohbet okuma zamani degil.
     let rows: Vec<InboxChat> = sqlx::query_as(
         r#"WITH my_chats AS (
-          SELECT t.chat_id, t.name as title, 'team' as kind
+          SELECT t.chat_id, t.name as title, 'team' as kind,
+                 null::uuid as record_id, t.id as team_id
           FROM teams t
-          JOIN team_members m ON m.team_id = t.id
-          WHERE m.user_id = $1
+          WHERE EXISTS (SELECT 1 FROM team_members m WHERE m.team_id = t.id AND m.user_id = $1)
           UNION ALL
-          SELECT r.chat_id, r.title, 'record' as kind
+          SELECT r.chat_id, r.title, 'record' as kind, r.id as record_id, r.team_id
           FROM records r
-          JOIN record_participants p ON p.record_id = r.id
-          WHERE p.user_id = $1
-        ),
-        latest_msgs AS (
-          SELECT DISTINCT ON (chat_id) chat_id, body, actor_id, created_at, kind = 'activity' as is_activity
-          FROM chat_feed
-          WHERE chat_id IN (SELECT chat_id FROM my_chats)
-          ORDER BY chat_id, created_at DESC
+          WHERE r.owner_id = $1 OR r.created_by = $1
+             OR EXISTS (SELECT 1 FROM record_participants p WHERE p.record_id = r.id AND p.user_id = $1)
+             OR EXISTS (SELECT 1 FROM team_members m WHERE m.team_id = r.team_id AND m.user_id = $1)
         )
-        SELECT c.chat_id, c.title, c.kind, m.body as last_message, m.actor_id as last_actor_id,
-               COALESCE(m.is_activity, false) as is_activity, m.created_at as updated_at,
-               COALESCE(m.created_at > $2, false) as unread
+        SELECT c.chat_id, c.title, c.kind, c.record_id, c.team_id, true as can_post,
+               m.body as last_message, m.author_id as last_actor_id, m.created_at as updated_at
         FROM my_chats c
-        LEFT JOIN latest_msgs m ON m.chat_id = c.chat_id
-        ORDER BY m.created_at DESC NULLS LAST"#
-    ).bind(me.id).bind(seen).fetch_all(&st.pool).await?;
+        LEFT JOIN LATERAL (
+          SELECT body, author_id, created_at FROM messages WHERE chat_id = c.chat_id
+          ORDER BY created_at DESC, id DESC LIMIT 1
+        ) m ON true
+        ORDER BY m.created_at DESC NULLS LAST, c.chat_id"#
+    ).bind(me.id).fetch_all(&st.pool).await?;
 
     Ok(Json(rows))
 }
