@@ -1,4 +1,4 @@
-# backend — Rust JSON API (alpha-0.2)
+# backend — Rust JSON API (0.10.4)
 
 Yalniz `/api/*`, yalniz JSON (`spec/15-sinirlar.md`). HTML yok; on yuz
 `frontend/`. Hedef sema: `spec/21-sema-v2.md`. Python uygulamasi (`app.py`,

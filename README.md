@@ -1,4 +1,4 @@
-# EkipTakip — alpha-0.2
+# EkipTakip — 0.10.4
 
 Ekip için hata/görev takibi: hiyerarşi + kayıtlar + kart içi sohbet + alan değişiklikleri.
 **Tek API, iki yüz, ortak veritabanı:**

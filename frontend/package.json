@@ -1,7 +1,7 @@
 {
   "name": "ekiptakip-web",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.10.4",
   "type": "module",
   "scripts": {
     "dev": "node scripts/css-modules.mjs && vite",
