@@ -40,6 +40,7 @@ export function LookupProvider({ meta, children }: { meta: Meta; children: React
       birth_day: null,
       birth_month: null,
       birth_year: null,
+      roles: [],
     };
     const path = (id: Uuid): string[] => {
       const out: string[] = [];

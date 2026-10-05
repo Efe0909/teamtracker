@@ -49,7 +49,9 @@ pub struct AdminView {
 struct RoleOut {
     id: Uuid,
     name: String,
+    color: String,
     scopes: Vec<String>,
+    node_ids: Vec<Uuid>,
 }
 
 #[derive(Serialize)]
@@ -111,12 +113,16 @@ fn group<T>(rows: Vec<(Uuid, T)>) -> HashMap<Uuid, Vec<T>> {
 
 async fn view(p: &PgPool, me: &User) -> Result<Json<AdminView>> {
     let scopes = sqlx::query_scalar("select name from scopes order by name").fetch_all(p).await?;
-    let roles: Vec<(Uuid, String)> =
-        sqlx::query_as("select id, name from roles order by name").fetch_all(p).await?;
+    let roles: Vec<(Uuid, String, String)> =
+        sqlx::query_as("select id, name, color from roles order by name").fetch_all(p).await?;
     let role_scopes = group(sqlx::query_as::<_, (Uuid, String)>(
         "select role_id, scope from role_scopes order by scope").fetch_all(p).await?);
+    let role_nodes = group(sqlx::query_as::<_, (Uuid, Uuid)>(
+        "select role_id, node_id from role_node_scopes order by node_id").fetch_all(p).await?);
     let user_roles = group(sqlx::query_as::<_, (Uuid, Uuid)>(
-        "select user_id, role_id from user_roles").fetch_all(p).await?);
+        "select ur.user_id, ur.role_id from user_roles ur
+           join roles r on r.id = ur.role_id order by ur.user_id, r.name")
+        .fetch_all(p).await?);
     let direct = group(sqlx::query_as::<_, (Uuid, String)>(
         "select user_id, scope from user_scopes").fetch_all(p).await?);
     let nodes = group(sqlx::query_as::<_, (Uuid, Uuid)>(
@@ -152,8 +158,10 @@ async fn view(p: &PgPool, me: &User) -> Result<Json<AdminView>> {
         }
     }).collect();
 
-    let roles = roles.into_iter().map(|(id, name)| RoleOut {
-        scopes: role_scopes.get(&id).cloned().unwrap_or_default(), id, name,
+    let roles = roles.into_iter().map(|(id, name, color)| RoleOut {
+        scopes: role_scopes.get(&id).cloned().unwrap_or_default(),
+        node_ids: role_nodes.get(&id).cloned().unwrap_or_default(),
+        id, name, color,
     }).collect();
     Ok(Json(AdminView { is_admin: me.is_admin, scopes, roles, people }))
 }
@@ -365,11 +373,14 @@ async fn within_grant(st: &AppState, me: &User, target: Uuid, op: &UserOp) -> Re
     if target == me.id {
         return Err(AppError::Denied("self_permissions"));
     }
-    let wanted: Vec<String> = match op {
-        UserOp::GrantScope(s) | UserOp::RevokeScope(s) => vec![s.clone()],
+    let (wanted, wanted_nodes): (Vec<String>, Vec<Uuid>) = match op {
+        UserOp::GrantScope(s) | UserOp::RevokeScope(s) => (vec![s.clone()], vec![]),
         UserOp::GrantRole(r) | UserOp::RevokeRole(r) => {
-            sqlx::query_scalar("select scope from role_scopes where role_id = $1")
-                .bind(r).fetch_all(&st.pool).await?
+            let scopes = sqlx::query_scalar("select scope from role_scopes where role_id = $1")
+                .bind(r).fetch_all(&st.pool).await?;
+            let nodes = sqlx::query_scalar("select node_id from role_node_scopes where role_id = $1")
+                .bind(r).fetch_all(&st.pool).await?;
+            (scopes, nodes)
         }
         UserOp::GrantNode(n) | UserOp::RevokeNode(n) => {
             let held = scope::permitted_nodes(&st.pool, me).await?;
@@ -386,11 +397,17 @@ async fn within_grant(st: &AppState, me: &User, target: Uuid, op: &UserOp) -> Re
         return Err(AppError::Denied("grant_manage_users"));
     }
     let mine = scope::active(&st.pool, me).await?;
-    if wanted.iter().all(|s| mine.contains(s)) {
-        Ok(())
-    } else {
-        Err(AppError::Denied("grant_not_held"))
+    if wanted.iter().any(|s| !mine.contains(s)) {
+        return Err(AppError::Denied("grant_not_held"));
     }
+    if !wanted_nodes.is_empty() {
+        let held = scope::permitted_nodes(&st.pool, me).await?;
+        let tree = common::tree(st);
+        if wanted_nodes.iter().any(|n| !held.iter().any(|p| tree.is_descendant(*n, *p))) {
+            return Err(AppError::Denied("grant_not_held"));
+        }
+    }
+    Ok(())
 }
 
 /// Yazim hatasi sessizce yetki vermesin: FK de korur ama 500 yerine kod.
@@ -420,11 +437,36 @@ pub struct RoleIn {
     #[serde(default)]
     name: Option<String>,
     #[serde(default)]
+    color: Option<String>,
+    #[serde(default)]
     scopes: Option<Vec<String>>,
+    #[serde(default)]
+    node_ids: Option<Vec<Uuid>>,
 }
 
-/// Rol SIG: kapsam demeti, okuma aninda birlesir (`db::scope::active`) —
-/// duzenleme mevcut sahiplerine aninda yansir.
+/// Rol yetkileri atama aninda kopyalanmaz; atanan kisilerde canli hesaplanir.
+fn valid_role_color(color: &str) -> Result<()> {
+    if color.len() == 7 && color.starts_with('#')
+        && color[1..].bytes().all(|b| b.is_ascii_hexdigit())
+    {
+        Ok(())
+    } else {
+        Err(AppError::BadRequest("invalid_color"))
+    }
+}
+
+fn valid_role_nodes(st: &AppState, nodes: &[Uuid]) -> Result<()> {
+    let tree = common::tree(st);
+    if nodes.iter().all(|id| tree.get(*id).is_some_and(|n| {
+        n.is_active && crate::refdata::under(&tree, *id, crate::refdata::UNITS)
+    })) {
+        Ok(())
+    } else {
+        Err(AppError::BadRequest("invalid_parent"))
+    }
+}
+
+/// Rol SIG: kapsam ve dal izinleri atanan kisilerde canli hesaplanir.
 async fn write_role(
     st: &AppState, tx: &mut sqlx::Transaction<'_, sqlx::Postgres>, id: Option<Uuid>, me: &User,
     b: RoleIn,
@@ -433,12 +475,19 @@ async fn write_role(
     if let Some(s) = &b.scopes {
         valid_scopes(&st.pool, s).await?;
     }
+    if let Some(c) = &b.color {
+        valid_role_color(c)?;
+    }
+    if let Some(nodes) = &b.node_ids {
+        valid_role_nodes(st, nodes)?;
+    }
+    let color = b.color.or_else(|| id.is_none().then(|| "#5b8cff".to_string()));
     let id = match (id, name) {
         (None, None) => return Err(AppError::BadRequest("invalid_name")),
         (None, Some(n)) => sqlx::query_scalar(
-            "insert into roles (name, created_by) values ($1, $2) on conflict (name) do nothing
-             returning id")
-            .bind(n).bind(me.id).fetch_optional(&mut **tx).await?
+            "insert into roles (name, created_by, color) values ($1, $2, $3)
+             on conflict (name) do nothing returning id")
+            .bind(n).bind(me.id).bind(color.clone()).fetch_optional(&mut **tx).await?
             .ok_or(AppError::Conflict("role_exists"))?,
         (Some(id), Some(n)) => {
             let taken: Option<i32> = sqlx::query_scalar("select 1 from roles where name = $1 and id <> $2")
@@ -446,17 +495,30 @@ async fn write_role(
             if taken.is_some() {
                 return Err(AppError::Conflict("role_exists"));
             }
-            sqlx::query("update roles set name = $2 where id = $1").bind(id).bind(n)
-                .execute(&mut **tx).await?;
+            sqlx::query("update roles set name = $2, color = coalesce($3, color) where id = $1")
+                .bind(id).bind(n).bind(color).execute(&mut **tx).await?;
             id
         }
-        (Some(id), None) => id,
+        (Some(id), None) => {
+            if let Some(color) = color {
+                sqlx::query("update roles set color = $2 where id = $1").bind(id).bind(color)
+                    .execute(&mut **tx).await?;
+            }
+            id
+        }
     };
     if let Some(s) = b.scopes {
         sqlx::query("delete from role_scopes where role_id = $1").bind(id).execute(&mut **tx).await?;
         sqlx::query("insert into role_scopes (role_id, scope) select $1, unnest($2::text[])
                      on conflict do nothing")
             .bind(id).bind(s).execute(&mut **tx).await?;
+    }
+    if let Some(nodes) = b.node_ids {
+        sqlx::query("delete from role_node_scopes where role_id = $1").bind(id).execute(&mut **tx).await?;
+        sqlx::query(
+            "insert into role_node_scopes (role_id, node_id, granted_by)
+             select $1, unnest($2::uuid[]), $3 on conflict do nothing")
+            .bind(id).bind(nodes).bind(me.id).execute(&mut **tx).await?;
     }
     Ok(id)
 }

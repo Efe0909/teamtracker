@@ -25,6 +25,12 @@ export type TeamRole = "lead" | "mentor" | "member";
 
 // --- /api/meta -------------------------------------------------------------
 
+export interface MetaRole {
+  id: Uuid;
+  name: string;
+  color: string;
+}
+
 export interface MetaUser {
   id: Uuid;
   name: string;
@@ -39,6 +45,8 @@ export interface MetaUser {
   birth_day: number | null;
   birth_month: number | null;
   birth_year: number | null;
+  /** Ekip sayfasinda gosterilen roller; yetki ayrintisi tasimaz. */
+  roles: MetaRole[];
 }
 
 export interface MetaTeam {
@@ -616,7 +624,9 @@ export interface AdminPerson {
 export interface AdminRole {
   id: Uuid;
   name: string;
+  color: string;
   scopes: string[];
+  node_ids: Uuid[];
 }
 
 export interface AdminView {

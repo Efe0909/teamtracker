@@ -35,7 +35,12 @@ pub async fn active(pool: &PgPool, user: &User) -> Result<Vec<String>, sqlx::Err
 /// Izin verilmis dallar. Alt agac MIRASI burada degil cagirida —
 /// `TreeIndex.is_descendant` ile O(1).
 pub async fn permitted_nodes(pool: &PgPool, user: &User) -> Result<Vec<Uuid>, sqlx::Error> {
-    sqlx::query_scalar("select node_id from user_node_scopes where user_id = $1")
+    sqlx::query_scalar(
+        "select node_id from user_node_scopes where user_id = $1
+         union
+         select rns.node_id from user_roles ur
+           join role_node_scopes rns on rns.role_id = ur.role_id
+          where ur.user_id = $1")
         .bind(user.id).fetch_all(pool).await
 }
 

@@ -9,7 +9,7 @@ import { JoinBanner } from "./Join";
 afterEach(cleanup);
 
 const user = (id: string, name: string) => ({ id, name, color: null, is_admin: false, last_seen_at: null,
-  nickname: null, phone: null, avatar_id: null, birth_day: null, birth_month: null, birth_year: null });
+  nickname: null, phone: null, avatar_id: null, birth_day: null, birth_month: null, birth_year: null, roles: [] });
 const META: Meta = {
   me: { id: "me", is_admin: false, scopes: [], team_ids: [], profile_complete: true, favorite_nodes: [] },
   users: [user("me", "Ben"), user("x", "Xenia")], teams: [], pillars: [], nodes: [],
