@@ -10,6 +10,7 @@ import { useCreateEvent, useEvents, useRecords } from "../../api/hooks";
 import type { EventSummary, IsoDate, RecordSummary, Uuid } from "../../api/types";
 import { NodeListPicker, NodeTreePicker, useNodesOf } from "../../features/nodes/NodePicker";
 import { QualityNote } from "../../features/record/QualityNote";
+import { MarkdownField } from "../../ui/MarkdownField";
 import { daysFromToday, parseDay, PRIORITY, PRIORITY_ORDER, toIsoDay } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
 import { navigate } from "../../lib/router";
@@ -391,8 +392,9 @@ function NewEventForm({ onCancel }: { onCancel: () => void }) {
   const [date, setDate] = useState("");
   const [description, setDescription] = useState("");
   const [qualityReasons, setQualityReasons] = useState<string[] | null>(null);
+  const bypassQuality = L.can("bypass_text_quality");
   const tpl = kindTemplate(L.meta.nodes, kind);
-  const ready = Array.from(title.trim()).length >= 5 && Array.from(description.trim()).length >= 30 && unit !== null && kind !== null;
+  const ready = (bypassQuality ? title.trim() !== "" && description.trim() !== "" : Array.from(title.trim()).length >= 5 && Array.from(description.trim()).length >= 30) && unit !== null && kind !== null;
   const submit = (quality_override = false) => {
     if (kind === null || unit === null) return;
     create.mutate(
@@ -413,15 +415,15 @@ function NewEventForm({ onCancel }: { onCancel: () => void }) {
         <span>Ad</span>
         <input className={ui.input} required maxLength={200} autoFocus placeholder="Örn. DC araba atölyesi"
           value={title} onChange={(e) => setTitle(e.target.value)} />
-        <small className={ui.fieldHint}>{Array.from(title.trim()).length}/5 karakter</small>
+        <small className={ui.fieldHint}>{Array.from(title.trim()).length}{bypassQuality ? " karakter" : "/5 karakter"}</small>
       </label>
-      <label className={ui.field}>
+      <div className={ui.field}>
         <span>Açıklama</span>
-        <textarea className={ui.input} rows={4} value={description} onChange={(e) => setDescription(e.target.value)}
-          placeholder="Ne yapılacak, neden, kim için?" aria-label="Açıklama" />
-        <small className={ui.fieldHint}>{Array.from(description.trim()).length}/30 karakter</small>
-      </label>
-      <QualityNote />
+        <MarkdownField value={description} onChange={setDescription} label="Açıklama" rows={4}
+          placeholder="Ne yapılacak, neden, kim için?" />
+        <small className={ui.fieldHint}>{Array.from(description.trim()).length}{bypassQuality ? " karakter" : "/30 karakter"}</small>
+      </div>
+      {!bypassQuality && <QualityNote />}
       <div className={ui.field}>
         <span>Tür</span>
         <NodeListPicker rootKey="event_types" label="Tür" value={kind} onChange={setKind} placeholder="Tür seç" />

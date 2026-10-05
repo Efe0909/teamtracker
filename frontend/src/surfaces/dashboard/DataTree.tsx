@@ -20,6 +20,7 @@ import type { MetaTeam, NewNode, NodePatch, NodeType, Shape, TreeNode, TreeView,
 import { NODE_TYPE } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
 import { Icon } from "../../ui/icons";
+import { MarkdownField, MarkdownText } from "../../ui/MarkdownField";
 import { Button, cx, Empty, Link, Loading, Picker, Req, Tag, ui, useToast } from "../../ui/ui";
 import { ErrorScreen } from "../errors/ErrorScreen";
 import s from "./dashboard.module.css";
@@ -295,7 +296,7 @@ function TreeScreen({ tree }: { tree: TreeView }) {
                     </span>
                   )}
                 </div>
-                {n.description !== null && <div className={s.tdesc}>{n.description}</div>}
+                {n.description !== null && <MarkdownText value={n.description} className={s.tdesc} />}
                 {editing && <EditForm node={n} tree={tree} byId={byId} onClose={() => setPanel(null)} />}
                 {adding && (
                   <AddForm
@@ -347,6 +348,8 @@ function AttrsFields(props: {
 }
 
 function AddForm(props: { parent: TreeNode; onClose: (added: boolean) => void }) {
+  const L = useLookup();
+  const bypassQuality = L.can("bypass_text_quality");
   const m = useCreateNode();
   const { parent } = props;
   // Sabit kural: tur ve shape sunucudan, formda sorulmaz.
@@ -360,7 +363,7 @@ function AddForm(props: { parent: TreeNode; onClose: (added: boolean) => void })
   const [err, setErr] = useState<string | null>(null);
   const nameLabel = fixed ? `${TYPE_LABEL[type]} adı` : "Alt düğüm adı";
   const nameValid = Array.from(name.trim()).length >= 5;
-  const descValid = desc.trim() === "" || Array.from(desc.trim()).length >= 30;
+  const descValid = bypassQuality || desc.trim() === "" || Array.from(desc.trim()).length >= 30;
 
   return (
     <form
@@ -402,12 +405,12 @@ function AddForm(props: { parent: TreeNode; onClose: (added: boolean) => void })
         )}
         <AttrsFields type={type} offset={offset} setOffset={setOffset} widget={widget} setWidget={setWidget} />
       </div>
-      <label className={ui.field}>
-        Açıklama
-        <textarea className={ui.input} rows={2} value={desc} onChange={(e) => setDesc(e.target.value)}
+      <div className={ui.field}>
+        <span>Açıklama</span>
+        <MarkdownField value={desc} onChange={setDesc} label="Açıklama" rows={2}
           placeholder="açıklama (isteğe bağlı)" />
-        <small className={ui.fieldHint}>{Array.from(desc.trim()).length}/30 karakter · isteğe bağlı</small>
-      </label>
+        <small className={ui.fieldHint}>{Array.from(desc.trim()).length}{bypassQuality ? " karakter" : "/30 karakter"} · isteğe bağlı</small>
+      </div>
       <div className={ui.dact}>
         <Button onClick={() => props.onClose(false)}>Vazgeç</Button>
         <Button type="submit" variant="primary" aria-busy={m.isPending} disabled={m.isPending || !nameValid || !descValid}>
@@ -420,6 +423,8 @@ function AddForm(props: { parent: TreeNode; onClose: (added: boolean) => void })
 
 function EditForm(props: { node: TreeNode; tree: TreeView; byId: ReadonlyMap<Uuid, TreeNode>; onClose: () => void }) {
   const { node, tree, byId, onClose } = props;
+  const L = useLookup();
+  const bypassQuality = L.can("bypass_text_quality");
   const m = usePatchNode();
   const del = useDeleteNode();
   const [name, setName] = useState(node.name);
@@ -438,7 +443,7 @@ function EditForm(props: { node: TreeNode; tree: TreeView; byId: ReadonlyMap<Uui
   // Kok ve slot: yalniz ad/aciklama (spec/74 §4.1-4.2).
   const locked = node.locked !== null;
   const nameValid = node.node_type === "operational" || Array.from(name.trim()).length >= 5 || name.trim() === node.name;
-  const descValid = desc.trim() === "" || Array.from(desc.trim()).length >= 30 || desc.trim() === (node.description ?? "");
+  const descValid = bypassQuality || desc.trim() === "" || Array.from(desc.trim()).length >= 30 || desc.trim() === (node.description ?? "");
   // Tur ve shape yalniz serbest kokte (Birimler) secilir; sabit kurallarda sunucunun.
   const free = !locked && node.root_key === "units";
   const up = node.parent_id === null ? undefined : byId.get(node.parent_id);
@@ -530,12 +535,12 @@ function EditForm(props: { node: TreeNode; tree: TreeView; byId: ReadonlyMap<Uui
             options={targets.map((x) => ({ value: x.id, label: x.name, depth: x.depth }))} />
         </div>
       )}
-      <label className={ui.field}>
-        Açıklama
-        <textarea className={ui.input} rows={2} value={desc} onChange={(e) => setDesc(e.target.value)}
+      <div className={ui.field}>
+        <span>Açıklama</span>
+        <MarkdownField value={desc} onChange={setDesc} label="Açıklama" rows={2}
           placeholder="açıklama — bu düğüm ne kapsıyor?" />
-        <small className={ui.fieldHint}>{Array.from(desc.trim()).length}/30 karakter · isteğe bağlı</small>
-      </label>
+        <small className={ui.fieldHint}>{Array.from(desc.trim()).length}{bypassQuality ? " karakter" : "/30 karakter"} · isteğe bağlı</small>
+      </div>
       <div className={ui.dact}>
         {node.can_hard_delete && !locked && (
           <Button variant="danger" className={s.tdelete} onClick={hardDelete} disabled={del.isPending}>

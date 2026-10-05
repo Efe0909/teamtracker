@@ -1283,6 +1283,7 @@ a.row:hover {
   }
 }
 .tdesc {
+  display: block;
   margin: -4px 0 6px 32px;
   color: var(--dim);
   font-size: var(--fs-sm);

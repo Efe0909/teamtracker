@@ -239,7 +239,9 @@ pub async fn create(
     let name = name_of(b.name)?;
     check_name(&name)?;
     let description = common::text(b.description, TEXT_MAX, "invalid_description")?;
-    check_description(description.as_deref())?;
+    if !common::has_scope(&st, &me, "bypass_text_quality").await? {
+        check_description(description.as_deref())?;
+    }
     let wanted = b.node_type.map(parse_type).transpose()?;
     let parent_id = b.parent_id.ok_or(AppError::Conflict("root_locked"))?;
     let access = NodeAccess::load(&st.pool, &me).await?;
@@ -353,6 +355,7 @@ pub async fn patch(
     let description = p.description
         .map(|d| common::text(d, TEXT_MAX, "invalid_description")).transpose()?;
     let access = NodeAccess::load(&st.pool, &me).await?;
+    let bypass_quality = common::has_scope(&st, &me, "bypass_text_quality").await?;
     let _write = st.structure.lock().await;
     let current_description: Option<String> =
         sqlx::query_scalar("select description from nodes where id = $1")
@@ -379,7 +382,7 @@ pub async fn patch(
         if next.name != node.name && node.node_type != NodeType::Operational {
             check_name(&next.name)?;
         }
-        if next.description != current_description {
+        if next.description != current_description && !bypass_quality {
             check_description(next.description.as_deref())?;
         }
         let structural = next.node_type != node.node_type || next.parent_id != node.parent_id

@@ -16,6 +16,7 @@ import { TEAM_ROLE } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
 import { navigate } from "../../lib/router";
 import { Icon } from "../../ui/icons";
+import { MarkdownField, MarkdownText } from "../../ui/MarkdownField";
 import { Avatar, Button, Dialog, Empty, IconButton, Link, Loading, Picker, Segmented, ui, useToast, Who } from "../../ui/ui";
 import { ErrorScreen } from "../errors/ErrorScreen";
 import { Banner } from "./Banner";
@@ -75,7 +76,9 @@ export function Teams() {
                     <h2>{team?.name ?? "?"}</h2>
                     {mine.has(t.id) && <span className={s.mine}>Üyesin</span>}
                   </span>
-                  <p>{team?.description ?? "Açıklama yok."}</p>
+                  {team?.description !== null && team?.description !== undefined
+                    ? <MarkdownText value={team.description} linkTextOnly />
+                    : <p>Açıklama yok.</p>}
                   {nodes.length > 0 && (
                     <span className={s.nodeLine}>
                       <Icon name="tree" size={13} />
@@ -127,6 +130,8 @@ export function TeamForm(props: {
   onSaved: (id: Uuid | undefined) => void;
   extra?: ReactNode;
 }) {
+  const L = useLookup();
+  const bypassQuality = L.can("bypass_text_quality");
   const m = useTeamWrite();
   const init = props.initial;
   const [name, setName] = useState(init?.name ?? "");
@@ -137,7 +142,7 @@ export function TeamForm(props: {
   const path = props.kind === "team" ? "/api/teams" : "/api/pillars";
   const body = { name: name.trim(), description: desc.trim() === "" ? null : desc, color };
   const nameValid = Array.from(name.trim()).length >= 5 || name.trim() === init?.name;
-  const descValid = desc.trim() === "" || Array.from(desc.trim()).length >= 30 || desc.trim() === (init?.description ?? "");
+  const descValid = bypassQuality || desc.trim() === "" || Array.from(desc.trim()).length >= 30 || desc.trim() === (init?.description ?? "");
 
   return (
     <Dialog open onClose={props.onClose} title={init === undefined ? `Yeni ${noun}` : `${props.kind === "team" ? "Takımı" : "Pillar'ı"} düzenle`}
@@ -157,12 +162,12 @@ export function TeamForm(props: {
           autoFocus placeholder={props.kind === "team" ? "Takım adı — ör. Maliye" : "Pillar adı — ör. Kalite"} aria-label="Ad" />
         <small className={ui.fieldHint}>{Array.from(name.trim()).length}/5 karakter</small>
         <div className={ui.propForm}>
-          <label className={ui.propField}>
+          <div className={ui.propField}>
             <span className={ui.propLabel}><Icon name="edit" size={14} /> Açıklama</span>
-            <textarea className={`${ui.input} ${ui.ghost}`} rows={3} value={desc} onChange={(e) => setDesc(e.target.value)}
+            <MarkdownField value={desc} onChange={setDesc} label="Açıklama" rows={3}
               placeholder={props.kind === "team" ? "Takım ne iş yapar?" : "Bu pillar neyi kapsar?"} />
-            <small className={ui.fieldHint}>{Array.from(desc.trim()).length}/30 karakter · isteğe bağlı</small>
-          </label>
+            <small className={ui.fieldHint}>{Array.from(desc.trim()).length}{bypassQuality ? " karakter" : "/30 karakter"} · isteğe bağlı</small>
+          </div>
           <div className={ui.propField}>
             <span className={ui.propLabel}><Icon name="stOpen" size={14} /> Renk</span>
             <ColorSwatches value={color} onChange={setColor} />
@@ -388,7 +393,7 @@ export function TeamPage({ id }: { id: Uuid }) {
               <TeamMark name={team.name} color={team.color} />
               <div className={s.pageTitle}>
                 <h1>{team.name}</h1>
-                {team.description !== null && <p className={s.pageSub}>{team.description}</p>}
+                {team.description !== null && <MarkdownText value={team.description} className={s.pageSub} />}
               </div>
             </div>
             <ArrangeButton on={arranging} onChange={setArranging} />

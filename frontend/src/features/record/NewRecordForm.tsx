@@ -14,6 +14,7 @@ import { Button, Dialog, Picker, PriorityTag, TeamName, ui, Who } from "../../ui
 import { NodeTreePicker, useNodesOf } from "../nodes/NodePicker";
 import { ACCESS } from "./Join";
 import { QualityNote } from "./QualityNote";
+import { MarkdownField } from "../../ui/MarkdownField";
 import s from "./form.module.css";
 
 export function NewRecordForm(props: {
@@ -37,6 +38,7 @@ export function NewRecordForm(props: {
   const [desc, setDesc] = useState("");
   const [access, setAccess] = useState<AccessMode>("public");
   const [qualityReasons, setQualityReasons] = useState<string[] | null>(null);
+  const bypassQuality = L.can("bypass_text_quality");
   const submit = (quality_override = false) => m.mutate(
     {
       kind, title, description: desc.trim() === "" ? null : desc,
@@ -63,12 +65,12 @@ export function NewRecordForm(props: {
       <div className={s.doc}>
         <input className={ui.titleInput} value={title} onChange={(e) => setTitle(e.target.value)}
           placeholder="Başlık — kısa ve aranabilir" required maxLength={200} autoFocus aria-label="Başlık" />
-        <small className={ui.fieldHint}>{Array.from(title.trim()).length}/5 karakter</small>
-        <textarea className={s.body} value={desc} onChange={(e) => setDesc(e.target.value)}
-          placeholder="Açıklama: ne yapılacak, neden, kim için?" rows={4} aria-label="Açıklama" />
-        <small className={ui.fieldHint}>{desc.trim().length}/30 karakter</small>
+        <small className={ui.fieldHint}>{Array.from(title.trim()).length}{bypassQuality ? " karakter" : "/5 karakter"}</small>
+        <MarkdownField value={desc} onChange={setDesc} label="Açıklama"
+          placeholder="Açıklama: ne yapılacak, neden, kim için?" rows={4} />
+        <small className={ui.fieldHint}>{desc.trim().length}{bypassQuality ? " karakter" : "/30 karakter"}</small>
       </div>
-      <QualityNote />
+      {!bypassQuality && <QualityNote />}
 
       <div className={s.chips} role="group" aria-label="Özellikler">
         <Picker look="chip" active label="Tür" value={kind} onChange={setKind}
@@ -133,7 +135,7 @@ export function NewRecordForm(props: {
       <div className={`${ui.dact} ${s.foot}`}>
         {props.onCancel !== undefined && <Button onClick={props.onCancel}>Vazgeç</Button>}
         <Button type="submit" variant="primary" big aria-busy={m.isPending}
-          disabled={m.isPending || Array.from(title.trim()).length < 5 || Array.from(desc.trim()).length < 30 || unit === ""}>
+          disabled={m.isPending || (!bypassQuality && (Array.from(title.trim()).length < 5 || Array.from(desc.trim()).length < 30)) || title.trim() === "" || desc.trim() === "" || unit === ""}>
           {m.isPending ? "Açılıyor…" : "Kaydı aç"}
         </Button>
       </div>

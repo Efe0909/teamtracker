@@ -98,6 +98,7 @@ export type ApiErrorCode =
   | "name_too_short"
   | "title_too_short"
   | "description_too_short"
+  | "description_required"
   | "closing_note_required"
   | "closing_note_too_short"
   | "invalid_closing_note"
@@ -200,6 +201,7 @@ export const ERRORS = {
   name_too_short: "Ad en az 5 karakter olmalı.",
   title_too_short: "Başlık en az 5 karakter olmalı.",
   description_too_short: "Açıklama en az 30 karakter olmalı.",
+  description_required: "Açıklama boş olamaz.",
   closing_note_required: "Kapatırken en az 30 karakterlik kapanış notu yaz.",
   closing_note_too_short: "Kapanış notu en az 30 karakter olmalı.",
   invalid_closing_note: "Kapanış notu çok uzun.",

@@ -41,7 +41,8 @@ fn check_name(name: &str) -> Result<()> {
     common::min_chars(Some(name), common::NAME_MIN, "name_too_short")
 }
 
-fn check_description(description: Option<&str>) -> Result<()> {
+fn check_description(description: Option<&str>, bypass_quality: bool) -> Result<()> {
+    if bypass_quality { return Ok(()); }
     if let Some(value) = description.filter(|s| !s.trim().is_empty()) {
         common::min_chars(Some(value), common::DESC_MIN, "description_too_short")?;
     }
@@ -124,10 +125,11 @@ pub async fn create_team(
     State(st): State<AppState>, CurrentUser(me): CurrentUser, Body(b): Body<NewTeam>,
 ) -> Result<(StatusCode, Json<CreatedTeam>)> {
     manage_teams(&st, &me).await?;
+    let bypass_quality = common::has_scope(&st, &me, "bypass_text_quality").await?;
     let name = name_of(b.name)?;
     check_name(&name)?;
     let description = common::text(b.description, TEXT_MAX, "invalid_description")?;
-    check_description(description.as_deref())?;
+    check_description(description.as_deref(), bypass_quality)?;
     let color = common::text(b.color, COLOR_MAX, "invalid_color")?;
     let mut tx = st.pool.begin().await?;
     let (id, _) = insert_team(&mut tx, me.id, &name, description.as_deref(), color.as_deref()).await?;
@@ -154,6 +156,7 @@ pub async fn patch_team(
     Body(p): Body<TeamPatch>,
 ) -> Result<StatusCode> {
     manage_teams(&st, &me).await?;
+    let bypass_quality = common::has_scope(&st, &me, "bypass_text_quality").await?;
     let id = common::id(&raw)?;
     let name = p.name.map(name_of).transpose()?;
     let description = p.description
@@ -174,7 +177,7 @@ pub async fn patch_team(
     }
     let next_description = description.clone().unwrap_or_else(|| old_description.clone());
     if next_description != old_description {
-        check_description(next_description.as_deref())?;
+        check_description(next_description.as_deref(), bypass_quality)?;
     }
     if is_pillar && next_name != old_name {
         return Err(AppError::Conflict("team_is_pillar"));
@@ -274,10 +277,11 @@ pub async fn create_pillar(
     State(st): State<AppState>, CurrentUser(me): CurrentUser, Body(b): Body<NewTeam>,
 ) -> Result<(StatusCode, Json<CreatedPillar>)> {
     manage_teams(&st, &me).await?;
+    let bypass_quality = common::has_scope(&st, &me, "bypass_text_quality").await?;
     let name = name_of(b.name)?;
     check_name(&name)?;
     let description = common::text(b.description, TEXT_MAX, "invalid_description")?;
-    check_description(description.as_deref())?;
+    check_description(description.as_deref(), bypass_quality)?;
     let color = common::text(b.color, COLOR_MAX, "invalid_color")?;
     let mut tx = st.pool.begin().await?;
     let (team_id, _) = insert_team(&mut tx, me.id, &name, description.as_deref(), color.as_deref()).await?;
@@ -314,6 +318,7 @@ pub async fn patch_pillar(
     Body(p): Body<PillarPatch>,
 ) -> Result<StatusCode> {
     manage_teams(&st, &me).await?;
+    let bypass_quality = common::has_scope(&st, &me, "bypass_text_quality").await?;
     let id = common::id(&raw)?;
     let name = p.name.map(name_of).transpose()?;
     let description = p.description
@@ -341,7 +346,7 @@ pub async fn patch_pillar(
         check_name(&next_name)?;
     }
     if next_description != old.description {
-        check_description(next_description.as_deref())?;
+        check_description(next_description.as_deref(), bypass_quality)?;
     }
     let next_color = color.unwrap_or(old.color);
     sqlx::query(

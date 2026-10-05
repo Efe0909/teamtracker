@@ -46,6 +46,7 @@
   margin-top: 6px;
 }
 .desc {
+  display: block;
   margin: 0;
   color: var(--txt);
   font-size: var(--fs-lg);

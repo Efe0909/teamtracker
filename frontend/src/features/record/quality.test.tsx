@@ -34,8 +34,9 @@ const detail: RecordDetail = {
   actions: [], participants: [], cards: [], access: { can_edit: true, can_edit_deadline: true },
   pinned: false, membership: { mode: "public", is_member: true, restricted: false, request: null, can_decide: false, requests: [] }, event_id: null,
 };
-function wrap(child: React.ReactNode) {
-  return render(<QueryClientProvider client={new QueryClient()}><ToastProvider><LookupProvider meta={meta}>{child}</LookupProvider></ToastProvider></QueryClientProvider>);
+function wrap(child: React.ReactNode, scopes: string[] = []) {
+  const scoped = { ...meta, me: { ...meta.me, scopes } };
+  return render(<QueryClientProvider client={new QueryClient()}><ToastProvider><LookupProvider meta={scoped}>{child}</LookupProvider></ToastProvider></QueryClientProvider>);
 }
 
 it("requires 5/30 characters before record submission", () => {
@@ -44,6 +45,18 @@ it("requires 5/30 characters before record submission", () => {
   fireEvent.change(screen.getByLabelText("Başlık"), { target: { value: "Planlama" } });
   fireEvent.change(screen.getByLabelText("Açıklama"), { target: { value: "Kısa" } });
   expect((screen.getByRole("button", { name: "Kaydı aç" }) as HTMLButtonElement).disabled).toBe(true);
+});
+
+it("bypass_text_quality permits short titles and descriptions", () => {
+  wrap(<NewRecordForm onCreated={() => undefined} />, ["bypass_text_quality"]);
+  fireEvent.change(screen.getByLabelText("Başlık"), { target: { value: "x" } });
+  const submit = screen.getByRole("button", { name: "Kaydı aç" }) as HTMLButtonElement;
+  expect(submit.disabled).toBe(true);
+  fireEvent.change(screen.getByLabelText("Açıklama"), { target: { value: "y" } });
+  expect(submit.disabled).toBe(false);
+  fireEvent.click(submit);
+  expect(mutate.mock.calls[0]?.[0]).toMatchObject({ title: "x", description: "y" });
+  expect(screen.queryByText(/modeline gider/)).toBeNull();
 });
 
 it("shows low-quality reasons and retries with quality_override", () => {
@@ -72,5 +85,15 @@ it("requires 30 characters in record closing dialog", () => {
   fireEvent.change(note, { target: { value: "Kısa" } });
   expect(closeButton().disabled).toBe(true);
   fireEvent.change(note, { target: { value: "Yapilan is tamamlandi ve sonucu ekiple paylasildi." } });
+  expect(closeButton().disabled).toBe(false);
+});
+
+it("bypass_text_quality still requires a closing note", () => {
+  wrap(<Properties d={detail} />, ["bypass_text_quality"]);
+  fireEvent.click(screen.getByRole("button", { name: "Durum: Açık" }));
+  fireEvent.click(screen.getByRole("option", { name: "Kapandı" }));
+  const closeButton = () => screen.getAllByRole("button", { name: "Kapat" }).at(-1) as HTMLButtonElement;
+  expect(closeButton().disabled).toBe(true);
+  fireEvent.change(screen.getByLabelText(/Kapanış notu/), { target: { value: "x" } });
   expect(closeButton().disabled).toBe(false);
 });

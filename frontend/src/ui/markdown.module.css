@@ -1,0 +1,116 @@
+.field {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--panel);
+}
+.toolbar {
+  display: flex;
+  gap: 2px;
+  padding: 3px 5px;
+  border-bottom: 1px solid var(--line);
+}
+.toolbar button {
+  display: grid;
+  place-items: center;
+  min-width: 26px;
+  height: 25px;
+  padding: 0 5px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--dim);
+  font: 600 var(--fs-sm)/1 var(--font-sans);
+  cursor: pointer;
+}
+.toolbar button:hover {
+  background: var(--tint);
+  color: var(--txt);
+}
+.input {
+  position: relative;
+}
+.input textarea,
+.overlayContent {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 96px;
+  margin: 0;
+  padding: 9px 10px;
+  border: 0;
+  font: inherit;
+  font-size: var(--fs-md);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  tab-size: 2;
+}
+.input textarea {
+  position: relative;
+  z-index: 1;
+  display: block;
+  resize: vertical;
+  background: transparent;
+  color: transparent;
+  caret-color: var(--txt);
+  -webkit-text-fill-color: transparent;
+}
+.input textarea::placeholder {
+  color: var(--dim);
+  -webkit-text-fill-color: var(--dim);
+}
+.input textarea::selection {
+  background: color-mix(in srgb, var(--acc) 28%, transparent);
+}
+.overlay {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  color: var(--txt);
+}
+.rendered {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+}
+.syntax {
+  color: transparent;
+}
+.strong { font-weight: 700; }
+.em { font-style: italic; }
+.heading { font-weight: 700; }
+.link { color: var(--acc-strong); text-decoration: underline; text-underline-offset: 2px; }
+.link:hover::after { content: ""; display: inline-block; width: 6px; height: 6px; margin-left: 4px; border-radius: 50%; background: var(--err); vertical-align: middle; }
+.mention { color: var(--acc-strong); font-weight: 600; }
+.quote { border-left: 2px solid var(--line-strong); padding-left: 5px; color: var(--dim); font-style: italic; }
+.list { color: var(--dim); }
+.rule { color: var(--line-strong); }
+.suggestions {
+  position: absolute;
+  z-index: 3;
+  left: 8px;
+  bottom: calc(100% - 4px);
+  max-height: 180px;
+  overflow: auto;
+  min-width: 180px;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--panel);
+  box-shadow: var(--sh-lg);
+}
+.suggestions button {
+  width: 100%;
+  padding: 6px 9px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--txt);
+  text-align: left;
+  cursor: pointer;
+}
+.suggestions button:hover,
+.suggestions button:focus-visible { background: var(--tint); outline: none; }
