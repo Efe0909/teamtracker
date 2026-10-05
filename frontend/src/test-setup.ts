@@ -10,3 +10,6 @@ globalThis.ResizeObserver ??= NoopResizeObserver;
 Element.prototype.scrollIntoView ??= function scrollIntoView() {};
 Element.prototype.hasPointerCapture ??= () => false;
 Element.prototype.releasePointerCapture ??= () => {};
+// CodeMirror metin aralıklarını ölçer; gerçek geometri tarayıcıda sınanır.
+Range.prototype.getClientRects ??= () => [] as unknown as DOMRectList;
+Range.prototype.getBoundingClientRect ??= () => new DOMRect();

@@ -25,7 +25,13 @@ Uçlar (hepsi admin): `GET|PUT|DELETE /api/admin/quality`, `POST /api/admin/qual
 
 ## Metin düzenleyicisi
 
-Açıklamalar ve kapanış notları Markdown kaynağı olarak saklanır; yazarken tamamlanan sözdizimi aynı alanda biçimli gösterilir. Yarım `[](htt` düz metin kalır, `[]()` kapanınca bağlantı olarak görünür. `###` başlığı, başlıklardan sonra metin başlayınca etkinleşir. Desteklenen biçimler: 1–3. düzey başlık, kalın, italik, bağlantı, alıntı (`>`), yatay çizgi (`---` / `===`), madde işaretli ve numaralı liste, kişi anması (`@handle`). Görev kutuları desteklenmez. Ham HTML çalıştırılmaz; `javascript:`, `data:`, `vbscript:` ve `blob:` bağlantıları bağlantı olarak üretilmez. Diğer URL'lerin geçerliliği veya erişilebilirliği sınanmaz.
+Düzenleyici CodeMirror 6 kaynak belgesi üzerinde çalışır (`@codemirror/state`, `view`, `commands`); önizleme katmanı veya transparan textarea overlay'i yoktur. Biçim işaretleri yer kaplamayan decoration'larla saklanır; kaynak↔DOM imleç eşlemesi, seçim ve undo editör tarafından yönetilir.
+
+Açıklamalar ve kapanış notları Markdown kaynağı olarak saklanır; yazarken tamamlanan sözdizimi aynı alanda biçimli gösterilir. Yarım `[](htt` düz metin kalır, `[]()` kapanınca bağlantı olarak görünür. `###` başlığı, başlıklardan sonra metin başlayınca etkinleşir. Desteklenen biçimler: 1–3. düzey başlık, kalın, italik, bağlantı, alıntı (`>`), yatay çizgi (`---` / `===`), madde işaretli ve numaralı liste, kişi anması (`@handle`). Görev kutuları desteklenmez. Ham HTML çalıştırılmaz. Aktif bağlantılarda yalnız `http`, `https`, `mailto` ve göreli hedefler kabul edilir; kontrol karakteri veya başka şema taşıyan hedefler biçimli ama tıklanamaz görünür. URL'nin geçerliliği veya erişilebilirliği sınanmaz.
+
+Ham URL'ler bağlantı olarak tanınır. Kırmızı isimlendirme noktası yalnız düzenleme alanında, bağlantının üstüne gelince görünür; noktaya tıklamak ham URL'yi `[|](URL)` biçimine dönüştürür ve imleci isim alanına yerleştirir. İsim boşken URL silik gösterilir; ilk isim karakteri yazılınca isim render edilir. Kart görünümünde nokta yoktur. Google Drive/Docs ve SharePoint bağlantıları `[isim](URL)` içinde yalnız URL deseniyle tanınır; isim dosya ikonlu pill olarak görünür. Metadata veya dosya adı için ağ isteği yapılmaz.
+
+`**` yazımı kapanış çiftini otomatik ekler ve imleci ortada tutar; ilk metinle kalın render başlar. Gizli biçim işaretleri arasında imleç kalmaz: oklarla sınır geçişi işaret çiftinin dışına çıkar. Liste maddesinde Enter sonraki maddeyi açar (numaralı listede sayı artar); boş maddede Enter listeyi bitirir, fazladan boş satır eklemez.
 
 ## Dış servisler ve KVKK
 

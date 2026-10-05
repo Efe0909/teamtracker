@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { EditorView } from "@codemirror/view";
 import { afterEach, expect, it, vi } from "vitest";
 import { ApiError } from "../../api/client";
 import type { Meta, RecordDetail } from "../../api/types";
@@ -39,11 +40,17 @@ function wrap(child: React.ReactNode, scopes: string[] = []) {
   return render(<QueryClientProvider client={new QueryClient()}><ToastProvider><LookupProvider meta={scoped}>{child}</LookupProvider></ToastProvider></QueryClientProvider>);
 }
 
+function setMarkdown(element: HTMLElement, source: string) {
+  const view = EditorView.findFromDOM(element);
+  if (!view) throw new Error("Markdown editor not mounted");
+  act(() => { view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: source } }); });
+}
+
 it("requires 5/30 characters before record submission", () => {
   wrap(<NewRecordForm onCreated={() => undefined} />);
   expect((screen.getByRole("button", { name: "Kaydı aç" }) as HTMLButtonElement).disabled).toBe(true);
   fireEvent.change(screen.getByLabelText("Başlık"), { target: { value: "Planlama" } });
-  fireEvent.change(screen.getByLabelText("Açıklama"), { target: { value: "Kısa" } });
+  setMarkdown(screen.getByLabelText("Açıklama"), "Kısa");
   expect((screen.getByRole("button", { name: "Kaydı aç" }) as HTMLButtonElement).disabled).toBe(true);
 });
 
@@ -52,7 +59,7 @@ it("bypass_text_quality permits short titles and descriptions", () => {
   fireEvent.change(screen.getByLabelText("Başlık"), { target: { value: "x" } });
   const submit = screen.getByRole("button", { name: "Kaydı aç" }) as HTMLButtonElement;
   expect(submit.disabled).toBe(true);
-  fireEvent.change(screen.getByLabelText("Açıklama"), { target: { value: "y" } });
+  setMarkdown(screen.getByLabelText("Açıklama"), "y");
   expect(submit.disabled).toBe(false);
   fireEvent.click(submit);
   expect(mutate.mock.calls[0]?.[0]).toMatchObject({ title: "x", description: "y" });
@@ -67,7 +74,7 @@ it("shows low-quality reasons and retries with quality_override", () => {
   });
   wrap(<NewRecordForm onCreated={created} />);
   fireEvent.change(screen.getByLabelText("Başlık"), { target: { value: "Planlama" } });
-  fireEvent.change(screen.getByLabelText("Açıklama"), { target: { value: "Toplanti yapilacak ve ekip bilgilendirilecek." } });
+  setMarkdown(screen.getByLabelText("Açıklama"), "Toplanti yapilacak ve ekip bilgilendirilecek.");
   fireEvent.click(screen.getByRole("button", { name: "Kaydı aç" }));
   expect(screen.getByText(/somut iş veya sonuç/)).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "Yine de gönder" }));
@@ -82,9 +89,9 @@ it("requires 30 characters in record closing dialog", () => {
   expect(screen.getByText("Kaydı kapat")).toBeTruthy();
   const note = screen.getByLabelText(/Kapanış notu/);
   const closeButton = () => screen.getAllByRole("button", { name: "Kapat" }).at(-1) as HTMLButtonElement;
-  fireEvent.change(note, { target: { value: "Kısa" } });
+  setMarkdown(note, "Kısa");
   expect(closeButton().disabled).toBe(true);
-  fireEvent.change(note, { target: { value: "Yapilan is tamamlandi ve sonucu ekiple paylasildi." } });
+  setMarkdown(note, "Yapilan is tamamlandi ve sonucu ekiple paylasildi.");
   expect(closeButton().disabled).toBe(false);
 });
 
@@ -94,6 +101,6 @@ it("bypass_text_quality still requires a closing note", () => {
   fireEvent.click(screen.getByRole("option", { name: "Kapandı" }));
   const closeButton = () => screen.getAllByRole("button", { name: "Kapat" }).at(-1) as HTMLButtonElement;
   expect(closeButton().disabled).toBe(true);
-  fireEvent.change(screen.getByLabelText(/Kapanış notu/), { target: { value: "x" } });
+  setMarkdown(screen.getByLabelText(/Kapanış notu/), "x");
   expect(closeButton().disabled).toBe(false);
 });
