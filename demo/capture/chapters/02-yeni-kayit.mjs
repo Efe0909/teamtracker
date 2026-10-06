@@ -82,7 +82,7 @@ export default {
     await R.step(page, {
       id: "yeni-kayit-sorumlu-sec",
       title: "Can Özdemir'e ata",
-      text: "Prizleri sayacak kişi atölyeden sorumlu **Can**. Seçince kayıt onun “Açık eylemim” listesine düşmez, kaydın sorumlusu olur.",
+      text: "Prizleri sayacak kişi atölyeden sorumlu **Can**. Seçtiğin kişi kaydın **sorumlusu** olur; adı listelerde ve kayıt sayfasında görünür.",
       target: opt(page, /Can Özdemir/),
       act: () => opt(page, /Can Özdemir/).click(),
     });

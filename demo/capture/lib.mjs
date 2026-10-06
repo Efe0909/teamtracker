@@ -26,7 +26,26 @@ export const HOSTS = {
 
 const PSQL = process.env.PSQL ?? "PGPASSWORD=ekiptakip psql -h 127.0.0.1 -U ekiptakip -d ekiptakip_demo";
 export const sql = (q) => execSync(`${PSQL} -X -q -t -A -c ${JSON.stringify(q)}`).toString().trim();
-export const userId = (name) => sql(`select id from users where name = '${name.replace(/'/g, "''")}'`);
+const lit = (s) => `'${String(s).replace(/'/g, "''")}'`;
+export const userId = (name) => sql(`select id from users where name = ${lit(name)}`);
+
+/** Basliga gore kayit kimligi (bolum onceki bolumun actigi kayda dayaniyorsa net bir hata ver). */
+export function recordId(title) {
+  const id = sql(`select id from records where title = ${lit(title)}`);
+  if (id === "") throw new Error(`"${title}" kaydi yok (once onu acan bolumu calistir)`);
+  return id;
+}
+
+/** Bugunun haftadaki adi ("Salı"); hikaye metinleri hangi gun calistirilirsa onu soylesin. */
+export const weekday = () => new Intl.DateTimeFormat("tr", { weekday: "long", timeZone: "UTC" }).format(new Date())
+  .replace(/^./, (c) => c.toLocaleUpperCase("tr"));
+
+/** Bugunden `n` gun sonrasinin takvim hucre etiketi ("10 Ekim 2026"). Sunucu, tohum ve
+ *  tarayici UTC oldugu icin "bugun" hepsinde ayni gundur. */
+export function dayLabel(n) {
+  const d = new Date(Date.now() + n * 86_400_000);
+  return new Intl.DateTimeFormat("tr", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }).format(d);
+}
 
 /** Masaustu ya da telefon boyutunda, `ad` olarak giris yapmis sayfa. */
 export async function openUser(browser, name, { host = "dashboard", mobile = false, width, height, scale } = {}) {
@@ -41,7 +60,9 @@ export async function openUser(browser, name, { host = "dashboard", mobile = fal
   // CANLIDA gorunen metni anlatir: on yuze "hicbir servis kapali degil" denir. Yalniz
   // gosterim degisir; sunucu davranisi (ve hicbir dis servise cagri) ayni kalir.
   await ctx.route("**/api/meta", async (route) => {
-    const res = await route.fetch();
+    // `*.localhost` yalniz Chromium'da cozulur (Node'da degil): istegi dogrudan IP'ye yolla.
+    const u = new URL(route.request().url());
+    const res = await route.fetch({ url: `http://127.0.0.1:${u.port}${u.pathname}${u.search}` });
     const body = await res.json();
     await route.fulfill({ response: res, json: { ...body, external_off: [] } });
   });
@@ -93,7 +114,10 @@ export class Recorder {
     await settle(page, s.wait ?? 250);
     const targets = s.target === undefined ? [] : Array.isArray(s.target) ? s.target : [s.target];
     const boxes = [];
-    for (const t of targets) {
+    for (const raw of targets) {
+      // `{ t, label }` ile kutuya kisa bir etiket eklenir (bolumleri tanitan genel bakis adimlari).
+      const labeled = raw !== null && typeof raw === "object" && "t" in raw;
+      const t = labeled ? raw.t : raw;
       let b;
       if (typeof t.boundingBox === "function") {
         const first = t.first();
@@ -106,7 +130,7 @@ export class Recorder {
         if (b === null) throw new Error(`[${s.id}] hedefin kutusu yok`);
         b = { x: b.x, y: b.y, w: b.width, h: b.height };
       } else b = t;
-      boxes.push(b);
+      boxes.push(labeled ? { ...b, label: raw.label } : b);
     }
     this.cur.steps += 1;
     const n = this.steps.length + 1;

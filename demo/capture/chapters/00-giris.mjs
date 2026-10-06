@@ -1,13 +1,13 @@
 // Bolum 0: giris ve Panolar (ana sayfa). Kisi: Kaan, etkinlik koordinatoru.
 
-import { HOSTS, settle } from "../lib.mjs";
+import { HOSTS, settle, weekday } from "../lib.mjs";
 
 export default {
   id: "giris",
   title: "Giriş ve Panolar",
   persona: "Kaan Demir",
   role: "Etkinlik koordinatörü",
-  intro: "Salı sabahı. Kaan, haftaya başlamadan önce EkipTakip'e girip önünde ne olduğuna bakıyor.",
+  intro: `${weekday()} sabahı. Kaan, haftaya başlamadan önce EkipTakip'e girip önünde ne olduğuna bakıyor.`,
 
   async run({ R, browser, open }) {
     // 1) Giris sayfasi — yayindaki gibi "Google ile devam et" (demo'da kullanici listesi var;
