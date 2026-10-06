@@ -1,0 +1,134 @@
+// Ekran goruntusu yakalayici: kisi olarak giris, adim kaydi, vurgu kutulari.
+//
+// Her adim = bir goruntu (tiklanacak oge vurgulu) + kisa anlatim. Goruntu YALIN kalir
+// (sayfaya bir sey enjekte edilmez); vurgu kutulari `steps.json`'a yazilir, halkayi
+// ve numarayi PDF olusturucu cizer. Boylece ayni goruntuden farkli yerlesimler uretilir.
+
+import { createRequire } from "node:module";
+import { execSync } from "node:child_process";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+
+const require = createRequire(import.meta.url);
+
+export function loadPlaywright() {
+  for (const p of ["playwright", join(execSync("npm root -g").toString().trim(), "playwright")]) {
+    try { return require(p); } catch { /* sonrakini dene */ }
+  }
+  throw new Error("playwright bulunamadi (npm i -g playwright)");
+}
+
+export const HOSTS = {
+  apex: "http://localhost:5173",
+  dashboard: "http://dashboard.localhost:5173",
+  app: "http://app.localhost:5173",
+};
+
+const PSQL = process.env.PSQL ?? "PGPASSWORD=ekiptakip psql -h 127.0.0.1 -U ekiptakip -d ekiptakip_demo";
+export const sql = (q) => execSync(`${PSQL} -X -q -t -A -c ${JSON.stringify(q)}`).toString().trim();
+export const userId = (name) => sql(`select id from users where name = '${name.replace(/'/g, "''")}'`);
+
+/** Masaustu ya da telefon boyutunda, `ad` olarak giris yapmis sayfa. */
+export async function openUser(browser, name, { host = "dashboard", mobile = false, width, height, scale } = {}) {
+  const viewport = mobile ? { width: 390, height: 844 } : { width: width ?? 1440, height: height ?? 900 };
+  const ctx = await browser.newContext({
+    viewport, deviceScaleFactor: scale ?? (mobile ? 2 : 1.5), locale: "tr-TR", timezoneId: "UTC",
+    isMobile: mobile, hasTouch: mobile, acceptDownloads: true,
+  });
+  // Karsilama "Gunaydin": yalniz saat bilgisi sabitlenir (tarihler sunucuyla ayni kalir).
+  await ctx.addInitScript(() => { Date.prototype.getHours = function getHours() { return 10; }; });
+  // Demo sunucuda dis servis anahtarlari yok (kalite kontrolu, posta, push kapali). Rehber
+  // CANLIDA gorunen metni anlatir: on yuze "hicbir servis kapali degil" denir. Yalniz
+  // gosterim degisir; sunucu davranisi (ve hicbir dis servise cagri) ayni kalir.
+  await ctx.route("**/api/meta", async (route) => {
+    const res = await route.fetch();
+    const body = await res.json();
+    await route.fulfill({ response: res, json: { ...body, external_off: [] } });
+  });
+  const page = await ctx.newPage();
+  await page.goto(`${HOSTS[host]}/api/auth/dev-login?user_id=${userId(name)}`, { waitUntil: "networkidle" });
+  await settle(page);
+  return { ctx, page, viewport };
+}
+
+/** Ag sakinlesti, yazi tipleri yuklendi, animasyon bitti. */
+export async function settle(page, ms = 350) {
+  await page.waitForLoadState("networkidle").catch(() => {});
+  await page.evaluate(() => document.fonts.ready).catch(() => {});
+  await page.waitForTimeout(ms);
+}
+
+const pad = (n, w = 2) => String(n).padStart(w, "0");
+
+export class Recorder {
+  constructor(dir) {
+    this.dir = dir;
+    this.shots = join(dir, "shots");
+    // Her calistirma kendi goruntu setini yazar; eski calistirmadan kalan numaralar karismasin.
+    rmSync(this.shots, { recursive: true, force: true });
+    mkdirSync(this.shots, { recursive: true });
+    this.chapters = [];
+    this.steps = [];
+    this.cur = null;
+    this.ext = process.env.SHOT_TYPE === "png" ? "png" : "jpg";
+  }
+
+  /** Yeni bolum: kisi ve kisa senaryo girisi (PDF ayirici sayfasi). */
+  chapter({ id, title, intro, persona, role }) {
+    this.cur = { id, title, intro, persona, role, steps: 0 };
+    this.chapters.push(this.cur);
+    console.log(`\n== ${title}`);
+  }
+
+  /**
+   * Bir adim yakalar.
+   *  target(s): vurgulanacak Locator / {x,y,w,h} (dizi olabilir)
+   *  act: goruntuden SONRA yapilan eylem (tiklama, yazma ...)
+   *  click: imlec simgesi (act varsa varsayilan acik)
+   *  nav: PDF'te "anlatim" yerine geciste gosterilecek kisa ad (opsiyonel)
+   *  tip: ek ipucu kutusu
+   */
+  async step(page, s) {
+    if (this.cur === null) throw new Error("once chapter()");
+    await settle(page, s.wait ?? 250);
+    const targets = s.target === undefined ? [] : Array.isArray(s.target) ? s.target : [s.target];
+    const boxes = [];
+    for (const t of targets) {
+      let b;
+      if (typeof t.boundingBox === "function") {
+        const first = t.first();
+        await first.waitFor({ state: "visible", timeout: 8000 }).catch((e) => {
+          throw new Error(`[${s.id}] hedef gorunmuyor: ${e.message.split("\n")[0]}`);
+        });
+        await first.scrollIntoViewIfNeeded().catch(() => {});
+        await page.waitForTimeout(120);
+        b = await first.boundingBox();
+        if (b === null) throw new Error(`[${s.id}] hedefin kutusu yok`);
+        b = { x: b.x, y: b.y, w: b.width, h: b.height };
+      } else b = t;
+      boxes.push(b);
+    }
+    this.cur.steps += 1;
+    const n = this.steps.length + 1;
+    const file = `${pad(n, 3)}-${s.id}.${this.ext}`;
+    const opts = this.ext === "png" ? { type: "png" } : { type: "jpeg", quality: 86 };
+    await page.screenshot({ path: join(this.shots, file), ...opts });
+    const vp = page.viewportSize();
+    this.steps.push({
+      n, chapter: this.cur.id, id: s.id, title: s.title, text: s.text ?? "", tip: s.tip ?? null, file,
+      viewport: vp, boxes, click: s.click ?? (s.act !== undefined), mobile: (vp?.width ?? 1440) < 600,
+      zoom: s.zoom ?? null, note: s.note ?? null,
+    });
+    console.log(`  ${pad(n, 3)} ${s.title}`);
+    if (s.act !== undefined) {
+      await s.act();
+      await settle(page, s.after ?? 350);
+    }
+  }
+
+  write(extra = {}) {
+    writeFileSync(join(this.dir, "steps.json"), JSON.stringify({
+      generated: new Date().toISOString(), chapters: this.chapters, steps: this.steps, ...extra,
+    }, null, 1));
+  }
+}
