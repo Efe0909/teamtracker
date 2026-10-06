@@ -17,6 +17,8 @@ const { chromium } = load();
 
 const arg = (name, def) => { const i = process.argv.indexOf(`--${name}`); return i > 0 ? process.argv[i + 1] : def; };
 const DAY = arg("day", "17 Ekim"), WEEKDAY = arg("weekday", "Cumartesi");
+// Turkce gun kisaltmalari: "Cumartesi".slice(0, 3) "Cum" olurdu (Cuma ile karisir).
+const SHORT = { Pazartesi: "Pzt", Salı: "Sal", Çarşamba: "Çar", Perşembe: "Per", Cuma: "Cum", Cumartesi: "Cmt", Pazar: "Paz" };
 const out = process.argv[2];
 if (!out) throw new Error("cikti dizini gerekli");
 mkdirSync(out, { recursive: true });
@@ -62,7 +64,7 @@ const posterV2 = `${base}<body style="width:794px;height:1123px;background:#fff6
     </div>
     <p style="margin-top:28px;font-size:26px;line-height:1.4;max-width:600px">Dört saatlik uygulamalı atölyede ışığı, ısıyı ve kapıyı kontrol eden bir devre kurup eve götür.</p>
     <div style="position:absolute;left:0;right:0;bottom:0;border-top:3px solid #1d1a16;padding-top:22px;display:flex;justify-content:space-between;align-items:flex-end">
-      <div><div style="font-size:44px;font-weight:900">${DAY} · ${WEEKDAY.slice(0, 3)}</div><div style="font-size:24px;margin-top:4px">10:00 – 14:00 · Maker Atölyesi (B Blok)</div></div>
+      <div><div style="font-size:44px;font-weight:900">${DAY} · ${SHORT[WEEKDAY] ?? WEEKDAY.slice(0, 3)}</div><div style="font-size:24px;margin-top:4px">10:00 – 14:00 · Maker Atölyesi (B Blok)</div></div>
       <div style="text-align:right"><div style="font-size:15px;letter-spacing:.12em;font-weight:700">KAYIT</div><div style="font-size:24px;font-weight:800">ornek.example/kayit</div><div style="font-size:16px;margin-top:2px">30 kişilik kontenjan</div></div>
     </div>
   </div>
