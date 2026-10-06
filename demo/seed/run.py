@@ -12,12 +12,17 @@ from __future__ import annotations
 
 import datetime as dt
 import os
+import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 
 from client import Api, Psql, TZ, guard, q  # noqa: E402
+import cal  # noqa: E402
 import structure as S  # noqa: E402
+from play import Player, order_key  # noqa: E402
+from story_events import EVENTS  # noqa: E402
+from story_records import RECORDS  # noqa: E402
 
 
 def log(msg: str) -> None:
@@ -180,6 +185,105 @@ def phase_profiles(api: Api) -> None:
             "birth_day": day, "birth_month": month, "birth_year": year})
 
 
+# --- 4. hikaye: kayitlar, etkinlikler, duvarlar ---------------------------------------
+
+WALLS = [
+    # (takim ya da pillar, gun, saat, kim, metin)
+    ("Tasarım", 38, "16:00", "mert", "Takım duvarına hoş geldiniz! Afiş ve görsel işleri için sıra: önce kayıt açın, dosyaları kayda yükleyin, yorumları sohbetten toplayın."),
+    ("Tasarım", 20, "13:20", "zeynep", "Açılış etkinliği için hikâye şablonlarını ortak klasöre koydum."),
+    ("Tasarım", 9, "12:10", "mert", "Atölye afişi v2 hazır. Afiş kayıtlarını 'Etkinlik Öncesi Hazırlık' birimine açalım ki toplanma yeri belli olsun."),
+    ("Lojistik", 38, "16:30", "kaan", "Lojistik duvarı: mekan, ulaşım, kayıt masası ve vardiya işleri burada konuşulur. Etkinlik başına bir kayıt açıp eylemleri dağıtıyoruz."),
+    ("Lojistik", 8, "18:00", "ayse", "Konferans salonu opsiyonu yedek olarak duruyor, B Blok onayı gelmezse devreye alırız."),
+    ("Maliye", 38, "17:00", "elif", "Maliye duvarı: bütçe ve satın alma onayları. Her etkinliğin malzeme listesi etkinlik sayfasındaki Satın alımlar widget'ında."),
+    ("Maliye", 4, "09:30", "elif", "DHT22 siparişi sponsor mektubuna bağlı; cuma günü son gün."),
+    ("İletişim", 38, "17:30", "zeynep", "İletişim duvarı: SEB yazışmaları ve sosyal medya duyuruları. Formlar (ETF/OTF) takibi Selin'de."),
+    ("İletişim", 3, "16:10", "selin", "Haftalık kontrol e-postası kararı alındı, ayrıntılar Defne'nin gizli kaydında."),
+    ("Teknik Atölye", 38, "18:00", "can", "Teknik Atölye duvarı: ekipman bakımı, atölye kuralları ve eğitim içerikleri."),
+    ("Teknik Atölye", 4, "09:15", "can", "Yeni üyeler atölye güvenliği brifingini almadan lehim istasyonuna geçmesin."),
+    ("Teknik Atölye", 2, "20:20", "burak", "Kayıt formuna bekleme listesini ekledim, bir bakar mısınız?"),
+]
+PILLAR_WALLS = [
+    ("Atölye Güvenliği", 30, "12:00", "can", "Pillar duvarı: atölye güvenliğiyle ilgili olaylar ve önlemler burada toplanır."),
+    ("Atölye Güvenliği", 4, "14:40", "can", "Havalandırma kaydını açtım: lehim dumanı yetersiz. Etkinlikten önce çözmeliyiz."),
+    ("Sürdürülebilirlik", 30, "12:30", "ayse", "Pillar duvarı: elektronik atık, malzemenin yeniden kullanımı ve çevre dostu etkinlik pratikleri."),
+    ("Sürdürülebilirlik", 7, "12:30", "ayse", "Atık kutusu için kampüs ofisiyle yazıştım, kutuyu etkinlik haftası verecekler."),
+]
+FAVORITES = {
+    "kaan": ["Etkinlik Planlama", "Malzeme ve Kaynak Planlama", "Etkinlik Öncesi Hazırlık"],
+    "selin": ["OTF", "ETF", "Ek talepler"],
+    "elif": ["Malzeme ve Kaynak Planlama"],
+}
+
+
+def phase_assets() -> None:
+    """Afis ve belge gorselleri (Chromium), etkinlik gununu yazar."""
+    e1 = cal.day(cal.A.e1)
+    out = os.environ.get("DEMO_ASSETS") or os.path.join(os.path.dirname(__file__), "..", "out", "assets")
+    subprocess.run(["node", os.path.join(os.path.dirname(__file__), "make_images.mjs"), out,
+                    "--day", cal._dm(e1), "--weekday", cal.DAYS[e1.weekday()]], check=True, capture_output=True)
+    log(f"gorseller: {out}")
+
+
+def phase_story(api: Api) -> None:
+    p = Player(api)
+    p._all_recs = RECORDS
+    log(f"{len(RECORDS)} kayit")
+    for r in sorted(RECORDS, key=lambda r: order_key(*r.at)):
+        p.create_record(r)
+    log(f"{len(EVENTS)} etkinlik")
+    infos = {}
+    for e in sorted(EVENTS, key=lambda e: order_key(*e.at)):
+        infos[e.key] = p.create_event(e)
+    for e in EVENTS:
+        p.event_followups(e, infos[e.key])
+    log("takim ve pillar duvarlari, favoriler")
+    for team, d, t, who, text in sorted(WALLS, key=lambda x: order_key(x[1], x[2])):
+        p.wall(team, d, t, who, text)
+    for team, d, t, who, text in sorted(PILLAR_WALLS, key=lambda x: order_key(x[1], x[2])):
+        p.wall(team, d, t, who, text, pillar=True)
+    api.clock.at(30, "10:00")
+    for who, names in FAVORITES.items():
+        for n in names:
+            api.as_(who).put(f"/api/nodes/{p.w.unit[n]}/favorite")
+
+
+# --- 5. son rotus: gorulme zamanlari, okunmamis bildirimler, kullanim ---------------------
+
+# (kisi, son gorulme: kac saat once, son giris: kac saat once, bildirimler en son kac saat once gorulmus,
+#  aktif gun olasiligi %, ilk kullanim: kac gun once)
+PRESENCE = {
+    "kaan": (2.5, 9, 30, 92, 44), "defne": (5, 10, 14, 86, 44), "selin": (3, 12, 20, 72, 44),
+    "zeynep": (7, 15, 16, 66, 44), "mert": (10, 22, 18, 62, 44), "can": (13, 24, 22, 66, 44),
+    "elif": (20, 30, 40, 60, 44), "ayse": (30, 36, 28, 46, 44), "burak": (44, 48, 26, 42, 16),
+}
+
+
+def phase_finish(api: Api) -> None:
+    log("gorulme zamanlari ve kullanim ozeti")
+    psql = api.psql
+    stmts = []
+    for key, (seen, login, notif, pct, since) in PRESENCE.items():
+        uid = api.users[key]
+        stmts.append(
+            f"update users set last_seen_at = now() - interval '{seen} hours', "
+            f"last_login_at = now() - interval '{login} hours', "
+            f"notifications_seen_at = now() - interval '{notif} hours' where id = '{uid}';")
+        stmts.append(
+            "insert into user_activity (user_id, day, requests, minutes) "
+            f"select '{uid}', g::date, "
+            f"(30 + abs(hashtext('{uid}' || g::text)) % 330) * (case extract(isodow from g) when 6 then 0.4 when 7 then 0.25 else 1 end)::numeric, "
+            f"(6 + abs(hashtext(g::text || '{uid}')) % 74) * (case extract(isodow from g) when 6 then 0.5 when 7 then 0.3 else 1 end)::numeric "
+            f"from generate_series(current_date - {since}, current_date - 1, interval '1 day') g "
+            f"where abs(hashtext('on' || g::text || '{uid}')) % 100 < {pct} "
+            "on conflict (user_id, day) do nothing;")
+    # Ayrilan uye: yillar once son gorulme.
+    stmts.append(f"update users set last_seen_at = now() - interval '12 days', last_login_at = now() - interval '12 days' "
+                 f"where id = '{api.users['ece']}';")
+    stmts.append("update user_activity set requests = round(requests), minutes = round(minutes);")
+    stmts.append("truncate mail_outbox;")
+    psql.run("\n".join(stmts))
+
+
 def main() -> None:
     api_url = os.environ.get("API", "http://127.0.0.1:8000")
     psql = Psql(os.environ["PSQL"])
@@ -187,6 +291,8 @@ def main() -> None:
     if psql.run("select count(*) from users") != "0":
         raise SystemExit("red: veritabani bos degil (demo/stack.sh reset)")
     api = Api(api_url, psql)
+    api.fmt = cal.fmt
+    phase_assets()
     only = set(sys.argv[1:])
 
     def run(name, fn):
@@ -197,7 +303,9 @@ def main() -> None:
     run("lists", phase_lists)
     run("teams", phase_teams)
     run("profiles", phase_profiles)
+    run("story", phase_story)
     api.shift()
+    run("finish", phase_finish)
     log("tamam")
 
 

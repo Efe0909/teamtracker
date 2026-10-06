@@ -19,8 +19,9 @@ export PGPASSWORD=${PGPASSWORD:-ekiptakip}
 PG="psql -h $HOSTPG -U ekiptakip -X -q"
 mkdir -p "$OUT/log" "$OUT/media"
 
-# Istanbul saati: DB, API ve tarayici ayni gunu gorsun (bugun/yarin/gecikti tutarli).
-export TZ=Europe/Istanbul
+# UTC: sqlx baglanti saat dilimini UTC'ye sabitler; tohum ve tarayici da UTC kullanir
+# (bugun/yarin/gecikti her saatte tutarli).
+export TZ=UTC
 
 api_pid() { pgrep -f "target/debug/ekiptakip" | head -1 || true; }
 vite_pid() { pgrep -f "node.*vite" | head -1 || true; }
@@ -51,8 +52,6 @@ case "${1:-status}" in
   reset)
     stop_api
     $PG -d postgres -c "drop database if exists $DB with (force)" -c "create database $DB"
-    # Tarih tutarliligi: current_date Istanbul gununu versin.
-    $PG -d postgres -c "alter database $DB set timezone = 'Europe/Istanbul'"
     rm -rf "$OUT/media" && mkdir -p "$OUT/media"
     start_api   # acilista gocler kosar, kokler (Birimler, Etkinlik Turleri/Yerleri) dogar
     echo "bos demo veritabani hazir: $DB"

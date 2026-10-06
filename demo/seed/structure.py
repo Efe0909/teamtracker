@@ -134,11 +134,11 @@ EVENT_TYPES = [
 TEAMS = [
     dict(name="Tasarım", color="#8e6bff",
          desc="Afiş, sosyal medya görselleri ve sahne tasarımı: etkinliklerin görsel kimliği burada üretilir.",
-         members=[("mert", "lead"), ("zeynep", "member"), ("burak", "member"), ("defne", "mentor")],
+         members=[("mert", "lead"), ("zeynep", "member"), ("defne", "mentor")],
          links=["Etkinlik Öncesi Hazırlık"]),
     dict(name="Lojistik", color="#1c8a5b",
          desc="Mekan, ulaşım, yerleşim ve etkinlik günü akışı: sahadaki işlerin takibi.",
-         members=[("kaan", "lead"), ("can", "member"), ("burak", "member"), ("ayse", "member")],
+         members=[("kaan", "lead"), ("can", "member"), ("ayse", "member")],
          links=["Etkinlik Planlama", "Mekan ve Yer Seçimi", "Ekip ve Görev Dağılımı"]),
     dict(name="Maliye", color="#d99a2b",
          desc="Bütçe, sponsor görüşmeleri ve satın alma onaylarının takibi.",

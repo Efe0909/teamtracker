@@ -22,7 +22,9 @@ import urllib.parse
 import urllib.request
 from zoneinfo import ZoneInfo
 
-TZ = ZoneInfo("Europe/Istanbul")
+# UTC: sqlx her baglantida TimeZone=UTC ister, sunucunun `current_date`i UTC gunudur; tohum ve
+# tarayici da UTC ise "bugun/gecikti" saat kacta kosulursa kosulsun tutarli kalir.
+TZ = ZoneInfo("UTC")
 
 
 def q(value: str) -> str:
@@ -91,7 +93,7 @@ class Session:
         if raw is not None:
             data = raw
         elif body is not None:
-            data = json.dumps(body).encode()
+            data = json.dumps(self.api.fmt(body)).encode()
             headers["Content-Type"] = "application/json"
         req = urllib.request.Request(f"{self.api.base}{path}", data=data, method=method, headers=headers)
         if record and method != "GET":
@@ -166,6 +168,7 @@ class Api:
     def __init__(self, base: str, psql: Psql):
         self.base, self.psql = base.rstrip("/"), psql
         self.clock = Clock()
+        self.fmt = lambda x: x  # metin yer tutuculari (cal.fmt); run.py takar
         self._sessions: dict[str, Session] = {}
         self.users: dict[str, str] = {}  # anahtar -> kullanici kimligi
 
