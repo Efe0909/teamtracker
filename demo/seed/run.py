@@ -279,6 +279,8 @@ def phase_finish(api: Api) -> None:
     # Ayrilan uye: yillar once son gorulme.
     stmts.append(f"update users set last_seen_at = now() - interval '12 days', last_login_at = now() - interval '12 days' "
                  f"where id = '{api.users['ece']}';")
+    # Ayrilan uyenin kullanim izi tabloda "?" olarak gorunmesin (hesap kapali, ad listede yok).
+    stmts.append(f"delete from user_activity where user_id = '{api.users['ece']}';")
     stmts.append("update user_activity set requests = round(requests), minutes = round(minutes);")
     stmts.append("truncate mail_outbox;")
     psql.run("\n".join(stmts))

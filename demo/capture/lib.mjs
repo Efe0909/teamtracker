@@ -74,6 +74,14 @@ export async function openUser(browser, name, { host = "dashboard", mobile = fal
     const body = await res.json();
     await route.fulfill({ response: res, json: { ...body, external_off: [] } });
   });
+  // Kalite kapisi sekmesi de "servis kapali" notunu gostermesin (yalniz okuma, GET).
+  await ctx.route("**/api/admin/quality", async (route) => {
+    if (route.request().method() !== "GET") return route.continue();
+    const u = new URL(route.request().url());
+    const res = await route.fetch({ url: `http://127.0.0.1:${u.port}${u.pathname}${u.search}` });
+    const body = await res.json();
+    return route.fulfill({ response: res, json: { ...body, service_on: true } });
+  });
   const page = await ctx.newPage();
   await page.goto(`${HOSTS[host]}/api/auth/dev-login?user_id=${userId(name)}`, { waitUntil: "networkidle" });
   await settle(page);
@@ -121,6 +129,8 @@ export class Recorder {
     if (this.cur === null) throw new Error("once chapter()");
     // Fare onceki tiklamanin ustunde kalirsa ipucu balonlari (title) goruntuye girer.
     await page.mouse.move(1, 1);
+    // `hover`: hover'la gorunen denetimler (kalem simgesi gibi) goruntude yer alsin.
+    if (s.hover !== undefined) await s.hover.first().hover();
     await settle(page, s.wait ?? 250);
     const targets = s.target === undefined ? [] : Array.isArray(s.target) ? s.target : [s.target];
     const boxes = [];
@@ -146,8 +156,18 @@ export class Recorder {
     const n = this.steps.length + 1;
     const file = `${pad(n, 3)}-${s.id}.${this.ext}`;
     const opts = this.ext === "png" ? { type: "png" } : { type: "jpeg", quality: 86 };
-    await page.screenshot({ path: join(this.shots, file), ...opts });
-    const vp = page.viewportSize();
+    // `clipTo`: uzun (yuksek pencereli) sayfalarda goruntuyu verilen ogenin altina kadar kirp;
+    // altta bos sayfa alani kalmasin. Kutular sol-ust kosesi 0,0 oldugu icin aynen gecerli.
+    let clip;
+    if (s.clipTo !== undefined) {
+      const box = await s.clipTo.first().boundingBox();
+      const full = page.viewportSize();
+      if (box !== null && full !== null) {
+        clip = { x: 0, y: 0, width: full.width, height: Math.min(full.height, Math.ceil(box.y + box.height + (s.clipPad ?? 28))) };
+      }
+    }
+    await page.screenshot({ path: join(this.shots, file), ...(clip === undefined ? {} : { clip }), ...opts });
+    const vp = clip === undefined ? page.viewportSize() : { width: clip.width, height: clip.height };
     this.steps.push({
       n, chapter: this.cur.id, id: s.id, title: s.title, text: s.text ?? "", tip: s.tip ?? null, file,
       viewport: vp, boxes, click: s.click ?? (s.act !== undefined), mobile: (vp?.width ?? 1440) < 600,
