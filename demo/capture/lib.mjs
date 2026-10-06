@@ -60,6 +60,7 @@ export async function openUser(browser, name, { host = "dashboard", mobile = fal
   const ctx = await browser.newContext({
     viewport, deviceScaleFactor: scale ?? (mobile ? 2 : 1.5), locale: "tr-TR", timezoneId: "UTC",
     isMobile: mobile, hasTouch: mobile, acceptDownloads: true,
+    permissions: ["clipboard-read", "clipboard-write"], // "Kopyala" dugmeleri bildirim gostersin
   });
   // Karsilama "Gunaydin": yalniz saat bilgisi sabitlenir (tarihler sunucuyla ayni kalir).
   await ctx.addInitScript(() => { Date.prototype.getHours = function getHours() { return 10; }; });
@@ -118,6 +119,8 @@ export class Recorder {
    */
   async step(page, s) {
     if (this.cur === null) throw new Error("once chapter()");
+    // Fare onceki tiklamanin ustunde kalirsa ipucu balonlari (title) goruntuye girer.
+    await page.mouse.move(1, 1);
     await settle(page, s.wait ?? 250);
     const targets = s.target === undefined ? [] : Array.isArray(s.target) ? s.target : [s.target];
     const boxes = [];

@@ -19,7 +19,12 @@ const chapters = [];
 for (const f of files) chapters.push((await import(pathToFileURL(join(here, "chapters", f)))).default);
 
 const { chromium } = loadPlaywright();
-const browser = await chromium.launch();
+// Tarayicinin kendi saat/tarih kutulari (input[type=time]) Turkce biciminde (24 saat) gorunsun:
+// yalniz `--lang` yetmiyor, surecin yerel ayari da Turkce olmali.
+const browser = await chromium.launch({
+  args: ["--lang=tr-TR"],
+  env: { ...process.env, LANGUAGE: "tr_TR:tr", LC_ALL: "tr_TR.UTF-8", LANG: "tr_TR.UTF-8" },
+});
 const R = new Recorder(out);
 const open = (name, opts) => openUser(browser, name, opts);
 let failed = 0;
