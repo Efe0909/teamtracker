@@ -40,6 +40,13 @@ export function recordId(title) {
 export const weekday = () => new Intl.DateTimeFormat("tr", { weekday: "long", timeZone: "UTC" }).format(new Date())
   .replace(/^./, (c) => c.toLocaleUpperCase("tr"));
 
+/** Ilk etkinligin (Arduino atolyesi) bugunden gun farki: en erken 9 gun sonraki Cumartesi (`cal.py` A.e1). */
+export function workshopOffset() {
+  let n = 9;
+  while (new Date(Date.now() + n * 86_400_000).getUTCDay() !== 6) n += 1;
+  return n;
+}
+
 /** Bugunden `n` gun sonrasinin takvim hucre etiketi ("10 Ekim 2026"). Sunucu, tohum ve
  *  tarayici UTC oldugu icin "bugun" hepsinde ayni gundur. */
 export function dayLabel(n) {

@@ -20,3 +20,12 @@ export const btn = (p, name) => p.getByRole("button", { name });
 export const menuItem = (p, name) => p.getByRole("menuitem", { name });
 /** Acik takvimde bugunden `n` gun sonrasinin hucresi (`exact`: "8 Ekim" "18 Ekim"i de eslemesin). */
 export const dayCell = (p, n) => p.getByRole("gridcell", { name: dayLabel(n), exact: true });
+
+/** Acik takvimde bugunden `n` gun sonrasini sec; gun gorunur aya gelene dek "Sonraki ay"a basar. */
+export async function pickDay(p, n) {
+  const cell = dayCell(p, n);
+  for (let i = 0; i < 8 && (await cell.count()) === 0; i++) {
+    await pop(p).getByRole("button", { name: "Sonraki ay" }).click();
+  }
+  await cell.click();
+}

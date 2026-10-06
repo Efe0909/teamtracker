@@ -117,7 +117,6 @@ EVENTS: list[Event] = [
           teams=["Teknik Atölye", "Tasarım", "Lojistik", "Maliye", "İletişim"],
           records=["kayit_formu", "malzeme_listesi", "afis", "vardiya", "otf_arduino"],
           done=[("Eğitmen kesinleşti", 11, "08:55", "kaan")],
-          requests=[("Duyuru yapıldı", 1, "21:30", "zeynep", "done")],
           materials=[
               Material("Arduino Uno R3 (30 adet)", "equipment", "high", 3,
                        "Orijinal kart tercih edilecek; arıza için 2 yedek kart eklenmeli.",
