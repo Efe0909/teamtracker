@@ -1,5 +1,5 @@
 // Yuruyus yakalayici. Kullanim:
-//   node demo/capture/run.mjs [--only giris,gorevler] [--out demo/out/guide]
+//   node demo/capture/run.mjs [--only giris,gorevler] [--out demo/guide]
 // Onkosul: `demo/stack.sh up` (API + Vite) ve `demo/stack.sh seed` (tohumlu veritabani).
 // Her calistirmadan once `demo/stack.sh restore` ile ayni durumdan baslanir.
 
@@ -11,8 +11,8 @@ import { Recorder, loadPlaywright, openUser } from "./lib.mjs";
 const here = dirname(fileURLToPath(import.meta.url));
 const arg = (name, def) => { const i = process.argv.indexOf(`--${name}`); return i > 0 ? process.argv[i + 1] : def; };
 const only = arg("only", "")?.split(",").filter(Boolean);
-// Kismi calistirma (`--only`) tam rehberin ustune yazmasin: varsayilan cikti `dev`.
-const out = resolve(arg("out", join(here, "..", "out", only.length > 0 ? "dev" : "guide")));
+// Kismi calistirma (`--only`) tam rehberin ustune yazmasin: varsayilan cikti `out/dev`; tam kosu `demo/guide`.
+const out = resolve(arg("out", join(here, "..", only.length > 0 ? join("out", "dev") : "guide")));
 
 const files = readdirSync(join(here, "chapters")).filter((f) => f.endsWith(".mjs")).sort();
 const chapters = [];
