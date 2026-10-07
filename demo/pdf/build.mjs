@@ -218,7 +218,7 @@ function render(p, page) {
       const cards = pick.map((s, i) => `<img class="fan f${i}" src="../pdf-shots/${s.file}" alt="">`).join("");
       return `<section class="slide cover"><div class="coverText">
         <div class="logo"><i></i>EkipTakip</div>
-        <h1>Ekip kullanım rehberi</h1>
+        <h1 class="sr">EkipTakip — Ekip kullanım rehberi</h1><div class="title">Ekip kullanım rehberi</div>
         <p class="lead">Haftalık işleyişin adım adım anlatımı: kayıtlar, etkinlikler, takımlar, veri yönetimi ve telefon. Her adımda neye tıklayacağın çerçeveyle gösterilir.</p>
         <ul class="facts"><li><b>${chapters.length}</b> bölüm</li><li><b>${steps.length}</b> adım</li><li><b>${people.length}</b> kişilik örnek ekip</li></ul>
         <p class="small">Bu rehber <b>demo verisiyle</b> hazırlandı: adlar, e-postalar, etkinlikler ve kayıtlar kurgudur; canlı veriye dokunulmadı.</p>
@@ -287,7 +287,7 @@ function render(p, page) {
         <h1>${esc(c.title)}</h1>
         <p class="lead">${esc(c.intro)}</p>
         <div class="whoCard">${avatar(c.persona, 72)}<div><b>${esc(c.persona)}</b><span>${esc(c.role)}</span></div></div></div>
-        <div class="chR"><h3>Bu bölümde ${list.length} adım var</h3><ol class="${list.length > 9 ? "two" : ""}">${list.map((s) => `<li>${esc(s.title)}</li>`).join("")}</ol></div>
+        <div class="chR"><h3>Bu bölümde ${list.length} adım var</h3><ol class="${list.length > 9 ? "cols" : ""}">${list.map((s) => `<li>${esc(s.title)}</li>`).join("")}</ol></div>
         ${footer(page, `Bölüm ${n}`)}</section>`;
     }
     case "step": {
@@ -355,13 +355,14 @@ code { font-family: MonoV, "JetBrains Mono", ui-monospace, monospace; background
 .av { display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; color: #fff; font-weight: 700; flex: none }
 
 /* Not: bulanik golge (blur) yok — Chromium bunlari PDF'e buyuk gri/RGB goruntu olarak gomer (PDF 85 MB -> ~35 MB). */
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap }
 /* kapak */
 .cover { background: radial-gradient(1200px 800px at 85% 10%, #8a73ff 0, transparent 60%), linear-gradient(135deg, #2c1d7a, #5a43c6 55%, #7c63e8); color: #fff }
 .cover .coverText { position: absolute; left: 96px; top: 150px; width: 780px }
 .logo { display: flex; align-items: center; gap: 16px; font-size: 34px; font-weight: 700; letter-spacing: -.01em; margin-bottom: 70px }
 .logo i { width: 54px; height: 54px; border-radius: 15px; background: #fff; display: inline-block; position: relative }
 .logo i::after { content: ""; position: absolute; inset: 14px 13px; border-top: 5px solid var(--brand); border-bottom: 5px solid var(--brand); border-radius: 2px; box-shadow: inset 0 0 0 0 transparent }
-.cover h1 { font-size: 104px; line-height: 1.02; letter-spacing: -.035em; font-weight: 800 }
+.cover .title { font-size: 104px; line-height: 1.02; letter-spacing: -.035em; font-weight: 800 }
 .cover .lead { margin-top: 36px; font-size: 31px; line-height: 1.45; color: rgba(255,255,255,.88); max-width: 720px }
 .facts { display: flex; gap: 20px; margin-top: 44px; list-style: none }
 .facts li { background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.22); border-radius: 16px; padding: 14px 24px; font-size: 24px }
@@ -424,9 +425,9 @@ code { font-family: MonoV, "JetBrains Mono", ui-monospace, monospace; background
 .chapter .lead { font-size: 31px; line-height: 1.5; margin-top: 30px; color: rgba(255,255,255,.88) }
 .whoCard { margin-top: 44px; display: inline-flex; gap: 20px; align-items: center; background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.25); border-radius: 22px; padding: 16px 30px 16px 18px }
 .whoCard b { display: block; font-size: 28px } .whoCard span:not(.av) { font-size: 20px; color: rgba(255,255,255,.8) }
-.chR { position: absolute; right: 80px; top: 110px; width: 700px; max-height: 860px; background: rgba(255,255,255,.96); color: var(--ink); border-radius: 26px; padding: 34px 40px; box-shadow: 12px 16px 0 rgba(8,4,40,.25) }
+.chR { position: absolute; right: 70px; top: 110px; width: 790px; max-height: 860px; background: rgba(255,255,255,.96); color: var(--ink); border-radius: 26px; padding: 34px 40px; box-shadow: 12px 16px 0 rgba(8,4,40,.25) }
 .chR h3 { font-size: 24px; color: var(--mute); margin-bottom: 14px } .chR ol { padding-left: 26px; font-size: 21px; line-height: 1.55 } .chR li::marker { color: var(--brand); font-weight: 700 }
-.chR ol.two { columns: 2; column-gap: 34px; font-size: 18px } .chR ol.two li { break-inside: avoid }
+.chR ol.cols { columns: 2; column-gap: 44px; font-size: 19px } .chR ol.cols li { break-inside: avoid }
 .chapter footer { color: rgba(255,255,255,.6) }
 
 /* adim sayfasi */
