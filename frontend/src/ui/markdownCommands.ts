@@ -1,14 +1,19 @@
 // Toolbar ve klavye biçimlendirmesi: EditorState → TransactionSpec (saf, test edilebilir).
 // Kaynak tek gerçektir; "kalıcı işaret" durumu tutulmaz, aktiflik sözdizimi ağacından türer.
 import { EditorSelection, type ChangeSpec, type EditorState, type TransactionSpec } from "@codemirror/state";
-import { markdown, commonmarkLanguage } from "@codemirror/lang-markdown";
-import { ensureSyntaxTree, syntaxTree } from "@codemirror/language";
+import { commonmarkLanguage } from "@codemirror/lang-markdown";
+import { Language, ensureSyntaxTree, languageDataProp, syntaxTree } from "@codemirror/language";
 import type { Tree } from "@lezer/common";
-import { analyzeTree, markdownExtensions, type Construct, type Range } from "./markdown";
+import { analyzeTree, markdownParser, type Construct, type Range } from "./markdown";
 
-// Basılı kısayollar `lang-markdown` anahtar haritasından değil, editörün kendi
-// tuşlarından gelir (koruma: IME, boş çift silme, Shift+Enter).
-export const markdownLanguage = markdown({ base: commonmarkLanguage, extensions: markdownExtensions, addKeymap: false, completeHTMLTags: false });
+// `markdown()` HTML/CSS/JS dillerini de çeker (paket +90kB gzip); biz yalnız kendi
+// ayrıştırıcımızı sarıyoruz. Veri facet'i lang-markdown'ınki: Enter/Backspace
+// komutları `isActiveAt`'i bu facet'e bakarak yanıtlar.
+export const markdownLanguage = new Language(
+  commonmarkLanguage.data,
+  markdownParser.configure({ props: [languageDataProp.add({ Document: commonmarkLanguage.data })] }),
+  [], "markdown",
+).extension;
 
 const cache = new WeakMap<Tree, Construct[]>();
 export function constructsOf(state: EditorState): Construct[] {
