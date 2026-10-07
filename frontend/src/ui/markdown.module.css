@@ -1,0 +1,148 @@
+/* Markdown alanı. Ham renk YOK — yalnız token.
+   Geometri kuralı: işaretin açılıp kapanması yalnız YATAY genişliği değiştirir.
+   Satır yüksekliği imleç konumuna bağlı değildir: her satır sınıfı kendi
+   line-height'ını sabit taşır, hiçbir inline kutu satırı büyütmez. */
+.field {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--panel);
+}
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; padding: 3px 5px; border-bottom: 1px solid var(--line); }
+.toolbar button {
+  display: grid;
+  place-items: center;
+  min-width: 26px;
+  height: 25px;
+  padding: 0 5px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--dim);
+  font: 600 var(--fs-sm)/1 var(--font-sans);
+  cursor: pointer;
+}
+.toolbar button:hover { background: var(--tint); color: var(--txt); }
+.toolbar button:focus-visible { outline: 2px solid var(--acc); outline-offset: -2px; }
+.toolbar button[aria-pressed="true"] { background: var(--acc-bg); color: var(--acc-strong); }
+.separator { width: 1px; height: 14px; margin: 0 3px; background: var(--line); }
+
+.input { position: relative; }
+.editor { color: var(--txt); font: inherit; font-size: var(--fs-md); line-height: 1.55; }
+.editor :global(.cm-editor) { min-height: inherit; background: transparent; }
+.editor :global(.cm-scroller) { font: inherit; line-height: inherit; overflow-wrap: anywhere; }
+.editor :global(.cm-content) { padding: 9px 0; caret-color: var(--txt); }
+.editor :global(.cm-line) { padding: 0 10px; }
+.editor :global(.cm-focused) { outline: 2px solid var(--acc); outline-offset: -2px; }
+.editor :global(.cm-placeholder) { color: var(--dim); vertical-align: baseline; }
+.editor :global(.cm-cursor) { border-left: 1.5px solid var(--txt); margin-left: -0.75px; }
+.editor :global(.cm-editor .cm-selectionBackground), .editor :global(.cm-editor.cm-focused .cm-selectionBackground) { background: color-mix(in srgb, var(--acc) 28%, transparent); }
+
+/* --- salt okunur gövde ---------------------------------------------- */
+.rendered { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.6; }
+.block { display: block; }
+.line { display: block; min-height: 1.6em; }
+
+/* --- satır içi ------------------------------------------------------- */
+.strong { font-weight: 700; }
+.em { font-style: italic; }
+/* line-height: 1 — mono yazı tipinin metrikleri satır kutusunu alt-piksel büyütüp
+   işaret açılıp kapanınca dikey zıplamaya yol açıyordu. */
+.inlineCode { font-family: var(--font-mono); font-size: 0.92em; line-height: 1; background: var(--tint); border-radius: var(--r-sm); padding: 0 3px; }
+.link { color: var(--info-text); text-decoration: underline; text-underline-offset: 2px; }
+.fallback { color: var(--dim); }
+.rawLink { cursor: text; }
+.mention { color: var(--acc-strong); font-weight: 600; }
+/* Görünür işaret: içerik biçimli kalır, işaret silik ve düz. */
+.syntax { color: var(--dim); font-weight: 400; font-style: normal; text-decoration: none; }
+
+/* Dosya hapı: simge yalnız gösterim (CSS maskesi), kaynakta karşılığı yok. */
+.file { background: var(--tint); border-radius: var(--r-sm); padding: 0 5px 0 2px; text-decoration: none; }
+.file::before {
+  content: "";
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  margin: 0 3px;
+  vertical-align: -0.15em;
+  background-color: var(--info-text);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'%3E%3Cpath d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z M14 2v6h6 M8 13h8 M8 17h6'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'%3E%3Cpath d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z M14 2v6h6 M8 13h8 M8 17h6'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+/* Ad-ver noktası: SIFIR genişlik; düğme mutlak konumlu, akışı ve satırı etkilemez. */
+.dotSlot { display: inline-block; position: relative; width: 0; height: 0; overflow: visible; }
+.dot {
+  position: absolute;
+  left: 2px;
+  top: -0.95em;
+  width: 9px;
+  height: 9px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--acc);
+  opacity: 0;
+  cursor: pointer;
+}
+.rawLink:hover + .dotSlot .dot,
+.rawLink:hover + :global(.cm-widgetBuffer) + .dotSlot .dot,
+.dotActive .dot,
+.dot:hover { opacity: 1; }
+
+/* --- satır türleri (editör satır dekorasyonu + salt okunur satır) ---- */
+.h1 { font-size: 1.45em; font-weight: 700; line-height: 1.3; }
+.h2 { font-size: 1.25em; font-weight: 700; line-height: 1.3; }
+.h3 { font-size: 1.1em; font-weight: 700; line-height: 1.35; }
+.quote { box-shadow: inset 2px 0 0 var(--line-strong); padding-left: 18px; color: var(--dim); }
+.editor :global(.cm-line).quote { padding-left: 18px; }
+
+/* Asılı girinti: sarılan satırlar işaretin sağında hizalanır. `.cm-line` dolgusu
+   daha özgül olduğundan editörde aynı özgüllükle ezilir. */
+.list { text-indent: calc(var(--md-hang, 2) * -1ch); }
+.editor :global(.cm-line).list { padding-inline-start: calc(10px + var(--md-hang, 2) * 1ch); }
+.rendered .list { padding-inline-start: calc(var(--md-hang, 2) * 1ch); }
+.bullet, .listMark { display: inline-block; width: calc(var(--md-hang, 2) * 1ch); text-indent: 0; white-space: nowrap; }
+.listMark { color: var(--dim); }
+.bullet { color: var(--dim); }
+
+.rule { position: relative; min-height: 1.55em; }
+.rule::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; border-top: 1px solid var(--line-strong); pointer-events: none; }
+.editor :global(.cm-line).rule::after { left: 10px; right: 10px; }
+.editor :global(.cm-line).rule:has(.syntax)::after { display: none; }
+
+.code { font-family: var(--font-mono); font-size: 0.92em; background: var(--tint); }
+/* Kod bloğu: arka plan kenarlardan içeri alınır (satır dolgusu aynı kalır, metin hizası bozulmaz);
+   üst/alt dolgu sabittir, imleç konumuna bağlı değildir. */
+.editor :global(.cm-line).code { margin: 0 4px; padding: 0 6px; }
+.rendered .code { padding: 0 6px; }
+.codeFirst { border-top-left-radius: var(--r-sm); border-top-right-radius: var(--r-sm); }
+.editor :global(.cm-line).codeFirst, .rendered .codeFirst { padding-top: 4px; }
+.codeLast { border-bottom-left-radius: var(--r-sm); border-bottom-right-radius: var(--r-sm); }
+.editor :global(.cm-line).codeLast, .rendered .codeLast { padding-bottom: 4px; }
+/* Ters tırnak glifi satırın üstüne yapışık çizilir; akışı değiştirmeden görsel ortaya indirilir. */
+.codeFence { position: relative; top: 0.3em; }
+
+.linkEditor { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px; border-bottom: 1px solid var(--line); }
+.linkEditor label { display: grid; gap: 3px; flex: 1 1 140px; color: var(--dim); font-size: var(--fs-sm); }
+.linkEditor input { min-width: 0; width: 100%; padding: 5px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--panel); color: var(--txt); font: inherit; }
+.linkOpen { align-self: end; padding: 5px 7px; border: 1px solid var(--line); border-radius: var(--r-sm); color: var(--info-text); background: var(--tint); text-decoration: none; }
+.linkEditor button { align-self: end; padding: 5px 7px; border: 1px solid var(--line); border-radius: var(--r-sm); color: var(--txt); background: var(--tint); cursor: pointer; }
+.suggestions {
+  position: absolute;
+  z-index: 3;
+  left: 8px;
+  bottom: calc(100% - 4px);
+  max-height: 180px;
+  overflow: auto;
+  min-width: 180px;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--panel);
+  box-shadow: var(--sh-lg);
+}
+.suggestions button { width: 100%; padding: 6px 9px; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--txt); text-align: left; cursor: pointer; }
+.suggestions button:hover, .suggestions button:focus-visible { background: var(--tint); outline: none; }

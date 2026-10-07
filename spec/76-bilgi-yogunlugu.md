@@ -1,13 +1,13 @@
 # 76 — Bilgi yoğunluğu kapısı
 
-**Durum: uygulandı.** API, kullanıcı metninin asgari uzunluğunu denetler; kayıt ve etkinlik metinleri ayrıca karar modeliyle değerlendirilir. İstemci sayaç ve uyarıları gösterir; sunucu son kararı verir.
+**Durum: uygulandı.** API, `bypass_text_quality` kapsamı olmayan kullanıcılar için metnin asgari uzunluğunu denetler; kayıt ve etkinlik metinleri ayrıca karar modeliyle değerlendirilir. İstemci sayaç ve uyarıları gösterir; sunucu son kararı verir.
 
 ## Kurallar
 
-- Başlık/ad en az **5 Unicode karakter**, açıklama en az **30 Unicode karakter** olmalı. Sayımdan önce baştaki ve sondaki boşluklar kırpılır.
+- Kayıt/etkinlik başlığı en az **5 Unicode karakter**, açıklaması en az **30 Unicode karakter** olmalı. Sayımdan önce baştaki ve sondaki boşluklar kırpılır. `bypass_text_quality` kapsamı yalnız alt sınırları ve model kapısını atlar; başlık ile kayıt/etkinlik açıklamasının zorunluluğu ve azami uzunluk korunur.
 - Kayıt ve etkinlik oluştururken başlık ve açıklama zorunlu. PATCH'te yalnız değiştirilen başlık/açıklama denetlenir; eski kısa veri başka alan güncellenirken geçerli kalır.
-- Düğüm, takım ve pillar adları en az 5 karakter olmalı. Açıklama boş bırakılabilir; boş değilse en az 30 karakter olmalı. Yalnız oluşturma ya da değiştirilen alanlar denetlenir. Sistem slot düğümleri kapsam dışı.
-- `closed` durumuna ilk geçişte kayıt ve eylem için en az 30 karakterlik kapanış notu zorunlu. `cancelled` bu kurala girmez. Not satırda saklanır, kayıt sohbetinin etkinlik akışına yazılır. Kapalıdan başka duruma geçiş notu temizler.
+- Düğüm, takım ve pillar adları en az 5 karakter olmalı; bu ad sınırı kapsamla atlanmaz. Açıklama boş bırakılabilir; boş değilse en az 30 karakter olmalı, `bypass_text_quality` bu alt sınırı atlar. Yalnız oluşturma ya da değiştirilen alanlar denetlenir. Sistem slot düğümleri kapsam dışı.
+- `closed` durumuna ilk geçişte kayıt ve eylem için kapanış notu zorunlu ve en az 30 karakter olmalı. Kapsam alt sınırı atlar, boş notu kabul etmez. `cancelled` bu kurala girmez. Not satırda saklanır, kayıt sohbetinin etkinlik akışına yazılır. Kapalıdan başka duruma geçiş notu temizler.
 
 ## Karar modeli
 
@@ -20,6 +20,18 @@ Soru **adları** sabittir (`specific`, `context`, `closing_justified`; kod bunla
 Uçlar (hepsi admin): `GET|PUT|DELETE /api/admin/quality`, `POST /api/admin/quality/try` (kaydedilmemiş taslakla tek deneme; kayıt akışına yazmaz). Doğrulama: üç soru da bulunmalı, yönerge ≤ 3000, ölçüt ≤ 400 karakter, eşik 0,05–0,95; bilinmeyen alan reddedilir. Varsayılan yönergeler Türkçe yazımı (aksansız, kısaltmalı) cezalandırmaz ve "somut bir şey söylüyor mu" ölçütüne dayanır; TASK-370 ölçümü genel gevşetmenin boş laf geçişini artırdığını gösterdi (kapanışta `bad` geçişi), bu yüzden değişikliği "Dene" kutusuyla örneklerle doğrula.
 
 Ön yüz Türkçe gerekçelerle “Düzenle” ve “Yine de gönder” seçeneklerini sunar. `quality_override: true` ile tekrar gönderim kabul edilir; override kayıt sohbeti etkinlik akışında görünür. Ağ/HTTP/yanıt hatası, zaman aşımı, anahtar yokluğu veya kill switch kalite denetimini atlar ve `tracing::warn` üretir; uzunluk denetimi sürer.
+
+`bypass_text_quality` kapsamı `scopes` tablosundan kullanıcıya ya da role verilir. Başlık, açıklama ve kapanış notunun alt uzunluk sınırını ve karar modeli denetimini atlar; alan zorunluluğunu, azami uzunlukları ve diğer doğrulamaları atlamaz. Atlanan karar kullanıcı istemcisinde de gösterilmez.
+
+## Metin düzenleyicisi
+
+Düzenleyici CodeMirror 6 kaynak belgesi üzerinde çalışır (`@codemirror/state`, `view`, `commands`); önizleme katmanı veya transparan textarea overlay'i yoktur. Biçim işaretleri yer kaplamayan decoration'larla saklanır; kaynak↔DOM imleç eşlemesi, seçim ve undo editör tarafından yönetilir.
+
+Açıklamalar ve kapanış notları Markdown kaynağı olarak saklanır; yazarken tamamlanan sözdizimi aynı alanda biçimli gösterilir. Yarım `[](htt` düz metin kalır, `[]()` kapanınca bağlantı olarak görünür. `###` başlığı, başlıklardan sonra metin başlayınca etkinleşir. Desteklenen biçimler: 1–3. düzey başlık, kalın, italik, bağlantı, alıntı (`>`), yatay çizgi (`---` / `===`), madde işaretli ve numaralı liste, kişi anması (`@handle`). Görev kutuları desteklenmez. Ham HTML çalıştırılmaz. Aktif bağlantılarda yalnız `http`, `https`, `mailto` ve göreli hedefler kabul edilir; kontrol karakteri veya başka şema taşıyan hedefler biçimli ama tıklanamaz görünür. URL'nin geçerliliği veya erişilebilirliği sınanmaz.
+
+Ham URL'ler bağlantı olarak tanınır. Kırmızı isimlendirme noktası yalnız düzenleme alanında, bağlantının üstüne gelince görünür; noktaya tıklamak ham URL'yi `[|](URL)` biçimine dönüştürür ve imleci isim alanına yerleştirir. İsim boşken URL silik gösterilir; ilk isim karakteri yazılınca isim render edilir. Kart görünümünde nokta yoktur. Google Drive/Docs ve SharePoint bağlantıları `[isim](URL)` içinde yalnız URL deseniyle tanınır; isim dosya ikonlu pill olarak görünür. Metadata veya dosya adı için ağ isteği yapılmaz.
+
+`**` yazımı kapanış çiftini otomatik ekler ve imleci ortada tutar; ilk metinle kalın render başlar. Gizli biçim işaretleri arasında imleç kalmaz: oklarla sınır geçişi işaret çiftinin dışına çıkar. Liste maddesinde Enter sonraki maddeyi açar (numaralı listede sayı artar); boş maddede Enter listeyi bitirir, fazladan boş satır eklemez.
 
 ## Dış servisler ve KVKK
 

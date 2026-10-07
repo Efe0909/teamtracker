@@ -327,12 +327,20 @@ pub async fn create(
     let title = common::text(Some(b.title), TITLE_MAX, "invalid_title")?
         .ok_or(AppError::BadRequest("invalid_title"))?;
     let description = common::text(b.description, TEXT_MAX, "invalid_description")?;
-    records::check_title(&title)?;
-    records::check_description(description.as_deref())?;
+    let bypass_quality = common::has_scope(&st, &me, "bypass_text_quality").await?;
+    if bypass_quality && description.is_none() {
+        return Err(AppError::BadRequest("description_required"));
+    }
+    if !bypass_quality {
+        records::check_title(&title)?;
+        records::check_description(description.as_deref())?;
+    }
     records::check_unit(&st, b.unit_id)?;
     check_kind(&st, b.kind_id)?;
-    let reasons = decision::gate(&st, decision::Kind::Entry,
-        &decision::entry_state(&title, description.as_deref()), b.quality_override).await?;
+    let reasons = if bypass_quality { None } else {
+        decision::gate(&st, decision::Kind::Entry,
+            &decision::entry_state(&title, description.as_deref()), b.quality_override).await?
+    };
     // Sablon kilit altinda okunur, kilit await'ten once birakilir (state.rs).
     let (checkpoints, widgets) = refdata::template(&common::tree(&st), b.kind_id);
     let priority = b.priority.unwrap_or(Priority::Medium);
@@ -421,15 +429,16 @@ pub async fn patch(
     Body(EventPatchBody { patch: p, quality_override }): Body<EventPatchBody>,
 ) -> Result<Json<Detail>> {
     let (ev, twin) = editable(&st, &me, common::id(&raw)?).await?;
+    let bypass_quality = common::has_scope(&st, &me, "bypass_text_quality").await?;
     let fixed = matches!(ev.status, EventStatus::Confirmed | EventStatus::Done);
     // Bilgi yogunlugu (spec/76): yalniz DEGISEN baslik/aciklama; model islemden once.
     let trimmed = |s: &str| Some(s.trim().to_string()).filter(|s| !s.is_empty());
     let entry = match &p {
-        EventPatch::Title(v) if v.trim() != ev.title => {
+        EventPatch::Title(v) if v.trim() != ev.title && !bypass_quality => {
             records::check_title(v.trim())?;
             Some(("title", decision::entry_state(v.trim(), ev.description.as_deref())))
         }
-        EventPatch::Description(v) if v.as_deref().and_then(trimmed) != ev.description => {
+        EventPatch::Description(v) if v.as_deref().and_then(trimmed) != ev.description && !bypass_quality => {
             let d = v.as_deref().and_then(trimmed);
             records::check_description(d.as_deref())?;
             Some(("description", decision::entry_state(&ev.title, d.as_deref())))
@@ -552,6 +561,9 @@ pub async fn patch(
         }
         EventPatch::Description(v) => {
             let v = common::text(v, TEXT_MAX, "invalid_description")?;
+            if bypass_quality && v.is_none() {
+                return Err(AppError::BadRequest("description_required"));
+            }
             set("update events set description = $2, updated_at = now() where id = $1")
                 .bind(&v).execute(&mut *tx).await?;
             log_change(&mut tx, &twin, &me, "description", json(&ev.description), json(&v)).await?;

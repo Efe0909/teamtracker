@@ -227,6 +227,15 @@ LEGACY=$(DB "with c as (insert into chats default values returning id) insert in
 w n PATCH "$NT" "/api/records/$LEGACY" '{"field":"priority","value":"low"}' >/dev/null
 ok "$(DB "select priority from records where id='$LEGACY'")" low "degismeyen eski kisa alan denetlenmez"
 ok "$(w n PATCH "$NT" "/api/records/$NEW" '{"field":"priority","value":"high"}' | jq -r 'has("quality")')" false "oncelik degisikliginde quality yok"
+DB "insert into user_scopes (user_id,scope) values ('$DENIZ','bypass_text_quality')" >/dev/null
+ok "$(w n PATCH "$NT" "/api/records/$NEW" '{"field":"title","value":"x"}' | jq -r .record.title)" x "kisa baslik kapsamla"
+ok "$(w n PATCH "$NT" "/api/records/$NEW" '{"field":"description","value":"y"}' | jq -r .record.description)" y "kisa aciklama kapsamla"
+ok "$(w n PATCH "$NT" "/api/records/$NEW" '{"field":"description","value":null}' | jq -r .error)" description_required "bos aciklama kapsamda da yasak"
+ok "$(w n PATCH "$NT" "/api/records/$NEW" '{"field":"status","value":"closed","closing_note":"x"}' | jq -r .record.status)" closed "kisa kapanis notu kapsamla"
+w n PATCH "$NT" "/api/records/$NEW" '{"field":"status","value":"open"}' >/dev/null
+DB "delete from user_scopes where user_id='$DENIZ' and scope='bypass_text_quality'" >/dev/null
+w n PATCH "$NT" "/api/records/$NEW" '{"field":"title","value":"Sozlesme kaydi"}' >/dev/null
+w n PATCH "$NT" "/api/records/$NEW" '{"field":"description","value":"Sozlesme taslagi hazirlanacak ve hukuk ekibiyle paylasilarak gozden gecirilecek."}' >/dev/null
 ok "$(w n PATCH "$NT" "/api/records/$NEW" '{"field":"description","value":"Sozlesme taslagi hazirlanacak ve hukuk ekibiyle paylasilarak son kez gozden gecirilecek."}' | jq -c '.quality')" '{"outcome":"skipped","reasons":[]}' "kapali servis: quality skipped, uydurma guven yok"
 ok "$(w n PATCH "$NT" "/api/records/$NEW" '{"field":"status","value":"closed"}' | jq -r .error)" closing_note_required "kapanis notu zorunlu"
 ok "$(w n PATCH "$NT" "/api/records/$NEW" '{"field":"status","value":"closed","closing_note":"Kisa not"}' | jq -r .error)" closing_note_too_short "kisa kapanis notu"
@@ -536,7 +545,14 @@ ok "$(DB "select detail from activity where chat_id='$TMC' and verb='member_role
 # --- takim ve pillar yazmalari (spec/22) ---------------------------------------
 t teams_crud
 ok "$(w w POST "$WT" /api/teams '{"name":"Ekip","description":null,"color":null}' | jq -r .error)" name_too_short "kisa takim adi"
-ok "$(w w POST "$WT" /api/teams '{"name":"Uzun Takim","description":"kisa","color":null}' | jq -r .error)" description_too_short "kisa takim aciklamasi"
+DB "insert into user_scopes (user_id,scope) values ('$DENIZ','manage_teams')" >/dev/null
+ok "$(w n POST "$NT" /api/teams '{"name":"Uzun Takim","description":"kisa","color":null}' | jq -r .error)" description_too_short "kisa aciklama kapsam olmadan"
+DB "insert into user_scopes (user_id,scope) values ('$DENIZ','bypass_text_quality')" >/dev/null
+R=$(w n POST "$NT" /api/teams '{"name":"Kisa Aciklama","description":"x","color":null}')
+SHORT_TEAM=$(jq -r .id <<<"$R")
+ok "$([ "$SHORT_TEAM" != null ] && echo V || echo Y)" V "kisa aciklama kapsamla"
+ok "$(wc_ n DELETE "$NT" "/api/teams/$SHORT_TEAM" '')" 204 "kapsam testi temizle"
+DB "delete from user_scopes where user_id='$DENIZ' and scope in ('manage_teams','bypass_text_quality')" >/dev/null
 R=$(w w POST "$WT" /api/teams '{"name":"Bakım Takımı","description":"Makine bakımını planlar ve ekipman arızalarını düzenli olarak izler.","color":"#0f766e"}')
 TID=$(jq -r .id <<<"$R")
 ok "$(jq -c 'keys' <<<"$R")" '["id"]' "201 { id }"
@@ -589,7 +605,9 @@ ok "$(wc_ w DELETE "$WT" "/api/teams/$TID2" '')" 404 "ikinci silme 404"
 
 t pillars_crud
 ok "$(w w POST "$WT" /api/pillars '{"name":"abc","description":null,"color":null}' | jq -r .error)" name_too_short "kisa pillar adi"
-ok "$(w w POST "$WT" /api/pillars '{"name":"Valid Pillar","description":"kisa","color":null}' | jq -r .error)" description_too_short "kisa pillar aciklamasi"
+DB "insert into user_scopes (user_id,scope) values ('$DENIZ','manage_teams')" >/dev/null
+ok "$(w n POST "$NT" /api/pillars '{"name":"Valid Pillar","description":"kisa","color":null}' | jq -r .error)" description_too_short "kisa pillar aciklamasi"
+DB "delete from user_scopes where user_id='$DENIZ' and scope='manage_teams'" >/dev/null
 R=$(w w POST "$WT" /api/pillars '{"name":"Çevre","description":"Çevre çalışmaları ve sürdürülebilirlik hedeflerini kulüp genelinde koordine eder.","color":"#0f766e"}')
 PID=$(jq -r .id <<<"$R"); PTID=$(jq -r .team_id <<<"$R")
 ok "$(jq -c 'keys' <<<"$R")" '["id","team_id"]' "201 { id, team_id }"

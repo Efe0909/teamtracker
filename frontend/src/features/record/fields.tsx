@@ -11,6 +11,7 @@ import { isDone, KIND, PRIORITY, PRIORITY_ORDER, STATUS, STATUS_ORDER } from "..
 import { useLookup } from "../../lib/lookup";
 import { DateField } from "../../ui/DateField";
 import { QualityNote } from "./QualityNote";
+import { MarkdownField } from "../../ui/MarkdownField";
 import { Icon, type IconName } from "../../ui/icons";
 import { Button, cx, Dialog, Due, Picker, PriorityTag, Status, TeamName, Tip, ui, useToast, Who } from "../../ui/ui";
 import { NodeTreePicker } from "../nodes/NodePicker";
@@ -53,6 +54,7 @@ export function Properties({ d }: { d: RecordDetail }) {
   const [closing, setClosing] = useState(false);
   const [closingNote, setClosingNote] = useState("");
   const [qualityReasons, setQualityReasons] = useState<string[] | null>(null);
+  const bypassQuality = L.can("bypass_text_quality");
   const submitClose = (quality_override = false) => m.mutate(
     { field: "status", value: "closed", closing_note: closingNote, quality_override },
     { onSuccess: () => { setClosing(false); setClosingNote(""); },
@@ -133,15 +135,15 @@ export function Properties({ d }: { d: RecordDetail }) {
       </Row>
       <Dialog open={closing} onClose={() => setClosing(false)} title="Kaydı kapat">
         <div className={ui.formStack}>
-          <label className={ui.field}>
+          <div className={ui.field}>
             <span>Kapanış notu</span>
-            <textarea className={ui.input} rows={5} value={closingNote} onChange={(e) => setClosingNote(e.target.value)} />
-            <small className={ui.fieldHint}>{Array.from(closingNote.trim()).length}/30 karakter</small>
-          </label>
-          <QualityNote />
+            <MarkdownField value={closingNote} onChange={setClosingNote} label="Kapanış notu" rows={5} />
+            <small className={ui.fieldHint}>{Array.from(closingNote.trim()).length}{bypassQuality ? " karakter" : "/30 karakter"}</small>
+          </div>
+          {!bypassQuality && <QualityNote />}
           <div className={ui.dact}>
             <Button onClick={() => setClosing(false)}>Vazgeç</Button>
-            <Button variant="primary" disabled={m.isPending || Array.from(closingNote.trim()).length < 30} onClick={() => submitClose()}>Kapat</Button>
+            <Button variant="primary" disabled={m.isPending || closingNote.trim() === "" || (!bypassQuality && Array.from(closingNote.trim()).length < 30)} onClick={() => submitClose()}>Kapat</Button>
           </div>
         </div>
         <Dialog open={qualityReasons !== null} onClose={() => setQualityReasons(null)} title="Kalite kontrolü uyarısı">

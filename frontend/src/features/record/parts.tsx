@@ -11,6 +11,7 @@ import { Icon } from "../../ui/icons";
 import { Avatar, Button, cx, Dialog, IconButton, KindTag, Picker, Popover, PriorityTag, Status, ui, useToast, Who, type Option } from "../../ui/ui";
 import { DueField } from "./fields";
 import { QualityNote } from "./QualityNote";
+import { MarkdownField, MarkdownText } from "../../ui/MarkdownField";
 import s from "./record.module.css";
 
 // --- baslik ----------------------------------------------------------------
@@ -44,7 +45,7 @@ export function RecordHead({ d, showPath = true, titleExtra }: { d: RecordDetail
       </div>
       <div className={s.descWrap}>
         {r.description !== null ? (
-          <p className={s.desc}>{r.description}</p>
+          <MarkdownText value={r.description} className={s.desc} />
         ) : (
           <p className={cx(s.desc, s.descEmpty)}>Açıklama yok.</p>
         )}
@@ -54,13 +55,15 @@ export function RecordHead({ d, showPath = true, titleExtra }: { d: RecordDetail
           </button>
         )}
       </div>
-      {r.status === "closed" && r.closing_note && <p className={s.muted}>Kapanış notu: {r.closing_note}</p>}
+      {r.status === "closed" && r.closing_note && <MarkdownText value={`Kapanış notu: ${r.closing_note}`} className={s.muted} />}
       {edit !== null && <TextEdit d={d} field={edit} onClose={() => setEdit(null)} />}
     </div>
   );
 }
 
 function TextEdit({ d, field, onClose }: { d: RecordDetail; field: "title" | "description"; onClose: () => void }) {
+  const L = useLookup();
+  const bypassQuality = L.can("bypass_text_quality");
   const m = usePatchRecord(d.record.id);
   const [v, setV] = useState((field === "title" ? d.record.title : d.record.description) ?? "");
   const [err, setErr] = useState<string | null>(null);
@@ -90,15 +93,14 @@ function TextEdit({ d, field, onClose }: { d: RecordDetail; field: "title" | "de
           <input className={ui.input} aria-labelledby="dlg-title" value={v} onChange={(e) => setV(e.target.value)}
             maxLength={200} required autoFocus />
         ) : (
-          <textarea className={ui.input} aria-labelledby="dlg-title" value={v} onChange={(e) => setV(e.target.value)}
-            rows={8} autoFocus placeholder="Ne oldu, nerede, ne zaman?" />
+          <MarkdownField value={v} onChange={setV} label="Açıklama" rows={8} placeholder="Ne oldu, nerede, ne zaman?" />
         )}
-        <small className={ui.fieldHint}>{Array.from(v.trim()).length}/{field === "title" ? 5 : 30} karakter</small>
-        <QualityNote />
+        <small className={ui.fieldHint}>{Array.from(v.trim()).length}{bypassQuality ? " karakter" : `/${field === "title" ? 5 : 30} karakter`}</small>
+        {!bypassQuality && <QualityNote />}
         <div className={ui.dact}>
           <Button onClick={onClose}>Vazgeç</Button>
           <Button type="submit" variant="primary" aria-busy={m.isPending}
-            disabled={m.isPending || (field === "title" && v.trim() === "")}>
+            disabled={m.isPending || (field === "title" && v.trim() === "") || (field === "description" && v.trim() === "") || (!bypassQuality && ((field === "title" && Array.from(v.trim()).length < 5) || (field === "description" && Array.from(v.trim()).length < 30 && v.trim() !== (d.record.description ?? ""))))}>
             {m.isPending ? "Kaydediliyor…" : "Kaydet"}
           </Button>
         </div>
@@ -284,6 +286,7 @@ export function ActionList({ d }: { d: RecordDetail }) {
   const [closingAction, setClosingAction] = useState<Action | null>(null);
   const [closingNote, setClosingNote] = useState("");
   const [qualityReasons, setQualityReasons] = useState<string[] | null>(null);
+  const bypassQuality = L.can("bypass_text_quality");
 
   const change = (a: Action, p: ActionPatch, undo: ActionPatch, text: string) =>
     patch.mutate(
@@ -317,7 +320,7 @@ export function ActionList({ d }: { d: RecordDetail }) {
           : change(a, { field: "status", value: v }, { field: "status", value: a.status }, "Durum değişti")}>
         <Status status={a.status} action />
       </Picker>
-      <span className={s.actionTitle}>{a.title}{a.closing_note && <small className={s.muted}> · {a.closing_note}</small>}</span>
+      <span className={s.actionTitle}>{a.title}{a.closing_note && <small className={s.muted}> · <MarkdownText value={a.closing_note} /></small>}</span>
       <span className={s.actionMeta}>
         {!ro && !isDone(a.status) && a.owner_id === null && (
           // Havuzdaki eylemi tek dokunusla ustlen (spec/17 etki 8).
@@ -358,15 +361,15 @@ export function ActionList({ d }: { d: RecordDetail }) {
       </div>
       <Dialog open={closingAction !== null} onClose={() => setClosingAction(null)} title="Eylemi kapat">
         <div className={ui.formStack}>
-          <label className={ui.field}>
+          <div className={ui.field}>
             <span>Kapanış notu</span>
-            <textarea className={ui.input} rows={5} value={closingNote} onChange={(e) => setClosingNote(e.target.value)} />
-            <small className={ui.fieldHint}>{Array.from(closingNote.trim()).length}/30 karakter</small>
-          </label>
-          <QualityNote />
+            <MarkdownField value={closingNote} onChange={setClosingNote} label="Kapanış notu" rows={5} />
+            <small className={ui.fieldHint}>{Array.from(closingNote.trim()).length}{bypassQuality ? " karakter" : "/30 karakter"}</small>
+          </div>
+          {!bypassQuality && <QualityNote />}
           <div className={ui.dact}>
             <Button onClick={() => setClosingAction(null)}>Vazgeç</Button>
-            <Button variant="primary" disabled={patch.isPending || Array.from(closingNote.trim()).length < 30} onClick={() => submitCloseAction()}>Kapat</Button>
+            <Button variant="primary" disabled={patch.isPending || closingNote.trim() === "" || (!bypassQuality && Array.from(closingNote.trim()).length < 30)} onClick={() => submitCloseAction()}>Kapat</Button>
           </div>
         </div>
         <Dialog open={qualityReasons !== null} onClose={() => setQualityReasons(null)} title="Kalite kontrolü uyarısı">

@@ -15,6 +15,7 @@ import { NodeListPicker } from "../../features/nodes/NodePicker";
 import { NewRecordForm } from "../../features/record/NewRecordForm";
 import { BallLine } from "../../features/record/parts";
 import { QualityNote } from "../../features/record/QualityNote";
+import { MarkdownField, MarkdownText } from "../../ui/MarkdownField";
 import r from "../../features/record/record.module.css";
 import { ago, formatDay, isDone, parseDay, PRIORITY, PRIORITY_ORDER, toIsoDay } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
@@ -213,7 +214,7 @@ function Head({ e }: { e: EventDetail }) {
         )}
       </div>
       <div className={r.descWrap}>
-        {e.description !== null ? <p className={r.desc}>{e.description}</p> : <p className={cx(r.desc, r.descEmpty)}>Açıklama yok.</p>}
+        {e.description !== null ? <MarkdownText value={e.description} className={r.desc} /> : <p className={cx(r.desc, r.descEmpty)}>Açıklama yok.</p>}
         {e.can_edit && (
           <button type="button" className={r.editLink} onClick={() => setEdit("description")}>
             <Icon name="edit" size={13} /> {e.description === null ? "Açıklama ekle" : "Açıklamayı düzenle"}
@@ -227,6 +228,8 @@ function Head({ e }: { e: EventDetail }) {
 
 /** parts.tsx TextEdit'in etkinlik karsiligi: baslik ya da aciklama. */
 function TextEdit({ e, field, onClose }: { e: EventDetail; field: "title" | "description"; onClose: () => void }) {
+  const L = useLookup();
+  const bypassQuality = L.can("bypass_text_quality");
   const { run, busy } = useRun();
   const [v, setV] = useState((field === "title" ? e.title : e.description) ?? "");
   const [qualityReasons, setQualityReasons] = useState<string[] | null>(null);
@@ -253,14 +256,13 @@ function TextEdit({ e, field, onClose }: { e: EventDetail; field: "title" | "des
           <input className={ui.input} aria-labelledby="dlg-title" value={v} onChange={(ev) => setV(ev.target.value)}
             maxLength={200} required autoFocus />
         ) : (
-          <textarea className={ui.input} aria-labelledby="dlg-title" value={v} onChange={(ev) => setV(ev.target.value)}
-            rows={8} autoFocus />
+          <MarkdownField value={v} onChange={setV} label="Açıklama" rows={8} />
         )}
-        <small className={ui.fieldHint}>{Array.from(v.trim()).length}/{field === "title" ? 5 : 30} karakter</small>
-        <QualityNote />
+        <small className={ui.fieldHint}>{Array.from(v.trim()).length}{bypassQuality ? " karakter" : `/${field === "title" ? 5 : 30} karakter`}</small>
+        {!bypassQuality && <QualityNote />}
         <div className={ui.dact}>
           <Button onClick={onClose}>Vazgeç</Button>
-          <Button type="submit" variant="primary" aria-busy={busy} disabled={busy || (field === "title" && Array.from(v.trim()).length < 5) || (field === "description" && Array.from(v.trim()).length < 30 && v.trim() !== (e.description ?? ""))}>
+          <Button type="submit" variant="primary" aria-busy={busy} disabled={busy || (field === "title" && v.trim() === "") || (field === "description" && v.trim() === "") || (!bypassQuality && ((field === "title" && Array.from(v.trim()).length < 5) || (field === "description" && Array.from(v.trim()).length < 30 && v.trim() !== (e.description ?? ""))))}>
             {busy ? "Kaydediliyor…" : "Kaydet"}
           </Button>
         </div>

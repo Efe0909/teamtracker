@@ -343,14 +343,19 @@ pub(crate) async fn log_override(
 
 /// `closed`'a gecis: not zorunlu, >= 30, model tartar. Donen: (not, override nedenleri, karar).
 async fn closing(
-    st: &AppState, note: Option<String>, context: &str, override_: bool,
-) -> Result<(String, Option<Vec<&'static str>>, decision::Quality)> {
+    st: &AppState, note: Option<String>, context: &str, override_: bool, bypass_quality: bool,
+) -> Result<(String, Option<Vec<&'static str>>, Option<decision::Quality>)> {
     let note = common::text(note, TEXT_MAX, "invalid_closing_note")?
         .ok_or(AppError::BadRequest("closing_note_required"))?;
-    common::min_chars(Some(&note), common::DESC_MIN, "closing_note_too_short")?;
-    let state = format!("{context}\nKapanış notu: {note}");
-    let (reasons, quality) = decision::gate_with(st, decision::Kind::Closing, &state, override_).await?;
-    Ok((note, reasons, quality))
+    let quality = if bypass_quality {
+        None
+    } else {
+        common::min_chars(Some(&note), common::DESC_MIN, "closing_note_too_short")?;
+        let state = format!("{context}\nKapanış notu: {note}");
+        let (reasons, quality) = decision::gate_with(st, decision::Kind::Closing, &state, override_).await?;
+        return Ok((note, reasons, Some(quality)));
+    };
+    Ok((note, None, quality))
 }
 
 // --- yeni kayit ------------------------------------------------------------
@@ -398,8 +403,14 @@ pub async fn create(
     let title = common::text(Some(b.title), TITLE_MAX, "invalid_title")?
         .ok_or(AppError::BadRequest("invalid_title"))?;
     let description = common::text(b.description, TEXT_MAX, "invalid_description")?;
-    check_title(&title)?;
-    check_description(description.as_deref())?;
+    let bypass_quality = common::has_scope(&st, &me, "bypass_text_quality").await?;
+    if bypass_quality && description.is_none() {
+        return Err(AppError::BadRequest("description_required"));
+    }
+    if !bypass_quality {
+        check_title(&title)?;
+        check_description(description.as_deref())?;
+    }
     check_unit(&st, b.unit_id)?;
     check_pillar(&st.pool, b.pillar_id).await?;
     check_team(&st.pool, b.team_id).await?;
@@ -409,8 +420,12 @@ pub async fn create(
         return Err(AppError::BadRequest("invalid_access_mode"));
     }
     // Ag cagrisi islemden ONCE: model beklenirken baglanti tutulmaz.
-    let reasons = decision::gate(&st, decision::Kind::Entry,
-        &decision::entry_state(&title, description.as_deref()), b.quality_override).await?;
+    let reasons = if bypass_quality {
+        None
+    } else {
+        decision::gate(&st, decision::Kind::Entry,
+            &decision::entry_state(&title, description.as_deref()), b.quality_override).await?
+    };
 
     let mut tx = st.pool.begin().await?;
     let chat_id: Uuid = sqlx::query_scalar("insert into chats default values returning id")
@@ -471,6 +486,7 @@ pub async fn patch(
     let rec = load(&st.pool, common::id(&raw)?).await?;
     require_edit(&st, &me, &rec).await?;
     let RecordPatchBody { patch: p, closing_note, quality_override } = body;
+    let bypass_quality = common::has_scope(&st, &me, "bypass_text_quality").await?;
     // Kapanis notu (closed'a geciste dolu) ve model onayi atlandiysa nedenleri.
     let mut note: Option<String> = None;
     let mut reasons: Option<Vec<&'static str>> = None;
@@ -491,8 +507,8 @@ pub async fn patch(
                 }
                 if rec.status != "closed" {
                     let (n, r, q) = closing(&st, closing_note, &format!("Kayıt: {}", rec.title),
-                        quality_override).await?;
-                    (note, reasons, quality) = (Some(n), r, Some(q));
+                        quality_override, bypass_quality).await?;
+                    (note, reasons, quality) = (Some(n), r, q);
                 }
             }
             ("status", "update records set status = $2 where id = $1",
@@ -551,7 +567,7 @@ pub async fn patch(
             let v = common::text(Some(v), TITLE_MAX, "invalid_title")?
                 .ok_or(AppError::BadRequest("invalid_title"))?;
             // Yalniz DEGISEN alan sinanir: eski kisa veri duzenlenene dek kalir.
-            if v != rec.title {
+            if v != rec.title && !bypass_quality {
                 check_title(&v)?;
                 let (r, q) = decision::gate_with(&st, decision::Kind::Entry,
                     &decision::entry_state(&v, rec.description.as_deref()), quality_override).await?;
@@ -561,7 +577,10 @@ pub async fn patch(
         }
         RecordPatch::Description(v) => {
             let v = common::text(v, TEXT_MAX, "invalid_description")?;
-            if v != rec.description {
+            if bypass_quality && v.is_none() {
+                return Err(AppError::BadRequest("description_required"));
+            }
+            if v != rec.description && !bypass_quality {
                 check_description(v.as_deref())?;
                 let (r, q) = decision::gate_with(&st, decision::Kind::Entry,
                     &decision::entry_state(&rec.title, v.as_deref()), quality_override).await?;
@@ -712,12 +731,13 @@ pub async fn patch_action(
     let rec = load(&st.pool, a.record_id).await?;
     require_edit(&st, &me, &rec).await?;
     let ActionPatchBody { patch: p, closing_note, quality_override } = body;
+    let bypass_quality = common::has_scope(&st, &me, "bypass_text_quality").await?;
 
     // Model cagrisi islemden once (agda beklerken baglanti tutulmaz).
     let (note, reasons) = match p {
         ActionPatch::Status(ActionStatus::Closed) if !matches!(a.status, ActionStatus::Closed) => {
             let (n, r, _) = closing(&st, closing_note,
-                &format!("Eylem: {}\nKayıt: {}", a.title, rec.title), quality_override).await?;
+                &format!("Eylem: {}\nKayıt: {}", a.title, rec.title), quality_override, bypass_quality).await?;
             (Some(n), r)
         }
         _ => (None, None),
