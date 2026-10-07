@@ -153,7 +153,7 @@ export function analyzeTree(tree: Tree, source: string): Construct[] {
           const start = lineStart(source, node.from);
           out.push({
             kind: "list", ordered: node.parent?.parent?.name === "OrderedList",
-            from: start, to: lineEnd(source, node.from), marks: [marks], hang: marks.to - marks.from,
+            from: start, to: lineEnd(source, node.from), marks: [marks], hang: Math.max(2, marks.to - marks.from),
           });
           return true;
         }

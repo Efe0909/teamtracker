@@ -53,7 +53,13 @@ export function formatsAt(state: EditorState): Formats {
       else if (c.kind === "list") formats[c.ordered ? "ordered" : "bullet"] = true;
     }
   }
-  for (const kind of ["strong", "em", "code"] as const) if (emptyPairAt(state, head, MARKER[kind])) formats[kind] = true;
+  for (const kind of ["strong", "em", "code"] as const) {
+    if (state.selection.main.empty) { if (emptyPairAt(state, head, MARKER[kind])) formats[kind] = true; continue; }
+    // Aralık seçimi: tüm (boşluksuz) parçalar tek bir yapının içindeyse açık — toggle ile aynı kural.
+    const items = constructsOf(state).filter((c) => c.kind === kind);
+    const parts = segmentsOf(state, items.flatMap((c) => (c.kind === "strong" || c.kind === "em" || c.kind === "code" ? c.marks : [])));
+    formats[kind] = parts.length > 0 && parts.every((p) => items.some((c) => c.from <= p.from && p.to <= c.to));
+  }
   return formats;
 }
 
