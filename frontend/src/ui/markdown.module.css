@@ -118,6 +118,7 @@
 .linkEditor { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px; border-bottom: 1px solid var(--line); }
 .linkEditor label { display: grid; gap: 3px; flex: 1 1 140px; color: var(--dim); font-size: var(--fs-sm); }
 .linkEditor input { min-width: 0; width: 100%; padding: 5px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--panel); color: var(--txt); font: inherit; }
+.linkOpen { align-self: end; padding: 5px 7px; border: 1px solid var(--line); border-radius: var(--r-sm); color: var(--info-text); background: var(--tint); text-decoration: none; }
 .linkEditor button { align-self: end; padding: 5px 7px; border: 1px solid var(--line); border-radius: var(--r-sm); color: var(--txt); background: var(--tint); cursor: pointer; }
 .suggestions {
   position: absolute;

@@ -6,6 +6,7 @@ import type { MetaUser } from "../api/types";
 import { handle } from "../lib/mentions";
 import { useLookup } from "../lib/lookup";
 import { commands, formatLink, linkEditFor, markdownExtensions, type LinkEdit } from "./MarkdownEditor";
+import { safeHref } from "./markdown";
 import { renderLines, type RenderedLine, type Segment } from "./markdownLines";
 import { formatsAt, type Formats } from "./markdownCommands";
 import s from "./markdown.module.css";
@@ -109,6 +110,9 @@ export function MarkdownField({ value, onChange, label, placeholder, rows = 4 }:
     syncing.current = false;
   }, [value]);
 
+  // Hedefi açmak ayrı, açık bir eylem: yalnız izinli şemalar (⌘/Ctrl+tık de aynı kuralı kullanır).
+  const opened = linkEdit === null || linkEdit.url.trim() === "" || linkEdit.url === "https://" ? null : safeHref(linkEdit.url.trim());
+
   const applyLink = () => {
     const view = editor.current;
     if (!view || !linkEdit) return;
@@ -161,6 +165,7 @@ export function MarkdownField({ value, onChange, label, placeholder, rows = 4 }:
       }}>
         <label>Ad<input aria-label="Bağlantı adı" value={linkEdit.alias} onChange={(e) => setLinkEdit({ ...linkEdit, alias: e.target.value })} autoFocus /></label>
         <label>Adres<input aria-label="Bağlantı adresi" value={linkEdit.url} onChange={(e) => setLinkEdit({ ...linkEdit, url: e.target.value })} /></label>
+        {opened !== null && <a className={s.linkOpen} href={opened} target="_blank" rel="noopener noreferrer">Aç</a>}
         <button type="button" onClick={applyLink}>Uygula</button>
         <button type="button" onClick={() => { setLinkEdit(null); editor.current?.focus(); }}>Vazgeç</button>
       </div>}

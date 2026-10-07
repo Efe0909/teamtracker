@@ -217,7 +217,21 @@ function deleteEmptyPair(view: EditorView): boolean {
 }
 
 // Boş maddede Enter hemen listeden çıkar (kütüphanenin "önce gevşet" adımı kapalı).
-const enterContinue = insertNewlineContinueMarkupCommand({ nonTightLists: false });
+const continueMarkup = insertNewlineContinueMarkupCommand({ nonTightLists: false });
+
+// Boş alıntı satırında (`> `) Enter alıntıdan çıkar; kütüphane yalnız iki boş satırdan sonra çıkıyor.
+function exitEmptyQuote(view: EditorView): boolean {
+  const { state } = view;
+  const { head, empty } = state.selection.main;
+  const line = state.doc.lineAt(head);
+  if (!empty || head !== line.to || !/^\s*>\s*$/.test(line.text)) return false;
+  const quote = constructsOf(state).find((c) => c.kind === "quote" && c.from === line.from);
+  const inList = constructsOf(state).some((c) => c.kind === "list" && c.from === line.from);
+  if (!quote || inList) return false;
+  view.dispatch({ changes: { from: line.from, to: line.to }, selection: { anchor: line.from }, userEvent: "delete.quote" });
+  return true;
+}
+const enterContinue = (view: EditorView) => exitEmptyQuote(view) || continueMarkup(view);
 
 function softBreak(view: EditorView): boolean {
   if (view.compositionStarted) return false;

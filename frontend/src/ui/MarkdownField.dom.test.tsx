@@ -238,6 +238,27 @@ it("continues bullet/ordered lists, exits the empty item without an extra blank 
   expect(view.state.doc.toString()).toBe("- item\n  ");
 });
 
+it("Enter on an empty quote line leaves the quote without leaving stray markers", () => {
+  const { container } = render(<Field initial="> alıntı" />);
+  const view = viewIn(container);
+  act(() => { view.dispatch({ selection: { anchor: 8 } }); });
+  key(view, "Enter");
+  expect(view.state.doc.toString()).toBe("> alıntı\n> ");
+  key(view, "Enter");
+  expect(view.state.doc.toString()).toBe("> alıntı\n");
+});
+
+it("offers an explicit Open action only for allowlisted destinations", () => {
+  const { container, queryByText, getByRole } = render(<Field initial="[Ad](https://example.com)" />);
+  const view = viewIn(container);
+  const alias = view.contentDOM.querySelector("[data-link-from]");
+  if (!alias) throw new Error("Alias missing");
+  fireEvent.doubleClick(alias);
+  expect(queryByText("Aç")?.getAttribute("href")).toBe("https://example.com");
+  fireEvent.change(getByRole("textbox", { name: "Bağlantı adresi" }), { target: { value: "javascript:alert(1)" } });
+  expect(queryByText("Aç")).toBeNull();
+});
+
 it("renders file pills without fetching and keeps HTML inert in the editor", () => {
   const { container } = render(<Field initial={'<img src=x onerror=alert(1)> [Plan](https://drive.google.com/file/d/unknown) [Doc](https://team.sharepoint.com/unknown)'} />);
   const view = viewIn(container);
