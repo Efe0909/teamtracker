@@ -106,11 +106,11 @@ export function Properties({ d }: { d: RecordDetail }) {
           ]}
           onChange={(v) => save({ field: "team_id", value: v }, { field: "team_id", value: r.team_id })} />
       </Row>
-      <Row icon="tree" label="Birim">
-        <NodeTreePicker rootKey="units" look="prop" label="Birim" disabled={ro || m.isPending} value={r.unit_id}
+      <Row icon="tree" label="Konu">
+        <NodeTreePicker rootKey="units" look="prop" label="Konu" disabled={ro || m.isPending} value={r.unit_id}
           onChange={(v) => save({ field: "unit_id", value: v }, { field: "unit_id", value: r.unit_id })} />
       </Row>
-      {/* Pillar ORTOGONAL: agacta degil, ayri tablo (spec/22); birimden bagimsiz secilir. */}
+      {/* Pillar ORTOGONAL: agacta degil, ayri tablo (spec/22); konudan bagimsiz secilir. */}
       <Row icon="pin" label="Pillar">
         <Picker look="prop" label="Pillar" disabled={ro} busy={m.isPending} value={r.pillar_id}
           options={[

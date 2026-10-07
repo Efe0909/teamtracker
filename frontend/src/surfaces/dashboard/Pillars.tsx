@@ -1,6 +1,6 @@
 // Pillar'lar: liste + pillar sayfasi. Pillar agaca BAGLI DEGIL (spec/22); her
 // pillar'in bir OZEL takimi var — uyeleri ve sohbeti o takimdan. Kayitlarla
-// bagi `records.pillar_id` (ortogonal: kaydin birimi ayri).
+// bagi `records.pillar_id` (ortogonal: kaydin konui ayri).
 
 import { useEffect, useState } from "react";
 import { ApiError, errorText } from "../../api/client";
@@ -41,7 +41,7 @@ export function Pillars() {
           <h1>
             Pillar'lar<span className={s.count}>{all.length}</span>
           </h1>
-          <p className={s.pageSub}>Kesişen sorumluluk alanları. Her pillar'ın kendi takımı ve sohbeti var; kayıtlar birimden bağımsız bir pillar'a bağlanır.</p>
+          <p className={s.pageSub}>Kesişen sorumluluk alanları. Her pillar'ın kendi takımı ve sohbeti var; kayıtlar konudan bağımsız bir pillar'a bağlanır.</p>
         </div>
         {can && (
           <Button variant="primary" onClick={() => setCreating(true)}>

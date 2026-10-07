@@ -41,10 +41,10 @@ function node(over: Partial<TreeNode> & { id: string; name: string }): TreeNode 
   };
 }
 
-/** Birimler koku: kilitli, serbest kural. */
+/** Konular koku: kilitli, serbest kural. */
 function unitsRoot(over: Partial<TreeNode> = {}): TreeNode {
   return node({
-    id: "units", name: "Birimler", parent_id: null, node_type: "operational", key: "units", depth: 0,
+    id: "units", name: "Konular", parent_id: null, node_type: "operational", key: "units", depth: 0,
     locked: "root", can_edit: true, child_types: ["cell", "machine", "task", "step", "generic"], ...over,
   });
 }
@@ -92,7 +92,7 @@ describe("salt okunur (butun bayraklar false)", () => {
   it("duzenle/ekle/kalici sil dugmesi hic cizilmez", async () => {
     stubFetch({ nodes: [unitsRoot({ can_edit: false, child_types: [] })] });
     renderTree();
-    await screen.findByText("Birimler");
+    await screen.findByText("Konular");
     expect(screen.queryByLabelText(/düzenle/)).toBeNull();
     expect(screen.queryByLabelText(/alt düğüm ekle/)).toBeNull();
     expect(screen.queryByText(/Kalıcı sil/)).toBeNull();
@@ -104,7 +104,7 @@ describe("kokler koddan gelir (spec/74 §4.1)", () => {
   it("kok dugum ekleme dugmesi yok", async () => {
     stubFetch({ nodes: [unitsRoot()] });
     renderTree();
-    await screen.findByText("Birimler");
+    await screen.findByText("Konular");
     expect(screen.queryByRole("button", { name: /Kök düğüm/ })).toBeNull();
   });
 
@@ -112,10 +112,10 @@ describe("kokler koddan gelir (spec/74 §4.1)", () => {
     // can_hard_delete kasten true: kilitli dugumde yine de cizilmemeli.
     stubFetch({ nodes: [unitsRoot({ can_hard_delete: true })] });
     renderTree();
-    await screen.findByText("Birimler");
-    expect(screen.getByLabelText("Birimler: kilitli")).toBeTruthy();
-    expect(screen.queryByLabelText(/Birimler: pasifleştir/)).toBeNull();
-    fireEvent.click(screen.getByLabelText("Birimler: düzenle"));
+    await screen.findByText("Konular");
+    expect(screen.getByLabelText("Konular: kilitli")).toBeTruthy();
+    expect(screen.queryByLabelText(/Konular: pasifleştir/)).toBeNull();
+    fireEvent.click(screen.getByLabelText("Konular: düzenle"));
     await screen.findByText(/yalnız ad ve açıklama değişir\./);
     expect(screen.queryByRole("button", { name: /^Üst düğüm:/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /^Tür:/ })).toBeNull();
@@ -130,7 +130,7 @@ describe("ekleme formu dugumun child_types/child_fixed'ine uyar (KNOW-241)", () 
       nodes: [unitsRoot({ child_count: 1 }), node({ id: "n1", name: "Üretim Hattı", can_edit: true, child_types: ["machine"] })],
     });
     renderTree();
-    fireEvent.click(await screen.findByLabelText("Birimler: alt düğümleri aç"));
+    fireEvent.click(await screen.findByLabelText("Konular: alt düğümleri aç"));
     fireEvent.click(await screen.findByLabelText(/Üretim Hattı: alt düğüm ekle/));
     expect(screen.getByRole("button", { name: /^Yapı:/ }).textContent).toContain("Ağaç");
     expect(await pickerOptions("Tür")).toEqual(["Makine"]);
@@ -139,9 +139,9 @@ describe("ekleme formu dugumun child_types/child_fixed'ine uyar (KNOW-241)", () 
   it("child_types bos: ekle dugmesi yok", async () => {
     stubFetch({ nodes: [unitsRoot({ child_types: [] })] });
     renderTree();
-    await screen.findByText("Birimler");
-    expect(screen.getByLabelText("Birimler: düzenle")).toBeTruthy();
-    expect(screen.queryByLabelText(/Birimler: alt düğüm ekle/)).toBeNull();
+    await screen.findByText("Konular");
+    expect(screen.getByLabelText("Konular: düzenle")).toBeTruthy();
+    expect(screen.queryByLabelText(/Konular: alt düğüm ekle/)).toBeNull();
   });
 
   it("child_fixed: tur/yapi sorulmaz; checkpoint gun farkini gonderir, tur gondermez", async () => {
@@ -197,22 +197,22 @@ describe("arama: eslesenler + ustleri gorunur, geri kalani gizli", () => {
   it("eslesmeyen dal gizlenir, eslesen ve onun ustu gorunur", async () => {
     stubFetch({
       nodes: [
-        node({ id: "r1", name: "Alfa Birimi", depth: 0, parent_id: null }),
-        node({ id: "r2", name: "Beta Birimi", depth: 0, parent_id: null, child_count: 1 }),
+        node({ id: "r1", name: "Alfa Konusu", depth: 0, parent_id: null }),
+        node({ id: "r2", name: "Beta Konusu", depth: 0, parent_id: null, child_count: 1 }),
         node({ id: "c1", name: "Hedef Görevi", parent_id: "r2", depth: 1 }),
       ],
     });
     renderTree();
-    await screen.findByText("Alfa Birimi");
-    expect(screen.getByText("Beta Birimi")).toBeTruthy();
+    await screen.findByText("Alfa Konusu");
+    expect(screen.getByText("Beta Konusu")).toBeTruthy();
     // c1 baslangicta kapali: ust acilmadan gorunmez.
     expect(screen.queryByText("Hedef Görevi")).toBeNull();
 
     fireEvent.change(screen.getByLabelText("Ağaçta ara"), { target: { value: "hedef" } });
 
     await waitFor(() => expect(screen.getByText("Hedef Görevi")).toBeTruthy());
-    expect(screen.getByText("Beta Birimi")).toBeTruthy(); // esleseninin ustu
-    expect(screen.queryByText("Alfa Birimi")).toBeNull(); // ilgisiz dal gizli
+    expect(screen.getByText("Beta Konusu")).toBeTruthy(); // esleseninin ustu
+    expect(screen.queryByText("Alfa Konusu")).toBeNull(); // ilgisiz dal gizli
   });
 });
 
@@ -225,8 +225,8 @@ describe("API hata kodu Turkce metne cevrilir (api/errors.ts)", () => {
       return undefined;
     });
     renderTree();
-    fireEvent.click(await screen.findByLabelText("Birimler: alt düğüm ekle"));
-    fireEvent.change(await screen.findByLabelText(/^Alt düğüm adı/), { target: { value: "Yeni Birim Adı" } });
+    fireEvent.click(await screen.findByLabelText("Konular: alt düğüm ekle"));
+    fireEvent.change(await screen.findByLabelText(/^Alt düğüm adı/), { target: { value: "Yeni Konu Adı" } });
     fireEvent.click(screen.getByRole("button", { name: "Ekle" }));
     await waitFor(() => expect(screen.getByRole("alert").textContent).toBe(ERRORS.invalid_name));
   });
