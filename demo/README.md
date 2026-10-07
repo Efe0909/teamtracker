@@ -24,7 +24,7 @@ demo/stack.sh seed          seed/        capture/                pdf/
 
 - PostgreSQL 16 reachable on `127.0.0.1:5432` with user/password `ekiptakip` (`docker compose up -d` works, so does a native install)
 - Rust toolchain (the API is built with `cargo build` on first use) and Node 20+ (`npm ci` runs in `frontend/` on first use)
-- Python 3.11+ (standard library only), `psql`, `lsof`
+- Python 3 (standard library only; developed on 3.13), `psql`, `lsof`
 - Playwright with Chromium (`npm i -g playwright`); the scripts also look it up in the global `node_modules`
 
 ## Run it
@@ -109,12 +109,12 @@ To add a chapter, drop a new file in `capture/chapters/`; chapters run in file-n
 
 ## PDF builder
 
-`pdf/build.mjs` renders one 1920×1080 page per step (SVG dim mask with a hole, orange ring, numbered badge, cursor,
+`pdf/build.mjs` renders one 1920×1080 page per step (vector dim layer with holes, orange ring, numbered badge, cursor,
 labelled regions for overview steps, phone frame for mobile), plus cover, how-to-read, cast, unit tree, unit table,
 event types and locations, table of contents with links, chapter dividers, tips and a closing page.
 
 - Screenshots are down-scaled through a Chromium canvas first (desktop 1560 px wide, phone 660 px, JPEG q0.8); the originals stay untouched.
-- Blurred CSS shadows are avoided on purpose: Chromium embeds them as large raster masks and the PDF grows by 40+ MB.
+- Blurred CSS shadows and SVG `<mask>` are avoided on purpose: Chromium embeds both as raster images. The same 318 pages came out at 85 MB with blur shadows, 48 MB with the mask, and 39 MB (screenshots only) with vector shapes.
 - The app's own modal backdrop is detected from the screenshot's top-left corner, and the extra dim is skipped in that case.
 - The PDF has bookmarks (`outline`) and is tagged; `GUIDE.md` has the same content with relative image links (`shots/…`).
 
