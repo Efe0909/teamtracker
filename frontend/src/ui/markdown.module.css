@@ -34,6 +34,8 @@
 .editor :global(.cm-content) { padding: 9px 0; caret-color: var(--txt); }
 .editor :global(.cm-line) { padding: 0 10px; }
 .editor :global(.cm-focused) { outline: 2px solid var(--acc); outline-offset: -2px; }
+/* base.css'in genel :focus-visible'ı contenteditable'a da uyar; çerçeve yalnız .cm-focused'ta. */
+.editor :global(.cm-content:focus-visible) { outline: none; }
 .editor :global(.cm-placeholder) { color: var(--dim); vertical-align: baseline; }
 .editor :global(.cm-cursor) { border-left: 1.5px solid var(--txt); margin-left: -0.75px; }
 .editor :global(.cm-editor .cm-selectionBackground), .editor :global(.cm-editor.cm-focused .cm-selectionBackground) { background: color-mix(in srgb, var(--acc) 28%, transparent); }
