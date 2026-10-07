@@ -426,10 +426,10 @@ function NewEventForm({ onCancel }: { onCancel: () => void }) {
         <span>Tür</span>
         <NodeListPicker rootKey="event_types" label="Tür" value={kind} onChange={setKind} placeholder="Tür seç" />
       </div>
-      {/* Etkinligin kaydi ayni islemde acilir; kayit bir birimde durur (spec/73 §3a). */}
+      {/* Etkinligin kaydi ayni islemde acilir; kayit bir konuda durur (spec/73 §3a). */}
       <div className={ui.field}>
-        <span>Birim <span className={ui.fieldHint}>— etkinliğin kaydı (sohbet + arşiv) burada açılır</span></span>
-        <NodeTreePicker rootKey="units" label="Birim" value={unit} onChange={setUnit} placeholder="Birim seç" />
+        <span>Konu <span className={ui.fieldHint}>— etkinliğin kaydı (sohbet + arşiv) burada açılır</span></span>
+        <NodeTreePicker rootKey="units" label="Konu" value={unit} onChange={setUnit} placeholder="Konu seç" />
       </div>
       <div className={ui.field}>
         <span>Tarih <span className={ui.fieldHint}>— boş bırakılırsa havuza düşer</span></span>

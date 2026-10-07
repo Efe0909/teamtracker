@@ -47,7 +47,7 @@ export const NODE_TYPE: Record<NodeType, string> = {
   step: "Adım",
   operational: "Operational",
   generic: "Genel",
-  // Etkinlik Turleri / Yerleri (spec/74). `checkpoint` sablon adimi — birimlerdeki
+  // Etkinlik Turleri / Yerleri (spec/74). `checkpoint` sablon adimi — konulardaki
   // `step`'le ayni etiket; ikisi ayni agacta hic bulunmaz.
   option: "Seçenek",
   checkpoint: "Adım",

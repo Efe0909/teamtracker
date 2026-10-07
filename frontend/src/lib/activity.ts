@@ -11,7 +11,7 @@ const FIELD: Record<string, string> = {
   owner_id: "Sorumlu",
   team_id: "Takım",
   pillar_id: "Pillar",
-  unit_id: "Birim",
+  unit_id: "Konu",
   due_date: "Son tarih",
   title: "Başlık",
   description: "Açıklama",
@@ -132,9 +132,9 @@ export function describe(item: FeedItem | Notice, L: Lookup): string {
         ? "takımın adını değiştirdi"
         : `takımın adını değiştirdi: ${String(ch.from)} → ${String(ch.to)}`;
     case "team_node_linked":
-      return `takımı “${item.target_label ?? ""}” birimine bağladı`;
+      return `takımı “${item.target_label ?? ""}” konusuna bağladı`;
     case "team_node_unlinked":
-      return `takımın “${item.target_label ?? ""}” birimiyle bağını kopardı`;
+      return `takımın “${item.target_label ?? ""}” konusuyla bağını kopardı`;
     case "member_added":
       return `${item.subject_label ?? ""} kişisini takıma ekledi (${roleText(ch?.to)})`;
     case "member_role":
