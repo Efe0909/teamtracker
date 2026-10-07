@@ -1,6 +1,6 @@
 // Yeni kayit formu — masaustu dialogu ve mobil sayfasi AYNI formu cizer.
 // Dil: buyuk cercevesiz baslik + aciklama, altinda ozellik cipleri (tur,
-// oncelik, birim, takim, sorumlu, pillar). Kutu yigini yok.
+// oncelik, konu, takim, sorumlu, pillar). Kutu yigini yok.
 
 import { useState } from "react";
 import { ApiError, errorText } from "../../api/client";
@@ -84,8 +84,8 @@ export function NewRecordForm(props: {
           options={PRIORITY_ORDER.map((v) => ({ value: v, label: PRIORITY[v], render: <PriorityTag priority={v} bare /> }))}>
           <PriorityTag priority={priority} bare />
         </Picker>
-        <NodeTreePicker rootKey="units" look="chip" label="Birim" value={unit === "" ? null : unit} onChange={setUnit}>
-          <Icon name="tree" size={13} /> {L.node(unit)?.name ?? "Birim seç"}
+        <NodeTreePicker rootKey="units" look="chip" label="Konu" value={unit === "" ? null : unit} onChange={setUnit}>
+          <Icon name="tree" size={13} /> {L.node(unit)?.name ?? "Konu seç"}
         </NodeTreePicker>
         <Picker look="chip" active label="Sorumlu" value={owner} onChange={setOwner}
           options={[

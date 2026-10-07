@@ -154,8 +154,8 @@ function TreeScreen({ tree }: { tree: TreeView }) {
         <h1>Veri Yönetimi</h1>
       </div>
       <p className={s.lead}>
-        Kökler (Birimler, Etkinlik Türleri, Etkinlik Yerleri) koddan gelir; yalnız adları ve açıklamaları
-        değişir. Birimler serbest bir ağaç: türü ve yapıyı sen seçersin. Etkinlik Türleri ve Etkinlik Yerleri
+        Kökler (Konular, Etkinlik Türleri, Etkinlik Yerleri) koddan gelir; yalnız adları ve açıklamaları
+        değişir. Konular serbest bir ağaç: türü ve yapıyı sen seçersin. Etkinlik Türleri ve Etkinlik Yerleri
         yönetilen listeler: türü sistem atar, her etkinlik türünün Adımlar ve Widget'lar bölümleri
         kendiliğinden açılır. Değişiklik anında uygulanır.
       </p>
@@ -236,7 +236,7 @@ function TreeScreen({ tree }: { tree: TreeView }) {
                       </span>
                     );
                   })}
-                  {/* Bu birimde calisan takimlar (team_nodes, spec/22). */}
+                  {/* Bu konuda calisan takimlar (team_nodes, spec/22). */}
                   {(teamsAt.get(n.id) ?? []).map((t) => (
                     <Link key={t.id} href={href({ name: "team", id: t.id })} className={s.tteam}>
                       <span className={s.teamDot} style={t.color !== null ? { background: t.color } : undefined} aria-hidden="true" />
@@ -444,7 +444,7 @@ function EditForm(props: { node: TreeNode; tree: TreeView; byId: ReadonlyMap<Uui
   const locked = node.locked !== null;
   const nameValid = node.node_type === "operational" || Array.from(name.trim()).length >= 5 || name.trim() === node.name;
   const descValid = bypassQuality || desc.trim() === "" || Array.from(desc.trim()).length >= 30 || desc.trim() === (node.description ?? "");
-  // Tur ve shape yalniz serbest kokte (Birimler) secilir; sabit kurallarda sunucunun.
+  // Tur ve shape yalniz serbest kokte (Konular) secilir; sabit kurallarda sunucunun.
   const free = !locked && node.root_key === "units";
   const up = node.parent_id === null ? undefined : byId.get(node.parent_id);
   // Tur secenekleri ustun kuralindan (sunucu); ust yetkisizse yalniz mevcut tur.

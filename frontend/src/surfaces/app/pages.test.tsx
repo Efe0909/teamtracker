@@ -410,13 +410,13 @@ describe("mobil yeni gezinme ve konuşmalar", () => {
     expect(screen.queryByText("Tasarım Ekibi")).toBeNull();
   });
 
-  it("takım kapağını korur; üyeler ve birimler başlangıçta kapalıdır", async () => {
+  it("takım kapağını korur; üyeler ve konular başlangıçta kapalıdır", async () => {
     const meta = { ...META, teams: META.teams.map((team) => team.id === "t1" ? { ...team, banner_id: "banner" } : team) };
     renderMobile(<TeamPage id="t1" />, meta);
     const banner = await screen.findByRole("img", { name: "Yazılım Ekibi kapak fotoğrafı" });
     expect(banner.getAttribute("src")).toBe("/api/attachments/banner");
     expect(screen.getByText("Üyeler (1)").closest("details")?.open).toBe(false);
-    expect(screen.getByText("Birimler (0)").closest("details")?.open).toBe(false);
+    expect(screen.getByText("Konular (0)").closest("details")?.open).toBe(false);
     expect(screen.getByText("Örnek Kayıt")).toBeTruthy();
   });
 
