@@ -33,7 +33,7 @@
 .em { font-style: italic; }
 .heading { font-weight: 700; font-size: 1.15em; }
 .link { color: var(--info-text); text-decoration: underline; text-underline-offset: 2px; }
-.file { display: inline-flex; align-items: center; gap: 4px; border-radius: var(--r-sm); padding: 0 5px; background: var(--tint); text-decoration: none; }
+.file { display: inline-flex; align-items: center; vertical-align: bottom; gap: 4px; border-radius: var(--r-sm); padding: 0 5px; background: var(--tint); text-decoration: none; }
 .fileLabel { border-radius: 0 var(--r-sm) var(--r-sm) 0; padding: 1px 5px 1px 2px; background: var(--tint); text-decoration: none; }
 .fileIcon { color: var(--info-text); background: var(--tint); border-radius: var(--r-sm) 0 0 var(--r-sm); padding: 2px 0 2px 5px; box-sizing: content-box; vertical-align: middle; }
 .fallback { color: var(--dim); }
@@ -51,7 +51,7 @@
   cursor: pointer;
   vertical-align: middle;
 }
-.rawLink:hover + .urlDot, .urlDot:hover, .urlDot:focus-visible { opacity: 1; }
+.rawLink:hover + .urlDot, .rawLink:hover + :global(.cm-widgetBuffer) + .urlDot, .urlDot:hover, .urlDot:focus-visible { opacity: 1; }
 .mention { color: var(--acc-strong); font-weight: 600; }
 .quote { border-left: 2px solid var(--line-strong); padding-left: 5px; color: var(--dim); font-style: italic; }
 .list { color: var(--dim); }
