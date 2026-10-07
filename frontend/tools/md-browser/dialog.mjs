@@ -18,7 +18,7 @@ for (const [zoom, scheme] of [[1, "light"], [1, "dark"], [1.25, "light"], [1.5, 
   const d = Math.max(Math.abs(m.cTop - m.pTop), Math.abs(m.cBot - m.pBot));
   if (d > 2) bad++;
   console.log(`${d <= 2 ? "PASS" : "FAIL"} zoom=${zoom} ${scheme} Δ=${d.toFixed(2)} caret=[${m.cTop.toFixed(1)},${m.cBot.toFixed(1)}] placeholder=[${m.pTop.toFixed(1)},${m.pBot.toFixed(1)}] ph=${m.phFont} line=${m.lineFont} va=${m.va}`);
-  if (zoom === 1 && scheme === "light") await page.screenshot({ path: "dialog-empty.png" });
+  if (zoom === 1 && scheme === "light") await page.screenshot({ path: process.env.MD_SHOT ?? "/tmp/md-dialog-empty.png" });
   await ctx.close();
 }
 await b.close(); process.exit(bad ? 1 : 0);
