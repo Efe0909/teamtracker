@@ -1,0 +1,7597 @@
+{
+ "generated": "2026-10-06T23:46:57.633Z",
+ "chapters": [
+  {
+   "id": "giris",
+   "title": "Giriş ve Panolar",
+   "intro": "Salı sabahı. Kaan, haftaya başlamadan önce EkipTakip'e girip önünde ne olduğuna bakıyor.",
+   "persona": "Kaan Demir",
+   "role": "Etkinlik koordinatörü",
+   "steps": 7
+  },
+  {
+   "id": "gorevler",
+   "title": "Görevler: haftayı tara",
+   "intro": "Kaan işe önce Görevler tablosuna bakıyor: neyin sırası geldi, hangisi kimde bekliyor, hangisi gecikti?",
+   "persona": "Kaan Demir",
+   "role": "Etkinlik koordinatörü",
+   "steps": 14
+  },
+  {
+   "id": "yeni-kayit",
+   "title": "Yeni kayıt aç",
+   "intro": "Atölye günü için ek prizler gerekiyor. Kaan bunu kayda dökerek sorumlusunu ve birimini belirliyor.",
+   "persona": "Kaan Demir",
+   "role": "Etkinlik koordinatörü",
+   "steps": 15
+  },
+  {
+   "id": "kayit-sayfasi",
+   "title": "Kayıt sayfası: tarih, eylem, kişi",
+   "intro": "Kaan az önce açtığı kaydı ekibe dağıtıyor: son tarih koyuyor, eylemleri sahipleriyle ekliyor, Elif'i işe dahil ediyor.",
+   "persona": "Kaan Demir",
+   "role": "Etkinlik koordinatörü",
+   "steps": 18
+  },
+  {
+   "id": "isi-bitir",
+   "title": "İşi bitir ve kaydı kapat",
+   "intro": "Can kendisine atanan iki eylemi tek tek bitiriyor, sonra işin tamamını kapatıyor. Her kapanışta kısa bir not bırakıyor.",
+   "persona": "Can Özdemir",
+   "role": "Atölye sorumlusu",
+   "steps": 15
+  },
+  {
+   "id": "sohbet",
+   "title": "Sohbet: konuş, an, görsel paylaş",
+   "intro": "Afiş taslakları hakkında konuşulan kayıtta Kaan baskı teklifine yanıt veriyor, Elif'i anıyor ve yerleşim planını paylaşıyor.",
+   "persona": "Kaan Demir",
+   "role": "Etkinlik koordinatörü",
+   "steps": 15
+  },
+  {
+   "id": "kartlar",
+   "title": "Kartlar: havuz, oylama, toplantı",
+   "intro": "Atölye günü için vardiya çizelgesi kaydında Kaan gönüllü toplamak ve ekibe bir şey sormak istiyor. Bunun için kayda kart ekliyor.",
+   "persona": "Kaan Demir",
+   "role": "Etkinlik koordinatörü",
+   "steps": 12
+  },
+  {
+   "id": "kartlara-katil",
+   "title": "Kartlara cevap ver: toplantı, oy, gönüllülük",
+   "intro": "Selin'e üç kayıtta üç şey soruluyor: toplantıya gelecek mi, forma hangi soruların konacağını düşünüyor, kayıt masasında gönüllü olur mu?",
+   "persona": "Selin Arslan",
+   "role": "SEB iletişim sorumlusu",
+   "steps": 6
+  },
+  {
+   "id": "etkinlikler",
+   "title": "Etkinlikler: takvime bak",
+   "intro": "Kaan önümüzdeki haftaların etkinlik takvimini tarıyor: ne zaman, nerede, kim sorumlu, hangisi tarihsiz bekliyor?",
+   "persona": "Kaan Demir",
+   "role": "Etkinlik koordinatörü",
+   "steps": 11
+  },
+  {
+   "id": "yeni-etkinlik",
+   "title": "Yeni etkinlik oluştur",
+   "intro": "Ekip kasım ayında bir lehimleme atölyesi daha yapmak istiyor. Kaan etkinliği oluşturuyor; tür seçilince plan kendiliğinden geliyor.",
+   "persona": "Kaan Demir",
+   "role": "Etkinlik koordinatörü",
+   "steps": 16
+  },
+  {
+   "id": "adim-onay",
+   "title": "Zaman çizelgesi: adımı bitir, onay iste",
+   "intro": "Zeynep Arduino atölyesinin duyurusunu yaptı. Etkinliğin zaman çizelgesinde bu adımı tamamlandı olarak işaretlemek istiyor; ama onaylayıcı o değil.",
+   "persona": "Zeynep Koç",
+   "role": "Duyuru ve sosyal medya",
+   "steps": 4
+  },
+  {
+   "id": "etkinlik-yonet",
+   "title": "Etkinlik sorumlusu: onayla ve planı düzenle",
+   "intro": "Zeynep'in isteği Kaan'a düştü. Kaan onaylıyor, sonra planda bir adımın tarihini kaydırıp kayıt masası için yeni bir adım ekliyor.",
+   "persona": "Kaan Demir",
+   "role": "Etkinlik koordinatörü",
+   "steps": 8
+  },
+  {
+   "id": "etkinlik-kisiler",
+   "title": "Etkinliğe kişi, takım ve kayıt bağla",
+   "intro": "Havya atölyesinin planı oturdu. Kaan şimdi ekibi kuruyor: eğitmeni ekliyor, takımları bağlıyor ve işleri kayıtlara bölüyor.",
+   "persona": "Kaan Demir",
+   "role": "Etkinlik koordinatörü",
+   "steps": 14
+  },
+  {
+   "id": "satin-alim",
+   "title": "Satın alımlar: malzemeyi takip et",
+   "intro": "Atölyeye iki hafta kala Elif malzeme listesini takip ediyor: hangisi onaylandı, hangisinin tedarikçisi yok, kritik olan ne bekliyor?",
+   "persona": "Elif Şahin",
+   "role": "Bütçe ve satın alma",
+   "steps": 13
+  },
+  {
+   "id": "otf",
+   "title": "OTF formu: doldur, gözden geçir, gönder",
+   "intro": "Üniversiteye etkinlikten en geç üç iş günü önce OTF gönderilmeli. Selin Arduino atölyesinin formunu daha önce doldurulmuş bir formdan başlatıp hazırlıyor.",
+   "persona": "Selin Arslan",
+   "role": "SEB iletişim sorumlusu",
+   "steps": 11
+  },
+  {
+   "id": "takimlar",
+   "title": "Takımlar: ekibini ve duvarını gör",
+   "intro": "Kaan takımların neye baktığını, kimlerin üye olduğunu ve açık işleri görmek için Takımlar'a geçiyor; Teknik Atölye'nin duvarına bir not bırakıyor.",
+   "persona": "Kaan Demir",
+   "role": "Etkinlik koordinatörü",
+   "steps": 10
+  },
+  {
+   "id": "takim-yonet",
+   "title": "Takım kur, üye ve birim ekle",
+   "intro": "Ekip sponsor görüşmeleri için yeni bir takım kuruyor. Takım yönetme yetkisi olan Ayşe takımı açıyor, üyeleri rolleriyle ekliyor ve çalıştığı birimi bağlıyor.",
+   "persona": "Ayşe Çelik",
+   "role": "Takım yöneticisi",
+   "steps": 14
+  },
+  {
+   "id": "ekip-profil",
+   "title": "Ekip, profil ve bildirimler",
+   "intro": "Kaan bir ekip arkadaşının telefonuna ihtiyaç duyuyor, sonra kendi profilini ve bildirim tercihlerini gözden geçiriyor.",
+   "persona": "Kaan Demir",
+   "role": "Etkinlik koordinatörü",
+   "steps": 8
+  },
+  {
+   "id": "pillarlar",
+   "title": "Pillar'lar: kesişen sorumluluklar",
+   "intro": "Bazı işler tek bir birime sığmaz: atölye güvenliği ya da sürdürülebilirlik gibi. Kaan bu kesişen alanları Pillar'lar sayfasından izliyor.",
+   "persona": "Kaan Demir",
+   "role": "Etkinlik koordinatörü",
+   "steps": 4
+  },
+  {
+   "id": "veri-birimler",
+   "title": "Veri yönetimi: birim ağacı",
+   "intro": "Kayıtların hangi işe ait olduğunu söyleyen birim ağacı, Veri yönetimi'nde tutulur. Kaan Etkinlik dalının yapısına bakıyor ve yeni bir birim ekliyor.",
+   "persona": "Kaan Demir",
+   "role": "Birim editörü",
+   "steps": 12
+  },
+  {
+   "id": "veri-turler",
+   "title": "Veri yönetimi: etkinlik türleri ve yerleri",
+   "intro": "Yeni etkinlik açarken seçilen türler ve yerler de Veri yönetimi'nden gelir. Kaan atölye türünün şablonuna ve yer listesine bakıyor, eksik bir yer ekliyor.",
+   "persona": "Kaan Demir",
+   "role": "Liste yöneticisi",
+   "steps": 11
+  },
+  {
+   "id": "yonetim",
+   "title": "Yönetim: kim girer, neyi yapabilir",
+   "intro": "Ekibe yeni bir üye katılıyor. Yönetici Defne onu kullanıcı listesine ekliyor, rolünü veriyor ve yetkilerin nasıl işlediğini gösteriyor.",
+   "persona": "Defne Aksoy",
+   "role": "Kulüp başkanı (yönetici)",
+   "steps": 17
+  },
+  {
+   "id": "yonetim-aktivite",
+   "title": "Yönetim: aktivite ve kalite kapısı",
+   "intro": "Dönem ortasında Defne ekibin sisteme ne kadar uğradığına ve kayıt metinlerini tartan kalite kapısının nasıl ayarlandığına bakıyor.",
+   "persona": "Defne Aksoy",
+   "role": "Kulüp başkanı (yönetici)",
+   "steps": 6
+  },
+  {
+   "id": "mobil",
+   "title": "Mobil uygulama: sahada telefonla",
+   "intro": "Atölyeye iki gün kala Kaan sahada, telefonuyla çalışıyor: eylemlerine bakıyor, etkinliğin adımlarını işaretliyor, sohbete yazıyor ve fotoğraf paylaşıyor.",
+   "persona": "Kaan Demir",
+   "role": "Etkinlik koordinatörü",
+   "steps": 24
+  }
+ ],
+ "steps": [
+  {
+   "n": 1,
+   "chapter": "giris",
+   "id": "giris-sayfasi",
+   "title": "Giriş sayfasını aç",
+   "text": "Ekibin adresine git. **Masaüstü paneli**ni seç ve **Google ile devam et**'e bas. Yalnızca ekibe davet edilmiş e-postalar girebilir.",
+   "tip": "Telefonda **Mobil uygulama**'yı seç; aynı hesapla çalışır.",
+   "file": "001-giris-sayfasi.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 834.59375,
+     "y": 360.5625,
+     "w": 380.40625,
+     "h": 148.296875
+    },
+    {
+     "x": 834.59375,
+     "y": 524.859375,
+     "w": 380.40625,
+     "h": 44
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 2,
+   "chapter": "giris",
+   "id": "panolar",
+   "title": "Panolar: günün özeti",
+   "text": "Giriş yapınca **Panolar** açılır. Üstteki dört sayaç sana ve ekibe ait işi özetler: **açık eylemlerin**, **geciken kayıtlar**, **atanmamış** işler ve toplam **açık kayıt**.",
+   "tip": null,
+   "file": "002-panolar.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 264,
+     "y": 100.546875,
+     "w": 1144,
+     "h": 86
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 3,
+   "chapter": "giris",
+   "id": "panolar-kenar",
+   "title": "Kenar çubuğu: tüm modüller",
+   "text": "Soldaki çubuktan **Görevler**, **Etkinlikler**, **Takımlar**, **Ekip**, **Pillar'lar** ve **Veri yönetimi**'ne geçersin. Takımların ve pillar'ların kısayolları altta; **üye** rozeti hangilerinde olduğunu gösterir.",
+   "tip": null,
+   "file": "003-panolar-kenar.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 0,
+     "y": 0,
+     "w": 232,
+     "h": 900
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 4,
+   "chapter": "giris",
+   "id": "panolar-geciken",
+   "title": "Geciken kayıtlara git",
+   "text": "Kırmızı sayaç bir şey gecikmiş demek. **Geciken kayıt** kutusuna tıkla; liste doğrudan o filtreyle açılır.",
+   "tip": null,
+   "file": "004-panolar-geciken.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 550.5,
+     "y": 101.546875,
+     "w": 285.5,
+     "h": 84
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 5,
+   "chapter": "giris",
+   "id": "geciken-liste",
+   "title": "Gecikenler tek listede",
+   "text": "Son tarihi geçmiş kayıtlar (ve gecikmiş eylemi olanlar) burada. Gecikme yalnız renkle değil **“1 gün gecikti”** yazısıyla da belirtilir.",
+   "tip": null,
+   "file": "005-geciken-liste.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 265,
+     "y": 209,
+     "w": 1270,
+     "h": 42
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 6,
+   "chapter": "giris",
+   "id": "palet-ac",
+   "title": "Her yere ⌘K ile git",
+   "text": "Herhangi bir sayfada **⌘K** (Windows'ta **Ctrl+K**) komut paletini açar. Kayıt, etkinlik, takım ve sayfa aramak için tek kutu.",
+   "tip": null,
+   "file": "006-palet-ac.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 10,
+     "y": 54,
+     "w": 211,
+     "h": 32
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 7,
+   "chapter": "giris",
+   "id": "palet-sonuc",
+   "title": "Aradığını yazarak bul",
+   "text": "“arduino” yazınca eşleşen kayıtlar ve etkinlikler listelenir. **Enter** ile açılır, **Esc** ile kapanır.",
+   "tip": null,
+   "file": "007-palet-sonuc.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 420,
+     "y": 126,
+     "w": 600,
+     "h": 355
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 8,
+   "chapter": "gorevler",
+   "id": "gorevler-ac",
+   "title": "Görevler'i aç",
+   "text": "Kenar çubuğundan **Görevler**'e tıkla. Bütün kayıtlar tek tabloda toplanır.",
+   "tip": null,
+   "file": "008-gorevler-ac.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 10,
+     "y": 154.5,
+     "w": 211,
+     "h": 30
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 9,
+   "chapter": "gorevler",
+   "id": "gorevler-tablo",
+   "title": "Tabloyu oku",
+   "text": "Her satır bir kayıt. **Hata** (kırmızı) bir şeyin ters gittiğini, **Görev** (mavi) yapılacak işi gösterir. **Etkinlik** etiketi kaydın bir etkinliğin kendi kaydı olduğunu, balon simgesi mesaj sayısını söyler.",
+   "tip": null,
+   "file": "009-gorevler-tablo.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 265,
+     "y": 251,
+     "w": 340,
+     "h": 42
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 10,
+   "chapter": "gorevler",
+   "id": "gorevler-eylemim",
+   "title": "Sadece benim eylemlerim",
+   "text": "Üstteki sekmeler hızlı filtredir. **Açık eylemim**, sana atanmış açık eylemi olan kayıtları getirir.",
+   "tip": null,
+   "file": "010-gorevler-eylemim.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 391.3125,
+     "y": 83,
+     "w": 96.46875,
+     "h": 26
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 11,
+   "chapter": "gorevler",
+   "id": "gorevler-eylemim-sonuc",
+   "title": "Önce bunlara bak",
+   "text": "Liste kısaldı: Panolar'daki **Açık eylemim** sayacıyla aynı kayıtlar. Sekmeyi **Hepsi**'ne çevirerek tüm tabloya dön.",
+   "tip": null,
+   "file": "011-gorevler-eylemim-sonuc.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 265,
+     "y": 209,
+     "w": 1270,
+     "h": 168
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 12,
+   "chapter": "gorevler",
+   "id": "gorevler-durum",
+   "title": "Durum filtresini aç",
+   "text": "Filtre çipleri tek satırda durur. Boş çip kesikli çizgilidir; **Durum**'a tıkla.",
+   "tip": null,
+   "file": "012-gorevler-durum.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 285,
+     "y": 132,
+     "w": 96.890625,
+     "h": 28
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 13,
+   "chapter": "gorevler",
+   "id": "gorevler-durum-sec",
+   "title": "Durumu seç",
+   "text": "Listeden **Beklemede**'yi seç: yalnızca bir yanıt, onay ya da malzeme bekleyen kayıtlar kalır.",
+   "tip": null,
+   "file": "013-gorevler-durum-sec.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 290.3333435058594,
+     "y": 267,
+     "w": 190,
+     "h": 32
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 14,
+   "chapter": "gorevler",
+   "id": "gorevler-durum-sonuc",
+   "title": "Filtre çipi dolu görünür",
+   "text": "Seçili filtre koyu çipte yazar: **Durum: Beklemede**. Sağdaki sayaç kaç kaydın açık/kapalı olduğunu söyler. Filtreler adres çubuğuna yazılır; adresi kopyalayıp ekip arkadaşına gönderebilirsin.",
+   "tip": null,
+   "file": "014-gorevler-durum-sonuc.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 285,
+     "y": 132,
+     "w": 152.625,
+     "h": 28
+    },
+    {
+     "x": 1031.984375,
+     "y": 132,
+     "w": 66.421875,
+     "h": 28
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 15,
+   "chapter": "gorevler",
+   "id": "gorevler-birim",
+   "title": "Birime göre süz",
+   "text": "**Birim** çipi birim ağacını açar. Kayıtlar ağaçtaki yerlerine göre süzülür.",
+   "tip": null,
+   "file": "015-gorevler-birim.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 607.4375,
+     "y": 132,
+     "w": 87.8125,
+     "h": 28
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 16,
+   "chapter": "gorevler",
+   "id": "gorevler-birim-agac",
+   "title": "Ağaçta ara, favoriye ekle",
+   "text": "Üstte **Favoriler** (yıldızla işaretlediklerin), altında ağaç durur. Okla dalı aç/kapa; arama kutusu eşleşen dalları kendiliğinden açar.",
+   "tip": null,
+   "file": "016-gorevler-birim-agac.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 607.3333129882812,
+     "y": 166,
+     "w": 360,
+     "h": 211
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 17,
+   "chapter": "gorevler",
+   "id": "gorevler-birim-ara",
+   "title": "Yazdıkça daralır",
+   "text": "“mekan” yazınca yalnız eşleşen birim ve üstündeki dallar kalır. **Mekan ve Yer Seçimi**'ni seç.",
+   "tip": null,
+   "file": "017-gorevler-birim-ara.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 612.3333129882812,
+     "y": 273,
+     "w": 250.375,
+     "h": 32
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 18,
+   "chapter": "gorevler",
+   "id": "gorevler-birim-sonuc",
+   "title": "Birim filtresi uygulandı",
+   "text": "Tablo yalnızca o birimdeki kayıtları gösterir. Çipin yanındaki **×** yalnız birim süzgecini kaldırır, **Temizle** hepsini.",
+   "tip": null,
+   "file": "018-gorevler-birim-sonuc.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 607.4375,
+     "y": 132,
+     "w": 199.6875,
+     "h": 28
+    },
+    {
+     "x": 265,
+     "y": 209,
+     "w": 1270,
+     "h": 84
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 19,
+   "chapter": "gorevler",
+   "id": "gorevler-ara",
+   "title": "Başlıkta ve açıklamada ara",
+   "text": "Arama kutusu başlık ve açıklamayı tarar; yazmayı bırakınca sonuçlar gelir. Türkçe karakterlere duyarsızdır (“afis” de “afiş”i bulur).",
+   "tip": null,
+   "file": "019-gorevler-ara.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 1128,
+     "y": 80,
+     "w": 280,
+     "h": 32
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 20,
+   "chapter": "gorevler",
+   "id": "gorevler-sirala",
+   "title": "Sütun başlığına tıklayıp sırala",
+   "text": "**Son tarih** başlığına tıkla: artan, bir daha tıkla: azalan, üçüncüde sıralama kapanır. Sütun kenarından sürükleyerek genişliği de ayarlayabilirsin.",
+   "tip": null,
+   "file": "020-gorevler-sirala.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 1007,
+     "y": 182.5,
+     "w": 67.359375,
+     "h": 18
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 21,
+   "chapter": "gorevler",
+   "id": "gorevler-sirala-sonuc",
+   "title": "En yakın tarih üstte",
+   "text": "Tarihi olmayanlar sona gider. Sıralama tablo başına cihazında hatırlanır.",
+   "tip": null,
+   "file": "021-gorevler-sirala-sonuc.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 265,
+     "y": 209,
+     "w": 1270,
+     "h": 42
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 22,
+   "chapter": "yeni-kayit",
+   "id": "yeni-kayit-ac",
+   "title": "Yeni kayıt düğmesine bas",
+   "text": "Görevler'de ya da Panolar'da sağ üstteki **Yeni kayıt**'a tıkla. Her üye her birimde kayıt açabilir.",
+   "tip": null,
+   "file": "022-yeni-kayit-ac.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 1301.25,
+     "y": 28,
+     "w": 106.75,
+     "h": 32
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 23,
+   "chapter": "yeni-kayit",
+   "id": "yeni-kayit-baslik",
+   "title": "Kısa ve aranabilir bir başlık yaz",
+   "text": "Başlık en az **5**, açıklama en az **30** karakter olmalı; sayaç altta görünür. Başlık, ekibin sonradan arayıp bulacağı şey.",
+   "tip": null,
+   "file": "023-yeni-kayit-baslik.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 421,
+     "y": 167,
+     "w": 598,
+     "h": 40
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 24,
+   "chapter": "yeni-kayit",
+   "id": "yeni-kayit-aciklama",
+   "title": "Ne, neden, kim için?",
+   "text": "Açıklamaya işin **ne** olduğunu, **neden** gerektiğini ve **kimin** için olduğunu yaz. Kısa tutulursa kayıt açılmaz.",
+   "tip": null,
+   "file": "024-yeni-kayit-aciklama.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 421,
+     "y": 233,
+     "w": 598,
+     "h": 112
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 25,
+   "chapter": "yeni-kayit",
+   "id": "yeni-kayit-tur",
+   "title": "Hata mı, görev mi?",
+   "text": "**Tür** çipinden seç: **Hata** bir şey ters gittiyse, **Görev** yapılacak bir iş içindir.",
+   "tip": null,
+   "file": "025-yeni-kayit-tur.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 421,
+     "y": 472,
+     "w": 85.390625,
+     "h": 28
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 26,
+   "chapter": "yeni-kayit",
+   "id": "yeni-kayit-tur-sec",
+   "title": "Görev'i seç",
+   "text": "Bu bir iş: **Görev**'i seç.",
+   "tip": null,
+   "file": "026-yeni-kayit-tur-sec.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 426.3333435058594,
+     "y": 543,
+     "w": 190.00003051757812,
+     "h": 32
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 27,
+   "chapter": "yeni-kayit",
+   "id": "yeni-kayit-birim",
+   "title": "Kaydın ağaçtaki yerini seç",
+   "text": "**Birim** kaydın hangi işe ait olduğunu söyler. Ağaç açılır; **Favoriler**'den hızlıca seçebilirsin.",
+   "tip": null,
+   "file": "027-yeni-kayit-birim.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 610.640625,
+     "y": 472,
+     "w": 99.125,
+     "h": 28
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 28,
+   "chapter": "yeni-kayit",
+   "id": "yeni-kayit-birim-sec",
+   "title": "Malzeme ve Kaynak Planlama",
+   "text": "Bu iş malzemeyle ilgili: **Malzeme ve Kaynak Planlama**'yı seç. Sıfırdan aramak için kutuya birimin adını yaz.",
+   "tip": null,
+   "file": "028-yeni-kayit-birim-sec.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 610.6666870117188,
+     "y": 506,
+     "w": 360,
+     "h": 211
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 29,
+   "chapter": "yeni-kayit",
+   "id": "yeni-kayit-sorumlu",
+   "title": "Sorumluyu seç",
+   "text": "Varsayılan sorumlu kaydı açan sensin. **Sorumlu** çipinden başkasını seçebilir ya da **Sorumlusuz** açabilirsin.",
+   "tip": null,
+   "file": "029-yeni-kayit-sorumlu.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 843.796875,
+     "y": 472,
+     "w": 134.0625,
+     "h": 28
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 30,
+   "chapter": "yeni-kayit",
+   "id": "yeni-kayit-sorumlu-sec",
+   "title": "Can Özdemir'e ata",
+   "text": "Prizleri sayacak kişi atölyeden sorumlu **Can**. Seçtiğin kişi kaydın **sorumlusu** olur; adı listelerde ve kayıt sayfasında görünür.",
+   "tip": null,
+   "file": "030-yeni-kayit-sorumlu-sec.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 849,
+     "y": 645,
+     "w": 204,
+     "h": 32
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 31,
+   "chapter": "yeni-kayit",
+   "id": "yeni-kayit-takim-oncelik",
+   "title": "Takım ve öncelik",
+   "text": "**Takım** çipi kaydı bir takıma bağlar: takımın üyeleri kaydı düzenleyebilir. **Öncelik** Kritik, Yüksek, Orta ya da Düşük olur.",
+   "tip": null,
+   "file": "031-yeni-kayit-takim-oncelik.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 421,
+     "y": 506,
+     "w": 137.203125,
+     "h": 28
+    },
+    {
+     "x": 519.984375,
+     "y": 472,
+     "w": 102.71875,
+     "h": 28
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 32,
+   "chapter": "yeni-kayit",
+   "id": "yeni-kayit-erisim",
+   "title": "Kimler görsün?",
+   "text": "**Erişim**: *Herkese açık* (herkes görür, tek tıkla katılır), *İzinle katılım* (sorumlu onaylar) ya da *Gizli* (içeriği yalnız katılımcılar görür).",
+   "tip": null,
+   "file": "032-yeni-kayit-erisim.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 564.203125,
+     "y": 506,
+     "w": 132.734375,
+     "h": 28
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 33,
+   "chapter": "yeni-kayit",
+   "id": "yeni-kayit-erisim-sec",
+   "title": "Üç erişim kipi",
+   "text": "Çoğu iş **Herkese açık** kalır. Hassas konular için **Gizli**'yi seç. Sonradan kayıt sayfasından değiştirilir.",
+   "tip": null,
+   "file": "033-yeni-kayit-erisim-sec.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 564,
+     "y": 540,
+     "w": 360,
+     "h": 169.25
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 34,
+   "chapter": "yeni-kayit",
+   "id": "yeni-kayit-kartlar",
+   "title": "İstersen boş kart blokları ekle",
+   "text": "**Kart blokları** isteğe bağlı: *Medya eki* (görseller), *Toplantı planı*, *Havuz kartı* (gönüllü topla). Kayıt açıldıktan sonra da eklenir.",
+   "tip": null,
+   "file": "034-yeni-kayit-kartlar.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 421,
+     "y": 550,
+     "w": 598,
+     "h": 141.890625
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 35,
+   "chapter": "yeni-kayit",
+   "id": "yeni-kayit-gonder",
+   "title": "Kaydı aç",
+   "text": "Her şey tamamsa **Kaydı aç**'a bas. Kayıt açılır ve doğrudan kayıt sayfasına gidersin.",
+   "tip": null,
+   "file": "035-yeni-kayit-gonder.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 935.984375,
+     "y": 728.890625,
+     "w": 83.015625,
+     "h": 36
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 36,
+   "chapter": "yeni-kayit",
+   "id": "yeni-kayit-sayfa",
+   "title": "Kayıt hazır",
+   "text": "Yeni kayıt sayfası: üstte başlık, ortada özellikler ve eylemler, sağda sohbet. Bir sonraki bölümde bunları kullanacağız.",
+   "tip": null,
+   "file": "036-yeni-kayit-sayfa.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 264,
+     "y": 72,
+     "w": 676,
+     "h": 28.59375
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 37,
+   "chapter": "kayit-sayfasi",
+   "id": "kayit-bul",
+   "title": "Kaydı listeden bul ve aç",
+   "text": "Görevler'de arama kutusuna birkaç harf yaz, satırdaki başlığa tıkla. Kayıt kendi sayfasında açılır.",
+   "tip": null,
+   "file": "037-kayit-bul.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 277,
+     "y": 220.25,
+     "w": 262.515625,
+     "h": 19.5
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 38,
+   "chapter": "kayit-sayfasi",
+   "id": "kayit-genel",
+   "title": "Kayıt sayfası beş bölümden oluşur",
+   "text": "Üstte **başlık ve açıklama**, altında **özellikler**, sonra **eylemler** ve **kartlar**. Sağdaki sütun kaydın kendi **sohbeti**. Tek bir iş için gereken her şey bu sayfada.",
+   "tip": null,
+   "file": "038-kayit-genel.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 264,
+     "y": 72,
+     "w": 744,
+     "h": 156.09375,
+     "label": "Başlık ve açıklama"
+    },
+    {
+     "x": 264,
+     "y": 256.09375,
+     "w": 744,
+     "h": 227.5,
+     "label": "Özellikler"
+    },
+    {
+     "x": 264,
+     "y": 543.09375,
+     "w": 744,
+     "h": 124,
+     "label": "Eylemler"
+    },
+    {
+     "x": 264,
+     "y": 695.09375,
+     "w": 744,
+     "h": 28,
+     "label": "Kartlar"
+    },
+    {
+     "x": 1040,
+     "y": 44,
+     "w": 400,
+     "h": 856,
+     "label": "Sohbet"
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 39,
+   "chapter": "kayit-sayfasi",
+   "id": "kayit-tarih",
+   "title": "Kayda son tarih ver",
+   "text": "**Son tarih** satırındaki “Tarih ekle”ye tıkla. Tarihi olmayan işin ne zaman biteceği belli olmaz; gecikme de ancak tarih varsa görünür.",
+   "tip": null,
+   "file": "039-kayit-tarih.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 368,
+     "y": 332.59375,
+     "w": 256,
+     "h": 30
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 40,
+   "chapter": "kayit-sayfasi",
+   "id": "kayit-tarih-sec",
+   "title": "Takvimden günü seç",
+   "text": "Takvim Pazartesi'den başlar. Hızlı seçim için **Bugün**, **Yarın**, **+1 hafta** düğmeleri var; ok tuşlarıyla da gezilir.",
+   "tip": null,
+   "file": "040-kayit-tarih-sec.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 562.421875,
+     "y": 517.6666259765625,
+     "w": 34.28125,
+     "h": 32
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 41,
+   "chapter": "kayit-sayfasi",
+   "id": "kayit-tarih-sonuc",
+   "title": "Kaydedildi — geri alınabilir",
+   "text": "Değişiklik hemen kaydedilir. Alttaki bildirimde **Geri al** varsa yanlış seçimi birkaç saniye içinde geri çevirebilirsin.",
+   "tip": null,
+   "file": "041-kayit-tarih-sonuc.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 368,
+     "y": 332.59375,
+     "w": 256,
+     "h": 30
+    },
+    {
+     "x": 1080,
+     "y": 847.5,
+     "w": 63.8125,
+     "h": 19.5
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 42,
+   "chapter": "kayit-sayfasi",
+   "id": "eylem-baslik",
+   "title": "İşi eylemlere böl",
+   "text": "Kayıt büyük bir iş; **eylem** onun içindeki tek kişilik adımdır. “Yeni eylem ekle…” kutusuna yapılacağı yaz: *kim, ne yapacak?*",
+   "tip": null,
+   "file": "042-eylem-baslik.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 298,
+     "y": 630.09375,
+     "w": 503.25,
+     "h": 30
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 43,
+   "chapter": "kayit-sayfasi",
+   "id": "eylem-sahip",
+   "title": "Eylemin sahibini seç",
+   "text": "Sahibi seçmezsen eylem **Havuzda** kalır: ekipten herkes “Üstlen” diyerek alabilir.",
+   "tip": null,
+   "file": "043-eylem-sahip.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 884.953125,
+     "y": 633.34375,
+     "w": 62.015625,
+     "h": 23.5
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 44,
+   "chapter": "kayit-sayfasi",
+   "id": "eylem-sahip-sec",
+   "title": "Can Özdemir'i seç",
+   "text": "Sahip eylemin **top**unu tutan kişidir; eylem onun Panolar'daki **Açık eylemim** sayacına yazılır.",
+   "tip": null,
+   "file": "044-eylem-sahip-sec.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 737.6666870117188,
+     "y": 398.3333435058594,
+     "w": 204,
+     "h": 32
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 45,
+   "chapter": "kayit-sayfasi",
+   "id": "eylem-tarih",
+   "title": "Eyleme de tarih koy",
+   "text": "Her eylemin kendi son tarihi olur. Tarihi geçen eylem, kaydı da **geciken** listesine düşürür.",
+   "tip": null,
+   "file": "045-eylem-tarih.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 754.234375,
+     "y": 632.09375,
+     "w": 71.703125,
+     "h": 26
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 46,
+   "chapter": "kayit-sayfasi",
+   "id": "eylem-ekle",
+   "title": "Ekle'ye bas",
+   "text": "Başlık, sahip ve tarih tamamsa **Ekle**. Enter tuşu da aynı işi yapar.",
+   "tip": null,
+   "file": "046-eylem-ekle.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 952.96875,
+     "y": 631.09375,
+     "w": 46.03125,
+     "h": 28
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 47,
+   "chapter": "kayit-sayfasi",
+   "id": "eylem-liste",
+   "title": "Eylemler sahipleriyle listelenir",
+   "text": "Her satırda **durum**, başlık, **tarih** ve **sahip** var; hepsi satırın içinden değiştirilir. Başlıktaki **“2 açık”** sayacı bitmemiş eylem sayısıdır.",
+   "tip": null,
+   "file": "047-eylem-liste.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 264,
+     "y": 547.09375,
+     "w": 744,
+     "h": 160.5
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 48,
+   "chapter": "kayit-sayfasi",
+   "id": "top-kimde",
+   "title": "“Top kimde?” satırı",
+   "text": "Özelliklerin altındaki satır işin **şu an kimde beklediğini** söyler: açık eylemlerin sahipleri ve son hareketin zamanı. Tıklayınca son güncellemeler açılır.",
+   "tip": null,
+   "file": "048-top-kimde.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 264,
+     "y": 495.59375,
+     "w": 744,
+     "h": 23.5
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 49,
+   "chapter": "kayit-sayfasi",
+   "id": "top-kimde-acik",
+   "title": "Son hareketler",
+   "text": "Yöneticiler “bu iş neden durdu?” sorusunun cevabını buradan görür: en yeni eylem ve kayıt değişiklikleri üstte.",
+   "tip": null,
+   "file": "049-top-kimde-acik.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 264,
+     "y": 495.59375,
+     "w": 744,
+     "h": 91.5
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 50,
+   "chapter": "kayit-sayfasi",
+   "id": "katilimci",
+   "title": "Başkalarını işe dahil et",
+   "text": "Başlığın altındaki avatarlar kaydın **katılımcıları**. Küçük **+**'ya tıklayıp ekibi ekleyebilirsin; katılımcılar kaydı düzenleyebilir, sohbette bildirim alır.",
+   "tip": null,
+   "file": "050-katilimci.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 317.484375,
+     "y": 108.59375,
+     "w": 60,
+     "h": 32
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 51,
+   "chapter": "kayit-sayfasi",
+   "id": "katilimci-sec",
+   "title": "Kişiyi işaretle",
+   "text": "Arama kutusuna adını yaz ve kutucuğu işaretle. Kaldırmak için işareti geri al.",
+   "tip": null,
+   "file": "051-katilimci-sec.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 342.3333435058594,
+     "y": 215.6666717529297,
+     "w": 15,
+     "h": 15
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 52,
+   "chapter": "kayit-sayfasi",
+   "id": "katilimci-sonuc",
+   "title": "Elif artık katılımcı",
+   "text": "Avatar yığınına Elif eklendi. Sohbette birini **@ad** diye anarsan o kişi de otomatik katılımcı olur (sohbet bölümünde göreceğiz).",
+   "tip": null,
+   "file": "052-katilimci-sonuc.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 317.484375,
+     "y": 108.59375,
+     "w": 82,
+     "h": 32
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 53,
+   "chapter": "kayit-sayfasi",
+   "id": "sabitle",
+   "title": "Sık baktığın kaydı sabitle",
+   "text": "Başlığın yanındaki **yıldız** kaydı Panolar'a sabitler. Takip ettiğin birkaç iş her sabah tek bakışta orada durur.",
+   "tip": null,
+   "file": "053-sabitle.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 980,
+     "y": 72,
+     "w": 28,
+     "h": 28
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 54,
+   "chapter": "kayit-sayfasi",
+   "id": "sabitle-sonuc",
+   "title": "Panolar'da “Sabitlenenler”",
+   "text": "Sabitlenen kayıtlar Panolar'ın en üstünde. Yıldıza bir daha basınca (“Sabitlemeyi kaldır”) listeden çıkar.",
+   "tip": null,
+   "file": "054-sabitle-sonuc.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 264,
+     "y": 210.546875,
+     "w": 1144,
+     "h": 263.5
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 55,
+   "chapter": "isi-bitir",
+   "id": "bitir-panolar",
+   "title": "Güne “Açık eylemim” ile başla",
+   "text": "Panolar'daki **Açık eylemim** sayacı, sana atanmış ve bitmemiş eylemleri sayar. Kaan'ın eklediği iki eylem de bu sayıya yazıldı. Sayaca tıkla.",
+   "tip": null,
+   "file": "055-bitir-panolar.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 265,
+     "y": 101.546875,
+     "w": 285.5,
+     "h": 84
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 56,
+   "chapter": "isi-bitir",
+   "id": "bitir-liste",
+   "title": "Sana ait kayıtlar listelenir",
+   "text": "Liste yalnızca üzerinde açık eylemin olan kayıtları gösterir. Kaydı aç.",
+   "tip": null,
+   "file": "056-bitir-liste.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 277,
+     "y": 219.75,
+     "w": 262.515625,
+     "h": 19.5
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 57,
+   "chapter": "isi-bitir",
+   "id": "bitir-durum",
+   "title": "İşe başlayınca durumu güncelle",
+   "text": "Kayıt **Açık** durumda. İşe başladığında **Durum** satırından değiştir; ekip kaydın ilerlediğini tabloda ve Panolar'da görür.",
+   "tip": null,
+   "file": "057-bitir-durum.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 368,
+     "y": 300.59375,
+     "w": 256,
+     "h": 30
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 58,
+   "chapter": "isi-bitir",
+   "id": "bitir-durum-sec",
+   "title": "Devam'ı seç",
+   "text": "**Açık** → **Devam** (üzerinde çalışılıyor) → **Beklemede** (başkasından yanıt, onay ya da malzeme bekleniyor) → **Kapandı**.",
+   "tip": null,
+   "file": "058-bitir-durum-sec.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 373,
+     "y": 373.6666564941406,
+     "w": 246,
+     "h": 32
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 59,
+   "chapter": "isi-bitir",
+   "id": "bitir-eylem",
+   "title": "Eylemi bitir",
+   "text": "Eylemin sağındaki **✓** düğmesi onu bitirir. Bitirirken bir **kapanış notu** istenir: ne yapıldı, sonuç ne?",
+   "tip": null,
+   "file": "059-bitir-eylem.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 971,
+     "y": 587.09375,
+     "w": 28,
+     "h": 28
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 60,
+   "chapter": "isi-bitir",
+   "id": "bitir-eylem-not",
+   "title": "Kapanış notunu yaz",
+   "text": "Not en az **30 karakter** olmalı; sayaç altta. Sonradan “bu iş nasıl bitmişti?” diye bakan herkes bu satırı okuyacak.",
+   "tip": null,
+   "file": "060-bitir-eylem-not.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 511,
+     "y": 191,
+     "w": 418,
+     "h": 115.5
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 61,
+   "chapter": "isi-bitir",
+   "id": "bitir-eylem-kapat",
+   "title": "Kapat'a bas",
+   "text": "Not yeterliyse **Kapat** etkinleşir. Eylem biter, notu satırın yanında kalır.",
+   "tip": null,
+   "file": "061-bitir-eylem-kapat.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 866.703125,
+     "y": 448.5,
+     "w": 62.296875,
+     "h": 32
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 62,
+   "chapter": "isi-bitir",
+   "id": "bitir-eylem-sonuc",
+   "title": "Eylem tamamlandı",
+   "text": "Biten eylem listenin altına iner ve soluklaşır; başlıkta **“1 açık · 1 bitti”** yazar. Notu eylemin yanındadır.",
+   "tip": null,
+   "file": "062-bitir-eylem-sonuc.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 264,
+     "y": 547.09375,
+     "w": 744,
+     "h": 160.5
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 63,
+   "chapter": "isi-bitir",
+   "id": "bitir-engel",
+   "title": "Açık eylem varken kayıt kapanmaz",
+   "text": "Durum listesinde **Kapandı** soluk ve yanında **“1 açık eylem”** yazıyor. Önce kalan eylemi bitirmen gerekir; kural reddedilince değil, daha seçmeden söylenir.",
+   "tip": null,
+   "file": "063-bitir-engel.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 368,
+     "y": 300.59375,
+     "w": 256,
+     "h": 30
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 64,
+   "chapter": "isi-bitir",
+   "id": "bitir-engel-liste",
+   "title": "Kapandı seçilemiyor",
+   "text": "Listeyi kapat (**Esc**) ve ikinci eylemi bitir.",
+   "tip": null,
+   "file": "064-bitir-engel-liste.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 373,
+     "y": 437.6666564941406,
+     "w": 246,
+     "h": 32
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 65,
+   "chapter": "isi-bitir",
+   "id": "bitir-kayit",
+   "title": "Şimdi kaydı kapatabilirsin",
+   "text": "İki eylem de bitti, başlık **“0 açık · 2 bitti”** diyor. **Durum**'u tekrar aç.",
+   "tip": null,
+   "file": "065-bitir-kayit.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 368,
+     "y": 300.59375,
+     "w": 256,
+     "h": 30
+    },
+    {
+     "x": 264,
+     "y": 547.09375,
+     "w": 744,
+     "h": 160.5
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 66,
+   "chapter": "isi-bitir",
+   "id": "bitir-kayit-sec",
+   "title": "Kapandı'yı seç",
+   "text": "**Kapandı** artık seçilebilir. Seçince kaydın kapanış notunu soran pencere açılır.",
+   "tip": null,
+   "file": "066-bitir-kayit-sec.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 373,
+     "y": 437.6666564941406,
+     "w": 246,
+     "h": 32
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 67,
+   "chapter": "isi-bitir",
+   "id": "bitir-kayit-not",
+   "title": "Kaydın kapanış notunu yaz",
+   "text": "Kayıt notu, işin **sonucunu** özetler: ne yapıldı, geriye ne kaldı, kim devraldı. Yine en az 30 karakter.",
+   "tip": null,
+   "file": "067-bitir-kayit-not.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 511,
+     "y": 191,
+     "w": 418,
+     "h": 115.5
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 68,
+   "chapter": "isi-bitir",
+   "id": "bitir-kayit-kapat",
+   "title": "Kaydı kapat",
+   "text": "**Kapat**'a bas. Kapalı kayıt silinmez; arşivde durur, istenirse **Durum**'dan yeniden açılabilir.",
+   "tip": null,
+   "file": "068-bitir-kayit-kapat.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 866.703125,
+     "y": 448.5,
+     "w": 62.296875,
+     "h": 32
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 69,
+   "chapter": "isi-bitir",
+   "id": "bitir-kayit-sonuc",
+   "title": "Kayıt kapandı",
+   "text": "Durum **Kapandı**; kapanış notu açıklamanın altında görünür. “Top kimde” satırı kalktı çünkü iş bitti. Panolar'daki ve Görevler'deki açık sayıları da bir düştü.",
+   "tip": null,
+   "file": "069-bitir-kayit-sonuc.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 264,
+     "y": 253.09375,
+     "w": 744,
+     "h": 19.5
+    },
+    {
+     "x": 368,
+     "y": 354.09375,
+     "w": 256,
+     "h": 30
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 70,
+   "chapter": "sohbet",
+   "id": "sohbet-ac",
+   "title": "Sabitlediğin kaydı Panolar'dan aç",
+   "text": "Panolar'daki **Sabitlenenler** listesi, takip ettiğin kayıtlara tek tıkla götürür.",
+   "tip": null,
+   "file": "070-sohbet-ac.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 265,
+     "y": 310.546875,
+     "w": 1142,
+     "h": 53.5
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 71,
+   "chapter": "sohbet",
+   "id": "sohbet-genel",
+   "title": "Her kaydın kendi sohbeti var",
+   "text": "Sağdaki **Sohbet** sütunu bu işe özel. Mesajlar, görseller ve sistem satırları (durum, tarih, eylem değişiklikleri) **tek akışta**, zaman sırasıyla durur. Yeni mesajlar altta.",
+   "tip": null,
+   "file": "071-sohbet-genel.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 1040,
+     "y": 44,
+     "w": 400,
+     "h": 856
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 72,
+   "chapter": "sohbet",
+   "id": "sohbet-gorsel-ac",
+   "title": "Görsele tıklayıp büyüt",
+   "text": "Sohbette paylaşılan görseller küçük görünür. Tıklayınca pencerede tam boyutu açılır.",
+   "tip": null,
+   "file": "072-sohbet-gorsel-ac.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 1106,
+     "y": 124.640625,
+     "w": 157.71875,
+     "h": 222
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 73,
+   "chapter": "sohbet",
+   "id": "sohbet-gorsel-buyuk",
+   "title": "Tam boyutta incele",
+   "text": "Pencerede görsel büyük görünür; **Tam boyut** yeni sekmede açar. Etiketleme yetkisi olanlar buradan etiket de ekler. **Esc** ile kapat.",
+   "tip": null,
+   "file": "073-sohbet-gorsel-buyuk.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 400,
+     "y": 108,
+     "w": 640,
+     "h": 720
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 74,
+   "chapter": "sohbet",
+   "id": "sohbet-yanitla",
+   "title": "Bir mesaja yanıt ver",
+   "text": "Mesajın altındaki **Yanıtla**, cevabını o mesaja bağlar; kalabalık sohbette neye cevap verdiğin belli olur.",
+   "tip": null,
+   "file": "074-sohbet-yanitla.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 1280.40625,
+     "y": 751.390625,
+     "w": 51.578125,
+     "h": 16.5
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 75,
+   "chapter": "sohbet",
+   "id": "sohbet-anma",
+   "title": "@ yazınca kişi önerilir",
+   "text": "Adın başına **@** koy: öneriler çıkar. **Enter** ya da **Tab** ilkini seçer. Anılan kişi bildirim alır ve kayda **katılımcı** olarak eklenir. Grup anmaları da var: **@all** (sohbetteki herkes), **@here** (son 10 dakikada görülenler), **@team** (kaydın takımı).",
+   "tip": null,
+   "file": "075-sohbet-anma.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 1053,
+     "y": 792,
+     "w": 375,
+     "h": 42
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 76,
+   "chapter": "sohbet",
+   "id": "sohbet-yaz",
+   "title": "Mesajını tamamla ve gönder",
+   "text": "Üstte yanıt verdiğin mesaj gri şeritte görünür (**×** ile vazgeçilir). **Enter** gönderir, **Shift+Enter** yeni satır açar; **Gönder** düğmesi de aynı işi yapar.",
+   "tip": null,
+   "file": "076-sohbet-yaz.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 1041,
+     "y": 759,
+     "w": 399,
+     "h": 141
+    },
+    {
+     "x": 1350.90625,
+     "y": 851,
+     "w": 72.09375,
+     "h": 32
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 77,
+   "chapter": "sohbet",
+   "id": "sohbet-sonuc",
+   "title": "Mesajın gitti",
+   "text": "Senin mesajların **mor**, başkalarınınkiler gri balonda. Anma vurgulu görünür; yanıt verdiğin mesaj balonun üstünde alıntılanır, tıklayınca ona kayar.",
+   "tip": null,
+   "file": "077-sohbet-sonuc.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 1101.046875,
+     "y": 672.390625,
+     "w": 322.953125,
+     "h": 104.1875
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 78,
+   "chapter": "sohbet",
+   "id": "sohbet-gorsel-ekle",
+   "title": "Görsel eklemek için resim simgesi",
+   "text": "Mesaj kutusunun solundaki **resim simgesi** dosya seçtirir. Bir mesaja en fazla **4 görsel** eklenir; yükleme seçer seçmez başlar.",
+   "tip": null,
+   "file": "078-sohbet-gorsel-ekle.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 1058,
+     "y": 851,
+     "w": 42,
+     "h": 32
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 79,
+   "chapter": "sohbet",
+   "id": "sohbet-gorsel-hazir",
+   "title": "Seçilen görsel mesajla gider",
+   "text": "Dosya adı kutunun üstünde çıkar; yanlışsa **×** ile çıkarılır. Metin yazmak zorunlu değil: yalnız görsel de gönderilebilir.",
+   "tip": null,
+   "file": "079-sohbet-gorsel-hazir.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 1053,
+     "y": 794,
+     "w": 159.640625,
+     "h": 22
+    },
+    {
+     "x": 1104,
+     "y": 829,
+     "w": 242.90625,
+     "h": 54
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 80,
+   "chapter": "sohbet",
+   "id": "sohbet-gorsel-sonuc",
+   "title": "Görsel sohbette",
+   "text": "Görsel metnin **üstünde** görünür. Aynı görseli kayda kalıcı koymak istersen bir **Medya eki** kartı kullan (Kartlar bölümünde).",
+   "tip": null,
+   "file": "080-sohbet-gorsel-sonuc.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 1101.046875,
+     "y": 553.578125,
+     "w": 322.953125,
+     "h": 222.96875
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 81,
+   "chapter": "sohbet",
+   "id": "sohbet-hizli",
+   "title": "Sohbetten çıkmadan eylem aç",
+   "text": "Konuşurken bir iş çıktıysa **⚡ Hızlı eylem**'e bas: “kim ne yapacak?” formu pencerede açılır. Eylem, kaydın **Eylemler** listesine eklenir.",
+   "tip": null,
+   "file": "081-sohbet-hizli.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 1053,
+     "y": 802,
+     "w": 104.421875,
+     "h": 28
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 82,
+   "chapter": "sohbet",
+   "id": "sohbet-hizli-form",
+   "title": "Başlığı yaz, sahibini seç",
+   "text": "Yeni eylem formuyla aynı alanlar: başlık, tarih, sahip. **Ekle**'ye basınca pencere kapanır, eylem listeye düşer.",
+   "tip": null,
+   "file": "082-sohbet-hizli-form.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 490,
+     "y": 108,
+     "w": 460,
+     "h": 145.5
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 83,
+   "chapter": "sohbet",
+   "id": "sohbet-bildirim",
+   "title": "Bu sohbetin bildirimlerini ayarla",
+   "text": "Sohbetin üstündeki **zil** sadece bu kayıt için bildirim düzeyini seçtirir: **her hareket**, **yalnızca anıldığımda** ya da **sessize al**. Kalabalık bir kaydı susturmak için ideal.",
+   "tip": null,
+   "file": "083-sohbet-bildirim.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 1396,
+     "y": 51.5,
+     "w": 28,
+     "h": 28
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 84,
+   "chapter": "sohbet",
+   "id": "sohbet-bildirim-menu",
+   "title": "Düzeyi seç",
+   "text": "**Varsayılan**, kişisel bildirim ayarını izler (profilinden değişir). Bir düzey seçersen yalnız bu sohbet için o geçerli olur.",
+   "tip": null,
+   "file": "084-sohbet-bildirim-menu.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 1086,
+     "y": 85.33333587646484,
+     "w": 337.84375,
+     "h": 173.50000762939453
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 85,
+   "chapter": "kartlar",
+   "id": "kart-bolum",
+   "title": "Kartlar: kayda eklenen küçük araçlar",
+   "text": "Kayıt sayfasının **Kartlar** bölümü, yazıdan fazlası gereken işler için. Bu kayıtta zaten bir **Medya eki** (yerleşim planı) ve bir **Toplantı planı** var. Yeni kart için **Kart ekle**'ye bas.",
+   "tip": null,
+   "file": "085-kart-bolum.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 264,
+     "y": 777.59375,
+     "w": 744,
+     "h": 28
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 86,
+   "chapter": "kartlar",
+   "id": "kart-menu",
+   "title": "Dört kart türü",
+   "text": "**Medya eki** görselleri kayıtla birlikte tutar, **Toplantı planı** zaman ve yer bilgisi ile katılım sorar, **Oylama** ekipten tek soruda görüş toplar, **Havuz kartı** gönüllü arar. Kaan **Havuz kartı**'nı seçiyor.",
+   "tip": null,
+   "file": "086-kart-menu.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 808,
+     "y": 633.3333129882812,
+     "w": 200,
+     "h": 138
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 87,
+   "chapter": "kartlar",
+   "id": "kart-havuz-bos",
+   "title": "Kart boş doğar, sen doldurursun",
+   "text": "Yeni kartta yalnızca türün ipucu görünür. Kartın sağ üstündeki **kalem**e basıp başlık ve ayrıntıları gir.",
+   "tip": null,
+   "file": "087-kart-havuz-bos.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 933,
+     "y": 700.125,
+     "w": 28,
+     "h": 28
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 88,
+   "chapter": "kartlar",
+   "id": "kart-havuz-form",
+   "title": "Kaç kişi lazım, ne yapılacak?",
+   "text": "**Kişi sayısı** hedefi, **Ne yapılacak** gönüllünün işini anlatır. Atama yok: isteyen kendisi “Bu işi alıyorum” der.",
+   "tip": null,
+   "file": "088-kart-havuz-form.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 400,
+     "y": 108,
+     "w": 640,
+     "h": 333.5
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 89,
+   "chapter": "kartlar",
+   "id": "kart-havuz-sonuc",
+   "title": "Gönüllü kartı hazır",
+   "text": "Kart, ne kadar kişi gerektiğini yazar; kimler üstlendikçe adları altına eklenir. Bu kartı ekibe sohbetten **@all** ile duyurabilirsin.",
+   "tip": null,
+   "file": "089-kart-havuz-sonuc.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 264,
+     "y": 685.125,
+     "w": 744,
+     "h": 201.25
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 90,
+   "chapter": "kartlar",
+   "id": "kart-oylama-sec",
+   "title": "Ekibe bir şey sormak için Oylama",
+   "text": "Aynı menüden **Oylama**'yı seç. Sorunu ve seçenekleri yazacağın bir pencere açılır.",
+   "tip": null,
+   "file": "090-kart-oylama-sec.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 813,
+     "y": 213.66665649414062,
+     "w": 190,
+     "h": 32
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 91,
+   "chapter": "kartlar",
+   "id": "kart-oylama-form",
+   "title": "Soruyu ve seçenekleri yaz",
+   "text": "**Seçenek ekle** ile en fazla 10 seçenek ekleyebilirsin. **“Diğer” seçeneği** işaretliyse kişi kendi cevabını yazar, ayrı sekmede toplanır. Altta *medya*, *sayaç* ve *çoklu seçim* opsiyonları var (yalnız oluştururken seçilir).",
+   "tip": null,
+   "file": "091-kart-oylama-form.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 400,
+     "y": 108,
+     "w": 640,
+     "h": 566
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 92,
+   "chapter": "kartlar",
+   "id": "kart-oylama-sonuc",
+   "title": "Oylama açıldı",
+   "text": "Seçenekler yan yana listelenir; her seçeneğin yanında oy sayısı ve oran çubuğu var. Kimin neye oy verdiği görünmez, yalnızca sayılar.",
+   "tip": null,
+   "file": "092-kart-oylama-sonuc.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 264,
+     "y": 616.375,
+     "w": 744,
+     "h": 283.5
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 93,
+   "chapter": "kartlar",
+   "id": "kart-toplanti",
+   "title": "Toplantı planı kartı",
+   "text": "Toplantı kartı **ne zaman, nerede, bağlantı ve gündem** bilgisini tutar; altındaki üç düğme (**Katılıyorum**, **Belki**, **Katılamıyorum**) herkesin cevabını toplar. Kalemle düzenle.",
+   "tip": null,
+   "file": "093-kart-toplanti.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 264,
+     "y": 140.125,
+     "w": 744,
+     "h": 255
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 94,
+   "chapter": "kartlar",
+   "id": "kart-toplanti-form",
+   "title": "Tarih ve saati takvimden seç",
+   "text": "**Ne zaman** alanı gün + saat ister. **Yer** ve **Gündem** serbest metin; **Bağlantı**'ya çevrimiçi toplantı adresini yapıştır.",
+   "tip": null,
+   "file": "094-kart-toplanti-form.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 400,
+     "y": 108,
+     "w": 640,
+     "h": 405.5
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 95,
+   "chapter": "kartlar",
+   "id": "kart-duzen",
+   "title": "Kartların sırasını kendine göre ayarla",
+   "text": "Birden çok kart varsa **Düzeni düzenle** sırayı değiştirtir. Sıra **sana özeldir**: başkalarının ekranını etkilemez.",
+   "tip": null,
+   "file": "095-kart-duzen.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 774.59375,
+     "y": 457.59375,
+     "w": 130.375,
+     "h": 28
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 96,
+   "chapter": "kartlar",
+   "id": "kart-duzen-oklar",
+   "title": "Yukarı / aşağı oklarını kullan",
+   "text": "Her kartta **yukarı** ve **aşağı** okları çıkar. Bitince **Düzeni bitir**'e bas. Kartın başlığındaki ok kartı katlar; katlanan kartlar cihazında hatırlanır.",
+   "tip": null,
+   "file": "096-kart-duzen-oklar.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 933,
+     "y": 510.59375,
+     "w": 28,
+     "h": 28
+    },
+    {
+     "x": 797.890625,
+     "y": 457.59375,
+     "w": 107.078125,
+     "h": 28
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 97,
+   "chapter": "kartlara-katil",
+   "id": "katil-toplanti",
+   "title": "Toplantıya katılacak mısın?",
+   "text": "**Toplantı planı** kartında zaman, yer ve gündem yazar. Altındaki üç düğmeden biriyle yanıt ver; yanıtlar herkese görünür ve kimin gelip gelmediği tek bakışta anlaşılır.",
+   "tip": null,
+   "file": "097-katil-toplanti.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 281,
+     "y": 766.34375,
+     "w": 96.0625,
+     "h": 32
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 98,
+   "chapter": "kartlara-katil",
+   "id": "katil-toplanti-sonuc",
+   "title": "Yanıtın kayıtlı",
+   "text": "Seçtiğin düğme mor dolu görünür, adın **Katılıyorum** satırına eklenir. Yanıtı değiştirmek için başka düğmeye bas; aynı düğmeye bir daha basarsan yanıtın geri çekilir.",
+   "tip": null,
+   "file": "098-katil-toplanti-sonuc.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 264,
+     "y": 537.59375,
+     "w": 744,
+     "h": 362
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 99,
+   "chapter": "kartlara-katil",
+   "id": "katil-oy",
+   "title": "Oylamada seçeneklere bas",
+   "text": "**Oylama** kartında seçenek düğmesine basmak oy vermektir. Bu soruda birden çok seçenek işaretlenebilir: aklındaki her soruya bas.",
+   "tip": null,
+   "file": "099-katil-oy.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 281,
+     "y": 717.09375,
+     "w": 710,
+     "h": 37.5
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 100,
+   "chapter": "kartlara-katil",
+   "id": "katil-oy-sonuc",
+   "title": "Oyun sayıldı",
+   "text": "İşaretlediklerin dolu görünür; sağdaki sayı o seçeneğe verilen oy, çubuk toplamdaki oranı gösterir. Oyunu değiştirmek ya da geri çekmek için seçeneğe tekrar bas.",
+   "tip": null,
+   "file": "100-katil-oy-sonuc.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 264,
+     "y": 610.59375,
+     "w": 744,
+     "h": 289.5
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 101,
+   "chapter": "kartlara-katil",
+   "id": "katil-havuz",
+   "title": "Gönüllü olmak için işi üstlen",
+   "text": "**Havuz kartı** atama yapmadan gönüllü arar: “**3 kişi lazım**”. İsteyen **Bu işi alıyorum**'a basar; adı kartın altında listelenir.",
+   "tip": null,
+   "file": "101-katil-havuz.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 281,
+     "y": 824.09375,
+     "w": 116.265625,
+     "h": 32
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 102,
+   "chapter": "kartlara-katil",
+   "id": "katil-havuz-sonuc",
+   "title": "Havuz doldu",
+   "text": "Üç gönüllü tamam: istenen kişi sayısına ulaşıldı. Fikrini değiştirirsen aynı düğmeye tekrar basıp işi bırakabilirsin.",
+   "tip": null,
+   "file": "102-katil-havuz-sonuc.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 264,
+     "y": 645.09375,
+     "w": 744,
+     "h": 254.75
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 103,
+   "chapter": "etkinlikler",
+   "id": "etk-ac",
+   "title": "Etkinlikler'i aç",
+   "text": "Kenar çubuğundan **Etkinlikler**'e tıkla. Toplantı, atölye, gezi, festival: kulübün tüm etkinlikleri burada planlanır.",
+   "tip": null,
+   "file": "103-etk-ac.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 10,
+     "y": 185.5,
+     "w": 211,
+     "h": 30
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 104,
+   "chapter": "etkinlikler",
+   "id": "etk-genel",
+   "title": "Sayfa üç parçadan oluşur",
+   "text": "**Sekmeler** etkinlikleri zamana böler, **tablo** her etkinliğin tarihini, durumunu, önemini, sorumlusunu ve beklenen katılımcı sayısını gösterir, sağdaki **takvim** ayı ve yaklaşan etkinlikleri özetler.",
+   "tip": null,
+   "file": "104-etk-genel.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 264,
+     "y": 76.796875,
+     "w": 243.171875,
+     "h": 32,
+     "label": "Sekmeler"
+    },
+    {
+     "x": 265,
+     "y": 175.796875,
+     "w": 838,
+     "h": 242,
+     "label": "Etkinlik tablosu"
+    },
+    {
+     "x": 1128,
+     "y": 76.796875,
+     "w": 280,
+     "h": 551.390625,
+     "label": "Takvim ve ajanda"
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 105,
+   "chapter": "etkinlikler",
+   "id": "etk-tablo",
+   "title": "Tabloyu oku",
+   "text": "Her satır bir etkinlik: adı, **türü** (gri etiket), yeri ve bağlı kayıt sayısı. **Durum** etiketi (*Fikir, Planlanıyor, Kesin, Yapıldı, İptal*) etkinliğin ne aşamada olduğunu söyler.",
+   "tip": null,
+   "file": "105-etk-tablo.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 265,
+     "y": 261.796875,
+     "w": 838,
+     "h": 52
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 106,
+   "chapter": "etkinlikler",
+   "id": "etk-havuz",
+   "title": "Tarihi olmayanlar Havuz'da bekler",
+   "text": "Fikir aşamasındaki, henüz tarihi konmamış etkinlikler **Havuz** sekmesinde durur. Tarih verilince otomatik olarak **Planlanan**'a geçer.",
+   "tip": null,
+   "file": "106-etk-havuz.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 435.171875,
+     "y": 79.796875,
+     "w": 69,
+     "h": 26
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 107,
+   "chapter": "etkinlikler",
+   "id": "etk-havuz-liste",
+   "title": "Havuzdaki fikirler",
+   "text": "Tarih sütunu **“Tarih yok”** diyor. Fikri kesinleştirmek için etkinliği aç, bir tarih seç ve durumu **Planlanıyor**'a çek.",
+   "tip": null,
+   "file": "107-etk-havuz-liste.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 265,
+     "y": 209.796875,
+     "w": 838,
+     "h": 104
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 108,
+   "chapter": "etkinlikler",
+   "id": "etk-gecmis",
+   "title": "Geçmiş etkinlikler arşivde",
+   "text": "Tarihi geçen etkinlikler **Geçmiş**'e düşer, en yenisi üstte. Yapıldı ya da iptal edilen etkinliklerin sohbeti, kayıtları ve formları da burada durur.",
+   "tip": null,
+   "file": "108-etk-gecmis.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 267,
+     "y": 79.796875,
+     "w": 75.703125,
+     "h": 26
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 109,
+   "chapter": "etkinlikler",
+   "id": "etk-tur",
+   "title": "Türe göre süz",
+   "text": "**Tür**, **Önem** ve **Sorumlu** çipleri tabloyu daraltır; arama kutusu etkinlik adı ve yerinde arar. Tür listesi **Veri yönetimi**'nden gelir.",
+   "tip": null,
+   "file": "109-etk-tur.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 285,
+     "y": 130.796875,
+     "w": 77.75,
+     "h": 28
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 110,
+   "chapter": "etkinlikler",
+   "id": "etk-tur-sec",
+   "title": "Atölye'yi seç",
+   "text": "Listede ekibin tanımladığı etkinlik türleri var. **Atölye**'yi seç: yalnız atölyeler kalır.",
+   "tip": null,
+   "file": "110-etk-tur-sec.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 290.3333435058594,
+     "y": 399.66668701171875,
+     "w": 204,
+     "h": 32
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 111,
+   "chapter": "etkinlikler",
+   "id": "etk-tur-sonuc",
+   "title": "Süzgeç çipi doldu",
+   "text": "Çipte **Tür: Atölye** yazar. **Temizle** tüm süzgeçleri kaldırır. Süzgeçler adres çubuğuna da yazılır; adresi paylaşınca aynı görünüm açılır.",
+   "tip": null,
+   "file": "111-etk-tur-sonuc.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 285,
+     "y": 130.796875,
+     "w": 106.03125,
+     "h": 28
+    },
+    {
+     "x": 265,
+     "y": 209.796875,
+     "w": 838,
+     "h": 52
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 112,
+   "chapter": "etkinlikler",
+   "id": "etk-takvim",
+   "title": "Takvimdeki noktaya tıkla",
+   "text": "Takvimde etkinlik olan günlerin altında **renkli nokta** var: renk önemi gösterir (kırmızı kritik, turuncu yüksek, mor orta). Güne ya da noktaya tıkla, etkinlik açılır. Ok düğmeleriyle aylar arasında gezilir.",
+   "tip": null,
+   "file": "112-etk-takvim.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 1323.890625,
+     "y": 225.453125,
+     "w": 34.578125,
+     "h": 34.578125
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 113,
+   "chapter": "etkinlikler",
+   "id": "etk-takvim-sonuc",
+   "title": "Etkinlik sayfası açıldı",
+   "text": "Takvimden doğrudan etkinliğin sayfasına geldik. Sonraki bölümlerde bu sayfanın parçalarını inceleyeceğiz.",
+   "tip": null,
+   "file": "113-etk-takvim-sonuc.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 264,
+     "y": 72,
+     "w": 626,
+     "h": 28.59375
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 114,
+   "chapter": "yeni-etkinlik",
+   "id": "yeni-etk-ac",
+   "title": "Yeni etkinlik düğmesine bas",
+   "text": "Etkinlikler sayfasında sağ üstteki **Yeni etkinlik**'e tıkla. Etkinlik hem takvimde hem kendi sayfasında hem de bir **kayıt** olarak (sohbet ve arşiv için) açılır.",
+   "tip": null,
+   "file": "114-yeni-etk-ac.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1180
+   },
+   "boxes": [
+    {
+     "x": 982.625,
+     "y": 76.796875,
+     "w": 121.375,
+     "h": 32
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 115,
+   "chapter": "yeni-etkinlik",
+   "id": "yeni-etk-ad",
+   "title": "Adı ve açıklamayı yaz",
+   "text": "**Ad** en az 5, **Açıklama** en az 30 karakter olmalı. Açıklamada *ne yapılacağını, neden ve kimin için* olduğunu söyle; OTF ve duyurular bu metne dayanır.",
+   "tip": null,
+   "file": "115-yeni-etk-ad.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1180
+   },
+   "boxes": [
+    {
+     "x": 511,
+     "y": 224.59375,
+     "w": 418,
+     "h": 34
+    },
+    {
+     "x": 511,
+     "y": 322.59375,
+     "w": 418,
+     "h": 96
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 116,
+   "chapter": "yeni-etkinlik",
+   "id": "yeni-etk-tur",
+   "title": "Etkinlik türünü seç",
+   "text": "**Tür** etkinliğin hangi planla yürüyeceğini belirler. Türler **Veri yönetimi → Etkinlik Türleri** altında tanımlıdır.",
+   "tip": null,
+   "file": "116-yeni-etk-tur.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1180
+   },
+   "boxes": [
+    {
+     "x": 511,
+     "y": 576.59375,
+     "w": 418,
+     "h": 34
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 117,
+   "chapter": "yeni-etkinlik",
+   "id": "yeni-etk-tur-sec",
+   "title": "Atölye'yi seç",
+   "text": "Listede ekibin tanımladığı türler var: toplantı, atölye, eğitim, saha ziyareti, konferans, yarışma, sosyal etkinlik.",
+   "tip": null,
+   "file": "117-yeni-etk-tur-sec.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1180
+   },
+   "boxes": [
+    {
+     "x": 516.3333740234375,
+     "y": 819.6666870117188,
+     "w": 408,
+     "h": 32
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 118,
+   "chapter": "yeni-etkinlik",
+   "id": "yeni-etk-sablon",
+   "title": "Tür seçince plan hazır gelir",
+   "text": "**Atölye şablonu** otomatik yüklenir: etkinliğe bağlanacak **widget'lar** (OTF formu, satın alımlar) ve **zaman çizelgesi** adımları, etkinlik gününe göre kaç gün önce yapılacaklarıyla birlikte.",
+   "tip": null,
+   "file": "118-yeni-etk-sablon.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1180
+   },
+   "boxes": [
+    {
+     "x": 511,
+     "y": 774.59375,
+     "w": 418,
+     "h": 172
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 119,
+   "chapter": "yeni-etkinlik",
+   "id": "yeni-etk-birim",
+   "title": "Etkinliğin kaydı hangi birimde dursun?",
+   "text": "**Birim**, etkinliğin kendi kaydının (sohbet + arşiv) açılacağı yeri seçer. Etkinlik işleri için genelde **Etkinlik Planlama** uygundur.",
+   "tip": null,
+   "file": "119-yeni-etk-birim.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1180
+   },
+   "boxes": [
+    {
+     "x": 511,
+     "y": 650.59375,
+     "w": 418,
+     "h": 34
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 120,
+   "chapter": "yeni-etkinlik",
+   "id": "yeni-etk-birim-sec",
+   "title": "Etkinlik Planlama'yı seç",
+   "text": "Birim ağacı kayıtlardaki ağaçla aynı: favoriler üstte, aranabilir, dallar açılıp kapanır.",
+   "tip": null,
+   "file": "120-yeni-etk-birim-sec.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1180
+   },
+   "boxes": [
+    {
+     "x": 516.3333740234375,
+     "y": 759.6666870117188,
+     "w": 408,
+     "h": 32
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 121,
+   "chapter": "yeni-etkinlik",
+   "id": "yeni-etk-tarih",
+   "title": "Tarihi seç (ya da boş bırak)",
+   "text": "**Tarih** boş bırakılırsa etkinlik **Havuz**'a düşer; fikir aşamasında tarih gerekmez. Tarih verince etkinlik takvimde görünür.",
+   "tip": null,
+   "file": "121-yeni-etk-tarih.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1180
+   },
+   "boxes": [
+    {
+     "x": 511,
+     "y": 724.59375,
+     "w": 418,
+     "h": 34
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 122,
+   "chapter": "yeni-etkinlik",
+   "id": "yeni-etk-takvim",
+   "title": "Ayı ve günü seç",
+   "text": "Ay okları takvimi ileri geri sürer. Cumartesi atölyeleri için kasımın uygun Cumartesi gününü seç; gün seçilince takvim kapanır.",
+   "tip": null,
+   "file": "122-yeni-etk-takvim.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1180
+   },
+   "boxes": [
+    {
+     "x": 705.7552490234375,
+     "y": 947.6666870117188,
+     "w": 34.28125,
+     "h": 32
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 123,
+   "chapter": "yeni-etkinlik",
+   "id": "yeni-etk-olustur",
+   "title": "Oluştur",
+   "text": "Alanlar tamamsa **Oluştur** etkinleşir. Etkinlik, kaydı ve şablondaki adımlar tek seferde açılır; doğrudan etkinliğin sayfasına geçersin.",
+   "tip": null,
+   "file": "123-yeni-etk-olustur.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1180
+   },
+   "boxes": [
+    {
+     "x": 857.65625,
+     "y": 970.59375,
+     "w": 71.34375,
+     "h": 32
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 124,
+   "chapter": "yeni-etkinlik",
+   "id": "yeni-etk-sayfa",
+   "title": "Etkinlik hazır",
+   "text": "Sayfada **zaman çizelgesi** (sağ üst) ve **widget'lar** (OTF formu, satın alımlar) şablondan geldi. Adımların tarihleri etkinlik gününe göre hesaplandı: örneğin OTF son gönderim tarihi kendiliğinden görünür.",
+   "tip": null,
+   "file": "124-yeni-etk-sayfa.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1180
+   },
+   "boxes": [
+    {
+     "x": 264,
+     "y": 72,
+     "w": 626,
+     "h": 28.59375,
+     "label": "Etkinlik"
+    },
+    {
+     "x": 1041,
+     "y": 44,
+     "w": 399,
+     "h": 319.421875,
+     "label": "Zaman çizelgesi"
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 125,
+   "chapter": "yeni-etkinlik",
+   "id": "yeni-etk-yer",
+   "title": "Yeri listeden seç",
+   "text": "Etkinlik açılınca **Özellikler**'den eksikleri tamamlarsın. **Yer** listesi **Veri yönetimi → Etkinlik Yerleri**'nden gelir; listede yoksa **Diğer… (yaz)** ile serbest metin girebilirsin.",
+   "tip": null,
+   "file": "125-yeni-etk-yer.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1180
+   },
+   "boxes": [
+    {
+     "x": 752,
+     "y": 353,
+     "w": 256,
+     "h": 30
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 126,
+   "chapter": "yeni-etkinlik",
+   "id": "yeni-etk-yer-sec",
+   "title": "Maker Atölyesi'ni seç",
+   "text": "Ortak yerleri listeden seçmek yazım hatalarını önler; OTF formu ve takvim bu adı kullanır.",
+   "tip": null,
+   "file": "126-yeni-etk-yer-sec.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1180
+   },
+   "boxes": [
+    {
+     "x": 757,
+     "y": 432.3333435058594,
+     "w": 258.25,
+     "h": 32
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 127,
+   "chapter": "yeni-etkinlik",
+   "id": "yeni-etk-saat",
+   "title": "Başlangıç saatini ekle",
+   "text": "Tarih verildiği için **Saat ekle** çıktı (tarihsiz etkinliğin saati olmaz). Tıkla, saati yaz, **Kaydet**'e bas.",
+   "tip": null,
+   "file": "127-yeni-etk-saat.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1180
+   },
+   "boxes": [
+    {
+     "x": 368,
+     "y": 368,
+     "w": 256,
+     "h": 30
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 128,
+   "chapter": "yeni-etkinlik",
+   "id": "yeni-etk-katilim",
+   "title": "Beklenen kişi sayısını yaz",
+   "text": "**Katılım**, OTF formundaki katılımcı sayısı ve takvimdeki kişi sütunu olarak kullanılır. Sayıyı yazıp **Kaydet**.",
+   "tip": null,
+   "file": "128-yeni-etk-katilim.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1180
+   },
+   "boxes": [
+    {
+     "x": 368,
+     "y": 438,
+     "w": 256,
+     "h": 30
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 129,
+   "chapter": "yeni-etkinlik",
+   "id": "yeni-etk-bitti",
+   "title": "Özellikler tamam",
+   "text": "Etkinliğin tarihi, saati, yeri ve katılımı dolu. Her değişiklik sohbet akışına ve etkinliğin kaydına yazılır; önem ve sorumluyu da aynı satırlardan değiştirebilirsin.",
+   "tip": null,
+   "file": "129-yeni-etk-bitti.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1180
+   },
+   "boxes": [
+    {
+     "x": 264,
+     "y": 263.5,
+     "w": 744,
+     "h": 217.5
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 130,
+   "chapter": "adim-onay",
+   "id": "onay-ac",
+   "title": "Etkinliği listeden aç",
+   "text": "Etkinlikler tablosunda satırın herhangi bir yerine (ya da başlığına) tıkla; etkinliğin sayfası açılır.",
+   "tip": null,
+   "file": "130-onay-ac.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 277,
+     "y": 267.546875,
+     "w": 162,
+     "h": 19.5
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 131,
+   "chapter": "adim-onay",
+   "id": "onay-cizelge",
+   "title": "Sağ üstte etkinliğin zaman çizelgesi",
+   "text": "Etkinliğe giden yol adımlara bölünmüş. **Dolu nokta** yapılmış adım, **halkalı nokta** sıradaki, **kesikli nokta** sonraki adımlar. Tarihler etkinlik gününe göre türden gelir.",
+   "tip": null,
+   "file": "131-onay-cizelge.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 1041,
+     "y": 44,
+     "w": 399,
+     "h": 297.40625
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 132,
+   "chapter": "adim-onay",
+   "id": "onay-nokta",
+   "title": "Adımı bitirince noktaya bas",
+   "text": "Duyuru yayınlandı: **Duyuru yapıldı** noktasına tıkla. Etkinliğin sahibi ya da etkinlik yöneticisi değilsen adım hemen işaretlenmez, **onay istenir**.",
+   "tip": null,
+   "file": "132-onay-nokta.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 1057,
+     "y": 194.0625,
+     "w": 12,
+     "h": 12
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 133,
+   "chapter": "adim-onay",
+   "id": "onay-bekliyor",
+   "title": "Onay istendi",
+   "text": "Alttaki bildirim “**Onay istendi**” diyor, adımın yanında **onay bekliyor** yazıyor. Onay isteği etkinliğin sorumlusuna (ve etkinlik yöneticilerine) görünür; onaylayınca nokta dolar.",
+   "tip": null,
+   "file": "133-onay-bekliyor.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 392.15625,
+     "y": 810,
+     "w": 176.828125,
+     "h": 18
+    },
+    {
+     "x": 1080,
+     "y": 849.5,
+     "w": 76.203125,
+     "h": 19.5
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 134,
+   "chapter": "etkinlik-yonet",
+   "id": "yonet-istek",
+   "title": "Onay istekleri sayfanın en üstünde",
+   "text": "Etkinliğin sorumlusu ve etkinlik yöneticileri, bekleyen onay isteklerini sayfanın en üstünde sarı kutuda görür: **kim**, **hangi adımı**, **ne yapmak istiyor**. Bu istek **Zeynep**'ten.",
+   "tip": null,
+   "file": "134-yonet-istek.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 264,
+     "y": 72,
+     "w": 744,
+     "h": 54
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 135,
+   "chapter": "etkinlik-yonet",
+   "id": "yonet-onayla",
+   "title": "Onayla ya da Reddet",
+   "text": "Duyuru gerçekten yapıldıysa **Onayla**'ya bas. Yapılmadıysa **Reddet** isteği siler, adım olduğu gibi kalır.",
+   "tip": null,
+   "file": "135-yonet-onayla.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 933.15625,
+     "y": 85,
+     "w": 61.84375,
+     "h": 28
+    },
+    {
+     "x": 862.515625,
+     "y": 85,
+     "w": 62.640625,
+     "h": 28
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 136,
+   "chapter": "etkinlik-yonet",
+   "id": "yonet-onaylandi",
+   "title": "Adım tamamlandı",
+   "text": "Nokta doldu ve satırda **tamam** yazıyor; kutu da kayboldu. Sorumlu ve yöneticiler adıma doğrudan basıp işaretleyebilir, onay istemeden.",
+   "tip": null,
+   "file": "136-yonet-onaylandi.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 1041,
+     "y": 44,
+     "w": 399,
+     "h": 319.421875
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 137,
+   "chapter": "etkinlik-yonet",
+   "id": "yonet-tarih",
+   "title": "Adımın tarihini değiştir",
+   "text": "Etkinlik yöneticisi adımın altındaki **tarih**e tıklayıp kaydırabilir. Varsayılan etkinlikten 7 gün önce; etkinlik tarihi değişirse varsayılan tarihler onunla birlikte kayar.",
+   "tip": null,
+   "file": "137-yonet-tarih.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 1075,
+     "y": 326.828125,
+     "w": 44.53125,
+     "h": 19.59375
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 138,
+   "chapter": "etkinlik-yonet",
+   "id": "yonet-tarih-sec",
+   "title": "Yeni günü seç",
+   "text": "Takvimden yeni gün seç. **Varsayılan (7 gün önce)** düğmesi özel tarihi silip hesaplanana döner.",
+   "tip": null,
+   "file": "138-yonet-tarih-sec.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 1124.6146240234375,
+     "y": 535.6666259765625,
+     "w": 34.28125,
+     "h": 32
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 139,
+   "chapter": "etkinlik-yonet",
+   "id": "yonet-adim",
+   "title": "Plana yeni bir adım ekle",
+   "text": "Zaman çizelgesinin başlığındaki **+**, şablonda olmayan bir adım eklemeni sağlar.",
+   "tip": null,
+   "file": "139-yonet-adim.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 1396,
+     "y": 60,
+     "w": 28,
+     "h": 28
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 140,
+   "chapter": "etkinlik-yonet",
+   "id": "yonet-adim-form",
+   "title": "Adın adını yaz, istersen tarih seç",
+   "text": "Tarihi boş bırakırsan adım **etkinlikten 7 gün önce**ye düşer. **Ekle**'ye bas.",
+   "tip": null,
+   "file": "140-yonet-adim-form.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 1138,
+     "y": 94,
+     "w": 286,
+     "h": 150
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 141,
+   "chapter": "etkinlik-yonet",
+   "id": "yonet-adim-sonuc",
+   "title": "Yeni adım çizelgede",
+   "text": "Adım çizelgeye eklendi. Şablondan gelen adımlar gibi bu da işaretlenebilir ya da yanındaki **×** ile kaldırılabilir.",
+   "tip": null,
+   "file": "141-yonet-adim-sonuc.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 1041,
+     "y": 44,
+     "w": 399,
+     "h": 371.90625
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 142,
+   "chapter": "etkinlik-kisiler",
+   "id": "kisi-ekle",
+   "title": "Etkinliğe kişi ekle",
+   "text": "Sağ sütundaki **Kişiler**'in **+** düğmesi ekibi etkinliğe katar. Eklenen kişi etkinliği düzenleyebilir, etkinlik sohbetinde bildirim alır.",
+   "tip": null,
+   "file": "142-kisi-ekle.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1000
+   },
+   "boxes": [
+    {
+     "x": 1396,
+     "y": 379.421875,
+     "w": 28,
+     "h": 28
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 143,
+   "chapter": "etkinlik-kisiler",
+   "id": "kisi-sec",
+   "title": "Kişiyi ara ve seç",
+   "text": "Yazdıkça liste daralır. **Can Özdemir**'i seç; zaten ekli olanlar listede çıkmaz.",
+   "tip": null,
+   "file": "143-kisi-sec.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1000
+   },
+   "boxes": [
+    {
+     "x": 1219,
+     "y": 456.3333435058594,
+     "w": 204,
+     "h": 32
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 144,
+   "chapter": "etkinlik-kisiler",
+   "id": "kisi-sonuc",
+   "title": "Can etkinlikte",
+   "text": "Kişi listeye girdi. Yanındaki **balon** simgesi o kişiyle etkinlik sohbetinde yazışmayı başlatır (özel mesaj yok, sohbet kayıtta yapılır); **×** kişiyi etkinlikten çıkarır.",
+   "tip": null,
+   "file": "144-kisi-sonuc.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1000
+   },
+   "boxes": [
+    {
+     "x": 1057,
+     "y": 455.421875,
+     "w": 367,
+     "h": 28
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 145,
+   "chapter": "etkinlik-kisiler",
+   "id": "takim-ekle",
+   "title": "Takımları bağla",
+   "text": "**Takımlar** bölümünün **+**'sı etkinliği bir ya da birkaç takıma bağlar: onlar için ayrı iş kaydı açabilirsin.",
+   "tip": null,
+   "file": "145-takim-ekle.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1000
+   },
+   "boxes": [
+    {
+     "x": 1396,
+     "y": 516.421875,
+     "w": 28,
+     "h": 28
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 146,
+   "chapter": "etkinlik-kisiler",
+   "id": "takim-sec",
+   "title": "Teknik Atölye'yi seç",
+   "text": "Takım listesi **Takımlar** sayfasındakiyle aynı. Atölye için eğitmenin takımı olan **Teknik Atölye**'yi bağla.",
+   "tip": null,
+   "file": "146-takim-sec.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1000
+   },
+   "boxes": [
+    {
+     "x": 1233,
+     "y": 651.6666870117188,
+     "w": 190,
+     "h": 32
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 147,
+   "chapter": "etkinlik-kisiler",
+   "id": "takim-kayit",
+   "title": "Takım için iş kaydı aç",
+   "text": "Bağlı takımın yanındaki **+ Kayıt**, takımı hazır gelen yeni bir kayıt formu açar. Oluşan kayıt etkinliğe otomatik bağlanır.",
+   "tip": null,
+   "file": "147-takim-kayit.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1000
+   },
+   "boxes": [
+    {
+     "x": 1318.109375,
+     "y": 556.421875,
+     "w": 69.890625,
+     "h": 28
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 148,
+   "chapter": "etkinlik-kisiler",
+   "id": "takim-kayit-form",
+   "title": "Formda takım zaten seçili",
+   "text": "Pencere takımı (**Teknik Atölye**) doldurmuş geldi. Başlığı ve açıklamayı yaz, **Birim**'i seç, **Kaydı aç**'a bas.",
+   "tip": null,
+   "file": "148-takim-kayit-form.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1000
+   },
+   "boxes": [
+    {
+     "x": 400,
+     "y": 120,
+     "w": 640,
+     "h": 677.890625
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 149,
+   "chapter": "etkinlik-kisiler",
+   "id": "takim-kayit-sonuc",
+   "title": "Kayıt widget olarak bağlandı",
+   "text": "**Widget'lar** altında yeni bir **Kayıt** kartı çıktı: kaydın durumu, eylemleri ve sahipleri etkinlik sayfasından izlenir. Başlığa tıklarsan kaydın kendi sayfasına gidersin.",
+   "tip": null,
+   "file": "149-takim-kayit-sonuc.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1000
+   },
+   "boxes": [
+    {
+     "x": 264,
+     "y": 885,
+     "w": 366,
+     "h": 115
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 150,
+   "chapter": "etkinlik-kisiler",
+   "id": "widget-ekle",
+   "title": "Başka bir widget ekle",
+   "text": "**Widget ekle** menüsünde **Kayıt** (var olan ya da yeni bir kaydı bağlar) ve eksikse **OTF formu** ile **Satın alımlar** bulunur. Diğer widget'lar için *Etkinlik widget'larını düzenle* yetkisi gerekir.",
+   "tip": null,
+   "file": "150-widget-ekle.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1000
+   },
+   "boxes": [
+    {
+     "x": 897.921875,
+     "y": 518.5,
+     "w": 110.078125,
+     "h": 28
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 151,
+   "chapter": "etkinlik-kisiler",
+   "id": "widget-menu",
+   "title": "Kayıt'ı seç",
+   "text": "**Kayıt** bir yer tutucu açar; ya yeni kayıt açarsın ya da mevcut bir kaydı seçersin.",
+   "tip": null,
+   "file": "151-widget-menu.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1000
+   },
+   "boxes": [
+    {
+     "x": 813,
+     "y": 557.6666870117188,
+     "w": 190,
+     "h": 32
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 152,
+   "chapter": "etkinlik-kisiler",
+   "id": "widget-var-olan",
+   "title": "Var olanı ekle",
+   "text": "Etkinliğe bağlı olmayan kayıtlar arasında arama yaparak bağla. Örneğin vardiya çizelgesi birçok etkinliğe lazımdır; bir kayıt birden çok etkinliğe bağlanabilir.",
+   "tip": null,
+   "file": "152-widget-var-olan.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1000
+   },
+   "boxes": [
+    {
+     "x": 764.15625,
+     "y": 938,
+     "w": 135,
+     "h": 28
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 153,
+   "chapter": "etkinlik-kisiler",
+   "id": "widget-var-olan-sec",
+   "title": "Kaydı seç",
+   "text": "Listede kayıt adı ve türü görünür. Seçince kart etkinliğe bağlanır; **×** yalnız bağlantıyı kaldırır, kayıt silinmez.",
+   "tip": null,
+   "file": "153-widget-var-olan-sec.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1000
+   },
+   "boxes": [
+    {
+     "x": 769,
+     "y": 895,
+     "w": 268.6875,
+     "h": 32
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 154,
+   "chapter": "etkinlik-kisiler",
+   "id": "etkinlik-sohbet",
+   "title": "Etkinliğin sohbeti kaydında",
+   "text": "Başlığın yanındaki **takvim | balon** düğmesi etkinlik sayfası ile etkinliğin **kaydı** arasında geçiş yapar. Sohbet ve arşiv kayıttadır; ikisi aynı etkinliğin iki yüzü.",
+   "tip": null,
+   "file": "154-etkinlik-sohbet.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1000
+   },
+   "boxes": [
+    {
+     "x": 930,
+     "y": 50,
+     "w": 78,
+     "h": 32
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 155,
+   "chapter": "etkinlik-kisiler",
+   "id": "etkinlik-sohbet-sayfa",
+   "title": "Etkinlik kaydı",
+   "text": "Burada etkinliğin sohbeti, eylemleri ve eklenen görseller durur. Etkinlik değişiklikleri (tarih, yer, kişi) sohbet akışına sistem satırı olarak düşer. Aynı düğmeyle etkinlik sayfasına dönülür.",
+   "tip": null,
+   "file": "155-etkinlik-sohbet-sayfa.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1000
+   },
+   "boxes": [
+    {
+     "x": 264,
+     "y": 72,
+     "w": 592,
+     "h": 28.59375
+    },
+    {
+     "x": 1040,
+     "y": 44,
+     "w": 400,
+     "h": 956
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 156,
+   "chapter": "satin-alim",
+   "id": "satin-genel",
+   "title": "Satın alımlar widget'ı",
+   "text": "Etkinliğin malzeme ve hizmet listesi burada tutulur. Her satırda **önem**, **ad**, **tür** (sarf / alet / hizmet), süreç **noktaları**, **en iyi fiyat** ve en yakın **varış tarihi** görünür. **Zaten var** işaretli malzemeler en alta iner.",
+   "tip": null,
+   "file": "156-satin-genel.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 264,
+     "y": 469.25,
+     "w": 744,
+     "h": 430.5
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 157,
+   "chapter": "satin-alim",
+   "id": "satin-saglik",
+   "title": "Başlıktaki renkli nokta genel durumu söyler",
+   "text": "Nokta, “gerekli” diye işaretlenmiş malzemelerin onay durumunu özetler: **yeşil** hepsi onaylı, **turuncu** onay bekleyen var, **kırmızı** kritik bir malzeme bekliyor. Şu an kırmızı: röle modülü gelmeden atölye testi yapılamaz.",
+   "tip": null,
+   "file": "157-satin-saglik.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 392.15625,
+     "y": 485,
+     "w": 176.828125,
+     "h": 18
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 158,
+   "chapter": "satin-alim",
+   "id": "satin-adim",
+   "title": "Süreç adımlarını noktalarla ilerlet",
+   "text": "Her malzemenin adımları var: **Gerekli mi?** → **Tedarikçi bulundu** → **Onaylandı** (sponsorlu olanlara **Sponsor** adımı da eklenir). Röle modülü tedarikçisi bulundu: ikinci noktaya bas.",
+   "tip": null,
+   "file": "158-satin-adim.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 716,
+     "y": 650.75,
+     "w": 12,
+     "h": 12
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 159,
+   "chapter": "satin-alim",
+   "id": "satin-adim-onay",
+   "title": "Sipariş onaylanınca son noktaya bas",
+   "text": "Onay gelince üçüncü noktaya bas; önceki adımlar da tamamlanmış sayılır. Dolu bir noktaya basmak o adımı ve sonrasını geri alır.",
+   "tip": null,
+   "file": "159-satin-adim-onay.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 755,
+     "y": 650.75,
+     "w": 12,
+     "h": 12
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 160,
+   "chapter": "satin-alim",
+   "id": "satin-adim-sonuc",
+   "title": "Kritik engel kalktı",
+   "text": "Başlıktaki nokta kırmızıdan **turuncuya** döndü: artık kritik bekleyen yok, ama onay bekleyen başka malzemeler var.",
+   "tip": null,
+   "file": "160-satin-adim-sonuc.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 392.15625,
+     "y": 485,
+     "w": 119.46875,
+     "h": 18
+    },
+    {
+     "x": 281,
+     "y": 635.75,
+     "w": 710,
+     "h": 41
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 161,
+   "chapter": "satin-alim",
+   "id": "satin-detay",
+   "title": "Satıra tıklayıp tedarikçileri gör",
+   "text": "Satırın solundaki oka tıklayınca tedarikçi tablosu açılır: bağlantı ya da telefon, fiyat ve varış tarihi. En ucuz teklif vurgulanır; tablo başlıklarına tıklayarak sıralayabilirsin.",
+   "tip": null,
+   "file": "161-satin-detay.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 281,
+     "y": 524,
+     "w": 384,
+     "h": 19.5
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 162,
+   "chapter": "satin-alim",
+   "id": "satin-detay-tablo",
+   "title": "Teklifleri kıyasla",
+   "text": "Üç tedarikçi var; en düşük fiyatlı olan satır vurgulu. Satırın başlığındaki fiyat ve tarih bu tablodan **otomatik** hesaplanır, elle girilmez.",
+   "tip": null,
+   "file": "162-satin-detay-tablo.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 281,
+     "y": 553.75,
+     "w": 710,
+     "h": 233.5
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 163,
+   "chapter": "satin-alim",
+   "id": "satin-tedarikci",
+   "title": "Yeni teklif ekle",
+   "text": "Bağlantıyı (ya da telefon numarasını) yaz, fiyat ve varış tarihini gir, **+ Tedarikçi**'ye bas. Eksik tarih ya da fiyat bırakılabilir.",
+   "tip": null,
+   "file": "163-satin-tedarikci.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 309,
+     "y": 741.25,
+     "w": 682,
+     "h": 34
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 164,
+   "chapter": "satin-alim",
+   "id": "satin-tedarikci-sonuc",
+   "title": "En iyi fiyat güncellendi",
+   "text": "Yeni teklif tabloya girdi ve daha ucuz olduğu için **vurgulandı**; satır başlığındaki fiyat da 4.290,00 ₺ oldu.",
+   "tip": null,
+   "file": "164-satin-tedarikci-sonuc.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 281,
+     "y": 553.75,
+     "w": 710,
+     "h": 267.5
+    },
+    {
+     "x": 779,
+     "y": 524.75,
+     "w": 96,
+     "h": 18
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 165,
+   "chapter": "satin-alim",
+   "id": "satin-ekle",
+   "title": "Listeye yeni malzeme ekle",
+   "text": "Listenin altındaki kutuya malzeme ya da hizmet adını yaz, **Ekle**'ye bas. Yeni malzeme ilk adımda başlar; sonra noktalarla ilerletirsin.",
+   "tip": null,
+   "file": "165-satin-ekle.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 281,
+     "y": 866.25,
+     "w": 635.96875,
+     "h": 34
+    },
+    {
+     "x": 924.96875,
+     "y": 866.25,
+     "w": 66.03125,
+     "h": 28
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 166,
+   "chapter": "satin-alim",
+   "id": "satin-menu",
+   "title": "Satırın ⋯ menüsü",
+   "text": "Menüde üç şey var: **Zaten var olarak işaretle** (stokta olan malzeme sona iner, süreç adımları kalkar), **Sponsorlu (adım ekle)** ve **Sil**.",
+   "tip": null,
+   "file": "166-satin-menu.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 963,
+     "y": 822.25,
+     "w": 28,
+     "h": 28
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 167,
+   "chapter": "satin-alim",
+   "id": "satin-menu-ac",
+   "title": "Sponsorlu malzemeye ek adım",
+   "text": "**Sponsorlu** seçilirse süreç dört adıma çıkar: sponsor onayı da beklenir (DHT22 sensörü gibi). Sponsor çıkarsa menüden adımı kaldırırsın.",
+   "tip": null,
+   "file": "167-satin-menu-ac.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 796.3333129882812,
+     "y": 738.3333129882812,
+     "w": 190,
+     "h": 32
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 168,
+   "chapter": "satin-alim",
+   "id": "satin-menu-sonuc",
+   "title": "Dört adımlı süreç",
+   "text": "Satırda artık dört nokta var: Gerekli mi? → Tedarikçi bulundu → Sponsor → Onaylandı.",
+   "tip": null,
+   "file": "168-satin-menu-sonuc.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 281,
+     "y": 815.25,
+     "w": 710,
+     "h": 41
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 169,
+   "chapter": "otf",
+   "id": "otf-baslik",
+   "title": "Etkinlik sayfasındaki OTF widget'ı",
+   "text": "**OTF** üniversitenin etkinlik talep formudur. Başlıkta **son gönderim günü** hesaplanır: etkinlikten 3 iş günü önce (hafta sonu sayılmaz). Tarih değişirse bu gün de kendiliğinden kayar.",
+   "tip": null,
+   "file": "169-otf-baslik.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 281,
+     "y": 618.25,
+     "w": 710,
+     "h": 28,
+     "label": "Son gönderim günü"
+    },
+    {
+     "x": 281,
+     "y": 656.25,
+     "w": 710,
+     "h": 90,
+     "label": "Dosya ve mail bilgisi"
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 170,
+   "chapter": "otf",
+   "id": "otf-otomatik",
+   "title": "Önceki formdan başlat",
+   "text": "**Otomatik doldur**, etkinlikten gelmeyen alanları (amaç, danışman, ekipman talepleri, sorumlular) en son kaydedilen başka bir etkinliğin formundan kopyalar. Hazır bir kalıp olduğu için en hızlı yol bu.",
+   "tip": null,
+   "file": "170-otf-otomatik.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 394.03125,
+     "y": 656.25,
+     "w": 133.875,
+     "h": 28
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 171,
+   "chapter": "otf",
+   "id": "otf-kilit",
+   "title": "Kopya gözden geçirilene kadar kilitli",
+   "text": "Kopyalanan formun uyarısı çıktı: **Word indir** kilitli, çünkü eski etkinliğin bilgileri yeni etkinliğe karışabilir. Önce bu etkinliğe göre en az bir alanı güncelle, sonra “gözden geçirdim” de.",
+   "tip": null,
+   "file": "171-otf-kilit.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 281,
+     "y": 692.25,
+     "w": 709.921875,
+     "h": 18
+    },
+    {
+     "x": 281,
+     "y": 656.25,
+     "w": 101.03125,
+     "h": 28
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 172,
+   "chapter": "otf",
+   "id": "otf-alanlar",
+   "title": "Etkinliğe özel alanları güncelle",
+   "text": "Üstteki gri kutu etkinlikten gelir (ad, tarih, saat, yer, kişi sayısı); onlar burada değişmez. **Amaç**, **bitiş saati**, **danışman**, **yaş grubu** ve **kazanımlar**'ı bu etkinliğe göre yaz.",
+   "tip": null,
+   "file": "172-otf-alanlar.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 281,
+     "y": 331.25,
+     "w": 710,
+     "h": 84
+    },
+    {
+     "x": 281,
+     "y": 455.25,
+     "w": 228.65625,
+     "h": 34
+    },
+    {
+     "x": 521.65625,
+     "y": 455.25,
+     "w": 228.671875,
+     "h": 34
+    },
+    {
+     "x": 281,
+     "y": 529.25,
+     "w": 710,
+     "h": 84
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 173,
+   "chapter": "otf",
+   "id": "otf-ekipman",
+   "title": "Talep edilen hizmetleri işaretle",
+   "text": "Düzen, ses-görüntü, teknik, ağırlama, temizlik ve diğer hizmetler gruplar halinde. Kutuyu işaretlersen yanında **adet** kutusu çıkar: örneğin her katılımcı masası için **8 priz**.",
+   "tip": null,
+   "file": "173-otf-ekipman.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 281,
+     "y": 690.25,
+     "w": 710,
+     "h": 210
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 174,
+   "chapter": "otf",
+   "id": "otf-sorumlu",
+   "title": "Etkinlik sorumlularını seç",
+   "text": "Form en fazla **3 sorumlu** ister; telefonları kişilerin profilinden gelir. Kopyalanan formdaki iki kişi duruyor, üçüncüyü ekle.",
+   "tip": null,
+   "file": "174-otf-sorumlu.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 281,
+     "y": 455.25,
+     "w": 710,
+     "h": 34
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 175,
+   "chapter": "otf",
+   "id": "otf-sorumlu-sec",
+   "title": "Kaan Demir'i ekle",
+   "text": "Listeden kişiyi seç. **Yok** seçeneği o yuvayı boşaltır.",
+   "tip": null,
+   "file": "175-otf-sorumlu-sec.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 286.3333435058594,
+     "y": 698.3333740234375,
+     "w": 700.0000305175781,
+     "h": 32
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 176,
+   "chapter": "otf",
+   "id": "otf-kaydet",
+   "title": "Kaydet",
+   "text": "Form tek parça kaydedilir; **Kaydet**'e basmadıkça yazdıkların sunucuya gitmez (altta “Kaydedilmemiş değişiklikler indirilen dosyaya girmez” uyarısı çıkar). **Vazgeç** son kayıtlı hale döndürür.",
+   "tip": null,
+   "file": "176-otf-kaydet.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 281,
+     "y": 529.25,
+     "w": 62.109375,
+     "h": 28
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 177,
+   "chapter": "otf",
+   "id": "otf-gozden",
+   "title": "“Formu gözden geçirdim”",
+   "text": "Bu etkinliğe göre bir alan güncellediğin için onay kutusu etkinleşti. İşaretle: form **gözden geçirildi** sayılır ve **Word indir** açılır.",
+   "tip": null,
+   "file": "177-otf-gozden.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 398.03125,
+     "y": 465.75,
+     "w": 13,
+     "h": 13
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 178,
+   "chapter": "otf",
+   "id": "otf-indir",
+   "title": "Word dosyasını indir",
+   "text": "**Word indir** kayıtlı formla doldurulmuş .docx dosyasını indirir. Dosyayı **kulüp mail adresinden**, mailin konusuyla birlikte SEB'e gönder; son gün: etkinlikten 3 iş günü önce.",
+   "tip": null,
+   "file": "178-otf-indir.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 281,
+     "y": 458.25,
+     "w": 101.03125,
+     "h": 28
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 179,
+   "chapter": "otf",
+   "id": "otf-kopyala",
+   "title": "Dosya adını ve mail konusunu kopyala",
+   "text": "SEB'in beklediği **dosya adı** ve **mail konusu** hazır gelir; yanlarındaki simgeyle kopyalayıp mailine yapıştır. Etkinlik adı ya da tarihi değişirse bunlar da güncellenir.",
+   "tip": null,
+   "file": "179-otf-kopyala.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 780.703125,
+     "y": 458.25,
+     "w": 28,
+     "h": 28
+    },
+    {
+     "x": 562.515625,
+     "y": 494.25,
+     "w": 28,
+     "h": 28
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 180,
+   "chapter": "takimlar",
+   "id": "takim-ac",
+   "title": "Takımlar'ı aç",
+   "text": "Kenar çubuğundan **Takımlar**'a tıkla. Takım, birlikte çalışan insanlardır; ağaçtaki birimlerden bağımsızdır.",
+   "tip": null,
+   "file": "180-takim-ac.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 10,
+     "y": 216.5,
+     "w": 211,
+     "h": 30
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 181,
+   "chapter": "takimlar",
+   "id": "takim-liste",
+   "title": "Her takım bir kart",
+   "text": "Kartta takımın **adı**, **açıklaması**, çalıştığı **birimler**, **üyeleri** ve **açık kayıt** sayısı var. Üyesi olduğun takımlar önde ve **Üyesin** rozetiyle işaretli.",
+   "tip": null,
+   "file": "181-takim-liste.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 264,
+     "y": 100.296875,
+     "w": 1144,
+     "h": 380
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 182,
+   "chapter": "takimlar",
+   "id": "takim-sec",
+   "title": "Takıma tıkla",
+   "text": "Kartın herhangi bir yerine tıkla; takımın sayfası açılır. Aynı sayfaya kenar çubuğundaki takım listesinden de ulaşılır.",
+   "tip": null,
+   "file": "182-takim-sec.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 649.328125,
+     "y": 100.296875,
+     "w": 373.328125,
+     "h": 184
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 183,
+   "chapter": "takimlar",
+   "id": "takim-genel",
+   "title": "Takım sayfasının dört bölümü",
+   "text": "Solda **Üyeler** (rolleriyle), **Çalıştığı birimler** ve takımın **Kayıtlar**'ı, sağda **Takım duvarı**. Her bölümün başlığına tıklarsan katlanır; katlama cihazında hatırlanır.",
+   "tip": null,
+   "file": "183-takim-genel.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 264,
+     "y": 152.296875,
+     "w": 744,
+     "h": 178.5,
+     "label": "Üyeler"
+    },
+    {
+     "x": 264,
+     "y": 358.796875,
+     "w": 744,
+     "h": 90.5,
+     "label": "Birimler"
+    },
+    {
+     "x": 264,
+     "y": 477.296875,
+     "w": 744,
+     "h": 177,
+     "label": "Kayıtlar"
+    },
+    {
+     "x": 1040,
+     "y": 44,
+     "w": 400,
+     "h": 856,
+     "label": "Takım duvarı"
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 184,
+   "chapter": "takimlar",
+   "id": "takim-duvar",
+   "title": "Takım duvarına not bırak",
+   "text": "**Takım duvarı** takımın ortak sohbetidir. Takıma ait duyuruları, kısa soruları buraya yaz; üyelik değişiklikleri de akışa sistem satırı olarak düşer. Duvara yalnız takım üyeleri yazar, herkes okur.",
+   "tip": null,
+   "file": "184-takim-duvar.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 1104,
+     "y": 773,
+     "w": 242.90625,
+     "h": 110
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 185,
+   "chapter": "takimlar",
+   "id": "takim-duvar-sonuc",
+   "title": "Not duvarda",
+   "text": "Mesajın takım üyelerine bildirim olarak gider. Grup anmaları da çalışır: **@team** yazarsan takımın tamamı anılır.",
+   "tip": null,
+   "file": "185-takim-duvar-sonuc.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 1101.046875,
+     "y": 701.1875,
+     "w": 322.953125,
+     "h": 111.875
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 186,
+   "chapter": "takimlar",
+   "id": "takim-duzen",
+   "title": "Bölümlerin sırasını kendine göre ayarla",
+   "text": "Sayfa başlığındaki **Düzen** düğmesi bölümleri yukarı/aşağı taşıtır. Sıra yalnız senin cihazında geçerlidir; başkalarını etkilemez.",
+   "tip": null,
+   "file": "186-takim-duzen.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 812.625,
+     "y": 82.140625,
+     "w": 86.71875,
+     "h": 32
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 187,
+   "chapter": "takimlar",
+   "id": "takim-duzen-oklar",
+   "title": "Oklarla taşı, bitince Düzeni bitir",
+   "text": "Her bölümün başlığında **yukarı** ve **aşağı** okları çıktı. Bitirince **Düzeni bitir**'e bas.",
+   "tip": null,
+   "file": "187-takim-duzen-oklar.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 931,
+     "y": 509.296875,
+     "w": 28,
+     "h": 28
+    },
+    {
+     "x": 781.84375,
+     "y": 82.140625,
+     "w": 117.5,
+     "h": 32
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 188,
+   "chapter": "takimlar",
+   "id": "takim-kayit",
+   "title": "Takım için kayıt aç",
+   "text": "**Kayıt aç**, takımı hazır gelen yeni kayıt penceresini açar: takımın bütün üyeleri o kaydı düzenleyebilir.",
+   "tip": null,
+   "file": "188-takim-kayit.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 911.34375,
+     "y": 82.140625,
+     "w": 96.65625,
+     "h": 32
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 189,
+   "chapter": "takimlar",
+   "id": "takim-kayit-form",
+   "title": "Takım çipi dolu geldi",
+   "text": "Pencere **Yeni kayıt** penceresinin aynısı; **Takım** alanı seçili geldi. Doldurup açabilir ya da **Vazgeç** diyebilirsin.",
+   "tip": null,
+   "file": "189-takim-kayit-form.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 400,
+     "y": 108,
+     "w": 640,
+     "h": 677.890625
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 190,
+   "chapter": "takim-yonet",
+   "id": "ty-yeni",
+   "title": "Yeni takım düğmesi",
+   "text": "**Yeni takım** düğmesi yalnız takım yönetme yetkisi (`manage_teams`) olanlara ve yöneticilere görünür. Diğer üyeler takımları görür ama kuramaz.",
+   "tip": null,
+   "file": "190-ty-yeni.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 1296.921875,
+     "y": 48.296875,
+     "w": 111.078125,
+     "h": 32
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 191,
+   "chapter": "takim-yonet",
+   "id": "ty-form",
+   "title": "Ad, açıklama ve renk",
+   "text": "**Ad** en az 5, **açıklama** (isteğe bağlı) en az 30 karakter olmalı. **Renk**, takımın kenar çubuğundaki noktasını ve kartını boyar.",
+   "tip": null,
+   "file": "191-ty-form.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 490,
+     "y": 108,
+     "w": 460,
+     "h": 390
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 192,
+   "chapter": "takim-yonet",
+   "id": "ty-sayfa",
+   "title": "Takım kuruldu, henüz üyesi yok",
+   "text": "Takımın sayfası açıldı. Duvarda **“Sponsorluk” takımını kurdu** satırı var. Şimdi üye ekleyelim: **Üyeler** kutusunun üstüne gelince çıkan **kalem** simgesine bas.",
+   "tip": null,
+   "file": "192-ty-sayfa.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 264,
+     "y": 401.796875,
+     "w": 744,
+     "h": 97
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 193,
+   "chapter": "takim-yonet",
+   "id": "ty-kalem",
+   "title": "Kutuyu düzenleme moduna al",
+   "text": "Her kutunun kalemi o kutuyu **düzenleme moduna** alır: ekleme ve çıkarma denetimleri yalnız bu modda görünür, böylece yanlışlıkla bir şey silinmez.",
+   "tip": null,
+   "file": "193-ty-kalem.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 963,
+     "y": 414.796875,
+     "w": 28,
+     "h": 28
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 194,
+   "chapter": "takim-yonet",
+   "id": "ty-kisi",
+   "title": "Kişiyi seç",
+   "text": "**Kişi ekle…** listesinden takıma katılacak kişiyi seç; arama kutusu kişi çoğalınca işine yarar.",
+   "tip": null,
+   "file": "194-ty-kisi.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 281,
+     "y": 508.796875,
+     "w": 511.96875,
+     "h": 34
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 195,
+   "chapter": "takim-yonet",
+   "id": "ty-kisi-sec",
+   "title": "Elif Şahin'i seç",
+   "text": "Elif bütçe ve sponsor katkılarına bakıyor; takımın lideri olsun.",
+   "tip": null,
+   "file": "195-ty-kisi-sec.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 286.3333435058594,
+     "y": 719.6666870117188,
+     "w": 501.9687805175781,
+     "h": 32
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 196,
+   "chapter": "takim-yonet",
+   "id": "ty-rol",
+   "title": "Rolünü seç",
+   "text": "Takımda üç rol var: **Lider**, **Mentor** ve **Üye**. Rol yalnız bilgilendirme içindir; kayıt yetkisi vermez (kayıt yetkisi takım üyeliğinden gelir).",
+   "tip": null,
+   "file": "196-ty-rol.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 800.96875,
+     "y": 508.796875,
+     "w": 130,
+     "h": 34
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 197,
+   "chapter": "takim-yonet",
+   "id": "ty-rol-sec",
+   "title": "Lider'i seç",
+   "text": "Rolü seçince liste kapanır; **Ekle** ile üyeliği kaydet.",
+   "tip": null,
+   "file": "197-ty-rol-sec.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 805.6666870117188,
+     "y": 553.6666870117188,
+     "w": 190,
+     "h": 32
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 198,
+   "chapter": "takim-yonet",
+   "id": "ty-ekle",
+   "title": "Ekle'ye bas",
+   "text": "Kişi takıma eklenir; duvara da “Elif Şahin kişisini takıma ekledi (Lider)” satırı düşer.",
+   "tip": null,
+   "file": "198-ty-ekle.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 938.96875,
+     "y": 509.796875,
+     "w": 52.03125,
+     "h": 32
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 199,
+   "chapter": "takim-yonet",
+   "id": "ty-uyeler",
+   "title": "Üye listesi",
+   "text": "Düzenleme modunda her satırda rol seçici ve **×** (takımdan çıkar) var. Bitince sağ üstteki **Bitti**'ye bas.",
+   "tip": null,
+   "file": "199-ty-uyeler.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 264,
+     "y": 401.796875,
+     "w": 744,
+     "h": 154
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 200,
+   "chapter": "takim-yonet",
+   "id": "ty-birim",
+   "title": "Takımın çalıştığı birimi bağla",
+   "text": "**Çalıştığı birimler** kutusu, takımı birim ağacının bir dalına bağlar (bir takım birden çok birimde çalışabilir). Bağlanan birim takım kartında ve Veri yönetimi'nde görünür; kayıtlar etkilenmez.",
+   "tip": null,
+   "file": "200-ty-birim.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 963,
+     "y": 541.796875,
+     "w": 28,
+     "h": 28
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 201,
+   "chapter": "takim-yonet",
+   "id": "ty-birim-ac",
+   "title": "Birime bağla…",
+   "text": "Birim ağacı açılır; aramayla bulup seç.",
+   "tip": null,
+   "file": "201-ty-birim-ac.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 281,
+     "y": 633.796875,
+     "w": 710,
+     "h": 34
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 202,
+   "chapter": "takim-yonet",
+   "id": "ty-birim-sec",
+   "title": "Malzeme ve Kaynak Planlama",
+   "text": "Sponsorluk işleri malzeme ve kaynak planıyla ilgili: o birimi seç. Bağlantı hemen kurulur.",
+   "tip": null,
+   "file": "202-ty-birim-sec.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 286.3333435058594,
+     "y": 781,
+     "w": 700.0000305175781,
+     "h": 32
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 203,
+   "chapter": "takim-yonet",
+   "id": "ty-sonuc",
+   "title": "Takım hazır",
+   "text": "Takımın üyesi ve birimi var; artık kayıtlar bu takıma atanabilir, duvar da kullanıma hazır.",
+   "tip": null,
+   "file": "203-ty-sonuc.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 264,
+     "y": 401.796875,
+     "w": 744,
+     "h": 99
+    },
+    {
+     "x": 264,
+     "y": 528.796875,
+     "w": 744,
+     "h": 154
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 204,
+   "chapter": "ekip-profil",
+   "id": "ekip-ac",
+   "title": "Ekip'i aç",
+   "text": "Kenar çubuğundan **Ekip**'e tıkla: kulübün herkesi tek sayfada.",
+   "tip": null,
+   "file": "204-ekip-ac.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 10,
+     "y": 247.5,
+     "w": 211,
+     "h": 30
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 205,
+   "chapter": "ekip-profil",
+   "id": "ekip-liste",
+   "title": "Herkesin profil kartı",
+   "text": "Kartta **ad**, **takma ad**, **rol rozetleri** (yetki demetleri), **telefon**, **doğum günü** (yıl gösterilmez) ve üye olduğu **takımlar** var. Doğum günü olanın yanında pasta simgesi ve **“bugün!”** yazar.",
+   "tip": null,
+   "file": "205-ekip-liste.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 264,
+     "y": 148.296875,
+     "w": 1144,
+     "h": 583.5
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 206,
+   "chapter": "ekip-profil",
+   "id": "ekip-ara",
+   "title": "Adla, takma adla ya da telefonla ara",
+   "text": "Arama kutusu ad, takma ad ve telefon numarasında arar. Telefon numarasına tıklamak aramayı başlatır (telefonda).",
+   "tip": null,
+   "file": "206-ekip-ara.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 264,
+     "y": 100.296875,
+     "w": 280,
+     "h": 32
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 207,
+   "chapter": "ekip-profil",
+   "id": "profil-menu",
+   "title": "Kendi bilgilerin sol-alttaki menüde",
+   "text": "Sol altta adına tıkla: **Profilim**, **Bildirimler**, **Tema** (açık / koyu / sistem) ve **Çıkış yap**.",
+   "tip": null,
+   "file": "207-profil-menu.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 10,
+     "y": 846,
+     "w": 211,
+     "h": 42
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 208,
+   "chapter": "ekip-profil",
+   "id": "profil-menu-ac",
+   "title": "Profilim'i seç",
+   "text": "Bilgilerini herkes kendi girer: başkasının profilini yalnız yöneticiler düzenleyebilir.",
+   "tip": null,
+   "file": "208-profil-menu-ac.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 17,
+     "y": 598.3333129882812,
+     "w": 201,
+     "h": 32
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 209,
+   "chapter": "ekip-profil",
+   "id": "profil-form",
+   "title": "Fotoğraf, takma ad, telefon, doğum günü",
+   "text": "**Telefon** zorunlu (ekip arkadaşların sana ulaşabilsin); biçimi kendiliğinden düzenlenir. **Takma ad** sohbette adının altında görünür, **doğum günü** Ekip sayfasında ve bugünse Panolar'da çıkar.",
+   "tip": null,
+   "file": "209-profil-form.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 490,
+     "y": 108,
+     "w": 460,
+     "h": 532
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 210,
+   "chapter": "ekip-profil",
+   "id": "bildirim-menu",
+   "title": "Bildirimler",
+   "text": "Menüden **Bildirimler**'i seç: hangi hareketlerde haber alacağını sen belirlersin.",
+   "tip": null,
+   "file": "210-bildirim-menu.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 17,
+     "y": 630.3333129882812,
+     "w": 201,
+     "h": 32
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 211,
+   "chapter": "ekip-profil",
+   "id": "bildirim-ayar",
+   "title": "Varsayılan bildirim düzeyi",
+   "text": "**Her hareket**, **yalnızca anıldığımda** ya da **sessize al**. **Sessiz saat** yalnız anlık bildirimi susturur, liste yine dolar. **Bu cihaz** bölümünden telefonda ya da tarayıcıda anlık bildirim açılır; bir sohbette farklı düzey için o sohbetin zil simgesini kullan.",
+   "tip": null,
+   "file": "211-bildirim-ayar.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 490,
+     "y": 108,
+     "w": 460,
+     "h": 380.5
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 212,
+   "chapter": "pillarlar",
+   "id": "pillar-ac",
+   "title": "Pillar'lar'ı aç",
+   "text": "Kenar çubuğundan **Pillar'lar**'a tıkla. Pillar, birimlerden bağımsız bir **sorumluluk alanıdır**: bir kayıt hem bir birimde (ne işi) hem de bir pillar'da (hangi alan) durabilir.",
+   "tip": null,
+   "file": "212-pillar-ac.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 10,
+     "y": 278.5,
+     "w": 211,
+     "h": 30
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 213,
+   "chapter": "pillarlar",
+   "id": "pillar-liste",
+   "title": "Pillar kartları",
+   "text": "Her pillar'ın kendi **takımı** ve **sohbeti** vardır. Kartta açıklama, kişi sayısı ve **açık kayıt** sayısı görünür.",
+   "tip": null,
+   "file": "213-pillar-liste.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 264,
+     "y": 100.296875,
+     "w": 1144,
+     "h": 156
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 214,
+   "chapter": "pillarlar",
+   "id": "pillar-sec",
+   "title": "Atölye Güvenliği'ne tıkla",
+   "text": "Pillar sayfası, takım sayfasına benzer: üyeler, kayıtlar ve sohbet.",
+   "tip": null,
+   "file": "214-pillar-sec.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 264,
+     "y": 100.296875,
+     "w": 373.328125,
+     "h": 156
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 215,
+   "chapter": "pillarlar",
+   "id": "pillar-sayfa",
+   "title": "Pillar sayfası",
+   "text": "**Üyeler**, bu pillar'a bağlı **kayıtlar** (birimi ne olursa olsun), ileride gösterge panelleri için ayrılmış **Göstergeler** alanı ve sağda **pillar sohbeti**. Kayıtlara pillar bağlamak için kayıt sayfasındaki **Pillar** satırı kullanılır.",
+   "tip": null,
+   "file": "215-pillar-sayfa.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 900
+   },
+   "boxes": [
+    {
+     "x": 264,
+     "y": 152.296875,
+     "w": 744,
+     "h": 178.5,
+     "label": "Üyeler"
+    },
+    {
+     "x": 264,
+     "y": 358.796875,
+     "w": 744,
+     "h": 135,
+     "label": "Bağlı kayıtlar"
+    },
+    {
+     "x": 1040,
+     "y": 44,
+     "w": 400,
+     "h": 856,
+     "label": "Pillar sohbeti"
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 216,
+   "chapter": "veri-birimler",
+   "id": "veri-ac",
+   "title": "Veri yönetimi'ni aç",
+   "text": "Kenar çubuğundan **Veri yönetimi**'ne tıkla. Burası kayıtların, etkinliklerin ve formların dayandığı **ortak listelerin** düzenlendiği yer.",
+   "tip": null,
+   "file": "216-veri-ac.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1500
+   },
+   "boxes": [
+    {
+     "x": 10,
+     "y": 309.5,
+     "w": 211,
+     "h": 30
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 217,
+   "chapter": "veri-birimler",
+   "id": "veri-kokler",
+   "title": "Üç kök liste",
+   "text": "**Birimler** serbest bir ağaçtır (türünü ve yapısını sen seçersin). **Etkinlik Türleri** ve **Etkinlik Yerleri** yönetilen listelerdir. Kökler koddan gelir (kilit simgesi), yalnız adları ve açıklamaları değişir. Her değişiklik anında uygulanır.",
+   "tip": null,
+   "file": "217-veri-kokler.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 359
+   },
+   "boxes": [
+    {
+     "x": 264,
+     "y": 166.796875,
+     "w": 1144,
+     "h": 34
+    },
+    {
+     "x": 264,
+     "y": 212.796875,
+     "w": 1144,
+     "h": 118
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 218,
+   "chapter": "veri-birimler",
+   "id": "veri-birimler-ac",
+   "title": "Birimler'in okuna bas",
+   "text": "Satırdaki **ok** alt dalları açar. **Birimler**'in altında tek dal var: **Etkinlik**.",
+   "tip": null,
+   "file": "218-veri-birimler-ac.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 359
+   },
+   "boxes": [
+    {
+     "x": 271,
+     "y": 223.796875,
+     "w": 24,
+     "h": 24
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 219,
+   "chapter": "veri-birimler",
+   "id": "veri-agac",
+   "title": "Etkinlik dalı: hücre → makine → görev/adım",
+   "text": "Her düğümün yanında **türü** yazar: **Cell** (ana hücre), **Makine** (iş kolu), **Görev** ve **Adım**. Altındaki satır kısa **açıklamadır**. Sağdaki sayı alt düğüm sayısı; renkli bağlantılar o birimde çalışan **takımlardır**.",
+   "tip": null,
+   "file": "219-veri-agac.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1143
+   },
+   "boxes": [
+    {
+     "x": 264,
+     "y": 212.796875,
+     "w": 1144,
+     "h": 902
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 220,
+   "chapter": "veri-birimler",
+   "id": "veri-duzenle",
+   "title": "Düğümü düzenle",
+   "text": "Satırdaki **kalem** düğümün adını, türünü, yapısını, **üst düğümünü** (taşımak için) ve açıklamasını değiştirir. Ad en az 5, açıklama (varsa) en az 30 karakter olmalı.",
+   "tip": null,
+   "file": "220-veri-duzenle.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1143
+   },
+   "boxes": [
+    {
+     "x": 1315,
+     "y": 593.796875,
+     "w": 28,
+     "h": 28
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 221,
+   "chapter": "veri-birimler",
+   "id": "veri-duzenle-form",
+   "title": "Düzenleme paneli satırın altında açılır",
+   "text": "**Tür** seçenekleri üst düğümün kuralına göre gelir (makinenin altına görev ya da adım eklenir). **Üst düğüm** listesi yalnız bu türü kabul eden dalları gösterir. Vazgeçmek için **Vazgeç**.",
+   "tip": null,
+   "file": "221-veri-duzenle-form.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1500
+   },
+   "boxes": [
+    {
+     "x": 373,
+     "y": 645.796875,
+     "w": 1030,
+     "h": 464
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 222,
+   "chapter": "veri-birimler",
+   "id": "veri-ekle",
+   "title": "Alt düğüm ekle",
+   "text": "Satırdaki **+** o birimin altına yeni bir düğüm ekler. **Etkinlik Planlama**'nın altına yeni bir görev ekleyelim.",
+   "tip": null,
+   "file": "222-veri-ekle.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1143
+   },
+   "boxes": [
+    {
+     "x": 1343,
+     "y": 481.796875,
+     "w": 28,
+     "h": 28
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 223,
+   "chapter": "veri-birimler",
+   "id": "veri-ekle-form",
+   "title": "Adı, türü ve açıklamayı gir",
+   "text": "**Tür** ve **Yapı** (ağaç / liste / yaprak) seçilir; **Açıklama** isteğe bağlıdır ama ekibe neyin nereye ait olduğunu anlatır. **Ekle**'ye bas.",
+   "tip": null,
+   "file": "223-veri-ekle-form.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1500
+   },
+   "boxes": [
+    {
+     "x": 349,
+     "y": 533.796875,
+     "w": 1054,
+     "h": 390
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 224,
+   "chapter": "veri-birimler",
+   "id": "veri-ekle-sonuc",
+   "title": "Yeni birim ağaçta",
+   "text": "Yeni düğüm kardeşlerinin sonuna eklendi. Bu andan itibaren **Yeni kayıt** penceresinde ve kayıt sayfasında **Birim** listesinde seçilebilir.",
+   "tip": null,
+   "file": "224-veri-ekle-sonuc.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1199
+   },
+   "boxes": [
+    {
+     "x": 269,
+     "y": 813.796875,
+     "w": 1134,
+     "h": 50
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 225,
+   "chapter": "veri-birimler",
+   "id": "veri-pasif",
+   "title": "Silme yerine pasifleştir",
+   "text": "Artık kullanılmayan bir birimi **silme**, **pasifleştir**. Geçmiş kayıtlar adını göstermeye devam eder; yeni kayıt ve listelerde çıkmaz. İstersen **Yeniden aç** ile geri getirirsin.",
+   "tip": null,
+   "file": "225-veri-pasif.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1199
+   },
+   "boxes": [
+    {
+     "x": 1371,
+     "y": 817.796875,
+     "w": 28,
+     "h": 28
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 226,
+   "chapter": "veri-birimler",
+   "id": "veri-pasif-sonuc",
+   "title": "Düğüm pasif",
+   "text": "Satır soluklaştı ve yanında **pasif** yazıyor. Kalıcı silme yalnızca “kalıcı sil” yetkisi olanlarda, düzenleme panelinin içinde ve bağlı kayıt sayısı gösterilerek yapılır.",
+   "tip": null,
+   "file": "226-veri-pasif-sonuc.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1199
+   },
+   "boxes": [
+    {
+     "x": 269,
+     "y": 813.796875,
+     "w": 1134,
+     "h": 50
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 227,
+   "chapter": "veri-birimler",
+   "id": "veri-ara",
+   "title": "Ağaçta ara",
+   "text": "Arama kutusu ad ve açıklamada arar; eşleşen düğümleri ve **üstlerini** gösterir, dalları kendiliğinden açar. Aramayı silince bulduğun yerde kalırsın.",
+   "tip": null,
+   "file": "227-veri-ara.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 963
+   },
+   "boxes": [
+    {
+     "x": 264,
+     "y": 166.796875,
+     "w": 926.109375,
+     "h": 34
+    },
+    {
+     "x": 269,
+     "y": 365.796875,
+     "w": 1134,
+     "h": 50
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 228,
+   "chapter": "veri-turler",
+   "id": "tur-ac",
+   "title": "Etkinlik Türleri'ni aç",
+   "text": "**Etkinlik Türleri** kökünün okuna bas: ekibin tanımladığı türler listelenir. Yeni etkinlik oluştururken **Tür** listesi buradan gelir.",
+   "tip": null,
+   "file": "228-tur-ac.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 359
+   },
+   "boxes": [
+    {
+     "x": 271,
+     "y": 259.796875,
+     "w": 24,
+     "h": 24
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 229,
+   "chapter": "veri-turler",
+   "id": "tur-liste",
+   "title": "Sekiz tür",
+   "text": "Her tür bir **seçenek** (option) düğümüdür: Toplantı, Atölye, Eğitim, Saha ziyareti, Konferans, Yarışma, Sosyal… Sayı, türün altındaki bölümleri gösterir. Tür düğümünü sistem atar; yalnız **ad ve açıklamayı** değiştirirsin.",
+   "tip": null,
+   "file": "229-tur-liste.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 707
+   },
+   "boxes": [
+    {
+     "x": 264,
+     "y": 212.796875,
+     "w": 1144,
+     "h": 466
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 230,
+   "chapter": "veri-turler",
+   "id": "tur-bolum",
+   "title": "Her türün iki bölümü var",
+   "text": "**Adımlar** o türdeki etkinliğe otomatik gelecek **zaman çizelgesi adımları**nı, **Widget'lar** otomatik eklenecek **widget'ları** (OTF formu, satın alımlar) tutar. İkisi de kendiliğinden açılır, silinemez (kilit).",
+   "tip": null,
+   "file": "230-tur-bolum.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 779
+   },
+   "boxes": [
+    {
+     "x": 269,
+     "y": 469.796875,
+     "w": 1134,
+     "h": 50
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 231,
+   "chapter": "veri-turler",
+   "id": "tur-adimlar",
+   "title": "Adımlar: etkinlikten kaç gün önce?",
+   "text": "Her adımın yanında **gün farkı** yazar (örneğin **−21 gün** = etkinlikten 21 gün önce). Yeni bir atölye açıldığında bu adımlar kendi tarihleriyle zaman çizelgesine kopyalanır. Hazırlık en geç 7 gün önce bitmeli: daha yakın adım **uyarı simgesi** alır.",
+   "tip": null,
+   "file": "231-tur-adimlar.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 959
+   },
+   "boxes": [
+    {
+     "x": 264,
+     "y": 212.796875,
+     "w": 1144,
+     "h": 718
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 232,
+   "chapter": "veri-turler",
+   "id": "tur-adim-ekle",
+   "title": "Şablona yeni adım ekle",
+   "text": "**Adımlar** satırındaki **+** şablona adım ekler. Eklenen adım yalnızca **bundan sonra açılan** atölyelere gelir; mevcut etkinlikler değişmez.",
+   "tip": null,
+   "file": "232-tur-adim-ekle.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 959
+   },
+   "boxes": [
+    {
+     "x": 1371,
+     "y": 529.796875,
+     "w": 28,
+     "h": 28
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 233,
+   "chapter": "veri-turler",
+   "id": "tur-adim-form",
+   "title": "Adı ve gün farkını yaz",
+   "text": "**Eksi** değer etkinlikten **önce** demektir: **−8** etkinlikten 8 gün önce. Alanları doldurup **Ekle**'ye bas.",
+   "tip": null,
+   "file": "233-tur-adim-form.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1293
+   },
+   "boxes": [
+    {
+     "x": 349,
+     "y": 565.796875,
+     "w": 1054,
+     "h": 320
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 234,
+   "chapter": "veri-turler",
+   "id": "tur-adim-sonuc",
+   "title": "Adım şablonda",
+   "text": "Yeni adım listeye girdi. Yanlışlık olursa satırdaki **pasifleştir** düğmesi adımı şablondan çıkarır; silmeden geri getirilebilir.",
+   "tip": null,
+   "file": "234-tur-adim-sonuc.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 995
+   },
+   "boxes": [
+    {
+     "x": 269,
+     "y": 741.796875,
+     "w": 1134,
+     "h": 36
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 235,
+   "chapter": "veri-turler",
+   "id": "yer-liste",
+   "title": "Etkinlik Yerleri",
+   "text": "**Etkinlik Yerleri**, etkinlik sayfasındaki **Yer** listesidir. Düz bir listedir: her yer tek bir düğümdür. Listede olmayan bir yer için etkinlikte **Diğer… (yaz)** kullanılır; sık kullanılanları buraya ekle.",
+   "tip": null,
+   "file": "235-yer-liste.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1331
+   },
+   "boxes": [
+    {
+     "x": 269,
+     "y": 925.796875,
+     "w": 1134,
+     "h": 36
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 236,
+   "chapter": "veri-turler",
+   "id": "yer-ekle",
+   "title": "Yeni yer ekle",
+   "text": "**Etkinlik Yerleri** satırındaki **+**'ya bas.",
+   "tip": null,
+   "file": "236-yer-ekle.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1331
+   },
+   "boxes": [
+    {
+     "x": 1371,
+     "y": 929.796875,
+     "w": 28,
+     "h": 28
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 237,
+   "chapter": "veri-turler",
+   "id": "yer-form",
+   "title": "Yerin adını ve açıklamasını yaz",
+   "text": "Yer türü sabittir (yer), **Tür** ya da **Yapı** sorulmaz. Açıklamaya kapasite, ekipman gibi bilgileri yazmak etkinlik planlayanlara yardım eder.",
+   "tip": null,
+   "file": "237-yer-form.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1400
+   },
+   "boxes": [
+    {
+     "x": 301,
+     "y": 965.796875,
+     "w": 1102,
+     "h": 320
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 238,
+   "chapter": "veri-turler",
+   "id": "yer-sonuc",
+   "title": "Yeni yer listede",
+   "text": "Yer anında kullanıma açıldı: etkinliklerin **Yer** listesinde ve tablo aramasında çıkar. Artık kullanılmayan yer **pasifleştirilir**; eski etkinlikler adını göstermeye devam eder.",
+   "tip": null,
+   "file": "238-yer-sonuc.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1387
+   },
+   "boxes": [
+    {
+     "x": 269,
+     "y": 1297.796875,
+     "w": 1134,
+     "h": 50
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 239,
+   "chapter": "yonetim",
+   "id": "yon-ac",
+   "title": "Yönetim'i aç",
+   "text": "Kenar çubuğundaki **Yönetim** yalnızca yöneticilere ve kullanıcı yönetme yetkisi (`manage_users`) olanlara görünür. Burası kimin girebileceğini ve neyi değiştirebileceğini belirler.",
+   "tip": null,
+   "file": "239-yon-ac.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1000
+   },
+   "boxes": [
+    {
+     "x": 10,
+     "y": 340.5,
+     "w": 211,
+     "h": 30
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 240,
+   "chapter": "yonetim",
+   "id": "yon-genel",
+   "title": "Üç bölüm",
+   "text": "**Kişiler ve roller** kullanıcıları ve yetki demetlerini, **Aktivite** kimin ne kadar uğradığını, **Kalite kapısı** (yalnız yönetici) metin kontrolü sorularını yönetir.",
+   "tip": null,
+   "file": "240-yon-genel.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1000
+   },
+   "boxes": [
+    {
+     "x": 264,
+     "y": 100.296875,
+     "w": 267.1875,
+     "h": 32
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 241,
+   "chapter": "yonetim",
+   "id": "yon-ekle",
+   "title": "Yeni kullanıcıyı ekle",
+   "text": "Yalnızca burada kayıtlı e-postalar giriş yapabilir (Google hesabıyla). **E-posta** ve **ad** yaz, **Kullanıcı ekle**'ye bas; kişiye davet postası otomatik hazırlanır.",
+   "tip": null,
+   "file": "241-yon-ekle.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1000
+   },
+   "boxes": [
+    {
+     "x": 264,
+     "y": 166.796875,
+     "w": 896,
+     "h": 200
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 242,
+   "chapter": "yonetim",
+   "id": "yon-liste",
+   "title": "Kullanıcı listede",
+   "text": "Her satırda **ad**, **e-posta**, **son görülme**, **bildirim ayarı** ve sahip olduğu **kapsamlar** var. Yeni eklenen kişi henüz hiç girmedi, kapsamı yok.",
+   "tip": null,
+   "file": "242-yon-liste.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1000
+   },
+   "boxes": [
+    {
+     "x": 265,
+     "y": 862.296875,
+     "w": 894,
+     "h": 138
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 243,
+   "chapter": "yonetim",
+   "id": "yon-duzenle",
+   "title": "Düzenle'yi aç",
+   "text": "Satırın altındaki **Düzenle** kapsam, rol ve dal izni denetimlerini açar. Liste kapalıyken taranabilir kalsın diye denetimler gizli durur.",
+   "tip": null,
+   "file": "243-yon-duzenle.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1000
+   },
+   "boxes": [
+    {
+     "x": 281,
+     "y": 967.796875,
+     "w": 46.734375,
+     "h": 18
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 244,
+   "chapter": "yonetim",
+   "id": "yon-rol",
+   "title": "Rol ver",
+   "text": "**Rol**, birden çok yetkiyi tek seferde veren bir demettir. Deniz tasarım takımına katılıyor: **Rol ver**'e bas.",
+   "tip": null,
+   "file": "244-yon-rol.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1000
+   },
+   "boxes": [
+    {
+     "x": 402,
+     "y": 485.796875,
+     "w": 98.046875,
+     "h": 28
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 245,
+   "chapter": "yonetim",
+   "id": "yon-rol-sec",
+   "title": "Tasarım rolünü seç",
+   "text": "Beş rol var: Birim Editörü, Etkinlik Koordinatörü, Liste Yöneticisi, Maliye, Tasarım. Rolün kapsamları sahiplerine **anında** yansır.",
+   "tip": null,
+   "file": "245-yon-rol-sec.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1000
+   },
+   "boxes": [
+    {
+     "x": 407,
+     "y": 691,
+     "w": 204,
+     "h": 32
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 246,
+   "chapter": "yonetim",
+   "id": "yon-rol-sonuc",
+   "title": "Rol atandı",
+   "text": "Satırda rol rozeti göründü (✕ ile geri alınır). Kişi **Ekip** sayfasında bu rozetle görünür; rolün kapsamları üstteki rozetlerde ayrıca listelenmez.",
+   "tip": null,
+   "file": "246-yon-rol-sonuc.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1000
+   },
+   "boxes": [
+    {
+     "x": 265,
+     "y": 296.296875,
+     "w": 894,
+     "h": 335
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 247,
+   "chapter": "yonetim",
+   "id": "yon-kapsam",
+   "title": "Tek tek kapsam da verilebilir",
+   "text": "Rolden bağımsız, doğrudan **kapsam** verebilirsin. Listedeki her kapsamın altında ne işe yaradığı yazar (örneğin `edit_deadline`: son tarih değiştirme).",
+   "tip": null,
+   "file": "247-yon-kapsam.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1000
+   },
+   "boxes": [
+    {
+     "x": 402,
+     "y": 457.796875,
+     "w": 126.140625,
+     "h": 28
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 248,
+   "chapter": "yonetim",
+   "id": "yon-kapsam-liste",
+   "title": "Kapsamlar ve anlamları",
+   "text": "**manage_events** etkinlikleri yönetir, **manage_purchases** satın alımları, **edit_nodes** birim ağacını, **manage_teams** takımları, **manage_users** kullanıcıları. Seçince kapsam hemen verilir; **Esc** ile vazgeç.",
+   "tip": null,
+   "file": "248-yon-kapsam-liste.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1000
+   },
+   "boxes": [
+    {
+     "x": 402,
+     "y": 492,
+     "w": 360,
+     "h": 388
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 249,
+   "chapter": "yonetim",
+   "id": "yon-dal",
+   "title": "Dal izni: yapıyı nerede değiştirebilir?",
+   "text": "**Dal izni**, birim ağacında bir dalı kişiye (ya da role) açar. Birim ağacını değiştirme gibi yapı yetkileri yalnızca izinli dalda ve altında geçer; kayıt düzenleme yetkisi de bu dallardaki kayıtlara uzanır.",
+   "tip": null,
+   "file": "249-yon-dal.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1000
+   },
+   "boxes": [
+    {
+     "x": 402,
+     "y": 513.796875,
+     "w": 121.609375,
+     "h": 28
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 250,
+   "chapter": "yonetim",
+   "id": "yon-dal-agac",
+   "title": "Ağaçtan dalı seç",
+   "text": "Birim ağacı açılır; **Etkinlik Planlama** gibi bir dal seçtiğinde kişi o dalın altındaki birimlerde yetkili olur.",
+   "tip": null,
+   "file": "250-yon-dal-agac.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1000
+   },
+   "boxes": [
+    {
+     "x": 402,
+     "y": 548,
+     "w": 214,
+     "h": 80
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 251,
+   "chapter": "yonetim",
+   "id": "yon-hesap",
+   "title": "Hesabı kapat, yönetici yap",
+   "text": "Satırın en altında **Hesabı kapat** (giriş izni kalkar, geçmiş kayıtlarda adı durur) ve yalnızca yöneticiye görünen **Yönetici yap** düğmeleri var. Mezun olan üyelerin hesabı silinmez, kapatılır.",
+   "tip": null,
+   "file": "251-yon-hesap.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1000
+   },
+   "boxes": [
+    {
+     "x": 296,
+     "y": 561.296875,
+     "w": 832,
+     "h": 41
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 252,
+   "chapter": "yonetim",
+   "id": "yon-toplu",
+   "title": "Birden çok kişiye aynı anda işlem",
+   "text": "Kişilerin solundaki kutuları işaretlersen üstte **Toplu işlemler** çıkar: **Rol ver**, **Rol al**, **Hesapları kapat/aç**. Dönem sonunda mezunları tek seferde kapatmak için ideal.",
+   "tip": null,
+   "file": "252-yon-toplu.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1000
+   },
+   "boxes": [
+    {
+     "x": 264,
+     "y": 0.296875,
+     "w": 896,
+     "h": 46
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 253,
+   "chapter": "yonetim",
+   "id": "yon-roller",
+   "title": "Roller bir kapsam demetidir",
+   "text": "Her rolün **adı**, **rengi**, **kapsamları** ve **dal izinleri** vardır. Rolü değiştirirsen sahipleri anında etkilenir. Rol oluşturma ve silme yalnız yöneticide.",
+   "tip": null,
+   "file": "253-yon-roller.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1000
+   },
+   "boxes": [
+    {
+     "x": 264,
+     "y": 444.796875,
+     "w": 896,
+     "h": 556
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 254,
+   "chapter": "yonetim",
+   "id": "yon-rol-duzenle",
+   "title": "Rolü düzenle",
+   "text": "Rolün **Düzenle**'si ad, renk, kapsam kutucukları ve dal izinlerini açar. Kutucukları işaretleyip **Kaydet**'e bas.",
+   "tip": null,
+   "file": "254-yon-rol-duzenle.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1000
+   },
+   "boxes": [
+    {
+     "x": 281,
+     "y": 634.296875,
+     "w": 46.734375,
+     "h": 18
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 255,
+   "chapter": "yonetim",
+   "id": "yon-rol-form",
+   "title": "Kapsamları işaretle",
+   "text": "Her kapsamın altında kısa açıklaması var; işaret sayısı başlıkta (**x / y seçili**) görünür. Vazgeçmek için paneli kapat, değişiklik kaydedilmedikçe uygulanmaz.",
+   "tip": null,
+   "file": "255-yon-rol-form.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1000
+   },
+   "boxes": [
+    {
+     "x": 296,
+     "y": 49.296875,
+     "w": 832,
+     "h": 951
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 256,
+   "chapter": "yonetim-aktivite",
+   "id": "akt-ac",
+   "title": "Aktivite sekmesi",
+   "text": "**Aktivite** kimin ne zaman uğradığını ve ne kadar iş çıkardığını gösterir. Amaç kimseyi denetlemek değil, **kimin takılıp kaldığını** ya da yardıma ihtiyaç duyduğunu görmek.",
+   "tip": null,
+   "file": "256-akt-ac.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1100
+   },
+   "boxes": [
+    {
+     "x": 374.140625,
+     "y": 103.296875,
+     "w": 63.265625,
+     "h": 26
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 257,
+   "chapter": "yonetim-aktivite",
+   "id": "akt-tablo",
+   "title": "Kişi başına özet",
+   "text": "Her satırda **son giriş**, **son hareket**, son 30 günde **aktif gün**, son 7 günde sekmenin açık kaldığı **süre** ve **katkı** (mesaj + kayıt, alan, eylem değişiklikleri) var. Başlığa tıklarsan sıralar.",
+   "tip": null,
+   "file": "257-akt-tablo.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1100
+   },
+   "boxes": [
+    {
+     "x": 264,
+     "y": 176.296875,
+     "w": 896,
+     "h": 449.75
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 258,
+   "chapter": "yonetim-aktivite",
+   "id": "akt-kisi",
+   "title": "Bir kişiye tıkla",
+   "text": "Satıra tıklayınca altta kişinin **katkı matrisi** açılır: son haftalarda gün gün katkı (koyu = çok).",
+   "tip": null,
+   "file": "258-akt-kisi.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1100
+   },
+   "boxes": [
+    {
+     "x": 264.5,
+     "y": 285.796875,
+     "w": 895,
+     "h": 37.75
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 259,
+   "chapter": "yonetim-aktivite",
+   "id": "akt-matris",
+   "title": "Katkı matrisi ve seriler",
+   "text": "Matris GitHub'daki gibi okunur. Yanındaki satırlarda son 7/30 günlük **katkı**, **en katkılı gün**, günlük ortalama **süre** ve ardışık **seri** (gün) var. “Süre” sekmenin açık kaldığı dakikadır, “katkı” ise yapılan işlerdir.",
+   "tip": null,
+   "file": "259-akt-matris.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1100
+   },
+   "boxes": [
+    {
+     "x": 264,
+     "y": 642.046875,
+     "w": 896,
+     "h": 223.5
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 260,
+   "chapter": "yonetim-aktivite",
+   "id": "kalite-ac",
+   "title": "Kalite kapısı sekmesi",
+   "text": "Yalnız yöneticiye görünen **Kalite kapısı**, kayıt, etkinlik ve kapanış notlarının yazı kalitesini tartan modelin sorularını tutar. Kaydedince hemen geçerli olur.",
+   "tip": null,
+   "file": "260-kalite-ac.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1100
+   },
+   "boxes": [
+    {
+     "x": 439.40625,
+     "y": 103.296875,
+     "w": 88.78125,
+     "h": 26
+    }
+   ],
+   "click": true,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 261,
+   "chapter": "yonetim-aktivite",
+   "id": "kalite-sorular",
+   "title": "Üç soru ve eşik",
+   "text": "**Somutluk**, **Bağlam** ve kapanış notu **Gerekçe** soruları: her biri model yönergesi, “evet / hayır” ölçütü ve bir **eşik** içerir. Metin eşiğin altında kalırsa yazana **uyarı** çıkar; “Yine de gönder” ile geçilebilir.",
+   "tip": null,
+   "file": "261-kalite-sorular.jpg",
+   "viewport": {
+    "width": 1440,
+    "height": 1100
+   },
+   "boxes": [
+    {
+     "x": 264,
+     "y": 174.296875,
+     "w": 896,
+     "h": 433.5
+    }
+   ],
+   "click": false,
+   "mobile": false,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 262,
+   "chapter": "mobil",
+   "id": "mobil-eylemler",
+   "title": "Telefonda ilk sayfa: Eylemler",
+   "text": "**app.** adresi (ya da ana ekrana eklediğin uygulama) doğrudan **Eylemler**'i açar: sana atanmış, bitmemiş eylemler; bu haftakiler üstte. Altta dört sekme ve ortada **+** düğmesi var; sekmelerdeki kırmızı sayı bekleyen iş sayısıdır.",
+   "tip": null,
+   "file": "262-mobil-eylemler.jpg",
+   "viewport": {
+    "width": 390,
+    "height": 844
+   },
+   "boxes": [
+    {
+     "x": 12,
+     "y": 245,
+     "w": 366,
+     "h": 91.75,
+     "label": "Eylem kartı"
+    },
+    {
+     "x": 0,
+     "y": 779,
+     "w": 390,
+     "h": 65,
+     "label": "Sekmeler"
+    }
+   ],
+   "click": false,
+   "mobile": true,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 263,
+   "chapter": "mobil",
+   "id": "mobil-sahip",
+   "title": "Sahibi olduğun kayıtlar",
+   "text": "En üstteki **Sahibi olduğum açık kayıtlar** başlığına dokununca kayıtlar açılır. Eylemin olmasa bile sorumlusu olduğun işleri buradan görürsün.",
+   "tip": null,
+   "file": "263-mobil-sahip.jpg",
+   "viewport": {
+    "width": 390,
+    "height": 844
+   },
+   "boxes": [
+    {
+     "x": 13,
+     "y": 70,
+     "w": 364,
+     "h": 44
+    }
+   ],
+   "click": true,
+   "mobile": true,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 264,
+   "chapter": "mobil",
+   "id": "mobil-kayit-sec",
+   "title": "Etkinliğin kaydını aç",
+   "text": "Liste kısa kayıt kartlarıdır: tür, önem ve başlık. Etkinliğin kendi kaydı (**Etkinlik** etiketli) etkinliğin sohbetini ve adımlarını taşır; dokunup aç.",
+   "tip": null,
+   "file": "264-mobil-kayit-sec.jpg",
+   "viewport": {
+    "width": 390,
+    "height": 844
+   },
+   "boxes": [
+    {
+     "x": 25,
+     "y": 393.75,
+     "w": 340,
+     "h": 115.75
+    }
+   ],
+   "click": true,
+   "mobile": true,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 265,
+   "chapter": "mobil",
+   "id": "mobil-kayit",
+   "title": "Etkinlik şeridi",
+   "text": "Etkinlik kayıtlarında başlığın altında bir **şerit** çıkar: durum, tarih, yer ve **ilerleme çubuğu** (tamamlanan adım / toplam). Altında kaydın alanları, eylemleri ve kartları masaüstüyle aynı.",
+   "tip": null,
+   "file": "265-mobil-kayit.jpg",
+   "viewport": {
+    "width": 390,
+    "height": 844
+   },
+   "boxes": [
+    {
+     "x": 16,
+     "y": 278.9375,
+     "w": 358,
+     "h": 95
+    }
+   ],
+   "click": false,
+   "mobile": true,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 266,
+   "chapter": "mobil",
+   "id": "mobil-adimlar",
+   "title": "Adım sayısına dokun",
+   "text": "**x/y adım** düğmesi etkinliğin zaman çizelgesini açar. Sahada bir iş bitince buradan işaretlersin; sorumlu ve etkinlik yöneticisi doğrudan işaretler, diğerleri onay ister.",
+   "tip": null,
+   "file": "266-mobil-adimlar.jpg",
+   "viewport": {
+    "width": 390,
+    "height": 844
+   },
+   "boxes": [
+    {
+     "x": 276.171875,
+     "y": 291.9375,
+     "w": 84.828125,
+     "h": 28
+    }
+   ],
+   "click": true,
+   "mobile": true,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 267,
+   "chapter": "mobil",
+   "id": "mobil-adim-isaretle",
+   "title": "OTF gönderildi'yi işaretle",
+   "text": "SEB'e OTF mailini az önce attın: adımın kutusuna dokun. Kutu dolar, ilerleme çubuğu uzar; değişiklik etkinliğin sohbetine de yazılır.",
+   "tip": null,
+   "file": "267-mobil-adim-isaretle.jpg",
+   "viewport": {
+    "width": 390,
+    "height": 844
+   },
+   "boxes": [
+    {
+     "x": 17,
+     "y": 508.9375,
+     "w": 356,
+     "h": 44
+    }
+   ],
+   "click": true,
+   "mobile": true,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 268,
+   "chapter": "mobil",
+   "id": "mobil-adim-sonuc",
+   "title": "Adım tamamlandı",
+   "text": "İşaretlenen adım üstü çizili ve dolu görünür, sayaç bir arttı. Yanlışsa aynı kutuya tekrar dokunarak geri alabilirsin.",
+   "tip": null,
+   "file": "268-mobil-adim-sonuc.jpg",
+   "viewport": {
+    "width": 390,
+    "height": 844
+   },
+   "boxes": [
+    {
+     "x": 16,
+     "y": 278.9375,
+     "w": 358,
+     "h": 365
+    }
+   ],
+   "click": false,
+   "mobile": true,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 269,
+   "chapter": "mobil",
+   "id": "mobil-sohbet-ac",
+   "title": "Sağ alttaki balon: sohbet",
+   "text": "Kaydın sohbeti masaüstündeki gibi sağda değil, **sağ alttaki balonda**. Üzerindeki sayı mesaj sayısıdır; dokununca sohbet tam ekran açılır.",
+   "tip": null,
+   "file": "269-mobil-sohbet-ac.jpg",
+   "viewport": {
+    "width": 390,
+    "height": 844
+   },
+   "boxes": [
+    {
+     "x": 314,
+     "y": 700,
+     "w": 60,
+     "h": 60
+    }
+   ],
+   "click": true,
+   "mobile": true,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 270,
+   "chapter": "mobil",
+   "id": "mobil-sohbet-yaz",
+   "title": "Mesajını yaz ve gönder",
+   "text": "Mesaj kutusu masaüstündekiyle aynı: **@** ile kişi anabilir, resim simgesiyle görsel ekleyebilir, **⚡ Hızlı eylem** ile eylem açabilirsin. Telefonda **Enter** satır atlar; **Gönder** düğmesi gönderir.",
+   "tip": null,
+   "file": "270-mobil-sohbet-yaz.jpg",
+   "viewport": {
+    "width": 390,
+    "height": 844
+   },
+   "boxes": [
+    {
+     "x": 63,
+     "y": 718,
+     "w": 233.90625,
+     "h": 109
+    }
+   ],
+   "click": true,
+   "mobile": true,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 271,
+   "chapter": "mobil",
+   "id": "mobil-sohbet-sonuc",
+   "title": "Mesaj gitti",
+   "text": "Mesajın mor balonda; üstte adımı işaretlediğin sistem satırı da akışta. Sol üstteki **×** ile sohbeti kapatıp kayda dönersin.",
+   "tip": null,
+   "file": "271-mobil-sohbet-sonuc.jpg",
+   "viewport": {
+    "width": 390,
+    "height": 844
+   },
+   "boxes": [
+    {
+     "x": 0,
+     "y": 0,
+     "w": 390,
+     "h": 844
+    }
+   ],
+   "click": false,
+   "mobile": true,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 272,
+   "chapter": "mobil",
+   "id": "mobil-ekle",
+   "title": "Ortadaki + düğmesi",
+   "text": "**+** üç işi tek dokunuşa indirir: **Arama**, **Yeni kayıt** ve **Fotoğraf çek / seç**.",
+   "tip": null,
+   "file": "272-mobil-ekle.jpg",
+   "viewport": {
+    "width": 390,
+    "height": 844
+   },
+   "boxes": [
+    {
+     "x": 167,
+     "y": 782,
+     "w": 56,
+     "h": 56
+    }
+   ],
+   "click": true,
+   "mobile": true,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 273,
+   "chapter": "mobil",
+   "id": "mobil-ekle-menu",
+   "title": "Fotoğraf çek / seç",
+   "text": "Sahada bir şey gördün mü (örneğin kurulumun son hali): **Fotoğraf çek / seç**'e dokun; kamera açılır ya da galeriden seçersin.",
+   "tip": null,
+   "file": "273-mobil-ekle-menu.jpg",
+   "viewport": {
+    "width": 390,
+    "height": 844
+   },
+   "boxes": [
+    {
+     "x": 172,
+     "y": 739,
+     "w": 190,
+     "h": 32
+    }
+   ],
+   "click": false,
+   "mobile": true,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 274,
+   "chapter": "mobil",
+   "id": "mobil-foto",
+   "title": "Önizleme ve açıklama",
+   "text": "Seçtiğin fotoğrafın **önizlemesi** gelir; istersen **açıklama** yaz. Aşağı kaydırınca fotoğrafı göndereceğin konuşmalar listelenir.",
+   "tip": null,
+   "file": "274-mobil-foto.jpg",
+   "viewport": {
+    "width": 390,
+    "height": 844
+   },
+   "boxes": [
+    {
+     "x": 21,
+     "y": 183.53125,
+     "w": 348,
+     "h": 220
+    },
+    {
+     "x": 21,
+     "y": 443.53125,
+     "w": 348,
+     "h": 84
+    }
+   ],
+   "click": false,
+   "mobile": true,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 275,
+   "chapter": "mobil",
+   "id": "mobil-foto-hedef",
+   "title": "Hangi sohbetlere gitsin?",
+   "text": "Kayıt sohbetlerini ve takım duvarlarını işaretle; **Gönder** fotoğrafı her birine ayrı gönderir. Biri başarısız olursa yalnızca o tekrar denenir.",
+   "tip": null,
+   "file": "275-mobil-foto-hedef.jpg",
+   "viewport": {
+    "width": 390,
+    "height": 844
+   },
+   "boxes": [
+    {
+     "x": 33,
+     "y": 585.53125,
+     "w": 20,
+     "h": 20
+    }
+   ],
+   "click": true,
+   "mobile": true,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 276,
+   "chapter": "mobil",
+   "id": "mobil-konusmalar-ac",
+   "title": "Konuşmalar sekmesi",
+   "text": "**Konuşmalar** yazabildiğin bütün sohbetleri son mesaja göre sıralar: kayıt sohbetleri ve takım duvarları tek listede.",
+   "tip": null,
+   "file": "276-mobil-konusmalar-ac.jpg",
+   "viewport": {
+    "width": 390,
+    "height": 844
+   },
+   "boxes": [
+    {
+     "x": 231,
+     "y": 786,
+     "w": 77.5,
+     "h": 52
+    }
+   ],
+   "click": true,
+   "mobile": true,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 277,
+   "chapter": "mobil",
+   "id": "mobil-konusmalar",
+   "title": "Tek gelen kutusu",
+   "text": "Her satırda sohbetin adı, son mesaj ve türü (**Kayıt** ya da **Takım**) var. Dokununca ilgili kaydın ya da takımın sohbeti açılır.",
+   "tip": null,
+   "file": "277-mobil-konusmalar.jpg",
+   "viewport": {
+    "width": 390,
+    "height": 844
+   },
+   "boxes": [
+    {
+     "x": 12,
+     "y": 65,
+     "w": 366,
+     "h": 89.25
+    }
+   ],
+   "click": false,
+   "mobile": true,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 278,
+   "chapter": "mobil",
+   "id": "mobil-bildirim-ac",
+   "title": "Bildirim sekmesi",
+   "text": "**Bildirim** seni anan, sana eylem atayan ya da kayıtlarında olay olan kişileri toplar; kırmızı sayı okunmamışları gösterir.",
+   "tip": null,
+   "file": "278-mobil-bildirim-ac.jpg",
+   "viewport": {
+    "width": 390,
+    "height": 844
+   },
+   "boxes": [
+    {
+     "x": 308.5,
+     "y": 786,
+     "w": 77.5,
+     "h": 52
+    }
+   ],
+   "click": true,
+   "mobile": true,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 279,
+   "chapter": "mobil",
+   "id": "mobil-bildirim",
+   "title": "Bildirim listesi",
+   "text": "Okunmamışlar vurgulu. Satıra dokununca olayın geçtiği kayda gidersin. En üstteki **Bildirim ayarları** anlık bildirimi (telefona düşen) açıp kapatır.",
+   "tip": null,
+   "file": "279-mobil-bildirim.jpg",
+   "viewport": {
+    "width": 390,
+    "height": 844
+   },
+   "boxes": [
+    {
+     "x": 0,
+     "y": 0,
+     "w": 390,
+     "h": 7507
+    }
+   ],
+   "click": false,
+   "mobile": true,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 280,
+   "chapter": "mobil",
+   "id": "mobil-takimlar-ac",
+   "title": "Takımlar sekmesi",
+   "text": "**Takımlar** takımlarını ve üyelerini gösterir; ekip arkadaşını aramak gerektiğinde telefon simgesi hazır.",
+   "tip": null,
+   "file": "280-mobil-takimlar-ac.jpg",
+   "viewport": {
+    "width": 390,
+    "height": 844
+   },
+   "boxes": [
+    {
+     "x": 81.5,
+     "y": 786,
+     "w": 77.5,
+     "h": 52
+    }
+   ],
+   "click": true,
+   "mobile": true,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 281,
+   "chapter": "mobil",
+   "id": "mobil-takimlar",
+   "title": "Takım kartları",
+   "text": "Kartta açıklama, üye ve açık kayıt sayısı var. Dokunup takım sayfasını aç.",
+   "tip": null,
+   "file": "281-mobil-takimlar.jpg",
+   "viewport": {
+    "width": 390,
+    "height": 844
+   },
+   "boxes": [
+    {
+     "x": 12,
+     "y": 399.5,
+     "w": 366,
+     "h": 164.25
+    }
+   ],
+   "click": true,
+   "mobile": true,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 282,
+   "chapter": "mobil",
+   "id": "mobil-takim",
+   "title": "Üyeler ve telefon",
+   "text": "**Üyeler** açılınca her kişinin rolü ve **telefon simgesi** görünür; simgeye dokunmak numarayı arar. Takım duvarına da sağ alttaki balondan yazılır.",
+   "tip": null,
+   "file": "282-mobil-takim.jpg",
+   "viewport": {
+    "width": 390,
+    "height": 844
+   },
+   "boxes": [
+    {
+     "x": 16,
+     "y": 199.5,
+     "w": 358,
+     "h": 239.5
+    }
+   ],
+   "click": false,
+   "mobile": true,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 283,
+   "chapter": "mobil",
+   "id": "mobil-arama",
+   "title": "Arama",
+   "text": "**+ → Arama** kayıt ve eylem başlıklarında arar; yazdıkça sonuçlar gelir. Sonuca dokununca kayıt açılır.",
+   "tip": null,
+   "file": "283-mobil-arama.jpg",
+   "viewport": {
+    "width": 390,
+    "height": 844
+   },
+   "boxes": [
+    {
+     "x": 12,
+     "y": 69,
+     "w": 366,
+     "h": 48
+    }
+   ],
+   "click": false,
+   "mobile": true,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 284,
+   "chapter": "mobil",
+   "id": "mobil-hesap",
+   "title": "Hesap menüsü",
+   "text": "Sağ üstteki avatar **Profilim**, **Bildirimler**, **Tema** (açık / koyu / sistem) ve **Çıkış yap**'ı açar; masaüstündeki menünün aynısı.",
+   "tip": null,
+   "file": "284-mobil-hesap.jpg",
+   "viewport": {
+    "width": 390,
+    "height": 844
+   },
+   "boxes": [
+    {
+     "x": 338,
+     "y": 6,
+     "w": 44,
+     "h": 44
+    }
+   ],
+   "click": true,
+   "mobile": true,
+   "zoom": null,
+   "note": null
+  },
+  {
+   "n": 285,
+   "chapter": "mobil",
+   "id": "mobil-hesap-menu",
+   "title": "Menü açık",
+   "text": "Profil bilgilerini ve bildirim tercihlerini telefonda da güncelleyebilirsin; telefona anlık bildirim bu menüden açılır.",
+   "tip": null,
+   "file": "285-mobil-hesap-menu.jpg",
+   "viewport": {
+    "width": 390,
+    "height": 844
+   },
+   "boxes": [
+    {
+     "x": 178,
+     "y": 56,
+     "w": 200,
+     "h": 273
+    }
+   ],
+   "click": false,
+   "mobile": true,
+   "zoom": null,
+   "note": null
+  }
+ ]
+}
