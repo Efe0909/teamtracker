@@ -1,4 +1,4 @@
-// Takimlar: liste + takim sayfasi (uyeler, calistigi birimler, acik kayitlar,
+// Takimlar: liste + takim sayfasi (uyeler, calistigi konular, acik kayitlar,
 // takim duvari). Takim agactan BAGIMSIZ (spec/22): /api/teams'ten acilir,
 // agacla bagi team_nodes (N:M). Pillar'larin ozel takimlari burada
 // listelenmez — onlar pillar sayfasinda.
@@ -49,7 +49,7 @@ export function Teams() {
           <h1>
             Takımlar<span className={s.count}>{rows.length}</span>
           </h1>
-          <p className={s.pageSub}>Üyeler, çalıştıkları birimler, açık kayıtlar ve takım duvarı. Üyesi olduğun takımlar önce.</p>
+          <p className={s.pageSub}>Üyeler, çalıştıkları konular, açık kayıtlar ve takım duvarı. Üyesi olduğun takımlar önce.</p>
         </div>
         {can && (
           <Button variant="primary" onClick={() => setCreating(true)}>
@@ -263,13 +263,13 @@ function MemberRows({ team, chat, editing }: { team: TeamView; chat: Uuid; editi
   );
 }
 
-/** Calistigi birimler: team_nodes (N:M). Bag kopunca kayitlar etkilenmez.
+/** Calistigi konular: team_nodes (N:M). Bag kopunca kayitlar etkilenmez.
  *  Bagla/kopar yalniz duzenleme modunda. */
 function NodesWidget({ teamId, move }: { teamId: Uuid; move: WidgetMove | undefined }) {
   const L = useLookup();
   const can = useCanManageTeams();
   return (
-    <Widget id="nodes" title="Çalıştığı birimler" count={L.team(teamId)?.node_ids.length ?? 0} canEdit={can} move={move}>
+    <Widget id="nodes" title="Çalıştığı konular" count={L.team(teamId)?.node_ids.length ?? 0} canEdit={can} move={move}>
       {(editing) => <NodeRows teamId={teamId} editing={editing} />}
     </Widget>
   );
@@ -287,7 +287,7 @@ function NodeRows({ teamId, editing }: { teamId: Uuid; editing: boolean }) {
     <>
       {linked.length === 0 ? (
         <p className={s.dim} style={{ padding: "12px 16px", margin: 0 }}>
-          Ağaçta hiçbir birime bağlı değil.{editing ? " Aşağıdan bağla — bir takım birden çok birimde çalışabilir." : ""}
+          Ağaçta hiçbir konuya bağlı değil.{editing ? " Aşağıdan bağla — bir takım birden çok konuda çalışabilir." : ""}
         </p>
       ) : (
         <ul className={s.members}>
@@ -312,7 +312,7 @@ function NodeRows({ teamId, editing }: { teamId: Uuid; editing: boolean }) {
       {rows.more}
       {editing && (
         <div className={s.unitPicker}>
-          <NodeTreePicker rootKey="units" label="Birime bağla" placeholder="Birime bağla…" value={null}
+          <NodeTreePicker rootKey="units" label="Konuya bağla" placeholder="Konuya bağla…" value={null}
             disabled={m.isPending} exclude={(n) => linked.includes(n.id)}
             onChange={(n) => m.mutate(teamOps.link(teamId, n), { onError: fail })} />
         </div>
@@ -440,7 +440,7 @@ export function TeamPage({ id }: { id: Uuid }) {
             <div className={s.dangerZone}>
               <span>
                 <b>Takımı sil</b>
-                <span className={s.dim}>Üyelikler, birim bağları ve takım duvarı gider. Kayıtlar takımsız kalır.</span>
+                <span className={s.dim}>Üyelikler, konu bağları ve takım duvarı gider. Kayıtlar takımsız kalır.</span>
               </span>
               <Button variant="danger" size="sm" onClick={remove} disabled={del.isPending}>Sil</Button>
             </div>

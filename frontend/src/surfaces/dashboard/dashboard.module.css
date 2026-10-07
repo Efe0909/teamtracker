@@ -902,7 +902,7 @@ a.row:hover {
 }
 /* Sutun sabit yukseklikte kayar; cocuklar SIKISMAZ. Yoksa overflow:hidden
    .surface'ler ekran yuksekligine buzulup kirpilir (kucuk ekranda/%100
-   zoom'da Uyeler ve birim agaci kesiliyordu). */
+   zoom'da Uyeler ve konu agaci kesiliyordu). */
 .recordMain > * {
   flex-shrink: 0;
 }
@@ -1482,7 +1482,7 @@ a.row:hover {
   cursor: pointer;
 }
 
-/* --- takim: birime bagla (NodeTreePicker, spec/74 §6) ------------------------ */
+/* --- takim: konuya bagla (NodeTreePicker, spec/74 §6) ------------------------ */
 .unitPicker {
   border-top: 1px solid var(--line);
   padding: var(--s-2) var(--s-4) var(--s-3);

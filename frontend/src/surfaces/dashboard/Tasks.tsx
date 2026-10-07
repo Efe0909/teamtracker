@@ -122,10 +122,10 @@ export function Tasks({ query }: { query: RecordQuery }) {
           ...L.meta.users.map((u) => ({ value: u.id, label: u.name, render: <Who user={u} /> })),
         ])}
         {chip("priority", "Öncelik", PRIORITY_ORDER.map((v) => ({ value: v, label: PRIORITY[v], render: <PriorityTag priority={v} bare /> })))}
-        <NodeTreePicker rootKey="units" look="chip" label="Birim" value={query.node ?? null} onChange={(id) => set({ node: id })}>
-          {query.node === undefined ? <><Icon name="plus" size={13} /> Birim</> : <>Birim: <b>{L.node(query.node)?.name ?? "?"}</b></>}
+        <NodeTreePicker rootKey="units" look="chip" label="Konu" value={query.node ?? null} onChange={(id) => set({ node: id })}>
+          {query.node === undefined ? <><Icon name="plus" size={13} /> Konu</> : <>Konu: <b>{L.node(query.node)?.name ?? "?"}</b></>}
         </NodeTreePicker>
-        {query.node !== undefined && <IconButton icon="x" label="Birim süzgecini kaldır" onClick={() => set({ node: undefined })} />}
+        {query.node !== undefined && <IconButton icon="x" label="Konu süzgecini kaldır" onClick={() => set({ node: undefined })} />}
         {chip("team", "Takım", L.plainTeams.map((t) => ({ value: t.id, label: t.name, render: <TeamName team={t} /> })))}
         {chip("kind", "Tür", [{ value: "issue", label: KIND.issue }, { value: "task", label: KIND.task }])}
         {L.pillars.length > 0 &&
@@ -164,7 +164,7 @@ const COLS: { key: ColKey; label: string; width: number }[] = [
   { key: "priority", label: "Öncelik", width: 110 },
   { key: "owner", label: "Sorumlu", width: 150 },
   { key: "due", label: "Son tarih", width: 140 },
-  { key: "unit", label: "Birim", width: 170 },
+  { key: "unit", label: "Konu", width: 170 },
   { key: "team", label: "Takım", width: 130 },
   { key: "updated", label: "Hareket", width: 100 },
 ];

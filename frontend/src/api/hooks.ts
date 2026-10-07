@@ -502,7 +502,7 @@ export const pillarOps = {
 // --- yapi (veri yonetimi) ---------------------------------------------------
 
 /** Yazma guncel agaci dondurur. Dugumler HER ekrani besliyor (`/api/meta`:
- *  birim listesi, yollar, takimlar); kalici silme kayitlari da goturur. */
+ *  konu listesi, yollar, takimlar); kalici silme kayitlari da goturur. */
 function afterTreeWrite(qc: QueryClient, t: TreeView) {
   qc.setQueryData(keys.nodes, t);
   void qc.invalidateQueries({ queryKey: keys.meta });
