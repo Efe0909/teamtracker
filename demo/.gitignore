@@ -1,0 +1,5 @@
+# uretilen ciktilar: gunlukler, medya, kismi capture kosulari
+out/
+# rehber ciktisinin gecici ara urunleri (PDF'in HTML'i ve kucultulmus goruntuler)
+guide/pdf/
+guide/pdf-shots/
