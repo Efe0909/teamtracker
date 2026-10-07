@@ -12,6 +12,7 @@ node tools/md-browser/browser.mjs     # dikey kayma, imleç tuzağı, kural geni
 node tools/md-browser/browser2.mjs    # elle yazım, fare/sürükleme, Shift+ok, link/liste/kod toolbar'ı, salt okunur tutarlılık
 node tools/md-browser/fuzz.mjs        # rastgele belgelerde ArrowRight/Left taraması
 node tools/md-browser/dialog.mjs      # gerçek Radix Dialog içinde placeholder/imleç hizası, çeşitli yakınlaştırma
+node tools/md-browser/caret.mjs       # çizilen imleç ↔ placeholder/yazı hizası (boş alanda yerel imleç yukarı kayıyordu)
 ```
 
 Ortam: `MD_HARNESS` harness adresini değiştirir. Boyutlar tarayıcı yakınlaştırmasını

@@ -1,5 +1,5 @@
 import { EditorState, StateEffect, StateField, Transaction, type Extension, type Range as DecoRange } from "@codemirror/state";
-import { Decoration, EditorView, WidgetType, keymap, placeholder, type DecorationSet } from "@codemirror/view";
+import { Decoration, EditorView, WidgetType, drawSelection, keymap, placeholder, type DecorationSet } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { deleteMarkupBackward, insertNewlineContinueMarkupCommand } from "@codemirror/lang-markdown";
 import { syntaxTree } from "@codemirror/language";
@@ -157,8 +157,8 @@ function build(state: EditorState): DecorationSet {
           const l = doc.line(n);
           line(`${s.code} ${n === first ? s.codeFirst : ""} ${n === last ? s.codeLast : ""}`, l.from);
         }
-        mark(s.syntax, c.open.from, c.open.to);
-        mark(s.syntax, c.close.from, c.close.to);
+        mark(`${s.syntax} ${s.codeFence}`, c.open.from, c.open.to);
+        mark(`${s.syntax} ${s.codeFence}`, c.close.from, c.close.to);
         break;
       }
     }
@@ -266,6 +266,9 @@ export function markdownExtensions(options: {
 }): Extension[] {
   return [
     history(), markdownLanguage, interaction, markdownDecorations, EditorView.lineWrapping,
+    // Tarayıcının yerel imleci boş satırda satır-içi widget (placeholder) yüzünden yukarı
+    // kayabiliyor; imleci CM kendisi çizer (coordsAtPos ile, tüm tarayıcılarda aynı).
+    drawSelection({ cursorBlinkRate: 1000 }),
     EditorView.focusChangeEffect.of((_state, focusing) => setFocus.of(focusing)),
     EditorView.contentAttributes.of({ "aria-label": options.label, "aria-multiline": "true", role: "textbox", spellcheck: "true" }),
     ...(options.placeholder === undefined ? [] : [placeholder(options.placeholder)]),

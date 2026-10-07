@@ -66,6 +66,8 @@ Birim+jsdom: `npm test` (27 dosya, 164 test). Gerçek tarayıcı: `frontend/tool
 | H1>H2>H3>gövde boyutu | geçti |
 | `https://a`→`.`→`com`: imleç glif sonunda, nokta genişliği 0, hover metrik/kaynak değiştirmez, tık→`[|](URL)` | geçti |
 | Placeholder/imleç hizası: açık/koyu, 100/125/150/200/300%, gerçek Radix Dialog içinde | geçti |
+| İmleç: yerel imleç boş alanda placeholder üstüne kayıyordu → `drawSelection` (CM çizer); 100–300%, yazıdan sonra da hizalı | geçti |
+| Kod bloğu: çit glifleri üste yapışıktı, arka plan kenarlara taşıyordu → glif ortalandı, blok içeri alındı | geçti (ekran görüntüsü) |
 | Toolbar B/liste/başlık/bağlantı aç-kapa, seçim/odak korunur | geçti |
 | Elle `**kalın**`, `# Başlık`, `[ad](url)`, `> ` `---` yazımı; liste Enter/çıkış | geçti |
 | Fare tıklama/sürükleme | geçti |
