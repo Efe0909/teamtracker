@@ -1,89 +1,197 @@
 import { expect, it } from "vitest";
-import { continueList, fileProvider, parseMarkdownParts, safeHref, visiblePosition } from "./markdown";
+import { EditorSelection, EditorState } from "@codemirror/state";
+import { analyze, delimiters, fileProvider, safeHref, touches, type Construct } from "./markdown";
+import { renderLines } from "./markdownLines";
+import { formatsAt, markdownLanguage, toggleCodeBlock, toggleInline, toggleLines } from "./markdownCommands";
 
-const visible = (source: string) => parseMarkdownParts(source).filter((p) => !p.hidden);
+const kinds = (source: string) => analyze(source).map((c) => c.kind);
+const find = <K extends Construct["kind"]>(source: string, kind: K) =>
+  analyze(source).find((c): c is Extract<Construct, { kind: K }> => c.kind === kind);
+const visibleText = (source: string) => renderLines(source).map((l) => l.segments.map((s) => s.text).join("")).join("\n");
 
-it("keeps incomplete syntax literal and renders complete aliases", () => {
-  expect(visible("[](htt)")).toEqual([expect.objectContaining({ text: "htt", kind: "link", href: "htt", fallback: true, from: 1, to: 1 })]);
-  expect(visible("[](https://example.com").map((p) => p.text).join("")).toBe("[](https://example.com");
-  expect(visible("**bold").map((p) => p.text).join("")).toBe("**bold");
-  expect(visible("[alias](madeup:target)")[0]).toMatchObject({ text: "alias", kind: "link" });
-  expect(visible("[alias](madeup:target)")[0]?.href).toBeUndefined();
-});
+function stateOf(doc: string, anchor = doc.length, head = anchor): EditorState {
+  return EditorState.create({ doc, selection: EditorSelection.single(anchor, head), extensions: [markdownLanguage] });
+}
+function apply(state: EditorState, spec: ReturnType<typeof toggleInline>): EditorState {
+  if (!spec) throw new Error("command returned null");
+  return state.update(spec).state;
+}
 
-it("parses bounded long malformed escaped links without exponential backtracking", () => {
-  const start = performance.now();
-  for (const prefix of ["[", "[label](", "[label](("]) {
-    const source = prefix + "\\a".repeat(2000);
-    expect(visible(source).map((p) => p.text).join("")).toBe(source);
+it("keeps incomplete syntax literal", () => {
+  for (const source of ["[isim](htt", "**bold", "*it", "[x]", "###", "### ", "#### deep", "`open"]) {
+    expect(kinds(source), source).toEqual([]);
+    expect(visibleText(source)).toBe(source);
   }
-  expect(performance.now() - start).toBeLessThan(1000);
-}, 1500);
-
-it("keeps unsupported nested emphasis wholly literal and strips punctuation after unmatched URL parentheses", () => {
-  for (const source of ["**bold *italic* bold**", "**bold _italic_ bold**", "**bold *incomplete"]) {
-    expect(visible(source).map((p) => p.text).join("")).toBe(source);
-    expect(parseMarkdownParts(source).some((p) => p.hidden)).toBe(false);
-  }
-  expect(visible("https://example.com/path!)")[0]).toMatchObject({ text: "https://example.com/path", href: "https://example.com/path" });
+  expect(kinds("[](https://x.com)")).toEqual(["link"]);
+  expect(kinds("[a](https://x.com)")).toEqual(["link"]);
 });
 
-it("hides only delimiter source spans, never duplicated visible text", () => {
-  const parts = parseMarkdownParts("**bold** [alias](url)");
-  expect(parts.filter((p) => p.hidden).map((p) => [p.from, p.to])).toEqual([[0, 2], [6, 8], [9, 10], [15, 21]]);
-  expect(parts.filter((p) => !p.hidden).map((p) => p.text).join("")).toBe("bold alias");
+it("starts a heading at its first title character, levels 1-3 only", () => {
+  expect(find("### t", "heading")).toMatchObject({ level: 3, marks: [{ from: 0, to: 4 }] });
+  expect(find("# a", "heading")?.level).toBe(1);
+  expect(find("## a", "heading")?.level).toBe(2);
+  expect(kinds("###    ")).toEqual([]);
 });
 
-it("keeps empty headings literal until the first title character", () => {
-  expect(visible("### ")).toEqual([{ text: "### ", from: 0, to: 4 }]);
-  expect(visible("### t")).toEqual([{ text: "t", from: 4, to: 5, kind: "heading" }]);
+it("parses nested emphasis instead of leaving it literal", () => {
+  const found = analyze("**bold *italic* bold**");
+  expect(found.map((c) => c.kind)).toEqual(["strong", "em"]);
+  expect(visibleText("**bold *italic* bold**")).toBe("bold italic bold");
+  expect(analyze("***x***").map((c) => c.kind).sort()).toEqual(["em", "strong"]);
 });
 
-it("renders formatting and raw URLs without task checkboxes", () => {
-  const kinds = visible("**bold**\n*italic*\n> quote\n===\n- bullet\n2. ordered\n@user").flatMap((p) => p.kind === undefined ? [] : [p.kind]);
-  expect(kinds).toEqual(["strong", "em", "quote", "rule", "list", "list", "mention"]);
-  expect(visible("- [x] done")).toEqual([{ text: "- [x] done", from: 0, to: 10 }]);
-  expect(visible("- [ ] todo")).toEqual([{ text: "- [ ] todo", from: 0, to: 10 }]);
-  expect(visible("See https://example.com/path.")).toEqual([
-    expect.objectContaining({ text: "See " }),
-    expect.objectContaining({ text: "https://example.com/path", rawUrl: true, href: "https://example.com/path" }),
-    expect.objectContaining({ text: "." }),
-  ]);
+it("treats === and --- as horizontal rules on their own line; no Setext headings", () => {
+  expect(kinds("===")).toEqual(["rule"]);
+  expect(kinds("---")).toEqual(["rule"]);
+  expect(kinds("text\n===")).toEqual(["rule"]);
+  expect(kinds("text\n---")).toEqual(["rule"]);
+  expect(kinds("a == b")).toEqual([]);
+});
+
+it("recognises raw http(s) URLs without the trailing sentence dot, and nothing else", () => {
+  expect(find("See https://example.com/path.", "url")).toMatchObject({ from: 4, to: 28 });
+  expect(find("https://a.com", "url")?.href).toBe("https://a.com");
+  expect(kinds("www.example.com")).toEqual([]);
+  expect(kinds("mail a@b.com")).toEqual([]);
 });
 
 it("allowlists active schemes without validating destinations or stripping controls", () => {
   for (const href of ["javascript:alert(1)", "data:text/html,x", "vbscript:x", "blob:x", "file:///tmp/x", "ftp://example.com", "java\tscript:x", "https://x\u0000", "https://x\u0085"]) expect(safeHref(href)).toBeNull();
   for (const href of ["https://", "http:bad", "mailto:a@b", "/path", "../relative", "htt", "#fragment"]) expect(safeHref(href)).toBe(href);
-  expect(visible("[bad](javascript:alert(1))")[0]).toMatchObject({ text: "bad", kind: "link" });
-  expect(visible("[bad](javascript:alert(1))")[0]?.href).toBeUndefined();
-  expect(visible("<img src=x onerror=alert(1)>").map((p) => p.text).join("")).toBe("<img src=x onerror=alert(1)>");
+  expect(find("[bad](javascript:alert(1))", "link")?.href).toBeUndefined();
+  expect(find("[ok](mailto:a@b)", "link")?.href).toBe("mailto:a@b");
 });
 
-it("maps hidden delimiter interiors to visible boundaries", () => {
-  const parts = parseMarkdownParts("**word** [name](https://example.com)");
-  expect(visiblePosition(parts, 7, 1)).toBe(8);
-  expect(visiblePosition(parts, 7, -1)).toBe(6);
-  expect(visiblePosition(parts, 1, 1)).toBe(2);
-  expect(visiblePosition(parts, 1, -1)).toBe(0);
-  expect(visiblePosition(parts, 13, 0)).toBe(13);
-  expect(visiblePosition(parts, 20, 1)).toBe(36);
-  expect(visiblePosition(parts, 20, -1)).toBe(14);
+it("keeps raw HTML inert and parses long malformed links in bounded time", () => {
+  expect(visibleText("<img src=x onerror=alert(1)>")).toBe("<img src=x onerror=alert(1)>");
+  const start = performance.now();
+  for (const prefix of ["[", "[label](", "[label]((", "**", "["]) {
+    const source = prefix + "\\a".repeat(5000);
+    expect(visibleText(source)).toBe(source);
+  }
+  expect(performance.now() - start).toBeLessThan(1500);
+}, 3000);
+
+it("classifies Drive/SharePoint hosts only, rejecting spoofed hosts", () => {
+  expect(fileProvider("https://drive.google.com/file/d/x")).toBe("drive");
+  expect(fileProvider("https://docs.google.com")).toBe("drive");
+  expect(fileProvider("https://team.sharepoint.com/x")).toBe("sharepoint");
+  for (const url of ["https://drive.google.com.evil.test/x", "https://drive.google.com@evil.test/", "https://evilsharepoint.com/x", "https://sharepoint.com.evil/x", "http://x.sharepoint.com.evil.test"]) {
+    expect(fileProvider(url), url).toBeUndefined();
+  }
 });
 
-it("continues bullets and increments ordered markers, then exits an empty item without another newline", () => {
-  expect(continueList("- item", 6)).toEqual({ from: 6, to: 6, insert: "\n- ", caret: 9 });
-  expect(continueList("3) item", 7)).toEqual({ from: 7, to: 7, insert: "\n4) ", caret: 11 });
-  expect(continueList("- item\n- ", 9)).toEqual({ from: 7, to: 9, insert: "", caret: 7 });
-  expect(continueList("3. item\n4. ", 11)).toEqual({ from: 8, to: 11, insert: "", caret: 8 });
-  expect(continueList("plain", 5)).toBeNull();
-  expect(continueList("- [x] task", 10)).toBeNull();
+it("never hides invisible or empty constructs", () => {
+  const empty = find("[](https://x.com)", "link");
+  expect(empty && delimiters(empty)).toEqual([]);
+  expect(delimiters(analyze("**a**")[0] as Construct)).toHaveLength(2);
 });
 
-it("classifies Drive and SharePoint by host regex only", () => {
-  expect(fileProvider("https://drive.google.com/file/d/no-check")).toBe("drive");
-  expect(fileProvider("https://docs.google.com/document/d/no-check")).toBe("drive");
-  expect(fileProvider("https://team.sharepoint.com/a")).toBe("sharepoint");
-  for (const raw of ["https://drive.google.com.evil.test/a", "https://evil.test/drive.google.com", "https://user@docs.google.com/a", "https://notsharepoint.com/a"]) expect(fileProvider(raw)).toBeUndefined();
-  expect(visible("[Plan](https://docs.google.com/document/d/a)")[0]).toMatchObject({ text: "Plan", provider: "drive" });
-  expect(visible("https://docs.google.com/document/d/a")[0]?.provider).toBeUndefined();
+it("I1: no hidden delimiter ever touches the caret, for every caret position", () => {
+  const corpus = ["**bold** and *it* and `c`", "# H1\n## H2\n### H3", "> quote\n- a\n- b\n1. x", "[alias](https://x.com/a(b)) tail", "[](https://x.com) ***both*** ", "a\n---\nb\n===", "**a *b* c**"];
+  for (const source of corpus) {
+    const constructs = analyze(source);
+    for (let pos = 0; pos <= source.length; pos++) {
+      for (const c of constructs) {
+        const hidden = delimiters(c);
+        const revealed = touches([{ from: pos, to: pos }], hidden);
+        // hidden ⇔ not touching: assert the complement never leaves a touching range hidden
+        for (const r of hidden) {
+          const hiddenNow = !revealed;
+          if (hiddenNow) expect(r.from <= pos && pos <= r.to, `${source}@${pos}`).toBe(false);
+        }
+      }
+    }
+  }
+});
+
+it("renders read-only lines without markers; block kinds and empty-alias fallbacks", () => {
+  expect(visibleText("**a** [b](https://x.com) `c`")).toBe("a b c");
+  const lines = renderLines("# T\n> q\n- i\n\n2. n\n---\n```\ncode\n```");
+  expect(lines.map((l) => l.kind)).toEqual(["h1", "quote", "list", undefined, "list", "rule", "code"]);
+  expect(lines[2]?.segments[0]?.text).toBe("• ");
+  expect(lines[4]?.segments[0]?.text).toBe("2. ");
+  expect(renderLines("[](https://drive.google.com/x)")[0]?.segments[0]).toMatchObject({ text: "Dosya", provider: "drive", fallback: true });
+  expect(renderLines("[](https://x.com)")[0]?.segments[0]).toMatchObject({ text: "https://x.com", fallback: true });
+});
+
+it("toolbar bold: toggles on a selection, idempotently", () => {
+  let state = stateOf("hello world", 0, 5);
+  state = apply(state, toggleInline(state, "strong"));
+  expect(state.doc.toString()).toBe("**hello** world");
+  expect(state.selection.main).toMatchObject({ from: 2, to: 7 });
+  expect(formatsAt(state).strong).toBe(true);
+  state = apply(state, toggleInline(state, "strong"));
+  expect(state.doc.toString()).toBe("hello world");
+  expect(state.selection.main).toMatchObject({ from: 0, to: 5 });
+});
+
+it("toolbar bold: partial unwrap splits the span; bold+italic combine and separate", () => {
+  let state = stateOf("**abcdef**", 4, 6);
+  state = apply(state, toggleInline(state, "strong"));
+  expect(state.doc.toString()).toBe("**ab**cd**ef**");
+  state = stateOf("word", 0, 4);
+  state = apply(state, toggleInline(state, "strong"));
+  state = apply(state, toggleInline(state, "em"));
+  expect(state.doc.toString()).toBe("***word***");
+  expect(formatsAt(state)).toMatchObject({ strong: true, em: true });
+  state = apply(state, toggleInline(state, "strong"));
+  expect(state.doc.toString()).toBe("*word*");
+});
+
+it("toolbar bold: partly bold selection becomes fully bold without doubling stars", () => {
+  let state = stateOf("**ab**cd", 0, 8);
+  state = apply(state, toggleInline(state, "strong"));
+  expect(state.doc.toString()).toBe("**abcd**");
+});
+
+it("toolbar bold: collapsed caret opens a pair, then steps out, then removes an empty pair", () => {
+  let state = stateOf("x ", 2);
+  state = apply(state, toggleInline(state, "strong"));
+  expect(state.doc.toString()).toBe("x ****");
+  expect(state.selection.main.head).toBe(4);
+  expect(formatsAt(state).strong).toBe(true); // `****` ağaçta yok ama "açık" durumdur
+  state = apply(state, toggleInline(state, "strong"));
+  expect(state.doc.toString()).toBe("x ");
+  expect(state.selection.main.head).toBe(2);
+});
+
+it("toolbar bold: stepping out of a typed span", () => {
+  let state = stateOf("**ab**", 4);
+  state = apply(state, toggleInline(state, "strong"));
+  expect(state.selection.main.head).toBe(6);
+  state = stateOf("**abcd**", 4);
+  state = apply(state, toggleInline(state, "strong"));
+  expect(state.doc.toString()).toBe("**ab****cd**");
+  expect(state.selection.main.head).toBe(6);
+});
+
+it("line toggles are idempotent, multi-line, and replace instead of stacking", () => {
+  let state = stateOf("one\ntwo", 0, 7);
+  state = apply(state, toggleLines(state, "bullet"));
+  expect(state.doc.toString()).toBe("- one\n- two");
+  state = apply(state, toggleLines(state, "ordered"));
+  expect(state.doc.toString()).toBe("1. one\n2. two");
+  state = apply(state, toggleLines(state, "ordered"));
+  expect(state.doc.toString()).toBe("one\ntwo");
+  state = stateOf("title", 2);
+  state = apply(state, toggleLines(state, "h2"));
+  state = apply(state, toggleLines(state, "h2"));
+  expect(state.doc.toString()).toBe("title");
+  state = apply(state, toggleLines(state, "h1"));
+  state = apply(state, toggleLines(state, "h3"));
+  expect(state.doc.toString()).toBe("### title");
+  state = apply(state, toggleLines(state, "quote"));
+  expect(state.doc.toString()).toBe("> ### title");
+  expect(formatsAt(state)).toMatchObject({ quote: true });
+});
+
+it("code block toggles around the selected lines", () => {
+  let state = stateOf("a\nb", 0, 3);
+  state = apply(state, toggleCodeBlock(state));
+  expect(state.doc.toString()).toBe("```\na\nb\n```");
+  state = stateOf(state.doc.toString(), 5);
+  expect(formatsAt(state).fence).toBe(true);
+  state = apply(state, toggleCodeBlock(state));
+  expect(state.doc.toString()).toBe("a\nb");
 });

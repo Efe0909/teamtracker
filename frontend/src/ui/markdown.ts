@@ -1,17 +1,23 @@
-// Kaynak aralıkları hem salt okunur çizim hem editörün DOM eşlemesi için ortak.
-export type Part = {
-  text: string;
-  from: number;
-  to: number;
-  hidden?: boolean;
-  kind?: "strong" | "em" | "link" | "mention" | "quote" | "heading" | "list" | "rule";
-  href?: string;
-  rawUrl?: boolean;
-  provider?: "drive" | "sharepoint";
-  fallback?: boolean;
-  linkFrom?: number;
-  linkTo?: number;
-};
+// Markdown kaynağının tek ayrıştırıcısı: Lezer ağacı → `Construct` listesi.
+// Editör (CodeMirror dekorasyonları) ve salt okunur çizim AYNI listeyi tüketir;
+// regex gramer yok. Kaynak metin hiçbir zaman normalize edilmez.
+import { Autolink, parser, type MarkdownConfig, type MarkdownExtension } from "@lezer/markdown";
+import type { Tree } from "@lezer/common";
+
+export type Range = { from: number; to: number };
+export type Provider = "drive" | "sharepoint";
+
+export type Construct =
+  | { kind: "strong" | "em" | "code"; from: number; to: number; marks: [Range, Range] }
+  | { kind: "link"; from: number; to: number; marks: [Range, Range]; alias: Range; destination: Range; href?: string; provider?: Provider }
+  | { kind: "url"; from: number; to: number; href?: string }
+  | { kind: "mention"; from: number; to: number }
+  // Blok yapılar: `from` satır başı. `marks` satır başındaki işaret (+ ardındaki boşluk).
+  | { kind: "heading"; level: 1 | 2 | 3; from: number; to: number; marks: [Range] }
+  | { kind: "quote"; from: number; to: number; marks: [Range] }
+  | { kind: "list"; ordered: boolean; from: number; to: number; marks: [Range]; hang: number }
+  | { kind: "rule"; from: number; to: number }
+  | { kind: "fence"; from: number; to: number; open: Range; close: Range };
 
 // URL doğrulaması değil: yalnız gezinme yetkisi. Kontrol karakterleri hiçbir
 // zaman temizlenip etkinleştirilmez; bilinmeyen şemalar biçimli ama etkisizdir.
@@ -22,117 +28,189 @@ export function safeHref(raw: string): string | null {
   return raw;
 }
 
-export function fileProvider(raw: string): Part["provider"] {
-  // ponytail: yalnız host regex'i; dosya varlığı/türü veya metadata sorgulanmaz.
+export function fileProvider(raw: string): Provider | undefined {
+  // ponytail: yalnız host eşleşmesi; dosya varlığı/türü veya metadata sorgulanmaz.
+  // Host'tan sonra yalnız `:port`, `/`, `?`, `#` gelebilir: `drive.google.com.evil.test`
+  // ve `drive.google.com@evil.test` sağlayıcı sayılmaz.
   if (/^https?:\/\/(?:drive|docs)\.google\.com(?::\d+)?(?:[/?#]|$)/i.test(raw)) return "drive";
   if (/^https?:\/\/[a-z\d.-]+\.sharepoint\.com(?::\d+)?(?:[/?#]|$)/i.test(raw)) return "sharepoint";
   return undefined;
 }
 
-function inlineParts(text: string, offset: number): Part[] {
-  const out: Part[] = [];
-  const push = (from: number, to: number, extra: Partial<Part> = {}) => {
-    out.push({ text: text.slice(from, to), from: offset + from, to: offset + to, ...extra });
-  };
-  // Escape ve sıradan karakter dalları AYRI olmalı: bozuk uzun bağlantıda
-  // backslash'ı iki dal da kabul ederse regex üstel backtracking yapar.
-  const token = /\[((?:\\.|[^\]\\\n])*)\]\(((?:\\.|[^()\\\n]|\((?:\\.|[^()\\\n])*\))*)\)|(\*\*(?:(?!\*\*)[^\n])+\*\*|__(?:(?!__)[^\n])+__)|((?<!\*)\*[^*\n]+\*(?!\*)|(?<!_)_[^_\n]+_(?!_))|https?:\/\/[^\s<>]+|@[\p{L}\p{N}_.-]+/gu;
-  let at = 0;
-  for (const m of text.matchAll(token)) {
-    const i = m.index;
-    if (i < at) continue;
-    if (i > at) push(at, i);
-    let end = i + m[0].length;
-    if (m[1] !== undefined && m[2] !== undefined) {
-      const href = safeHref(m[2]);
-      const provider = fileProvider(m[2]);
-      const extra: Partial<Part> = {
-        kind: "link", linkFrom: offset + i, linkTo: offset + end,
-        ...(href === null ? {} : { href }), ...(provider === undefined ? {} : { provider }),
-      };
-      push(i, i + 1, { hidden: true });
-      push(i + 1, i + 1 + m[1].length, m[1] === ""
-        ? { ...extra, text: m[2], fallback: true } : extra);
-      push(i + 1 + m[1].length, end, { hidden: true });
-    } else if (m[3] !== undefined || m[4] !== undefined) {
-      const width = m[3] === undefined ? 1 : 2;
-      const body = m[0].slice(width, -width);
-      // İç içe emphasis bu küçük dilde yok; kısmen yorumlayıp marker kaybetme.
-      if (width === 2 && /\*|_[^_]+_/.test(body)) push(i, end);
-      else {
-        push(i, i + width, { hidden: true });
-        push(i + width, end - width, { kind: width === 2 ? "strong" : "em" });
-        push(end - width, end, { hidden: true });
+// Kullanıcı `===` istedi: Setext başlık altı çizgisi değil, kendi satırında yatay çizgi.
+const EQUALS_RULE = /^={3,}\s*$/;
+const equalsRule: MarkdownConfig = {
+  parseBlock: [{
+    name: "EqualsRule",
+    parse(cx, line) {
+      if (!EQUALS_RULE.test(line.text.slice(line.pos))) return false;
+      cx.addElement(cx.elt("HorizontalRule", cx.lineStart + line.pos, cx.lineStart + line.text.length));
+      cx.nextLine();
+      return true;
+    },
+    endLeaf: (_cx, line) => EQUALS_RULE.test(line.text.slice(line.pos)),
+    before: "HorizontalRule",
+  }],
+};
+
+// Editör (lang-markdown) ve salt okunur çizim aynı gramer yapılandırmasını kullanır.
+export const markdownExtensions: MarkdownExtension[] = [Autolink, equalsRule, { remove: ["SetextHeading"] }];
+export const markdownParser = parser.configure(markdownExtensions);
+
+const MENTION = /(?<![\p{L}\p{N}_.-])@[\p{L}\p{N}_.-]+/gu;
+
+function lineStart(source: string, pos: number): number {
+  return source.lastIndexOf("\n", pos - 1) + 1;
+}
+function lineEnd(source: string, pos: number): number {
+  const end = source.indexOf("\n", pos);
+  return end < 0 ? source.length : end;
+}
+// İşaretin ardındaki boşluklar işaretin parçası: başlık/liste/alıntı birlikte açılır-kapanır.
+function withSpaces(source: string, from: number, to: number, max = Infinity): Range {
+  let end = to;
+  while (end < source.length && end - to < max && (source[end] === " " || source[end] === "\t")) end++;
+  return { from, to: end };
+}
+
+export function analyzeTree(tree: Tree, source: string): Construct[] {
+  const out: Construct[] = [];
+  const skip: Range[] = []; // mention aranmayacak aralıklar
+
+  tree.iterate({
+    enter(ref) {
+      const node = ref.node;
+      switch (ref.name) {
+        case "StrongEmphasis":
+        case "Emphasis":
+        case "InlineCode": {
+          const marks = node.getChildren(ref.name === "InlineCode" ? "CodeMark" : "EmphasisMark");
+          const first = marks[0];
+          const last = marks[marks.length - 1];
+          if (marks.length >= 2 && first && last) {
+            out.push({
+              kind: ref.name === "StrongEmphasis" ? "strong" : ref.name === "Emphasis" ? "em" : "code",
+              from: node.from, to: node.to,
+              marks: [{ from: first.from, to: first.to }, { from: last.from, to: last.to }],
+            });
+          }
+          if (ref.name === "InlineCode") { skip.push({ from: node.from, to: node.to }); return false; }
+          return true;
+        }
+        case "Link": {
+          // Yalnız tamamlanmış `[ad](hedef)`; kısa/referans biçimleri literal kalır.
+          const marks = node.getChildren("LinkMark");
+          const [open, close, paren, end] = marks;
+          if (marks.length !== 4 || !open || !close || !paren || !end
+            || source[close.from] !== "]" || source[paren.from] !== "(" || source[end.from] !== ")") return true;
+          const url = node.getChildren("URL").find((u) => u.from >= paren.to);
+          const destination = url ? { from: url.from, to: url.to } : { from: paren.to, to: end.from };
+          let raw = source.slice(destination.from, destination.to);
+          if (raw.startsWith("<") && raw.endsWith(">")) raw = raw.slice(1, -1);
+          const href = raw === "" ? null : safeHref(raw);
+          const provider = fileProvider(raw);
+          out.push({
+            kind: "link", from: node.from, to: node.to,
+            marks: [{ from: open.from, to: open.to }, { from: close.from, to: node.to }],
+            alias: { from: open.to, to: close.from }, destination,
+            ...(href === null ? {} : { href }), ...(provider === undefined ? {} : { provider }),
+          });
+          skip.push(destination);
+          return true;
+        }
+        case "URL": {
+          const parent = node.parent?.name;
+          if (parent === "Link" || parent === "Image" || parent === "Autolink") return true;
+          const text = source.slice(node.from, node.to);
+          // Yalnız açık http(s) şemalı ham URL; `www.x` göreli yola dönüşmesin.
+          if (!/^https?:\/\//i.test(text)) return true;
+          const href = safeHref(text);
+          out.push({ kind: "url", from: node.from, to: node.to, ...(href === null ? {} : { href }) });
+          skip.push({ from: node.from, to: node.to });
+          return true;
+        }
+        case "ATXHeading1":
+        case "ATXHeading2":
+        case "ATXHeading3": {
+          const mark = node.getChild("HeaderMark");
+          if (!mark) return true;
+          const marks = withSpaces(source, mark.from, mark.to);
+          // Ürün politikası: ilk gerçek başlık karakterine kadar literal.
+          if (source.slice(marks.to, node.to).trim() === "") return true;
+          out.push({
+            kind: "heading", level: Number(ref.name.slice(-1)) as 1 | 2 | 3,
+            from: lineStart(source, node.from), to: lineEnd(source, node.from), marks: [marks],
+          });
+          return true;
+        }
+        case "QuoteMark": {
+          const marks = withSpaces(source, node.from, node.to, 1);
+          out.push({ kind: "quote", from: lineStart(source, node.from), to: lineEnd(source, node.from), marks: [marks] });
+          return true;
+        }
+        case "ListMark": {
+          const marks = withSpaces(source, node.from, node.to);
+          const start = lineStart(source, node.from);
+          out.push({
+            kind: "list", ordered: node.parent?.parent?.name === "OrderedList",
+            from: start, to: lineEnd(source, node.from), marks: [marks], hang: marks.to - marks.from,
+          });
+          return true;
+        }
+        case "HorizontalRule":
+          out.push({ kind: "rule", from: node.from, to: node.to });
+          return true;
+        case "FencedCode": {
+          const marks = node.getChildren("CodeMark");
+          const first = marks[0];
+          const last = marks[marks.length - 1];
+          skip.push({ from: node.from, to: node.to });
+          // Kapanmamış çit literal kalır (yarım sözdizimi politikası).
+          if (marks.length >= 2 && first && last && last.from > first.to) {
+            out.push({
+              kind: "fence", from: node.from, to: node.to,
+              open: { from: first.from, to: lineEnd(source, first.to) }, close: { from: last.from, to: last.to },
+            });
+          }
+          return false;
+        }
+        default:
+          return true;
       }
-    } else if (m[0].startsWith("@")) {
-      push(i, end, { kind: "mention" });
-    } else {
-      // Cümle sonu noktalama ve URL dışındaki kapanış parantezi bağlantıya girmez.
-      let raw = m[0];
-      let previous: string;
-      do {
-        previous = raw;
-        raw = raw.replace(/[.,;!?]+$/, "");
-        while (raw.endsWith(")") && (raw.match(/\)/g)?.length ?? 0) > (raw.match(/\(/g)?.length ?? 0)) raw = raw.slice(0, -1);
-      } while (raw !== previous);
-      end = i + raw.length;
-      const href = safeHref(raw);
-      const incompleteLink = text.lastIndexOf("](", i);
-      if (incompleteLink >= 0 && !text.slice(incompleteLink + 2, i).includes(")")) push(i, end);
-      else push(i, end, { kind: "link", rawUrl: true, ...(href === null ? {} : { href }) });
-    }
-    at = end;
+    },
+  });
+
+  for (const m of source.matchAll(MENTION)) {
+    const text = m[0].replace(/[.-]+$/, "");
+    const from = m.index;
+    const to = from + text.length;
+    if (text.length > 1 && !skip.some((r) => from < r.to && to > r.from)) out.push({ kind: "mention", from, to });
   }
-  if (at < text.length) push(at, text.length);
-  return out;
+  return out.sort((a, b) => a.from - b.from || a.to - b.to);
 }
 
-export function visiblePosition(parts: Part[], position: number, direction: number): number {
-  const hidden = parts.find((p) => p.hidden && p.from < position && position < p.to);
-  if (hidden === undefined) return position;
-  if (direction < 0) return hidden.from;
-  if (direction > 0) return hidden.to;
-  return position - hidden.from < hidden.to - position ? hidden.from : hidden.to;
+export function analyze(source: string): Construct[] {
+  return analyzeTree(markdownParser.parse(source), source);
 }
 
-export function continueList(source: string, position: number): { from: number; to: number; insert: string; caret: number } | null {
-  const start = source.lastIndexOf("\n", position - 1) + 1;
-  const nextLine = source.indexOf("\n", position);
-  const end = nextLine < 0 ? source.length : nextLine;
-  const line = source.slice(start, end);
-  const match = /^(\s*)([-*+]\s+|(\d+)([.)])\s+)(?!\[[ x]\])/i.exec(line);
-  if (match === null || position < start + match[0].length) return null;
-  if (line.slice(match[0].length).trim() === "") return { from: start, to: end, insert: "", caret: start };
-  const marker = match[3] === undefined ? match[2] ?? "" : `${BigInt(match[3]) + 1n}${match[4] ?? "."} `;
-  const insert = `\n${match[1] ?? ""}${marker}`;
-  return { from: position, to: position, insert, caret: position + insert.length };
+/** [from,to] kapalı aralığı bir ya da birden çok aralığa değiyor mu? */
+export function touches(ranges: readonly Range[], marks: readonly Range[]): boolean {
+  return ranges.some((r) => marks.some((m) => r.from <= m.to && r.to >= m.from));
 }
 
-export function parseMarkdownParts(text: string): Part[] {
-  const out: Part[] = [];
-  let offset = 0;
-  for (const [i, line] of text.split("\n").entries()) {
-    if (i > 0) out.push({ text: "\n", from: offset - 1, to: offset });
-    const heading = /^(#{1,3}\s+)(.+)$/.exec(line);
-    const quote = /^(> ?)(.*)$/.exec(line);
-    const list = /^(\s*)([-*+]\s+|\d+[.)]\s+)(?!\[[ x]\])/i.exec(line);
-    const prefix = heading?.[1] ?? quote?.[1];
-    if (/^\s*(?:-{3,}|={3,})\s*$/.test(line)) {
-      out.push({ text: "────────────", from: offset, to: offset + line.length, kind: "rule" });
-    } else if (prefix !== undefined) {
-      out.push({ text: prefix, from: offset, to: offset + prefix.length, hidden: true });
-      const parts = inlineParts(line.slice(prefix.length), offset + prefix.length);
-      out.push(...parts.map((p) => p.kind === undefined && !p.hidden ? { ...p, kind: heading ? "heading" as const : "quote" as const } : p));
-    } else if (list !== null) {
-      const indent = list[1] ?? "";
-      const marker = list[2] ?? "";
-      if (indent) out.push({ text: indent, from: offset, to: offset + indent.length });
-      out.push({ text: /^\d/.test(marker) ? marker.replace(/[.)]\s+$/, ". ") : "• ", from: offset + indent.length, to: offset + list[0].length, kind: "list" });
-      out.push(...inlineParts(line.slice(list[0].length), offset + list[0].length));
-    } else {
-      out.push(...inlineParts(line, offset));
-    }
-    offset += line.length + 1;
+/** Gizlenebilir ayraç aralıkları. Boş yapılar (görünmez kalırdı) hiç gizlenmez. */
+export function delimiters(c: Construct): Range[] {
+  switch (c.kind) {
+    case "strong": case "em": case "code":
+      return c.marks[0].to === c.marks[1].from ? [] : [...c.marks];
+    case "link":
+      return c.alias.from === c.alias.to ? [] : [...c.marks];
+    case "heading": case "quote": case "list":
+      return [...c.marks];
+    case "rule":
+      return [{ from: c.from, to: c.to }];
+    default:
+      return [];
   }
-  return out;
 }
+

@@ -1,34 +1,49 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { EditorState, Transaction } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
-import { FileText } from "lucide-react";
+import { Bold, Code, Heading1, Heading2, Heading3, Italic, Link, List, ListOrdered, Minus, Quote, SquareCode, type LucideIcon } from "lucide-react";
 import type { MetaUser } from "../api/types";
 import { handle } from "../lib/mentions";
 import { useLookup } from "../lib/lookup";
-import { parseMarkdownParts, visiblePosition } from "./markdown";
-import { linkAt, markdownExtensions, type LinkEdit } from "./MarkdownEditor";
+import { commands, formatLink, linkEditFor, markdownExtensions, type LinkEdit } from "./MarkdownEditor";
+import { renderLines, type RenderedLine, type Segment } from "./markdownLines";
+import { formatsAt, type Formats } from "./markdownCommands";
 import s from "./markdown.module.css";
-export { parseMarkdownParts } from "./markdown";
 
-function render(text: string, users: MetaUser[], linkTextOnly: boolean): ReactNode[] {
-  return parseMarkdownParts(text).map((part, i) => {
-    if (part.hidden) return null;
-    const title = part.kind === "mention" ? users.find((u) => handle(u.name) === handle(part.text.slice(1)))?.name : undefined;
-    if (part.kind === "link") {
-      const className = `${s.link} ${part.provider && !part.fallback ? s.file : ""} ${part.fallback ? s.fallback : ""}`;
-      const content = <>{part.provider && !part.fallback && <FileText size={14} aria-hidden="true" />}{part.text}</>;
-      return linkTextOnly || part.href === undefined
-        ? <span key={i} className={className} title={part.href}>{content}</span>
-        : <a key={i} className={className} href={part.href} target="_blank" rel="noopener noreferrer" title={part.href}>{content}</a>;
-    }
-    return <span key={i} className={part.kind === undefined ? undefined : s[part.kind]} title={title}>{part.text}</span>;
-  });
+const NO_FORMATS: Formats = { strong: false, em: false, code: false, link: false, quote: false, bullet: false, ordered: false, fence: false, heading: 0 };
+
+function segment(part: Segment, i: number, users: MetaUser[], linkTextOnly: boolean): ReactNode {
+  const classes = part.styles.map((style) => style === "code" ? s.inlineCode : s[style]);
+  if (part.provider) classes.push(s.file);
+  if (part.fallback) classes.push(s.fallback);
+  const className = classes.join(" ") || undefined;
+  if (part.styles.includes("link")) {
+    return linkTextOnly || part.href === undefined
+      ? <span key={i} className={className} title={part.href}>{part.text}</span>
+      : <a key={i} className={className} href={part.href} target="_blank" rel="noopener noreferrer" title={part.href}>{part.text}</a>;
+  }
+  const title = part.styles.includes("mention") ? users.find((u) => handle(u.name) === handle(part.text.slice(1)))?.name : undefined;
+  return className === undefined && title === undefined ? part.text : <span key={i} className={className} title={title}>{part.text}</span>;
 }
 
 export function MarkdownText({ value, className, linkTextOnly = false }: { value: string; className?: string; linkTextOnly?: boolean }) {
   const L = useLookup();
-  return <span className={`${s.rendered} ${className ?? ""}`}>{render(value, L.meta.users, linkTextOnly)}</span>;
+  const lines = useMemo(() => renderLines(value), [value]);
+  const flat = lines.length === 1 && lines[0]?.kind === undefined;
+  const body = (line: RenderedLine) => line.segments.map((part, i) => segment(part, i, L.meta.users, linkTextOnly));
+  return (
+    <span className={`${s.rendered} ${flat ? "" : s.block} ${className ?? ""}`}>
+      {flat ? body(lines[0] ?? { segments: [] }) : lines.map((line, i) => (
+        <span key={i} className={`${s.line} ${line.kind === undefined ? "" : s[line.kind]}`}
+          {...(line.kind === "list" ? { style: { "--md-hang": line.segments[0]?.text.length ?? 2 } as React.CSSProperties } : {})}>
+          {body(line)}
+        </span>
+      ))}
+    </span>
+  );
 }
+
+type ToolButton = { label: string; hint: string; icon: LucideIcon; pressed: (f: Formats) => boolean; run: (view: EditorView) => void };
 
 export function MarkdownField({ value, onChange, label, placeholder, rows = 4 }: {
   value: string; onChange: (value: string) => void; label: string; placeholder?: string; rows?: number;
@@ -38,6 +53,7 @@ export function MarkdownField({ value, onChange, label, placeholder, rows = 4 }:
   const editor = useRef<EditorView | null>(null);
   const syncing = useRef(false);
   const [caret, setCaret] = useState(0);
+  const [formats, setFormats] = useState<Formats>(NO_FORMATS);
   const [linkEdit, setLinkEdit] = useState<LinkEdit | null>(null);
   const latest = useRef({ value, onChange, L });
   latest.current = { value, onChange, L };
@@ -65,6 +81,7 @@ export function MarkdownField({ value, onChange, label, placeholder, rows = 4 }:
         label, ...(placeholder === undefined ? {} : { placeholder }),
         onChange: (source) => { if (!syncing.current) latest.current.onChange(source); setLinkEdit(null); },
         onSelection: setCaret,
+        onFormats: setFormats,
         onEditLink: setLinkEdit,
         completeMention: () => {
           const source = view.state.doc.toString();
@@ -80,6 +97,7 @@ export function MarkdownField({ value, onChange, label, placeholder, rows = 4 }:
       }),
     }) });
     editor.current = view;
+    setFormats(formatsAt(view.state));
     return () => { editor.current = null; view.destroy(); };
   }, [label, placeholder]);
 
@@ -87,57 +105,55 @@ export function MarkdownField({ value, onChange, label, placeholder, rows = 4 }:
     const view = editor.current;
     if (!view || view.state.doc.toString() === value) return;
     syncing.current = true;
-    const position = visiblePosition(parseMarkdownParts(value), Math.min(view.state.selection.main.head, value.length), 0);
-    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: value }, selection: { anchor: position }, annotations: Transaction.addToHistory.of(false) });
+    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: value }, selection: { anchor: Math.min(view.state.selection.main.head, value.length) }, annotations: Transaction.addToHistory.of(false) });
     syncing.current = false;
   }, [value]);
 
-  const insert = (before: string, after = "") => {
-    const view = editor.current;
-    if (view === null) return;
-    const { from, to } = view.state.selection.main;
-    const selected = view.state.sliceDoc(from, to);
-    view.dispatch({ changes: { from, to, insert: before + selected + after },
-      selection: { anchor: from + before.length + selected.length + (selected === "" ? 0 : after.length) },
-      annotations: Transaction.userEvent.of("input.format") });
-    view.focus();
-  };
-  const prefixLine = (prefix: string) => {
-    const view = editor.current;
-    if (view === null) return;
-    const { from, to } = view.state.selection.main;
-    const start = view.state.doc.lineAt(from).from;
-    view.dispatch({ changes: { from: start, insert: prefix }, selection: { anchor: from + prefix.length, head: to + prefix.length }, annotations: Transaction.userEvent.of("input.format") });
-    view.focus();
-  };
-  const editLink = () => {
-    const view = editor.current;
-    if (view === null) return;
-    const { from, to, head } = view.state.selection.main;
-    const existing = linkAt(view.state.doc.toString(), head);
-    setLinkEdit(existing ?? { from, to, alias: view.state.sliceDoc(from, to), url: "https://" });
-  };
   const applyLink = () => {
     const view = editor.current;
     if (!view || !linkEdit) return;
-    const alias = linkEdit.alias.replace(/\r?\n/g, " ");
-    const url = linkEdit.url.replace(/\r?\n/g, "");
-    view.dispatch({ changes: { from: linkEdit.from, to: linkEdit.to, insert: `[${alias}](${url})` },
-      selection: { anchor: linkEdit.from + 1 + alias.length }, annotations: Transaction.userEvent.of("input.link") });
+    const insert = formatLink(linkEdit.alias, linkEdit.url);
+    view.dispatch({ changes: { from: linkEdit.from, to: linkEdit.to, insert },
+      selection: { anchor: linkEdit.from + 1 + linkEdit.alias.replace(/\r?\n/g, " ").length }, annotations: Transaction.userEvent.of("input.link") });
     setLinkEdit(null);
     view.focus();
   };
+
+  const groups: ToolButton[][] = [
+    [
+      { label: "Kalın", hint: "Kalın · ⌘/Ctrl+B", icon: Bold, pressed: (f) => f.strong, run: commands.inline("strong") },
+      { label: "İtalik", hint: "İtalik · ⌘/Ctrl+I", icon: Italic, pressed: (f) => f.em, run: commands.inline("em") },
+      { label: "Satır içi kod", hint: "Satır içi kod", icon: Code, pressed: (f) => f.code, run: commands.inline("code") },
+    ],
+    [
+      { label: "Başlık 1", hint: "Başlık 1 · ⌘/Ctrl+Alt+1", icon: Heading1, pressed: (f) => f.heading === 1, run: commands.lines("h1") },
+      { label: "Başlık 2", hint: "Başlık 2 · ⌘/Ctrl+Alt+2", icon: Heading2, pressed: (f) => f.heading === 2, run: commands.lines("h2") },
+      { label: "Başlık 3", hint: "Başlık 3 · ⌘/Ctrl+Alt+3", icon: Heading3, pressed: (f) => f.heading === 3, run: commands.lines("h3") },
+    ],
+    [
+      { label: "Bağlantı", hint: "Bağlantı · ⌘/Ctrl+K · Düzenle: çift tık", icon: Link, pressed: (f) => f.link, run: (view) => setLinkEdit(linkEditFor(view.state)) },
+      { label: "Alıntı", hint: "Alıntı", icon: Quote, pressed: (f) => f.quote, run: commands.lines("quote") },
+      { label: "Madde işaretli liste", hint: "Madde işaretli liste", icon: List, pressed: (f) => f.bullet, run: commands.lines("bullet") },
+      { label: "Numaralı liste", hint: "Numaralı liste", icon: ListOrdered, pressed: (f) => f.ordered, run: commands.lines("ordered") },
+      { label: "Kod bloğu", hint: "Kod bloğu", icon: SquareCode, pressed: (f) => f.fence, run: commands.codeBlock },
+      { label: "Yatay çizgi", hint: "Yatay çizgi", icon: Minus, pressed: () => false, run: commands.rule },
+    ],
+  ];
+
   return (
     <div className={s.field}>
       <div className={s.toolbar} role="toolbar" aria-label="Metin biçimlendirme" onMouseDown={(e) => e.preventDefault()}>
-        <button type="button" aria-label="Kalın" title="Kalın" onClick={() => insert("**", "**")}><b>B</b></button>
-        <button type="button" aria-label="İtalik" title="İtalik" onClick={() => insert("*", "*")}><i>I</i></button>
-        <button type="button" aria-label="Başlık biçimi" title="Başlık" onClick={() => prefixLine("### ")}>H</button>
-        <button type="button" aria-label="Bağlantı" title="Bağlantı · Düzenle: çift tık / ⌘K" onClick={editLink}>↗</button>
-        <button type="button" aria-label="Alıntı" title="Alıntı" onClick={() => prefixLine("> ")}>❯</button>
-        <button type="button" aria-label="Madde işaretli liste" title="Madde işaretli liste" onClick={() => prefixLine("- ")}>•</button>
-        <button type="button" aria-label="Numaralı liste" title="Numaralı liste" onClick={() => prefixLine("1. ")}>1.</button>
-        <button type="button" aria-label="Yatay çizgi" title="Yatay çizgi" onClick={() => prefixLine("---\n")}>―</button>
+        {groups.map((group, g) => (
+          <span key={g} style={{ display: "contents" }}>
+            {g > 0 && <span className={s.separator} aria-hidden="true" />}
+            {group.map(({ label: name, hint, icon: Icon, pressed, run }) => (
+              <button key={name} type="button" aria-label={name} title={hint} aria-pressed={pressed(formats)}
+                onClick={() => { const view = editor.current; if (view) { run(view); view.focus(); } }}>
+                <Icon size={15} aria-hidden="true" />
+              </button>
+            ))}
+          </span>
+        ))}
       </div>
       {linkEdit !== null && <div className={s.linkEditor} role="group" aria-label="Bağlantıyı düzenle" onKeyDown={(e) => {
         if (e.key === "Escape") { e.preventDefault(); setLinkEdit(null); editor.current?.focus(); }
