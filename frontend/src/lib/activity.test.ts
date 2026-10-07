@@ -32,7 +32,7 @@ describe("activity cumleleri", () => {
 
   it("takim yazma fiilleri ham kalmaz", () => {
     expect(sentence(item({ verb: "team_node_linked", subject_label: "Maliye", target_label: "Bütçe Onayı" }), L))
-      .toBe("takımı “Bütçe Onayı” birimine bağladı");
+      .toBe("takımı “Bütçe Onayı” konusuna bağladı");
     expect(sentence(item({ verb: "team_renamed", body: '{"from":"A","to":"B"}' }), L)).toBe("takımın adını değiştirdi: A → B");
   });
 

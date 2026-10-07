@@ -21,7 +21,7 @@ const node = (id: string, name: string, depth: number, parent_id: string | null,
 });
 
 const NODES = [
-  node("u", "Birimler", 0, null, "units"),
+  node("u", "Konular", 0, null, "units"),
   node("a", "Maliye", 1, "u", "units"),
   node("a1", "Bütçe", 2, "a", "units"),
   node("b", "Hukuk", 1, "u", "units"),
@@ -46,14 +46,14 @@ function renderWith(ui: ReactNode) {
 }
 
 it("agac: favoriler ustte, ilk seviye katli, kok ve baska kok yok", () => {
-  renderWith(<NodeTreePicker rootKey="units" label="Birim" value={null} onChange={() => {}} />);
-  fireEvent.click(screen.getByRole("button", { name: /Birim/ }));
+  renderWith(<NodeTreePicker rootKey="units" label="Konu" value={null} onChange={() => {}} />);
+  fireEvent.click(screen.getByRole("button", { name: /Konu/ }));
   const favs = screen.getByRole("group", { name: "Favoriler" });
   expect(within(favs).getByText("Sözleşme")).toBeTruthy();
   const list = screen.getByRole("listbox");
   expect(within(list).getByText("Maliye")).toBeTruthy();
   expect(within(list).queryByText("Bütçe")).toBeNull();
-  expect(within(list).queryByText("Birimler")).toBeNull();
+  expect(within(list).queryByText("Konular")).toBeNull();
   expect(within(list).queryByText("Toplantı")).toBeNull();
   fireEvent.click(screen.getByLabelText("Maliye dalını aç/kapat"));
   expect(within(list).getByText("Bütçe")).toBeTruthy();
@@ -61,9 +61,9 @@ it("agac: favoriler ustte, ilk seviye katli, kok ve baska kok yok", () => {
 
 it("agac: arama eslesen dali kendiliginden acar, parent secilebilir", () => {
   const picked: string[] = [];
-  renderWith(<NodeTreePicker rootKey="units" label="Birim" value={null} onChange={(id) => picked.push(id)} />);
-  fireEvent.click(screen.getByRole("button", { name: /Birim/ }));
-  fireEvent.change(screen.getByPlaceholderText("Birim ara…"), { target: { value: "bütç" } });
+  renderWith(<NodeTreePicker rootKey="units" label="Konu" value={null} onChange={(id) => picked.push(id)} />);
+  fireEvent.click(screen.getByRole("button", { name: /Konu/ }));
+  fireEvent.change(screen.getByPlaceholderText("Konu ara…"), { target: { value: "bütç" } });
   const list = screen.getByRole("listbox");
   expect(within(list).getByText("Bütçe")).toBeTruthy();
   expect(within(list).getByText("Maliye")).toBeTruthy();

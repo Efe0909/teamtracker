@@ -42,7 +42,7 @@ export function Welcome() {
             Kayıtlar, eylemler ve kart içi sohbet. Masaüstünde panel, cepte uygulama — aynı hesapla.
           </p>
           <ul className="points">
-            <li>Birimden birime tek ağaç</li>
+            <li>Konudan konuya tek ağaç</li>
             <li>Her karta bağlı sohbet</li>
             <li>Telefona anında bildirim</li>
           </ul>

@@ -247,7 +247,7 @@ export function TeamPage({ id }: { id: Uuid }) {
           {team.banner_id !== null && <img src={attachmentUrl(team.banner_id)} alt={`${team.name} kapak fotoğrafı`} className={s.teamBanner} />}
           <div className={s.teamIdentityBody}>
             <span className={s.teamMark}><Icon name="teams" size={24} /></span>
-            <div><h2>{team.name}</h2>{team.description !== null && <p>{team.description}</p>}<span className={s.cardMeta}>{q.data.members.length} üye · {team.node_ids.length} birim</span></div>
+            <div><h2>{team.name}</h2>{team.description !== null && <p>{team.description}</p>}<span className={s.cardMeta}>{q.data.members.length} üye · {team.node_ids.length} konu</span></div>
           </div>
         </section>
         <details className={s.disclosure}>
@@ -264,9 +264,9 @@ export function TeamPage({ id }: { id: Uuid }) {
           </ul>
         </details>
         <details className={s.disclosure}>
-          <summary>Birimler ({team.node_ids.length})</summary>
+          <summary>Konular ({team.node_ids.length})</summary>
           <ul className={s.unitList}>{team.node_ids.map((nodeId) => <li key={nodeId}>{L.path(nodeId).join(" › ")}</li>)}</ul>
-          {team.node_ids.length === 0 && <p className={s.detailContent}>Bağlı birim yok.</p>}
+          {team.node_ids.length === 0 && <p className={s.detailContent}>Bağlı konu yok.</p>}
         </details>
         <h2 className={s.group} style={{ margin: "var(--s-2) 0 0" }}>
           Açık Kayıtlar ({recs.data?.length ?? q.data.open_records})
