@@ -5,7 +5,7 @@
 // GET atmadan tazelenir, liste/ana sayfa gecersiz sayilir.
 
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
-import { qs, request } from "./client";
+import { ApiError, qs, request } from "./client";
 import type {
   ActionPatch,
   AdminView,
@@ -178,12 +178,26 @@ function afterRecordWrite(qc: QueryClient, d: RecordDetail) {
   void qc.invalidateQueries({ queryKey: keys.myActions });
 }
 
+/** Alan yazmasina "gordugum deger"i ekler: yazma, o alan arada baska biri
+ *  tarafindan degistiyse reddedilir (son yazan sessizce kazanmaz). Cagiran
+ *  `base` verdiyse (acilista goruleni korumasi gereken metin duzenleyici) ona dokunmaz. */
+function withBase(qc: QueryClient, id: Uuid, p: RecordPatch): RecordPatch {
+  if (p.base !== undefined) return p;
+  const seen = qc.getQueryData<RecordDetail>(keys.record(id))?.record;
+  // Onbellekte karsiligi olmayan alan (ornegin access_mode) kontrolsuz kalir.
+  return seen !== undefined && p.field in seen ? { ...p, base: seen[p.field as keyof typeof seen] } : p;
+}
+
 export function usePatchRecord(id: Uuid) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (p: RecordPatch) => request<RecordPatched>("PATCH", `/api/records/${id}`, p),
+    mutationFn: (p: RecordPatch) => request<RecordPatched>("PATCH", `/api/records/${id}`, withBase(qc, id, p)),
     // Onbellege kalite girmez: GET'te yok, bayat karar kayitla yasamasin.
     onSuccess: ({ quality: _, ...d }) => afterRecordWrite(qc, d),
+    // Baska biri alani degistirmis: ekrandaki bayat degeri hemen tazele.
+    onError: (e) => {
+      if (e instanceof ApiError && e.code === "stale_field") void qc.invalidateQueries({ queryKey: keys.record(id) });
+    },
   });
 }
 

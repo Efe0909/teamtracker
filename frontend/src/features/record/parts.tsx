@@ -65,17 +65,28 @@ function TextEdit({ d, field, onClose }: { d: RecordDetail; field: "title" | "de
   const L = useLookup();
   const bypassQuality = L.can("bypass_text_quality");
   const m = usePatchRecord(d.record.id);
-  const [v, setV] = useState((field === "title" ? d.record.title : d.record.description) ?? "");
+  const live = field === "title" ? d.record.title : d.record.description;
+  const [v, setV] = useState(live ?? "");
+  // Duzenleme ACILDIGINDA gorulen metin: yazarken baskasi degistirirse sunucu 409 doner.
+  const [opened] = useState(live);
+  // 409'dan sonra kullanici guncel metni gordu: bilerek ustune yazar (taban = guncel).
+  const [stale, setStale] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [qualityReasons, setQualityReasons] = useState<string[] | null>(null);
   const submit = (quality_override = false) => {
     const patch = field === "title"
       ? ({ field: "title", value: v } as const)
       : ({ field: "description", value: v.trim() === "" ? null : v } as const);
-    m.mutate({ ...patch, quality_override }, {
+    setErr(null);
+    m.mutate({ ...patch, quality_override, base: stale ? live : opened }, {
       onSuccess: onClose,
-      onError: (x) => x instanceof ApiError && x.code === "low_quality"
-        ? setQualityReasons(x.reasons) : setErr(errorText(x)),
+      onError: (x) => {
+        if (x instanceof ApiError && x.code === "low_quality") setQualityReasons(x.reasons);
+        else {
+          setStale(x instanceof ApiError && x.code === "stale_field");
+          setErr(errorText(x));
+        }
+      },
     });
   };
   return (
@@ -88,6 +99,7 @@ function TextEdit({ d, field, onClose }: { d: RecordDetail; field: "title" | "de
         }}
       >
         {err !== null && <p className={ui.error} role="alert">{err}</p>}
+        {stale && <small className={ui.fieldHint}>Güncel hâli: {live ?? "(boş)"}</small>}
         {/* Gorunur etiket dialog basligi; alan adini ondan alir. */}
         {field === "title" ? (
           <input className={ui.input} aria-labelledby="dlg-title" value={v} onChange={(e) => setV(e.target.value)}
@@ -101,7 +113,7 @@ function TextEdit({ d, field, onClose }: { d: RecordDetail; field: "title" | "de
           <Button onClick={onClose}>Vazgeç</Button>
           <Button type="submit" variant="primary" aria-busy={m.isPending}
             disabled={m.isPending || (field === "title" && v.trim() === "") || (field === "description" && v.trim() === "") || (!bypassQuality && ((field === "title" && Array.from(v.trim()).length < 5) || (field === "description" && Array.from(v.trim()).length < 30 && v.trim() !== (d.record.description ?? ""))))}>
-            {m.isPending ? "Kaydediliyor…" : "Kaydet"}
+            {m.isPending ? "Kaydediliyor…" : stale ? "Yine de kaydet" : "Kaydet"}
           </Button>
         </div>
       </form>
