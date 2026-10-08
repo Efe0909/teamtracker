@@ -1,12 +1,12 @@
 # tools/release.sh yazar — ELLE DUZENLEME.
 {
-  tag = "rust-5d8ab31897";
+  tag = "rust-4449371dcc";
   aarch64-linux = {
-    url = "https://github.com/Efe0909/teamtracker/releases/download/rust-5d8ab31897/ekiptakip-5d8ab31897-aarch64-linux.tar.gz";
-    hash = "sha256-BkRBsYzb9c3RV7JATmIBM3Gg+wgDkwrr/IiUlF56n+4=";
+    url = "https://github.com/Efe0909/teamtracker/releases/download/rust-4449371dcc/ekiptakip-4449371dcc-aarch64-linux.tar.gz";
+    hash = "sha256-RLnBL9coCRQdkaSLxOuzpOwOvc2vQjRNGfztRdNfYQA=";
   };
   x86_64-linux = {
-    url = "https://github.com/Efe0909/teamtracker/releases/download/rust-5d8ab31897/ekiptakip-5d8ab31897-x86_64-linux.tar.gz";
-    hash = "sha256-oKQWGmcZzbirA732ty1nk5zPkyLyOQwqhc7HGsBl3Rc=";
+    url = "https://github.com/Efe0909/teamtracker/releases/download/rust-4449371dcc/ekiptakip-4449371dcc-x86_64-linux.tar.gz";
+    hash = "sha256-cVQUWEixvtMbbx8pywL4hw7wrUzIFimlMqstD97jO5U=";
   };
 }
