@@ -21,7 +21,7 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true,
-    proxy: { "/api": "http://127.0.0.1:8000" },
+    proxy: { "/api": { target: "http://127.0.0.1:8000", ws: true } },
   },
   // home/privacy/terms.html: apex'in JS'siz statik sayfalari (Google marka
   // dogrulamasi ham HTML okur). nginx yalniz polonyum.com'da `/`, `/privacy`,
