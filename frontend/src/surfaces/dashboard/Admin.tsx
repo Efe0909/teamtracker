@@ -5,8 +5,8 @@
 
 import { useEffect, useState } from "react";
 import { ApiError, errorText } from "../../api/client";
-import { adminOps, useAdmin, useAdminWrite } from "../../api/hooks";
-import type { AdminPerson, AdminRole, AdminView, UserOp } from "../../api/types";
+import { adminOps, useAdmin, useAdminWrite, useRenameUser } from "../../api/hooks";
+import type { AdminPerson, AdminRole, AdminView, Uuid, UserOp } from "../../api/types";
 import { ago, NOTIFY, SCOPE } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
 import { Icon } from "../../ui/icons";
@@ -188,20 +188,73 @@ function BulkBar({ v, selected, onClear }: { v: AdminView; selected: Set<string>
   );
 }
 
+/** Duzenleme taslagi: kaydedilene kadar yalniz burada; kayitli durum sunucudan gelir. */
+type Draft = { name: string; scopes: string[]; roles: Uuid[]; nodes: Uuid[] };
+
+const sameSet = (a: string[], b: string[]) => a.length === b.length && a.every((x) => b.includes(x));
+const diff = (next: string[], prev: string[]) => ({
+  added: next.filter((x) => !prev.includes(x)),
+  removed: prev.filter((x) => !next.includes(x)),
+});
+
 function PersonRow({ p, v, roleById, checked, onCheck }: {
   p: AdminPerson; v: AdminView; roleById: Map<string, AdminRole>; checked: boolean; onCheck: (on: boolean) => void;
 }) {
   const L = useLookup();
   const toast = useToast();
   const m = useAdminWrite();
+  const rename = useRenameUser();
+  const [draft, setDraft] = useState<Draft | null>(null);
+  const [busy, setBusy] = useState(false);
+  const canName = L.can("edit_user_names");
   const run = (op: UserOp) =>
     m.mutate(adminOps.user(p.id, op), { onError: (e) => toast({ text: errorText(e), error: true }) });
-  const direct = new Set(p.scopes.filter((r) => r.direct).map((r) => r.name));
-  const roleScopes = new Set(v.roles.filter((r) => p.role_ids.includes(r.id)).flatMap((r) => r.scopes));
-  const visibleScopes = p.scopes.filter((r) => !roleScopes.has(r.name));
-  const hiddenDirect = p.scopes.filter((r) => r.direct && roleScopes.has(r.name));
-  const grantable = v.scopes.filter((k) => !direct.has(k));
-  const assignable = v.roles.filter((r) => !p.role_ids.includes(r.id));
+  // Rolden gelenler sunucuda birlikte gelir; burada yalniz gosterim ve secicide haric tutma.
+  const held = v.roles.filter((r) => p.role_ids.includes(r.id));
+  const roleScopes = new Set(held.flatMap((r) => r.scopes));
+  const roleNodes = new Set(held.flatMap((r) => r.node_ids));
+  const savedScopes = p.scopes.filter((r) => r.direct).map((r) => r.name);
+  const visibleScopes = savedScopes.filter((k) => !roleScopes.has(k));
+  const saved: Draft = { name: p.name, scopes: savedScopes, roles: p.role_ids, nodes: p.node_ids };
+  const cur = draft ?? saved;
+  const edit = (change: (d: Draft) => Draft) => setDraft((prev) => change(prev ?? saved));
+  const nameOk = cur.name.trim() !== "";
+  const dirty = draft !== null && (draft.name.trim() !== p.name || !sameSet(draft.scopes, savedScopes)
+    || !sameSet(draft.roles, p.role_ids) || !sameSet(draft.nodes, p.node_ids));
+
+  // Ad once, sonra kapsam/rol/dal farki; sirayla gider. Basarisizlar sayilir, tasla kalir.
+  const save = async () => {
+    if (draft === null) return;
+    const name = draft.name.trim();
+    const sc = diff(draft.scopes, savedScopes);
+    const rl = diff(draft.roles, p.role_ids);
+    const nd = diff(draft.nodes, p.node_ids);
+    const plan: Array<() => Promise<unknown>> = [
+      ...(canName && name !== "" && name !== p.name ? [() => rename.mutateAsync({ id: p.id, name })] : []),
+      ...sc.removed.map((k) => () => m.mutateAsync(adminOps.user(p.id, { op: "revoke_scope", value: k }))),
+      ...sc.added.map((k) => () => m.mutateAsync(adminOps.user(p.id, { op: "grant_scope", value: k }))),
+      ...rl.removed.map((id) => () => m.mutateAsync(adminOps.user(p.id, { op: "revoke_role", value: id }))),
+      ...rl.added.map((id) => () => m.mutateAsync(adminOps.user(p.id, { op: "grant_role", value: id }))),
+      ...nd.removed.map((id) => () => m.mutateAsync(adminOps.user(p.id, { op: "revoke_node", value: id }))),
+      ...nd.added.map((id) => () => m.mutateAsync(adminOps.user(p.id, { op: "grant_node", value: id }))),
+    ];
+    setBusy(true);
+    let failed = 0;
+    for (const step of plan) {
+      try {
+        await step();
+      } catch {
+        failed += 1;
+      }
+    }
+    setBusy(false);
+    if (failed === 0) {
+      setDraft(null);
+      toast({ text: `${name || p.name} kaydedildi.`, error: false });
+    } else {
+      toast({ text: `${failed} değişiklik yapılamadı.`, error: true });
+    }
+  };
 
   return (
     <li className={s.person}>
@@ -224,44 +277,60 @@ function PersonRow({ p, v, roleById, checked, onCheck }: {
       </div>
 
       <div className={s.chips}>
+        {held.map((role) => (
+          <span key={role.id} className={s.chip} style={{ borderColor: role.color }}>
+            <span className={s.roleDot} style={{ backgroundColor: role.color }} />
+            {role.name}
+          </span>
+        ))}
         {p.is_admin ? (
           <span className={s.dim}>Yönetici bütün kapsamlara sahip.</span>
-        ) : visibleScopes.length === 0 ? (
-          <span className={s.dim}>{roleScopes.size > 0 ? "Diğer kapsamlar rollerden geliyor." : "Kapsam yok."}</span>
         ) : (
-          visibleScopes.map((r) => (
-            <span key={r.name} className={s.chip} title={SCOPE[r.name] ?? r.name}>
-              {r.name}
-              {r.direct && (
-                <button type="button" className={s.chipX} aria-label={`${r.name} kapsamını al`}
-                  onClick={() => run({ op: "revoke_scope", value: r.name })}>✕</button>
-              )}
-            </span>
+          visibleScopes.map((k) => (
+            <span key={k} className={s.chip} title={SCOPE[k] ?? k}>{k}</span>
           ))
         )}
+        {!p.is_admin && held.length === 0 && visibleScopes.length === 0 && <span className={s.dim}>Kapsam yok.</span>}
       </div>
 
       <details className={s.personEdit}>
         <summary>Düzenle</summary>
 
         <div className={s.adminRow}>
+          <span className={s.adminKey}>Ad</span>
+          {canName ? (
+            <input className={ui.input} aria-label={`${p.name} adı`} value={cur.name} maxLength={200} disabled={busy}
+              onChange={(e) => edit((d) => ({ ...d, name: e.target.value }))} />
+          ) : (
+            <span>{p.name}</span>
+          )}
+        </div>
+
+        <div className={s.adminRow}>
           <span className={s.adminKey}>Kapsam</span>
           <div className={s.chips}>
-            <Grant label="Kapsam ver" empty="Bütün kapsamlar zaten doğrudan verilmiş."
-              options={grantable.map((k) => ({ value: k, label: k, desc: SCOPE[k] ?? "" }))}
-              onPick={(k) => run({ op: "grant_scope", value: k })} />
+            {cur.scopes.filter((k) => !roleScopes.has(k)).map((k) => (
+              <span key={k} className={s.chip} title={SCOPE[k] ?? k}>
+                {k}
+                <button type="button" className={s.chipX} aria-label={`${k} kapsamını kaldır`}
+                  onClick={() => edit((d) => ({ ...d, scopes: d.scopes.filter((x) => x !== k) }))}><Icon name="x" size={12} /></button>
+              </span>
+            ))}
+            <Grant label="Kapsam ver" empty="Verilecek kapsam yok."
+              options={v.scopes.filter((k) => !cur.scopes.includes(k) && !roleScopes.has(k)).map((k) => ({ value: k, label: k, desc: SCOPE[k] ?? "" }))}
+              onPick={(k) => edit((d) => ({ ...d, scopes: [...d.scopes, k] }))} />
           </div>
         </div>
 
-        {hiddenDirect.length > 0 && (
+        {cur.scopes.some((k) => roleScopes.has(k)) && (
           <div className={s.adminRow}>
             <span className={s.adminKey}>Rolde de olan doğrudan kapsam</span>
             <div className={s.chips}>
-              {hiddenDirect.map((r) => (
-                <span key={r.name} className={s.chip}>
-                  {r.name}
-                  <button type="button" className={s.chipX} aria-label={`${r.name} doğrudan kapsamını al`}
-                    onClick={() => run({ op: "revoke_scope", value: r.name })}><Icon name="x" size={12} /></button>
+              {cur.scopes.filter((k) => roleScopes.has(k)).map((k) => (
+                <span key={k} className={s.chip}>
+                  {k}
+                  <button type="button" className={s.chipX} aria-label={`${k} doğrudan kapsamını al`}
+                    onClick={() => edit((d) => ({ ...d, scopes: d.scopes.filter((x) => x !== k) }))}><Icon name="x" size={12} /></button>
                 </span>
               ))}
             </div>
@@ -271,7 +340,7 @@ function PersonRow({ p, v, roleById, checked, onCheck }: {
         <div className={s.adminRow}>
           <span className={s.adminKey}>Roller</span>
           <div className={s.chips}>
-            {p.role_ids.map((id) => {
+            {cur.roles.map((id) => {
               const role = roleById.get(id);
               return (
                 <span key={id} className={s.chip} style={{ borderColor: role?.color ?? undefined }}>
@@ -279,29 +348,29 @@ function PersonRow({ p, v, roleById, checked, onCheck }: {
                     <span className={s.roleDot} style={{ backgroundColor: role.color }} />}
                   {role?.name ?? "?"}
                   <button type="button" className={s.chipX} aria-label={`${role?.name ?? "?"} rolünü al`}
-                    onClick={() => run({ op: "revoke_role", value: id })}><Icon name="x" size={12} /></button>
+                    onClick={() => edit((d) => ({ ...d, roles: d.roles.filter((x) => x !== id) }))}><Icon name="x" size={12} /></button>
                 </span>
               );
             })}
             <Grant label="Rol ver" empty="Verilecek rol yok."
-              options={assignable.map((r) => ({ value: r.id, label: r.name }))}
-              onPick={(id) => run({ op: "grant_role", value: id })} />
+              options={v.roles.filter((r) => !cur.roles.includes(r.id)).map((r) => ({ value: r.id, label: r.name }))}
+              onPick={(id) => edit((d) => ({ ...d, roles: [...d.roles, id] }))} />
           </div>
         </div>
 
         <div className={s.adminRow}>
           <span className={s.adminKey}>Dal izni</span>
           <div className={s.chips}>
-            {p.node_ids.map((id) => (
+            {cur.nodes.map((id) => (
               <span key={id} className={s.chip}>
                 {L.path(id).join(" › ")}
                 <button type="button" className={s.chipX} aria-label="Dal iznini al"
-                  onClick={() => run({ op: "revoke_node", value: id })}><Icon name="x" size={12} /></button>
+                  onClick={() => edit((d) => ({ ...d, nodes: d.nodes.filter((x) => x !== id) }))}><Icon name="x" size={12} /></button>
               </span>
             ))}
             <NodeTreePicker rootKey="units" look="chip" label="Dal izni ver" value={null}
-              disabled={m.isPending} exclude={(n) => p.node_ids.includes(n.id)}
-              onChange={(id) => run({ op: "grant_node", value: id })}>
+              disabled={busy} exclude={(n) => cur.nodes.includes(n.id) || roleNodes.has(n.id)}
+              onChange={(id) => edit((d) => ({ ...d, nodes: [...d.nodes, id] }))}>
               <Icon name="plus" size={13} /> Dal izni ver
             </NodeTreePicker>
           </div>
@@ -318,6 +387,12 @@ function PersonRow({ p, v, roleById, checked, onCheck }: {
               {p.is_admin ? "Yöneticiliği al" : "Yönetici yap"}
             </Button>
           )}
+          <div style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
+            <Button size="sm" disabled={draft === null || busy} onClick={() => setDraft(null)}>Vazgeç</Button>
+            <Button size="sm" variant="primary" disabled={!dirty || !nameOk || busy} onClick={() => void save()}>
+              {busy ? "Kaydediliyor…" : "Kaydet"}
+            </Button>
+          </div>
         </div>
       </details>
     </li>

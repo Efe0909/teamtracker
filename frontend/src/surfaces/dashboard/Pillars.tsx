@@ -13,6 +13,7 @@ import { isDone } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
 import { navigate } from "../../lib/router";
 import { Icon } from "../../ui/icons";
+import { MarkdownText } from "../../ui/MarkdownField";
 import { Avatar, Button, Dialog, Empty, Link, Loading, Tag, useToast } from "../../ui/ui";
 import { ErrorScreen } from "../errors/ErrorScreen";
 import { Banner } from "./Banner";
@@ -64,7 +65,7 @@ export function Pillars() {
                   <h2>{p.name}</h2>
                   {!p.is_active && <Tag tone="neutral">Pasif</Tag>}
                 </span>
-                <p>{p.description ?? "Açıklama yok."}</p>
+                <p>{p.description !== null ? <MarkdownText value={p.description} linkTextOnly /> : "Açıklama yok."}</p>
                 <span className={s.teamFoot}>
                   <span className={s.avStack}>
                     {(tv?.members ?? []).slice(0, 6).map((m) => (
@@ -146,7 +147,7 @@ function PillarScreen({ p }: { p: MetaPillar }) {
                 <h1>
                   {p.name} {!p.is_active && <Tag tone="neutral">Pasif</Tag>}
                 </h1>
-                {p.description !== null && <p className={s.pageSub}>{p.description}</p>}
+                {p.description !== null && <MarkdownText value={p.description} className={s.pageSub} />}
               </div>
             </div>
             <ArrangeButton on={arranging} onChange={setArranging} />

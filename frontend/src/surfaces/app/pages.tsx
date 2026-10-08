@@ -11,6 +11,7 @@ import { useLookup } from "../../lib/lookup";
 import { mentionsMe } from "../../lib/mentions";
 import { navigate } from "../../lib/router";
 import { Icon } from "../../ui/icons";
+import { MarkdownText } from "../../ui/MarkdownField";
 import { Avatar, cx, Due, Empty, KindTag, Link, Loading, PriorityTag, Status, Tag, ui } from "../../ui/ui";
 import s from "./app.module.css";
 import { TopBar } from "./MobileApp";
@@ -133,7 +134,7 @@ export function SearchPage({ q }: { q: string }) {
                   <Link key={t.id} href={href({ name: "team", id: t.id })} className={s.card}>
                     <span className={s.cardBody}>
                       <span className={s.cardTitle}>{t.name}</span>
-                      {t.description !== null && <span className={s.cardPath}>{t.description}</span>}
+                      {t.description !== null && <MarkdownText value={t.description} linkTextOnly className={s.cardPath} />}
                     </span>
                     <span className={s.chev}>
                       <Icon name="chevron" size={20} />
@@ -361,7 +362,7 @@ export function TeamsListPage() {
           <span className={s.teamMark}><Icon name="teams" size={24} /></span>
           <span className={s.cardBody}>
             <span className={s.cardTitle}>{team.name}</span>
-            {team.description !== null && <span className={s.cardPath}>{team.description}</span>}
+            {team.description !== null && <MarkdownText value={team.description} linkTextOnly className={s.cardPath} />}
             {view !== undefined && <>
               <span className={s.cardMeta}>{members.length} üye · {view.open_records} açık kayıt</span>
               <span className={s.avatarRow}>{members.slice(0, 5).map((m) => <Avatar key={m.user_id} user={L.user(m.user_id)} size={26} />)}{members.length > 5 && <span>+{members.length - 5}</span>}</span>

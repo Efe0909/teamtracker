@@ -41,6 +41,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/auth/dev-login", get(auth::dev_login))
         .route("/api/meta", get(meta::meta))
         .route("/api/me/profile", patch(profile::patch))
+        .route("/api/users/{id}/name", patch(profile::rename))
         .route("/api/home", get(home::home))
         .route("/api/pins/{slug}", post(home::pin).delete(home::unpin))
         .route("/api/records", get(records::list).post(records::create))

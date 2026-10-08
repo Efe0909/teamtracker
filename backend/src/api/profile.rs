@@ -4,8 +4,12 @@
 //! fotografi. Yetenek gerekmez; kimlik oturumdan gelir. Telefon zorunlu ama
 //! burada reddedilmez: bos kalabilir, `meta.me.profile_complete` on yuzu
 //! yonlendirir (ilk giris telefonsuz olusur).
+//!
+//! Istisna: `PATCH /api/users/{id}/name` (ad, `users.name`) yalniz
+//! `edit_user_names` kapsamiyla — kendi ya da baskasinin adi. Kapsam yoksa
+//! ad herkes icin salt okunur.
 
-use axum::{extract::State, http::StatusCode};
+use axum::{extract::{Path, State}, http::StatusCode};
 use serde::Deserialize;
 use uuid::Uuid;
 
@@ -18,6 +22,31 @@ use crate::{
 
 const NICK_MAX: usize = 40;
 const PHONE_MAX: usize = 30;
+const NAME_MAX: usize = 200;
+
+/// Ad degisikligi. Kapsam kontrolu `active` uzerinden: admin zaten tum
+/// kapsamlara sahip (scope.rs), bu yuzden ayrica `is_admin` bakmaya gerek yok.
+#[derive(Deserialize)]
+pub struct NameIn {
+    name: String,
+}
+
+pub async fn rename(
+    State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>, Body(p): Body<NameIn>,
+) -> Result<StatusCode> {
+    if !common::has_scope(&st, &me, "edit_user_names").await? {
+        return Err(AppError::Denied("name_not_allowed"));
+    }
+    let id = common::id(&raw)?;
+    let name = common::text(Some(p.name), NAME_MAX, "invalid_name")?
+        .ok_or(AppError::BadRequest("invalid_name"))?;
+    let n = sqlx::query("update users set name = $2 where id = $1")
+        .bind(id).bind(&name).execute(&st.pool).await?.rows_affected();
+    if n == 0 {
+        return Err(AppError::NotFound);
+    }
+    Ok(StatusCode::NO_CONTENT)
+}
 
 /// Verilmeyen alan DEGISMEZ, `null` siler.
 #[derive(Deserialize)]
