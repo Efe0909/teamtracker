@@ -773,6 +773,48 @@ DB "delete from user_scopes where user_id='$DENIZ' and scope='manage_events'" >/
 ok "$(DB "select owner_id from records where id='$EVREC'")" "$DENIZ" "ikize yazildi"
 ok "$(wc_ n PATCH "$NT" "/api/events/$EVID" "$(OWN "\"$SELIN\"")")" 200 "sorumlu devreder"
 
+t purchases_v2
+# spec/73 §5 (017): kalem etkinlikten bagimsiz; sponsor adim degil istek; teslim
+# isareti ve satin alindi AYRI kapilar. `purchased` yalniz review_purchases.
+ok "$(wc_ n POST "$NT" "/api/events/$EVID/materials" '{"name":"Lehim teli"}')" 403 "scope'suz ekleyemez"
+DB "insert into user_scopes (user_id,scope) values ('$DENIZ','manage_purchases')" >/dev/null
+M=$(w n POST "$NT" "/api/events/$EVID/materials" '{"name":"Lehim teli"}')
+MID=$(jq -r '.materials[0].id' <<<"$M")
+ok "$(jq -r '.materials[0]|"\(.qty) \(.state) \(.purchased)"' <<<"$M")" "1 0 false" "varsayilanlar"
+ok "$(DB "select (m.created_by='$DENIZ')::text||' '||(select count(*) from event_materials where material_id=m.id) from materials m where m.id='$MID'")" "true 1" "ekleyen ve etkinlik bagi"
+ok "$(w n PATCH "$NT" "/api/materials/$MID" '{"qty":0}' | jq -r .error)" invalid_qty "adet >= 1"
+ok "$(w n PATCH "$NT" "/api/materials/$MID" '{"state":4}' | jq -r .error)" invalid_state "sponsor adimi yok: state <= 3"
+ok "$(w n PATCH "$NT" "/api/materials/$MID" '{"delivered":true}' | jq -r .error)" not_approved "onaysiz teslim edilmez"
+ok "$(w n PATCH "$NT" "/api/materials/$MID" '{"chosen":"sponsor"}' | jq -r .error)" no_sponsor "sponsorsuz sponsor secilmez"
+ok "$(w n PATCH "$NT" "/api/materials/$MID" '{"qty":12,"has_sponsor":true,"sponsor_qty":8,"sponsor_date":"2026-10-15","chosen":"sponsor"}' | jq -r '.materials[0]|"\(.qty) \(.has_sponsor) \(.sponsor_qty) \(.sponsor_chosen)"')" "12 true 8 true" "sponsor istegi"
+ok "$(w n PATCH "$NT" "/api/materials/$MID" '{"has_sponsor":false}' | jq -r '.materials[0]|"\(.sponsor_qty) \(.sponsor_chosen) \(.sponsor_date)"')" "null false null" "vazgecince sponsor alanlari temizlenir"
+ok "$(w n PATCH "$NT" "/api/materials/$MID" '{"owned":true}' | jq -r '.materials[0].owned')" true "elde var"
+ok "$(w n PATCH "$NT" "/api/materials/$MID" '{"has_sponsor":true}' | jq -r .error)" owned_no_sponsor "elde olan sponsordan istenmez"
+w n PATCH "$NT" "/api/materials/$MID" '{"owned":false}' >/dev/null
+P1=$(w n POST "$NT" "/api/materials/$MID/providers" '{"contact":"firma.example","price":100}' | jq -r '.materials[0].providers[0].id')
+ok "$(w n PATCH "$NT" "/api/material-providers/$P1" '{"price":99.5,"arrival_date":"2026-10-12"}' | jq -r '.materials[0].providers[0]|"\(.price) \(.arrival_date)"')" "99.5 2026-10-12" "teklif duzenlenir"
+ok "$(w n PATCH "$NT" "/api/material-providers/$P1" '{"price":null}' | jq -r '.materials[0].providers[0].price')" null "null fiyati siler"
+ok "$(w n PATCH "$NT" "/api/materials/$MID" "{\"chosen\":\"$P1\"}" | jq -r '.materials[0].chosen_provider_id')" "$P1" "teklif secilir"
+M2=$(w n POST "$NT" "/api/events/$EVID/materials" '{"name":"Rozet"}'); MID2=$(jq -r '.materials[1].id' <<<"$M2")
+ok "$(w n PATCH "$NT" "/api/materials/$MID2" "{\"chosen\":\"$P1\"}" | jq -r .error)" invalid_provider "baska kalemin teklifi secilmez"
+w n DELETE "$NT" "/api/material-providers/$P1" '' >/dev/null
+ok "$(DB "select chosen_provider_id is null from materials where id='$MID'")" t "teklif silinince secim kalkar"
+
+t purchased_review
+w n PATCH "$NT" "/api/materials/$MID" '{"state":2}' >/dev/null
+ok "$(wc_ n PATCH "$NT" "/api/materials/$MID/purchased" '{"purchased":true}')" 403 "manage_purchases satin alindi isaretlemez"
+DB "insert into user_scopes (user_id,scope) values ('$DENIZ','review_purchases')" >/dev/null
+ok "$(w n PATCH "$NT" "/api/materials/$MID/purchased" '{"purchased":true}' | jq -r .error)" not_approved "onaysiz satin alinmis sayilmaz"
+w n PATCH "$NT" "/api/materials/$MID" '{"state":3,"delivered":true}' >/dev/null
+ok "$(w n PATCH "$NT" "/api/materials/$MID/purchased" '{"purchased":true}' | jq -r '"\(.purchased) \(.delivered)"')" "true true" "maliye isaretler"
+ok "$(DB "select (purchased_at is not null)::text||' '||(purchased_by='$DENIZ')::text from materials where id='$MID'")" "true true" "ne zaman, kim"
+ok "$(w n PATCH "$NT" "/api/materials/$MID" '{"qty":3}' | jq -r .error)" purchased_locked "satin alinan kalemin tedarigi donar"
+ok "$(wc_ n DELETE "$NT" "/api/materials/$MID" '')" 409 "silinemez"
+ok "$(w n PATCH "$NT" "/api/materials/$MID" '{"notes":"teslim alindi","delivered":false}' | jq -r '.materials[0]|"\(.notes) \(.delivered)"')" "teslim alindi false" "not ve teslim isareti serbest"
+w n PATCH "$NT" "/api/materials/$MID/purchased" '{"purchased":false}' >/dev/null
+ok "$(DB "select purchased::text||' '||(purchased_at is null)::text from materials where id='$MID'")" "false true" "inceleme geri alinir"
+DB "delete from user_scopes where user_id='$DENIZ' and scope in ('manage_purchases','review_purchases')" >/dev/null
+
 t action_owner_participant
 # K1: eyleme atanan kayda katilimci olur, eylemini kapatabilir (A3 de kapanir).
 ok "$(g c2 "/api/records/$VEKALET" | jq -r .access.can_edit)" false "atanmadan once duzenleyemez"

@@ -150,17 +150,42 @@ struct Widget {
     record_id: Option<Uuid>,
 }
 
+/// `materials` sutunlari, `m` takma adiyla (etkinlik ayrintisi ve maliye ayni satiri okur).
+macro_rules! material_cols {
+    () => {
+        "m.id, m.name, m.notes, m.type as kind, m.priority, m.state, m.qty, m.has_sponsor, m.owned,
+         m.chosen_provider_id, m.sponsor_chosen, m.sponsor_qty, m.sponsor_date, m.in_sponsor_record,
+         m.delivered, m.purchased, m.purchased_at, m.created_by, m.updated_at"
+    };
+}
+
 #[derive(Serialize, sqlx::FromRow)]
-struct Material {
+pub struct Material {
     id: Uuid,
     name: String,
     notes: Option<String>,
     #[serde(rename = "type")]
     kind: MaterialType,
     priority: Priority,
+    /// Tamamlanan adim sayisi (0..=3). Sponsor adim degil, ayri istek (`has_sponsor`).
     state: i16,
+    qty: i32,
+    /// "Sponsordan istendi". Sponsorun sureci arayuzde yok; son secim yetkilide.
     has_sponsor: bool,
     owned: bool,
+    /// Secilen teklif; bos ve `sponsor_chosen` ise sponsor secildi, ikisi de bos ise secim yok.
+    chosen_provider_id: Option<Uuid>,
+    sponsor_chosen: bool,
+    sponsor_qty: Option<i32>,
+    sponsor_date: Option<NaiveDate>,
+    /// Sponsorluk kaydinin aciklamasina islendi mi ("Guncelle" sayaci).
+    in_sponsor_record: bool,
+    /// Teslim alindi; yalniz onayli kalem. Sutun degil, detaydaki isaret.
+    delivered: bool,
+    /// Yalniz maliye incelemesi (`review_purchases`); widget onayi satin alindi demek DEGIL.
+    purchased: bool,
+    purchased_at: Option<DateTime<Utc>>,
+    created_by: Option<Uuid>,
     updated_at: DateTime<Utc>,
     #[sqlx(skip)]
     providers: Vec<Provider>,
@@ -206,20 +231,12 @@ async fn detail_of(st: &AppState, me: &User, event: EventRow) -> Result<Detail> 
     let widgets = sqlx::query_as(
         "select id, widget_type as kind, record_id from event_widgets where event_id = $1 order by position")
         .bind(event.id).fetch_all(&st.pool).await?;
-    let mut materials: Vec<Material> = sqlx::query_as(
-        "select id, name, notes, type as kind, priority, state, has_sponsor, owned, updated_at
-           from materials where event_id = $1 order by created_at")
+    let mut materials: Vec<Material> = sqlx::query_as(concat!(
+        "select ", material_cols!(), " from materials m
+           join event_materials em on em.material_id = m.id
+          where em.event_id = $1 order by m.created_at, m.id"))
         .bind(event.id).fetch_all(&st.pool).await?;
-    let ids: Vec<Uuid> = materials.iter().map(|m| m.id).collect();
-    let providers: Vec<Provider> = sqlx::query_as(
-        "select id, material_id, contact, price::float8 as price, arrival_date
-           from material_providers where material_id = any($1) order by price nulls last, id")
-        .bind(&ids).fetch_all(&st.pool).await?;
-    for p in providers {
-        if let Some(m) = materials.iter_mut().find(|m| m.id == p.material_id) {
-            m.providers.push(p);
-        }
-    }
+    attach_providers(&st.pool, &mut materials).await?;
     Ok(Detail { event, participants, team_ids, checkpoints, widgets, materials, can_edit, can_manage, can_approve, requests })
 }
 
@@ -906,9 +923,37 @@ pub async fn add_material(
     require_scope(&st, &me, "manage_purchases").await?;
     let name = common::text(Some(b.name), TITLE_MAX, "invalid_name")?
         .ok_or(AppError::BadRequest("invalid_name"))?;
-    sqlx::query("insert into materials (event_id, name) values ($1, $2)")
-        .bind(id).bind(name).execute(&st.pool).await?;
+    // Kalem bagimsiz dogar, etkinlige `event_materials` ile baglanir.
+    let mut tx = st.pool.begin().await?;
+    let material: Uuid = sqlx::query_scalar("insert into materials (name, created_by) values ($1, $2) returning id")
+        .bind(name).bind(me.id).fetch_one(&mut *tx).await?;
+    sqlx::query("insert into event_materials (material_id, event_id) values ($1, $2)")
+        .bind(material).bind(id).execute(&mut *tx).await?;
+    tx.commit().await?;
     reply(&st, &me, id).await
+}
+
+/// Teklifleri kalemlere ekler (etkinlik ayrintisi ve maliye ortak).
+async fn attach_providers(pool: &PgPool, materials: &mut [Material]) -> Result<()> {
+    let ids: Vec<Uuid> = materials.iter().map(|m| m.id).collect();
+    let providers: Vec<Provider> = sqlx::query_as(
+        "select id, material_id, contact, price::float8 as price, arrival_date
+           from material_providers where material_id = any($1) order by price nulls last, id")
+        .bind(&ids).fetch_all(pool).await?;
+    for p in providers {
+        if let Some(m) = materials.iter_mut().find(|m| m.id == p.material_id) {
+            m.providers.push(p);
+        }
+    }
+    Ok(())
+}
+
+/// Maliye incelemesinden gecmis kalemin tedarigi donar: ad, adet, adimlar, sponsor,
+/// secim ve tekliflere yazilmaz. Not, oncelik ve teslim isareti serbest.
+async fn require_unpurchased(pool: &PgPool, material: Uuid) -> Result<()> {
+    let purchased: bool = sqlx::query_scalar("select purchased from materials where id = $1")
+        .bind(material).fetch_one(pool).await?;
+    if purchased { Err(AppError::Conflict("purchased_locked")) } else { Ok(()) }
 }
 
 /// Kismi: gelen alan degisir. `notes: null` notu siler, `notes` yoksa dokunmaz.
@@ -922,17 +967,108 @@ pub struct MaterialPatch {
     kind: Option<MaterialType>,
     #[serde(default)]
     priority: Option<Priority>,
-    /// Tamamlanan adim sayisi. Sponsor adimi kalkinca 4 -> 3'e iner.
+    /// Tamamlanan adim sayisi (0..=3). 3'ten dusen kalemin teslim isareti kalkar.
     #[serde(default)]
     state: Option<i16>,
     #[serde(default)]
+    qty: Option<i32>,
+    /// Sponsordan iste / vazgec. Kapaninca sponsor alanlari ve secimi temizlenir.
+    #[serde(default)]
     has_sponsor: Option<bool>,
+    #[serde(default, deserialize_with = "common::present")]
+    sponsor_qty: Option<Option<i32>>,
+    #[serde(default, deserialize_with = "common::present")]
+    sponsor_date: Option<Option<NaiveDate>>,
+    /// Secim: teklif id'si, `"sponsor"` ya da `null` (secimi kaldir).
+    #[serde(default, deserialize_with = "common::present")]
+    chosen: Option<Option<String>>,
+    /// Elde olan kalem surece girmez; sponsor ve teslim isareti de kalkar.
     #[serde(default)]
     owned: Option<bool>,
+    /// Teslim alindi: yalniz onayli (state 3) ve elde olmayan kalem.
+    #[serde(default)]
+    delivered: Option<bool>,
 }
 
+const QTY_MAX: i32 = 1_000_000;
+
+/// Kalemin yeni hali: mevcut satir + PATCH -> tutarli satir. Saf (DB'ye gitmez);
+/// kurallar burada, `017_purchases_v2.sql` kisitlari ikinci kapi.
+fn apply(mut m: Material, b: MaterialPatch) -> Result<Material> {
+    if m.purchased && (b.name.is_some() || b.kind.is_some() || b.qty.is_some() || b.state.is_some()
+        || b.owned.is_some() || b.has_sponsor.is_some() || b.sponsor_qty.is_some()
+        || b.sponsor_date.is_some() || b.chosen.is_some())
+    {
+        return Err(AppError::Conflict("purchased_locked"));
+    }
+    if let Some(n) = b.name {
+        m.name = common::text(Some(n), TITLE_MAX, "invalid_name")?.ok_or(AppError::BadRequest("invalid_name"))?;
+    }
+    if let Some(n) = b.notes {
+        m.notes = common::text(n, TEXT_MAX, "invalid_notes")?;
+    }
+    if let Some(k) = b.kind { m.kind = k; }
+    if let Some(p) = b.priority { m.priority = p; }
+    if let Some(q) = b.qty {
+        if !(1..=QTY_MAX).contains(&q) { return Err(AppError::BadRequest("invalid_qty")); }
+        m.qty = q;
+    }
+    if let Some(s) = b.state {
+        if !(0..=3).contains(&s) { return Err(AppError::BadRequest("invalid_state")); }
+        m.state = s;
+    }
+    if let Some(o) = b.owned { m.owned = o; }
+    if m.owned {
+        m.has_sponsor = false;
+        m.delivered = false;
+    }
+    match b.has_sponsor {
+        Some(true) if m.owned => return Err(AppError::BadRequest("owned_no_sponsor")),
+        Some(v) => m.has_sponsor = v,
+        None => {}
+    }
+    if !m.has_sponsor {
+        m.sponsor_chosen = false;
+        m.sponsor_qty = None;
+        m.sponsor_date = None;
+        m.in_sponsor_record = false;
+    }
+    if let Some(q) = b.sponsor_qty {
+        if q.is_some_and(|q| !(1..=QTY_MAX).contains(&q)) { return Err(AppError::BadRequest("invalid_qty")); }
+        if q.is_some() && !m.has_sponsor { return Err(AppError::BadRequest("no_sponsor")); }
+        m.sponsor_qty = q;
+    }
+    if let Some(d) = b.sponsor_date {
+        if d.is_some() && !m.has_sponsor { return Err(AppError::BadRequest("no_sponsor")); }
+        m.sponsor_date = d;
+    }
+    match b.chosen {
+        None => {}
+        Some(None) => {
+            m.chosen_provider_id = None;
+            m.sponsor_chosen = false;
+        }
+        Some(Some(s)) if s == "sponsor" => {
+            if !m.has_sponsor { return Err(AppError::BadRequest("no_sponsor")); }
+            m.chosen_provider_id = None;
+            m.sponsor_chosen = true;
+        }
+        Some(Some(s)) => {
+            m.chosen_provider_id = Some(s.parse().map_err(|_| AppError::BadRequest("invalid_provider"))?);
+            m.sponsor_chosen = false;
+        }
+    }
+    if m.state < 3 { m.delivered = false; }
+    if let Some(d) = b.delivered {
+        if d && (m.state != 3 || m.owned) { return Err(AppError::BadRequest("not_approved")); }
+        m.delivered = d;
+    }
+    Ok(m)
+}
+
+/// Kalemin etkinligi; etkinligi olmayan (sahipsiz) kalem bu uclardan duzenlenmez.
 async fn material_event(pool: &PgPool, id: Uuid) -> Result<Uuid> {
-    event_of(pool, "select event_id from materials where id = $1", id).await
+    event_of(pool, "select event_id from event_materials where material_id = $1", id).await
 }
 
 pub async fn patch_material(
@@ -942,29 +1078,27 @@ pub async fn patch_material(
     let id = common::id(&raw)?;
     let event = material_event(&st.pool, id).await?;
     require_scope(&st, &me, "manage_purchases").await?;
-    let name = match b.name {
-        Some(n) => Some(common::text(Some(n), TITLE_MAX, "invalid_name")?
-            .ok_or(AppError::BadRequest("invalid_name"))?),
-        None => None,
-    };
-    let notes = b.notes.map(|n| common::text(n, TEXT_MAX, "invalid_notes")).transpose()?;
-    if b.state.is_some_and(|s| !(0..=4).contains(&s)) {
-        return Err(AppError::BadRequest("invalid_state"));
+    let mut tx = st.pool.begin().await?;
+    let cur: Material = sqlx::query_as(concat!("select ", material_cols!(), " from materials m where m.id = $1 for update"))
+        .bind(id).fetch_one(&mut *tx).await?;
+    let m = apply(cur, b)?;
+    // Secilen teklif bu kalemin: bileske FK de zorlar, ama 500 yerine 400 donelim.
+    if let Some(pid) = m.chosen_provider_id {
+        let mine: bool = sqlx::query_scalar("select exists(select 1 from material_providers where id = $1 and material_id = $2)")
+            .bind(pid).bind(id).fetch_one(&mut *tx).await?;
+        if !mine { return Err(AppError::BadRequest("invalid_provider")); }
     }
     sqlx::query(
-        "update materials set
-            name = coalesce($2, name),
-            notes = case when $3 then $4 else notes end,
-            type = coalesce($5, type),
-            priority = coalesce($6, priority),
-            has_sponsor = coalesce($7, has_sponsor),
-            state = least(coalesce($8, state), case when coalesce($7, has_sponsor) then 4 else 3 end),
-            owned = coalesce($9, owned),
-            updated_at = now()
+        "update materials set name = $2, notes = $3, type = $4, priority = $5, state = $6, qty = $7,
+                owned = $8, has_sponsor = $9, chosen_provider_id = $10, sponsor_chosen = $11,
+                sponsor_qty = $12, sponsor_date = $13, in_sponsor_record = $14, delivered = $15,
+                updated_at = now()
           where id = $1")
-        .bind(id).bind(name).bind(notes.is_some()).bind(notes.flatten()).bind(b.kind).bind(b.priority)
-        .bind(b.has_sponsor).bind(b.state).bind(b.owned)
-        .execute(&st.pool).await?;
+        .bind(id).bind(&m.name).bind(&m.notes).bind(m.kind).bind(m.priority).bind(m.state).bind(m.qty)
+        .bind(m.owned).bind(m.has_sponsor).bind(m.chosen_provider_id).bind(m.sponsor_chosen)
+        .bind(m.sponsor_qty).bind(m.sponsor_date).bind(m.in_sponsor_record).bind(m.delivered)
+        .execute(&mut *tx).await?;
+    tx.commit().await?;
     reply(&st, &me, event).await
 }
 
@@ -974,6 +1108,7 @@ pub async fn delete_material(
     let id = common::id(&raw)?;
     let event = material_event(&st.pool, id).await?;
     require_scope(&st, &me, "manage_purchases").await?;
+    require_unpurchased(&st.pool, id).await?;
     sqlx::query("delete from materials where id = $1").bind(id).execute(&st.pool).await?;
     reply(&st, &me, event).await
 }
@@ -994,6 +1129,7 @@ pub async fn add_provider(
     let id = common::id(&raw)?;
     let event = material_event(&st.pool, id).await?;
     require_scope(&st, &me, "manage_purchases").await?;
+    require_unpurchased(&st.pool, id).await?;
     let contact = common::text(Some(b.contact), CONTACT_MAX, "invalid_contact")?
         .ok_or(AppError::BadRequest("invalid_contact"))?;
     if b.price.is_some_and(|p| !p.is_finite() || !(0.0..=PRICE_MAX).contains(&p)) {
@@ -1014,14 +1150,154 @@ pub async fn delete_provider(
     State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>,
 ) -> Result<Json<Detail>> {
     let id = common::id(&raw)?;
-    let (material, event): (Uuid, Uuid) = sqlx::query_as(
-        "select m.id, m.event_id from material_providers p join materials m on m.id = p.material_id
-          where p.id = $1")
-        .bind(id).fetch_optional(&st.pool).await?.ok_or(AppError::NotFound)?;
+    let (material, event) = provider_owner(&st.pool, id).await?;
     require_scope(&st, &me, "manage_purchases").await?;
+    require_unpurchased(&st.pool, material).await?;
     let mut tx = st.pool.begin().await?;
     sqlx::query("delete from material_providers where id = $1").bind(id).execute(&mut *tx).await?;
     sqlx::query("update materials set updated_at = now() where id = $1").bind(material).execute(&mut *tx).await?;
     tx.commit().await?;
     reply(&st, &me, event).await
+}
+
+/// Teklifin (kalemi, etkinligi); etkinligi olmayan kalemin teklifi bu uclardan degismez.
+async fn provider_owner(pool: &PgPool, id: Uuid) -> Result<(Uuid, Uuid)> {
+    sqlx::query_as(
+        "select p.material_id, em.event_id from material_providers p
+           join event_materials em on em.material_id = p.material_id where p.id = $1")
+        .bind(id).fetch_optional(pool).await?.ok_or(AppError::NotFound)
+}
+
+/// Kismi: gelen alan degisir; `price`/`arrival_date` icin `null` siler.
+#[derive(Deserialize)]
+pub struct ProviderPatch {
+    #[serde(default)]
+    contact: Option<String>,
+    #[serde(default, deserialize_with = "common::present")]
+    price: Option<Option<f64>>,
+    #[serde(default, deserialize_with = "common::present")]
+    arrival_date: Option<Option<NaiveDate>>,
+}
+
+pub async fn patch_provider(
+    State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>,
+    Body(b): Body<ProviderPatch>,
+) -> Result<Json<Detail>> {
+    let id = common::id(&raw)?;
+    let (material, event) = provider_owner(&st.pool, id).await?;
+    require_scope(&st, &me, "manage_purchases").await?;
+    require_unpurchased(&st.pool, material).await?;
+    let contact = match b.contact {
+        Some(c) => Some(common::text(Some(c), CONTACT_MAX, "invalid_contact")?
+            .ok_or(AppError::BadRequest("invalid_contact"))?),
+        None => None,
+    };
+    if b.price.flatten().is_some_and(|p| !p.is_finite() || !(0.0..=PRICE_MAX).contains(&p)) {
+        return Err(AppError::BadRequest("invalid_price"));
+    }
+    let mut tx = st.pool.begin().await?;
+    sqlx::query(
+        "update material_providers set
+            contact = coalesce($2, contact),
+            price = case when $3 then round($4::numeric, 2) else price end,
+            arrival_date = case when $5 then $6 else arrival_date end
+          where id = $1")
+        .bind(id).bind(contact)
+        .bind(b.price.is_some()).bind(b.price.flatten())
+        .bind(b.arrival_date.is_some()).bind(b.arrival_date.flatten())
+        .execute(&mut *tx).await?;
+    sqlx::query("update materials set updated_at = now() where id = $1").bind(material).execute(&mut *tx).await?;
+    tx.commit().await?;
+    reply(&st, &me, event).await
+}
+
+#[derive(Deserialize)]
+pub struct PurchasedPatch {
+    purchased: bool,
+}
+
+/// Maliye incelemesi: kalemi "satin alindi" isaretler/kaldirir. Widget'tan YAPILAMAZ
+/// (`PATCH /api/materials/{id}` bu alani bilmez); ayri scope ister. Yalniz onayli,
+/// elde olmayan kalem satin alinmis sayilir. Etkinlik gerekmez: sahipsiz kalem de incelenir.
+pub async fn set_purchased(
+    State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>,
+    Body(b): Body<PurchasedPatch>,
+) -> Result<Json<Material>> {
+    let id = common::id(&raw)?;
+    let (state, owned): (i16, bool) = sqlx::query_as("select state, owned from materials where id = $1")
+        .bind(id).fetch_optional(&st.pool).await?.ok_or(AppError::NotFound)?;
+    require_scope(&st, &me, "review_purchases").await?;
+    if b.purchased && (state != 3 || owned) { return Err(AppError::Conflict("not_approved")); }
+    sqlx::query(
+        "update materials set purchased = $2,
+                purchased_at = case when $2 then now() end,
+                purchased_by = case when $2 then $3::uuid end,
+                updated_at = now()
+          where id = $1")
+        .bind(id).bind(b.purchased).bind(me.id).execute(&st.pool).await?;
+    let mut m: Vec<Material> = sqlx::query_as(concat!("select ", material_cols!(), " from materials m where m.id = $1"))
+        .bind(id).fetch_all(&st.pool).await?;
+    attach_providers(&st.pool, &mut m).await?;
+    Ok(Json(m.pop().ok_or(AppError::NotFound)?))
+}
+
+#[cfg(test)]
+mod material_tests {
+    use super::*;
+
+    fn mat() -> Material {
+        Material {
+            id: Uuid::nil(), name: "Lehim".into(), notes: None, kind: MaterialType::Consumable,
+            priority: Priority::Medium, state: 3, qty: 1, has_sponsor: true, owned: false,
+            chosen_provider_id: None, sponsor_chosen: true, sponsor_qty: Some(2),
+            sponsor_date: None, in_sponsor_record: true, delivered: false, purchased: false,
+            purchased_at: None, created_by: None, updated_at: Utc::now(), providers: vec![],
+        }
+    }
+    fn patch(json: &str) -> MaterialPatch { serde_json::from_str(json).unwrap() }
+    fn code(r: Result<Material>) -> &'static str {
+        match r { Err(AppError::BadRequest(c)) | Err(AppError::Conflict(c)) => c, Err(_) => "other", Ok(_) => "ok" }
+    }
+
+    #[test]
+    fn sponsor_kapaninca_sponsor_alanlari_temizlenir() {
+        let m = apply(mat(), patch(r#"{"has_sponsor": false}"#)).unwrap();
+        assert!(!m.sponsor_chosen && m.sponsor_qty.is_none() && !m.in_sponsor_record);
+    }
+
+    #[test]
+    fn sponsor_secimi_sponsor_ister_ve_teklifi_dusurur() {
+        let mut m = mat();
+        m.has_sponsor = false;
+        assert_eq!(code(apply(m, patch(r#"{"chosen": "sponsor"}"#))), "no_sponsor");
+        let id = Uuid::new_v4();
+        let m = apply(mat(), patch(&format!(r#"{{"chosen": "{id}"}}"#))).unwrap();
+        assert_eq!((m.chosen_provider_id, m.sponsor_chosen), (Some(id), false));
+        assert_eq!(code(apply(mat(), patch(r#"{"chosen": "x"}"#))), "invalid_provider");
+    }
+
+    #[test]
+    fn elde_olan_kalem_sponsor_ve_teslim_tasimaz() {
+        let m = apply(mat(), patch(r#"{"owned": true}"#)).unwrap();
+        assert!(!m.has_sponsor && !m.delivered);
+        assert_eq!(code(apply(m, patch(r#"{"has_sponsor": true}"#))), "owned_no_sponsor");
+    }
+
+    #[test]
+    fn teslim_yalniz_onayli_kalemde_ve_geri_adimda_kalkar() {
+        let m = apply(mat(), patch(r#"{"delivered": true}"#)).unwrap();
+        assert!(m.delivered);
+        let m = apply(m, patch(r#"{"state": 2}"#)).unwrap();
+        assert!(!m.delivered);
+        assert_eq!(code(apply(m, patch(r#"{"delivered": true}"#))), "not_approved");
+        assert_eq!(code(apply(mat(), patch(r#"{"state": 4}"#))), "invalid_state");
+    }
+
+    #[test]
+    fn satin_alinmis_kalemde_yalniz_not_oncelik_teslim_degisir() {
+        let bought = || Material { purchased: true, ..mat() };
+        assert_eq!(code(apply(bought(), patch(r#"{"qty": 3}"#))), "purchased_locked");
+        assert_eq!(code(apply(bought(), patch(r#"{"state": 1}"#))), "purchased_locked");
+        assert!(apply(bought(), patch(r#"{"delivered": true, "priority": "high", "notes": "x"}"#)).is_ok());
+    }
 }
