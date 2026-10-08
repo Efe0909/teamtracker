@@ -993,7 +993,7 @@ pub struct MaterialPatch {
 const QTY_MAX: i32 = 1_000_000;
 
 /// Kalemin yeni hali: mevcut satir + PATCH -> tutarli satir. Saf (DB'ye gitmez);
-/// kurallar burada, `017_purchases_v2.sql` kisitlari ikinci kapi.
+/// kurallar burada, `018_purchases_v2.sql` kisitlari ikinci kapi.
 fn apply(mut m: Material, b: MaterialPatch) -> Result<Material> {
     if m.purchased && (b.name.is_some() || b.kind.is_some() || b.qty.is_some() || b.state.is_some()
         || b.owned.is_some() || b.has_sponsor.is_some() || b.sponsor_qty.is_some()
