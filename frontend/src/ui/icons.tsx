@@ -45,12 +45,15 @@ import {
   ShieldCheck,
   SignalHigh,
   SignalLow,
+  Signal,
   SignalMedium,
+  Send,
   SlidersHorizontal,
   Smartphone,
   Star,
   Sun,
   Trash2,
+  Truck,
   TriangleAlert,
   Info,
   Copy,
@@ -122,6 +125,10 @@ const ICONS = {
   prLow: SignalLow,
   prMedium: SignalMedium,
   prHigh: SignalHigh,
+  // satin alimlar: 4 cubuklu seviye (kritik = tam), teslim ve sponsor
+  prCritical: Signal,
+  truck: Truck,
+  send: Send,
 } satisfies Record<string, LucideIcon>;
 
 export type IconName = keyof typeof ICONS;

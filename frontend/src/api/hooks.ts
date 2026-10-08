@@ -21,6 +21,7 @@ import type {
   IsoDate,
   MaterialPatch,
   MaterialProvider,
+  ProviderPatch,
   NewEvent,
   OtfInput,
   OtfView,
@@ -369,6 +370,7 @@ export const eventOps = {
   dropMaterial: (mid: Uuid): EventOp => ({ method: "DELETE", path: `/api/materials/${mid}` }),
   addProvider: (mid: Uuid, p: Omit<MaterialProvider, "id">): EventOp =>
     ({ method: "POST", path: `/api/materials/${mid}/providers`, body: p }),
+  provider: (pid: Uuid, p: ProviderPatch): EventOp => ({ method: "PATCH", path: `/api/material-providers/${pid}`, body: p }),
   dropProvider: (pid: Uuid): EventOp => ({ method: "DELETE", path: `/api/material-providers/${pid}` }),
 };
 

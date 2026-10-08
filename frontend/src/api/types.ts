@@ -255,11 +255,27 @@ export interface Material {
   notes: string | null;
   type: MaterialType;
   priority: Priority;
-  /** Tamamlanan adim sayisi. */
+  /** Tamamlanan adim sayisi (0..3): Gerekli mi? · Tedarikci bulundu · Onaylandi. */
   state: number;
+  /** Adet; birim fiyat tekliften turetilir, saklanmaz. */
+  qty: number;
+  /** "Sponsordan istendi": surec adimi degil, ayri istek. */
   has_sponsor: boolean;
   /** "Zaten var": surece girmez. */
   owned: boolean;
+  /** Secilen teklif; bos ve `sponsor_chosen` ise sponsor secildi, ikisi de bos ise secim yok. */
+  chosen_provider_id: Uuid | null;
+  sponsor_chosen: boolean;
+  sponsor_qty: number | null;
+  sponsor_date: IsoDate | null;
+  /** Sponsorluk kaydinin aciklamasina islendi mi. */
+  in_sponsor_record: boolean;
+  /** Teslim alindi (yalniz onayli kalem). */
+  delivered: boolean;
+  /** Yalniz maliye incelemesi; widget onayi satin alindi demek DEGIL. Doluyken tedarik donar. */
+  purchased: boolean;
+  purchased_at: IsoTime | null;
+  created_by: Uuid | null;
   updated_at: IsoTime;
   providers: MaterialProvider[];
 }
@@ -357,8 +373,20 @@ export interface MaterialPatch {
   type?: MaterialType;
   priority?: Priority;
   state?: number;
+  qty?: number;
   has_sponsor?: boolean;
+  sponsor_qty?: number | null;
+  sponsor_date?: IsoDate | null;
+  /** Teklif id'si, `"sponsor"` ya da `null` (secimi kaldir). */
+  chosen?: Uuid | "sponsor" | null;
   owned?: boolean;
+  delivered?: boolean;
+}
+
+export interface ProviderPatch {
+  contact?: string;
+  price?: number | null;
+  arrival_date?: IsoDate | null;
 }
 
 export type AccessMode = "public" | "request" | "private";

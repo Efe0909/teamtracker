@@ -76,6 +76,12 @@ export type ApiErrorCode =
   | "invalid_state"
   | "invalid_contact"
   | "invalid_price"
+  | "invalid_qty"
+  | "invalid_provider"
+  | "no_sponsor"
+  | "owned_no_sponsor"
+  | "not_approved"
+  | "purchased_locked"
   | "invalid_otf_item"
   | "invalid_quantity"
   | "too_many_contacts"
@@ -182,6 +188,12 @@ export const ERRORS = {
   invalid_state: "Süreç adımı geçersiz.",
   invalid_contact: "Tedarikçi boş olamaz ve 300 karakteri aşamaz.",
   invalid_price: "Fiyat geçersiz.",
+  invalid_qty: "Adet 1 ile 1.000.000 arasında olmalı.",
+  invalid_provider: "Seçilen teklif bu kaleme ait değil. Sayfayı yenile.",
+  no_sponsor: "Önce kalemi sponsordan iste.",
+  owned_no_sponsor: "Elde olan kalem sponsordan istenmez.",
+  not_approved: "Önce kalemi Onaylandı adımına getir.",
+  purchased_locked: "Maliye satın alındı olarak işaretlemiş. Tedariği değiştirmek için önce o işaret kaldırılmalı.",
   invalid_otf_item: "Formda olmayan bir kalem seçildi. Sayfayı yenile.",
   invalid_quantity: "Adet 1 ile 10000 arasında olmalı.",
   too_many_contacts: "Formda en çok 3 etkinlik sorumlusu yer alır.",
