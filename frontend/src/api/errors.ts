@@ -76,6 +76,7 @@ export type ApiErrorCode =
   | "invalid_state"
   | "invalid_contact"
   | "invalid_price"
+  | "invalid_budget"
   | "invalid_qty"
   | "invalid_provider"
   | "no_sponsor"
@@ -188,6 +189,7 @@ export const ERRORS = {
   invalid_state: "Süreç adımı geçersiz.",
   invalid_contact: "Tedarikçi boş olamaz ve 300 karakteri aşamaz.",
   invalid_price: "Fiyat geçersiz.",
+  invalid_budget: "Bütçe 0'dan büyük olmalı; boş bırakmak bütçeyi siler.",
   invalid_qty: "Adet 1 ile 1.000.000 arasında olmalı.",
   invalid_provider: "Seçilen teklif bu kaleme ait değil. Sayfayı yenile.",
   no_sponsor: "Önce kalemi sponsordan iste.",

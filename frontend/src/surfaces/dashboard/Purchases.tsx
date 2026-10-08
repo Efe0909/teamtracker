@@ -235,7 +235,7 @@ export function Purchases({ eventId, eventDate, items, onRemove }: {
       )}
 
       {open !== null && (
-        <MaterialDetail m={open} eventDate={eventDate} canEdit={canEdit} busy={w.isPending} run={run} onClose={() => setOpenId(null)} />
+        <MaterialDetail m={open} eventDate={eventDate} canEdit={canEdit} canBudget={L.can("manage_budgets")} busy={w.isPending} run={run} onClose={() => setOpenId(null)} />
       )}
     </div>
   );

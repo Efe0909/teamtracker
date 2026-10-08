@@ -1,6 +1,21 @@
 import { expect, it } from "vitest";
 import type { Material, MetaNode } from "../../api/types";
-import { bestOffer, columnOf, daysBefore, etaOf, isLate, kindTemplate, placeLabel, priceOf, purchaseHealth, purchaseTotals, unitPrice } from "./eventModel";
+import { bestOffer, columnOf, daysBefore, etaOf, isLate, isPhone, kindTemplate, overPct, placeLabel, priceOf, purchaseHealth, purchaseTotals, unitPrice } from "./eventModel";
+
+it("butce asimi yuzdesi: fiyat ya da butce yoksa null", () => {
+  expect(overPct(150, 100)).toBe(50);
+  expect(overPct(80, 100)).toBe(-20);
+  expect(overPct(150, null)).toBeNull();
+  expect(overPct(null, 100)).toBeNull();
+  expect(overPct(150, 0)).toBeNull();
+});
+
+it("teklif metni: telefon ya da baglanti", () => {
+  expect(isPhone("0532 555 01 17")).toBe(true);
+  expect(isPhone("+90 212 555 01 42")).toBe(true);
+  expect(isPhone("https://devreci.example/uno-set")).toBe(false);
+  expect(isPhone("firma.com")).toBe(false);
+});
 
 const n = (id: string, parent_id: string | null, attrs: MetaNode["attrs"] = {}, is_active = true): MetaNode => ({
   id, parent_id, name: id, node_type: "option", is_active, depth: 0, key: null, root_key: "event_types", shape: "leaf", attrs,
@@ -32,9 +47,9 @@ const m = (p: Partial<Material>): Material => ({
   id: "x", name: "x", notes: null, type: "consumable", priority: "medium", state: 0, qty: 1,
   has_sponsor: false, owned: false, chosen_provider_id: null, sponsor_chosen: false, sponsor_qty: null,
   sponsor_date: null, in_sponsor_record: false, delivered: false, purchased: false, purchased_at: null,
-  created_by: null, updated_at: "2026-10-01T00:00:00Z", providers: [], ...p,
+  created_by: null, updated_at: "2026-10-01T00:00:00Z", budget: null, overage_level: null, providers: [], ...p,
 });
-const prov = (id: string, price: number | null, arrival_date: string | null) => ({ id, contact: id, price, arrival_date });
+const prov = (id: string, price: number | null, arrival_date: string | null) => ({ id, contact: id, name: null, price, arrival_date, overage_level: null });
 
 it("baslik noktasi yalniz 'gerekli' adimini gecmis, elde olmayanlara bakar", () => {
   expect(purchaseHealth([])).toBe("none");
@@ -52,9 +67,9 @@ it("baslik noktasi yalniz 'gerekli' adimini gecmis, elde olmayanlara bakar", () 
 it("en iyi teklif tedarikcilerden turetilir", () => {
   expect(bestOffer(m({}))).toEqual({ price: null, date: null });
   expect(bestOffer(m({ providers: [
-    { id: "a", contact: "a", price: 1450, arrival_date: "2026-10-07" },
-    { id: "b", contact: "b", price: 1300, arrival_date: null },
-    { id: "c", contact: "c", price: null, arrival_date: "2026-10-05" },
+    { id: "a", contact: "a", name: null, price: 1450, arrival_date: "2026-10-07", overage_level: null },
+    { id: "b", contact: "b", name: null, price: 1300, arrival_date: null, overage_level: null },
+    { id: "c", contact: "c", name: null, price: null, arrival_date: "2026-10-05", overage_level: null },
   ] }))).toEqual({ price: 1300, date: "2026-10-05" });
 });
 

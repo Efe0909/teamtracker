@@ -265,6 +265,22 @@ Yeni widget türü tanımlandıkça ilgili türlerin şablonuna eklenir.
   `PATCH /api/materials/{id}/purchased`). Widget'taki onay satın alındı demek DEĞİL.
   Satın alınmış kalemin tedariki donar (`purchased_locked`): yalnız not, öncelik ve
   teslim işareti yazılır.
+- **Bütçe** (`budget numeric(12,2)`, boş olabilir, > 0): kalem başına tek tutar, detayda
+  girilir; her teklifin toplamıyla karşılaştırılır (kademe teklifin yanında). Yazmak
+  `manage_budgets` ister (ayrı yetki). Satın alınmış kalemde kilitli (`purchased_locked`).
+  Panoda gösterilmez.
+- **Aşım** (`overage_ln double precision`): `ln(kart fiyatı / bütçe)` ham değer olarak
+  saklanır; fiyat ya da bütçe yoksa, ya da sponsor seçiliyse boş. Kademe ($, $$, $$$)
+  saklanmaz, okumada türetilir: `ln <= 0` → `$` (bütçe içinde), `ln <= yellow_max_ln`
+  → `$$`, üstü → `$$$`. Eşik `overage_base(effective_from, yellow_max_ln)` tablosunda,
+  zamanlı: her değişiklik yeni satır, eski silinmez. Bir kalemin kademesi, kendi
+  `updated_at` zamanındaki tabanla (`effective_from <= zaman`) gösterilir. Taban ilk
+  değeri `ln(√2)` (%41 üstü `$$$`). Ham değer hiç değişmez; KPI'lar (avg_price, std_price,
+  avg_overpay) ondan okunur. Eşik her ~50 üründe kantil tabanlı yeniden hesaplanabilir.
+  `overage_ln` `apply()` içinde türetilir; teklif değişince `refresh_overage` aynı kuralı
+  çağırır.
+- **Teklif adı** (`material_providers.name`, boş olabilir): telefon teklifinde kişi/firma
+  adı; bağlantı teklifinde boş. Telefon/bağlantı türü metinden çıkarılır (`isPhone`).
 - **Hizmet de satın alımdır** (lazer kesim gibi dışarıda yaptırılan iş): `type = 'service'`.
 - **En iyi fiyat / en yakın tarih saklanmaz** — tekliflerden türetilir.
   İki kaynak ayrışamaz.

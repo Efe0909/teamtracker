@@ -103,6 +103,23 @@ export function unitPrice(price: number | null, qty: number): number | null {
   return price === null ? null : Math.round((price / qty) * 100) / 100;
 }
 
+// --- butce asimi ----------------------------------------------------------------------
+// Kademe sunucuda turetilir (`overage_level`: ln(fiyat/butce) ve tarihli taban). Burada
+// yalniz ekran karsiligi ve yuzde. Kademe 0 = butce icinde, 1 = hafif asim, 2 = belirgin asim.
+
+export const OVERAGE_MARK = ["$", "$$", "$$$"] as const;
+
+/** Butce asiminin yuzdesi (negatif: altinda). Fiyat ya da butce yoksa null. */
+export function overPct(price: number | null, budget: number | null): number | null {
+  if (price === null || budget === null || budget <= 0) return null;
+  return Math.round((price / budget - 1) * 100);
+}
+
+/** Teklif metni telefon mu (rakam, bosluk, +, parantez, tire); degilse baglanti. */
+export function isPhone(contact: string): boolean {
+  return /^[+\d][\d\s()-]{6,}$/.test(contact.trim());
+}
+
 /** Etkinlik gunune kac gun kala (negatif = gec). */
 export function daysBefore(eventDate: string, arrival: string): number {
   return Math.round((Date.parse(eventDate) - Date.parse(arrival)) / 86_400_000);

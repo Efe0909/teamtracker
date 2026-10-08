@@ -368,7 +368,7 @@ export const eventOps = {
   addMaterial: (id: Uuid, name: string): EventOp => ({ method: "POST", path: `/api/events/${id}/materials`, body: { name } }),
   material: (mid: Uuid, p: MaterialPatch): EventOp => ({ method: "PATCH", path: `/api/materials/${mid}`, body: p }),
   dropMaterial: (mid: Uuid): EventOp => ({ method: "DELETE", path: `/api/materials/${mid}` }),
-  addProvider: (mid: Uuid, p: Omit<MaterialProvider, "id">): EventOp =>
+  addProvider: (mid: Uuid, p: Omit<MaterialProvider, "id" | "overage_level">): EventOp =>
     ({ method: "POST", path: `/api/materials/${mid}/providers`, body: p }),
   provider: (pid: Uuid, p: ProviderPatch): EventOp => ({ method: "PATCH", path: `/api/material-providers/${pid}`, body: p }),
   dropProvider: (pid: Uuid): EventOp => ({ method: "DELETE", path: `/api/material-providers/${pid}` }),

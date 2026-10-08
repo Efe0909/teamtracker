@@ -244,9 +244,14 @@ export interface CheckpointRequest {
 
 export interface MaterialProvider {
   id: Uuid;
+  /** Baglanti ya da telefon. */
   contact: string;
+  /** Telefonda kisi/firma adi; baglantida null. */
+  name: string | null;
   price: number | null;
   arrival_date: IsoDate | null;
+  /** Teklifin kademesi (kalemin butcesine gore): 0 $, 1 $$, 2 $$$. Bos: butce ya da fiyat yok. */
+  overage_level: number | null;
 }
 
 export interface Material {
@@ -277,6 +282,10 @@ export interface Material {
   purchased_at: IsoTime | null;
   created_by: Uuid | null;
   updated_at: IsoTime;
+  /** Kalem butcesi (TL); bos: girilmemis. */
+  budget: number | null;
+  /** Kademe: 0 $ (butce icinde), 1 $$, 2 $$$. Bos: fiyat ya da butce yok, ya da sponsor secili. */
+  overage_level: number | null;
   providers: MaterialProvider[];
 }
 
@@ -381,10 +390,12 @@ export interface MaterialPatch {
   chosen?: Uuid | "sponsor" | null;
   owned?: boolean;
   delivered?: boolean;
+  budget?: number | null;
 }
 
 export interface ProviderPatch {
   contact?: string;
+  name?: string | null;
   price?: number | null;
   arrival_date?: IsoDate | null;
 }
