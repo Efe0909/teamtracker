@@ -15,6 +15,7 @@ import { EVENT_STATUS, formatDay, TEAM_ROLE } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
 import { navigate, useLocation } from "../../lib/router";
 import { Icon } from "../../ui/icons";
+import { MarkdownText } from "../../ui/MarkdownField";
 import { Avatar, cx, Dialog, Loading, Tag, useToast } from "../../ui/ui";
 import { ErrorScreen } from "../errors/ErrorScreen";
 import s from "./app.module.css";
@@ -247,7 +248,7 @@ export function TeamPage({ id }: { id: Uuid }) {
           {team.banner_id !== null && <img src={attachmentUrl(team.banner_id)} alt={`${team.name} kapak fotoğrafı`} className={s.teamBanner} />}
           <div className={s.teamIdentityBody}>
             <span className={s.teamMark}><Icon name="teams" size={24} /></span>
-            <div><h2>{team.name}</h2>{team.description !== null && <p>{team.description}</p>}<span className={s.cardMeta}>{q.data.members.length} üye · {team.node_ids.length} konu</span></div>
+            <div><h2>{team.name}</h2>{team.description !== null && <MarkdownText value={team.description} />}<span className={s.cardMeta}>{q.data.members.length} üye · {team.node_ids.length} konu</span></div>
           </div>
         </section>
         <details className={s.disclosure}>

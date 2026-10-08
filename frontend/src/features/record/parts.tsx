@@ -11,6 +11,7 @@ import { Icon } from "../../ui/icons";
 import { Avatar, Button, cx, Dialog, IconButton, KindTag, Picker, Popover, PriorityTag, Status, ui, useToast, Who, type Option } from "../../ui/ui";
 import { DueField } from "./fields";
 import { QualityNote } from "./QualityNote";
+import { InlineDescription } from "./InlineDescription";
 import { MarkdownField, MarkdownText } from "../../ui/MarkdownField";
 import s from "./record.module.css";
 
@@ -22,14 +23,15 @@ export function RecordHead({ d, showPath = true, titleExtra }: { d: RecordDetail
   const L = useLookup();
   const r = d.record;
   const creator = L.user(r.created_by);
-  const [edit, setEdit] = useState<"title" | "description" | null>(null);
+  const [editTitle, setEditTitle] = useState(false);
+  const patchRecord = usePatchRecord(r.id);
   const pin = usePin(r.id);
   return (
     <div className={s.head}>
       {showPath && <div className={s.path}>{L.path(r.unit_id).join(" › ")}</div>}
       <div className={s.titleRow}>
         <h1 className={s.title}>{r.title}</h1>
-        {d.access.can_edit && <IconButton icon="edit" label="Başlığı düzenle" onClick={() => setEdit("title")} />}
+        {d.access.can_edit && <IconButton icon="edit" label="Başlığı düzenle" onClick={() => setEditTitle(true)} />}
         <IconButton icon="star" className={d.pinned ? s.pinnedBtn : ""} label={d.pinned ? "Sabitlemeyi kaldır" : "Panolara sabitle"}
           disabled={pin.isPending} onClick={() => pin.mutate(!d.pinned)} />
         {titleExtra}
@@ -44,42 +46,31 @@ export function RecordHead({ d, showPath = true, titleExtra }: { d: RecordDetail
         )}
       </div>
       <div className={s.descWrap}>
-        {r.description !== null ? (
-          <MarkdownText value={r.description} className={s.desc} />
-        ) : (
-          <p className={cx(s.desc, s.descEmpty)}>Açıklama yok.</p>
-        )}
-        {d.access.can_edit && (
-          <button type="button" className={s.editLink} onClick={() => setEdit("description")}>
-            <Icon name="edit" size={13} /> {r.description === null ? "Açıklama ekle" : "Açıklamayı düzenle"}
-          </button>
-        )}
+        <InlineDescription value={r.description} canEdit={d.access.can_edit} bypassQuality={L.can("bypass_text_quality")}
+          save={(description, quality_override) => patchRecord.mutateAsync({ field: "description", value: description, quality_override })} />
       </div>
       {r.status === "closed" && r.closing_note && <MarkdownText value={`Kapanış notu: ${r.closing_note}`} className={s.muted} />}
-      {edit !== null && <TextEdit d={d} field={edit} onClose={() => setEdit(null)} />}
+      {editTitle && <TitleEdit d={d} onClose={() => setEditTitle(false)} />}
     </div>
   );
 }
 
-function TextEdit({ d, field, onClose }: { d: RecordDetail; field: "title" | "description"; onClose: () => void }) {
+function TitleEdit({ d, onClose }: { d: RecordDetail; onClose: () => void }) {
   const L = useLookup();
   const bypassQuality = L.can("bypass_text_quality");
   const m = usePatchRecord(d.record.id);
-  const [v, setV] = useState((field === "title" ? d.record.title : d.record.description) ?? "");
+  const [v, setV] = useState(d.record.title);
   const [err, setErr] = useState<string | null>(null);
   const [qualityReasons, setQualityReasons] = useState<string[] | null>(null);
   const submit = (quality_override = false) => {
-    const patch = field === "title"
-      ? ({ field: "title", value: v } as const)
-      : ({ field: "description", value: v.trim() === "" ? null : v } as const);
-    m.mutate({ ...patch, quality_override }, {
+    m.mutate({ field: "title", value: v, quality_override }, {
       onSuccess: onClose,
       onError: (x) => x instanceof ApiError && x.code === "low_quality"
         ? setQualityReasons(x.reasons) : setErr(errorText(x)),
     });
   };
   return (
-    <Dialog open onClose={onClose} title={field === "title" ? "Başlığı düzenle" : "Açıklamayı düzenle"} wide>
+    <Dialog open onClose={onClose} title="Başlığı düzenle" wide>
       <form
         className={ui.formStack}
         onSubmit={(e) => {
@@ -89,18 +80,14 @@ function TextEdit({ d, field, onClose }: { d: RecordDetail; field: "title" | "de
       >
         {err !== null && <p className={ui.error} role="alert">{err}</p>}
         {/* Gorunur etiket dialog basligi; alan adini ondan alir. */}
-        {field === "title" ? (
-          <input className={ui.input} aria-labelledby="dlg-title" value={v} onChange={(e) => setV(e.target.value)}
-            maxLength={200} required autoFocus />
-        ) : (
-          <MarkdownField value={v} onChange={setV} label="Açıklama" rows={8} placeholder="Ne oldu, nerede, ne zaman?" />
-        )}
-        <small className={ui.fieldHint}>{Array.from(v.trim()).length}{bypassQuality ? " karakter" : `/${field === "title" ? 5 : 30} karakter`}</small>
+        <input className={ui.input} aria-labelledby="dlg-title" value={v} onChange={(e) => setV(e.target.value)}
+          maxLength={200} required autoFocus />
+        <small className={ui.fieldHint}>{Array.from(v.trim()).length}{bypassQuality ? " karakter" : "/5 karakter"}</small>
         {!bypassQuality && <QualityNote />}
         <div className={ui.dact}>
           <Button onClick={onClose}>Vazgeç</Button>
           <Button type="submit" variant="primary" aria-busy={m.isPending}
-            disabled={m.isPending || (field === "title" && v.trim() === "") || (field === "description" && v.trim() === "") || (!bypassQuality && ((field === "title" && Array.from(v.trim()).length < 5) || (field === "description" && Array.from(v.trim()).length < 30 && v.trim() !== (d.record.description ?? ""))))}>
+            disabled={m.isPending || v.trim() === "" || (!bypassQuality && Array.from(v.trim()).length < 5)}>
             {m.isPending ? "Kaydediliyor…" : "Kaydet"}
           </Button>
         </div>
