@@ -144,7 +144,10 @@ telefon ──https──> Cloudflare ──tünel──> cloudflared ──> ng
                     (TLS burada biter)                   (server_name)   (yalnız /api, JSON)
 ```
 
-nginx `webRoot`'u (React derlemesi) statik verir ve `/api/`'yi Rust'a vekiller. Host'un
+nginx `webRoot`'u (React derlemesi) statik verir ve `/api/`'yi Rust'a vekiller.
+**`/api/ws` (WebSocket) için `Upgrade`/`Connection` başlıkları geçirilmeli** —
+yapılandırma `~/nix`'te; ayrıntı ve güncellenmemişse ne olacağı: `spec/77-gercek-zamanli.md`
+"Dağıtım". Host'un
 ilk etiketi yüzü seçer: `app.` mobil, `dashboard.` masaüstü, apex karşılama; bilinmeyen
 host `444`. Zon `polonyum.com`. Veritabanı yerel PostgreSQL, unix soketinde peer
 kimlik doğrulaması — parola yok. Ağaç indeksi süreç belleğinde olduğundan tek süreç çalışır.
