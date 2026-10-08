@@ -643,6 +643,18 @@ export function usePatchProfile() {
   });
 }
 
+/** Ad (`edit_user_names`): kendi ya da baskasinin adi. Sozluk ve yonetim tazelenir. */
+export function useRenameUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, name }: { id: Uuid; name: string }) => request<null>("PATCH", `/api/users/${id}/name`, { name }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.meta });
+      void qc.invalidateQueries({ queryKey: keys.admin });
+    },
+  });
+}
+
 export function useMarkSeen() {
   const qc = useQueryClient();
   return useMutation({

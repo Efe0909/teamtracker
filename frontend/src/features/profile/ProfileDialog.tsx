@@ -3,7 +3,7 @@
 
 import { useRef, useState } from "react";
 import { errorText, upload } from "../../api/client";
-import { usePatchProfile } from "../../api/hooks";
+import { usePatchProfile, useRenameUser } from "../../api/hooks";
 import { privacyUrl } from "../../api/session";
 import type { Attachment } from "../../api/types";
 import { useLookup } from "../../lib/lookup";
@@ -39,8 +39,12 @@ function ProfileForm({ onDone }: { onDone: () => void }) {
   const L = useLookup();
   const me = L.me;
   const m = usePatchProfile();
+  const rename = useRenameUser();
   const toast = useToast();
   const file = useRef<HTMLInputElement>(null);
+  // Ad yalniz `edit_user_names` kapsamiyla degisir; kapsam yoksa alan hic cizilmez.
+  const canName = L.can("edit_user_names");
+  const [name, setName] = useState(me.name);
   const [nickname, setNickname] = useState(me.nickname ?? "");
   const [phone, setPhone] = useState(me.phone ?? "0");
   const [day, setDay] = useState(me.birth_day?.toString() ?? "");
@@ -65,7 +69,10 @@ function ProfileForm({ onDone }: { onDone: () => void }) {
       onSubmit={(e) => {
         e.preventDefault();
         setErr(null);
-        m.mutate(
+        const newName = name.trim();
+        const renaming = canName && newName !== "" && newName !== me.name;
+        const first: Promise<unknown> = renaming ? rename.mutateAsync({ id: me.id, name: newName }) : Promise.resolve();
+        first.then(() => m.mutate(
           {
             nickname: nickname.trim() === "" ? null : nickname,
             phone: phone.trim() === "" ? null : phone,
@@ -76,7 +83,7 @@ function ProfileForm({ onDone }: { onDone: () => void }) {
             onSuccess: () => { toast({ text: "Profil kaydedildi", error: false }); onDone(); },
             onError: (x) => setErr(errorText(x)),
           },
-        );
+        ), (x: unknown) => setErr(errorText(x)));
       }}
     >
       {err !== null && <p className={ui.error} role="alert">{err}</p>}
@@ -91,6 +98,12 @@ function ProfileForm({ onDone }: { onDone: () => void }) {
         <input ref={file} type="file" accept="image/jpeg,image/png,image/webp" hidden
           onChange={(e) => { const f = e.target.files?.[0]; if (f !== undefined) pick(f); e.target.value = ""; }} />
       </div>
+      {canName && (
+        <label className={ui.field}>
+          <span>Ad<Req /></span>
+          <input className={ui.input} value={name} onChange={(e) => setName(e.target.value)} maxLength={200} required />
+        </label>
+      )}
       <label className={ui.field}>
         <span>Takma ad <span className={ui.fieldHint}>— sohbette adının altında görünür</span></span>
         <input className={ui.input} value={nickname} onChange={(e) => setNickname(e.target.value)} maxLength={40} />

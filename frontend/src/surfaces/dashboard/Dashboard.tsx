@@ -4,6 +4,7 @@
 // Mobil yuze BAGLANTI YOK — bilincli ayrim (KNOW-153).
 
 import { useEffect, useRef, useState } from "react";
+import { useNotifications } from "../../api/hooks";
 import { NotifySettings } from "../../features/profile/NotifySettings";
 import { ProfileDialog } from "../../features/profile/ProfileDialog";
 import { useLookup } from "../../lib/lookup";
@@ -21,6 +22,7 @@ import { DataTree } from "./DataTree";
 import { EventPage } from "./EventPage";
 import { Events } from "./Events";
 import { Home } from "./Home";
+import { Notifications } from "./Notifications";
 import { People } from "./People";
 import { Palette } from "./Palette";
 import { PillarPage, Pillars } from "./Pillars";
@@ -98,6 +100,8 @@ function Page({ route }: { route: Route }) {
       return <DataTree />;
     case "people":
       return <People />;
+    case "notifications":
+      return <Notifications />;
     case "admin":
       return <Admin />;
     case "notFound":
@@ -128,6 +132,7 @@ const NAV: NavItem[] = [
   { route: { name: "tasks", query: {} }, icon: "tasks", label: "Görevler", match: ["tasks", "record"] },
   { route: { name: "events", query: {} }, icon: "calendar", label: "Etkinlikler", match: ["events", "event"] },
   { route: { name: "teams" }, icon: "teams", label: "Takımlar", match: ["teams"] },
+  { route: { name: "notifications" }, icon: "bell", label: "Bildirimler", match: ["notifications"] },
   { route: { name: "people" }, icon: "user", label: "Ekip", match: ["people"] },
   { route: { name: "pillars" }, icon: "pin", label: "Pillar'lar", match: ["pillars"] },
   { route: { name: "tree" }, icon: "tree", label: "Veri yönetimi", match: ["tree"] },
@@ -145,6 +150,7 @@ const THEME_OPTS: { value: Theme; label: string; icon: IconName }[] = [
 function Sidebar({ route, onSearch, onFold }: { route: Route; onSearch: () => void; onFold: () => void }) {
   const L = useLookup();
   const theme = useTheme();
+  const unread = useNotifications().data?.unread ?? 0;
   const admin = L.meta.me.is_admin || L.can("manage_users");
   const mine = new Set(L.meta.me.team_ids);
   const teams = [...L.plainTeams].sort((a, b) => Number(mine.has(b.id)) - Number(mine.has(a.id)) || a.name.localeCompare(b.name, "tr"));
@@ -223,6 +229,9 @@ function Sidebar({ route, onSearch, onFold }: { route: Route; onSearch: () => vo
       >
         <Icon name={n.icon} size={16} />
         <span>{n.label}</span>
+        {key === "notifications" && unread > 0 && (
+          <span className={s.navBadge} aria-label={`${unread} okunmamış`}>{unread > 99 ? "99+" : unread}</span>
+        )}
       </Link>
     );
   };

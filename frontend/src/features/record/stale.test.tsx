@@ -4,6 +4,7 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react";
+import { EditorView } from "@codemirror/view";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { keys, usePatchRecord } from "../../api/hooks";
@@ -114,4 +115,41 @@ it("title editor sends what it opened with, then retries against the live text",
   fireEvent.click(screen.getByRole("button", { name: "Yine de kaydet" }));
   await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
   expect(sent(fetchMock, 1)).toMatchObject({ value: "Bütçe onayı v2", base: "Başkasının başlığı" });
+});
+
+it("description editor sends what it opened with, then retries against the live text", async () => {
+  const qc = clientWith(detail());
+  const withDesc = (description: string | null): RecordDetail => {
+    const d = detail();
+    return { ...d, record: { ...d.record, description } };
+  };
+  const tree = (d: RecordDetail) => (
+    <QueryClientProvider client={qc}>
+      <ToastProvider><LookupProvider meta={META}><RecordHead d={d} /></LookupProvider></ToastProvider>
+    </QueryClientProvider>
+  );
+  const original = "Bu açıklama yeterince uzun ve açıklayıcı bir örnek metindir.";
+  const view = render(tree(withDesc(original)));
+
+  fireEvent.click(screen.getByRole("button", { name: /Açıklamayı düzenle/ }));
+  const editor = EditorView.findFromDOM(screen.getByLabelText("Açıklama"));
+  if (!editor) throw new Error("Markdown editor not mounted");
+  const mine = "Benim yazdığım açıklama da yeterince uzun ve ayrıntılıdır.";
+  act(() => { editor.dispatch({ changes: { from: 0, to: editor.state.doc.length, insert: mine } }); });
+
+  fetchMock.mockImplementationOnce(() => Promise.resolve(json(409, { error: "stale_field" })));
+  fireEvent.click(screen.getByRole("button", { name: "Kaydet" }));
+  await waitFor(() => expect(screen.getByRole("alert").textContent).toMatch(/başkası değiştirdi/));
+  expect(sent(fetchMock, 0)).toMatchObject({ field: "description", value: mine, base: original });
+
+  // Kayit yeniden cekildi: baskasinin aciklamasi artik props'ta ve gosteriliyor.
+  const theirs = "Başkasının yazdığı açıklama, benimkinden farklı bir metin.";
+  view.rerender(tree(withDesc(theirs)));
+  expect(screen.getByText(/Güncel hâli/)).toBeTruthy();
+  expect(screen.getByText(theirs)).toBeTruthy();
+
+  fetchMock.mockImplementationOnce(() => Promise.resolve(json(200, withDesc(mine))));
+  fireEvent.click(screen.getByRole("button", { name: "Yine de kaydet" }));
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+  expect(sent(fetchMock, 1)).toMatchObject({ value: mine, base: theirs });
 });

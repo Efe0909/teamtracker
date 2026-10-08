@@ -74,3 +74,28 @@ it("kullanıcı özetinde rollerden gelen kapsamları tekrar göstermez", async 
   expect(summary).not.toBeNull();
   expect(within(summary as HTMLElement).queryByText("edit_nodes")).toBeNull();
 });
+
+it("özet satırında rolü gösterir; değişiklik yokken Kaydet pasif", async () => {
+  const view: AdminView = {
+    is_admin: true,
+    scopes: ["edit_nodes"],
+    roles: [{ id: "r1", name: "Yapıcı", color: "#5b8cff", scopes: ["edit_nodes"], node_ids: [] }],
+    people: [{ ...person("p", "Tester", false), role_ids: ["r1"] }],
+  };
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => view }));
+  const meta: Meta = {
+    me: { id: "admin", is_admin: true, scopes: [], team_ids: [], profile_complete: true, favorite_nodes: [] },
+    users: [], teams: [], pillars: [], nodes: [],
+  };
+  render(
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <LookupProvider meta={meta}><Admin /></LookupProvider>
+    </QueryClientProvider>,
+  );
+  await screen.findByText("Tester");
+  const summary = screen.getAllByText("Yapıcı")[0]?.parentElement;
+  expect(summary).not.toBeNull();
+  const row = screen.getByText("Tester").closest("li") as HTMLElement;
+  const save = within(row).getByRole("button", { name: "Kaydet" }) as HTMLButtonElement;
+  expect(save.disabled).toBe(true);
+});

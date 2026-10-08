@@ -14,8 +14,8 @@ import type { CheckpointAction, EventDetail, EventStatus, Uuid } from "../../api
 import { NodeListPicker } from "../../features/nodes/NodePicker";
 import { NewRecordForm } from "../../features/record/NewRecordForm";
 import { BallLine } from "../../features/record/parts";
+import { InlineDescription } from "../../features/record/InlineDescription";
 import { QualityNote } from "../../features/record/QualityNote";
-import { MarkdownField, MarkdownText } from "../../ui/MarkdownField";
 import r from "../../features/record/record.module.css";
 import { ago, formatDay, isDone, parseDay, PRIORITY, PRIORITY_ORDER, toIsoDay } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
@@ -183,7 +183,8 @@ export function EventSwitch({ eventId, recordId, at }: { eventId: string; record
 
 function Head({ e }: { e: EventDetail }) {
   const L = useLookup();
-  const [edit, setEdit] = useState<"title" | "description" | null>(null);
+  const [editTitle, setEditTitle] = useState(false);
+  const eventWrite = useEventWrite();
   const creator = L.user(e.created_by);
   const shown = e.participants.slice(0, 4);
   const stack = (
@@ -201,7 +202,7 @@ function Head({ e }: { e: EventDetail }) {
     <div className={r.head}>
       <div className={r.titleRow}>
         <h1 className={r.title}>{e.title}</h1>
-        {e.can_edit && <IconButton icon="edit" label="Başlığı düzenle" onClick={() => setEdit("title")} />}
+        {e.can_edit && <IconButton icon="edit" label="Başlığı düzenle" onClick={() => setEditTitle(true)} />}
         <EventSwitch eventId={e.id} recordId={e.record_id} at="event" />
       </div>
       <div className={r.byline}>
@@ -214,37 +215,30 @@ function Head({ e }: { e: EventDetail }) {
         )}
       </div>
       <div className={r.descWrap}>
-        {e.description !== null ? <MarkdownText value={e.description} className={r.desc} /> : <p className={cx(r.desc, r.descEmpty)}>Açıklama yok.</p>}
-        {e.can_edit && (
-          <button type="button" className={r.editLink} onClick={() => setEdit("description")}>
-            <Icon name="edit" size={13} /> {e.description === null ? "Açıklama ekle" : "Açıklamayı düzenle"}
-          </button>
-        )}
+        <InlineDescription value={e.description} canEdit={e.can_edit} bypassQuality={L.can("bypass_text_quality")}
+          save={(description, quality_override) => eventWrite.mutateAsync(eventOps.patch(e.id, { field: "description", value: description } as const, quality_override))} />
       </div>
-      {edit !== null && <TextEdit e={e} field={edit} onClose={() => setEdit(null)} />}
+      {editTitle && <TitleEdit e={e} onClose={() => setEditTitle(false)} />}
     </div>
   );
 }
 
-/** parts.tsx TextEdit'in etkinlik karsiligi: baslik ya da aciklama. */
-function TextEdit({ e, field, onClose }: { e: EventDetail; field: "title" | "description"; onClose: () => void }) {
+/** parts.tsx TitleEdit'in etkinlik karsiligi. Aciklama yerinde duzenlenir (InlineDescription). */
+function TitleEdit({ e, onClose }: { e: EventDetail; onClose: () => void }) {
   const L = useLookup();
   const bypassQuality = L.can("bypass_text_quality");
   const { run, busy } = useRun();
-  const [v, setV] = useState((field === "title" ? e.title : e.description) ?? "");
+  const [v, setV] = useState(e.title);
   const [qualityReasons, setQualityReasons] = useState<string[] | null>(null);
   const submit = (quality_override = false) => {
-    const patch = field === "title"
-      ? { field: "title", value: v.trim() } as const
-      : { field: "description", value: v.trim() === "" ? null : v } as const;
-    run(eventOps.patch(e.id, patch, quality_override), onClose, (x) => {
+    run(eventOps.patch(e.id, { field: "title", value: v.trim() } as const, quality_override), onClose, (x) => {
       if (!(x instanceof ApiError && x.code === "low_quality")) return false;
       setQualityReasons(x.reasons);
       return true;
     });
   };
   return (
-    <Dialog open onClose={onClose} title={field === "title" ? "Başlığı düzenle" : "Açıklamayı düzenle"} wide>
+    <Dialog open onClose={onClose} title="Başlığı düzenle" wide>
       <form
         className={ui.formStack}
         onSubmit={(ev) => {
@@ -252,17 +246,13 @@ function TextEdit({ e, field, onClose }: { e: EventDetail; field: "title" | "des
           submit();
         }}
       >
-        {field === "title" ? (
-          <input className={ui.input} aria-labelledby="dlg-title" value={v} onChange={(ev) => setV(ev.target.value)}
-            maxLength={200} required autoFocus />
-        ) : (
-          <MarkdownField value={v} onChange={setV} label="Açıklama" rows={8} />
-        )}
-        <small className={ui.fieldHint}>{Array.from(v.trim()).length}{bypassQuality ? " karakter" : `/${field === "title" ? 5 : 30} karakter`}</small>
+        <input className={ui.input} aria-labelledby="dlg-title" value={v} onChange={(ev) => setV(ev.target.value)}
+          maxLength={200} required autoFocus />
+        <small className={ui.fieldHint}>{Array.from(v.trim()).length}{bypassQuality ? " karakter" : "/5 karakter"}</small>
         {!bypassQuality && <QualityNote />}
         <div className={ui.dact}>
           <Button onClick={onClose}>Vazgeç</Button>
-          <Button type="submit" variant="primary" aria-busy={busy} disabled={busy || (field === "title" && v.trim() === "") || (field === "description" && v.trim() === "") || (!bypassQuality && ((field === "title" && Array.from(v.trim()).length < 5) || (field === "description" && Array.from(v.trim()).length < 30 && v.trim() !== (e.description ?? ""))))}>
+          <Button type="submit" variant="primary" aria-busy={busy} disabled={busy || v.trim() === "" || (!bypassQuality && Array.from(v.trim()).length < 5)}>
             {busy ? "Kaydediliyor…" : "Kaydet"}
           </Button>
         </div>

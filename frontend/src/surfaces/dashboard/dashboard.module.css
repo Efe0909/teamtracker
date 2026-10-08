@@ -637,6 +637,22 @@ a.row:hover {
   flex: none;
   min-width: 96px;
 }
+/* okunmamis bildirim: sol kenarda vurgu seridi */
+.rowUnread {
+  background: var(--acc-bg);
+  box-shadow: inset 3px 0 0 var(--acc-strong);
+}
+.navBadge {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--acc-fill);
+  color: var(--on-acc);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+}
 .rowMain {
   flex: 1;
   min-width: 0;
