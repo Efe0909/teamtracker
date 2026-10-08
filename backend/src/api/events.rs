@@ -155,7 +155,8 @@ macro_rules! material_cols {
     () => {
         "m.id, m.name, m.notes, m.type as kind, m.priority, m.state, m.qty, m.has_sponsor, m.owned,
          m.chosen_provider_id, m.sponsor_chosen, m.sponsor_qty, m.sponsor_date, m.in_sponsor_record,
-         m.delivered, m.purchased, m.purchased_at, m.created_by, m.updated_at"
+         m.delivered, m.purchased, m.purchased_at, m.created_by, m.updated_at,
+         m.budget::float8 as budget, m.overage_ln"
     };
 }
 
@@ -187,6 +188,13 @@ pub struct Material {
     purchased_at: Option<DateTime<Utc>>,
     created_by: Option<Uuid>,
     updated_at: DateTime<Utc>,
+    /// Kalem butcesi (TL). Bos: butce girilmemis.
+    budget: Option<f64>,
+    /// ln(kart fiyati / butce). Bos: fiyat ya da butce yok, sponsor secili, ya da fiyat 0.
+    overage_ln: Option<f64>,
+    /// Kademe (0 $, 1 $$, 2 $$$), `overage_ln` ve kalemin zamanindaki taban ile turetilir.
+    #[sqlx(skip)]
+    overage_level: Option<u8>,
     #[sqlx(skip)]
     providers: Vec<Provider>,
 }
@@ -196,10 +204,16 @@ struct Provider {
     id: Uuid,
     #[serde(skip)]
     material_id: Uuid,
+    /// Baglanti ya da telefon.
     contact: String,
+    /// Telefon ise kisi/firma adi; baglantida bos.
+    name: Option<String>,
     /// numeric(12,2) -> float8 yalniz OKURKEN; toplama sunucuda numeric'te kalir.
     price: Option<f64>,
     arrival_date: Option<NaiveDate>,
+    /// Bu teklifin kademesi (kalemin butcesine gore). Sutun degil.
+    #[sqlx(skip)]
+    overage_level: Option<u8>,
 }
 
 async fn detail_of(st: &AppState, me: &User, event: EventRow) -> Result<Detail> {
@@ -237,6 +251,7 @@ async fn detail_of(st: &AppState, me: &User, event: EventRow) -> Result<Detail> 
           where em.event_id = $1 order by m.created_at, m.id"))
         .bind(event.id).fetch_all(&st.pool).await?;
     attach_providers(&st.pool, &mut materials).await?;
+    fill_levels(&st.pool, &mut materials).await?;
     Ok(Detail { event, participants, team_ids, checkpoints, widgets, materials, can_edit, can_manage, can_approve, requests })
 }
 
@@ -934,17 +949,71 @@ pub async fn add_material(
 }
 
 /// Teklifleri kalemlere ekler (etkinlik ayrintisi ve maliye ortak).
-async fn attach_providers(pool: &PgPool, materials: &mut [Material]) -> Result<()> {
+async fn attach_providers<'e>(ex: impl sqlx::PgExecutor<'e>, materials: &mut [Material]) -> Result<()> {
     let ids: Vec<Uuid> = materials.iter().map(|m| m.id).collect();
     let providers: Vec<Provider> = sqlx::query_as(
-        "select id, material_id, contact, price::float8 as price, arrival_date
+        "select id, material_id, contact, name, price::float8 as price, arrival_date
            from material_providers where material_id = any($1) order by price nulls last, id")
-        .bind(&ids).fetch_all(pool).await?;
+        .bind(&ids).fetch_all(ex).await?;
     for p in providers {
         if let Some(m) = materials.iter_mut().find(|m| m.id == p.material_id) {
             m.providers.push(p);
         }
     }
+    Ok(())
+}
+
+/// Kademe: 0 = butce icinde ($), 1 = hafif asim ($$), 2 = belirgin asim ($$$). Esik `yellow_max_ln`.
+fn overage_level(ln: Option<f64>, yellow_max_ln: f64) -> Option<u8> {
+    ln.map(|x| if x <= 0.0 { 0 } else if x <= yellow_max_ln { 1 } else { 2 })
+}
+
+/// Kalemin zamanindaki taban: `effective_from <= zaman` olan en son satir; hepsi sonradan ise ilki.
+fn base_at(bases: &[(DateTime<Utc>, f64)], at: DateTime<Utc>) -> Option<f64> {
+    bases.iter().rev().find(|(from, _)| *from <= at).or(bases.first()).map(|(_, y)| *y)
+}
+
+/// Kademeleri (tarihli taban ile) doldurur. Kademe sutun degil; her okumada turetilir.
+async fn fill_levels(pool: &PgPool, materials: &mut [Material]) -> Result<()> {
+    let bases: Vec<(DateTime<Utc>, f64)> = sqlx::query_as(
+        "select effective_from, yellow_max_ln from overage_base order by effective_from")
+        .fetch_all(pool).await?;
+    for m in materials.iter_mut() {
+        let Some(y) = base_at(&bases, m.updated_at) else { continue };
+        m.overage_level = overage_level(m.overage_ln, y);
+        for p in m.providers.iter_mut() {
+            p.overage_level = overage_level(overage_ln(p.price, m.budget), y);
+        }
+    }
+    Ok(())
+}
+
+/// Kart fiyati (`eventModel.priceOf` ile ayni kural): sponsor secildiyse yok, secili teklif,
+/// yoksa en dusuk teklif. Sponsor fiyati 0 sayilir ama asim hesabina girmez.
+fn card_price(m: &Material) -> Option<f64> {
+    if m.sponsor_chosen { return None; }
+    match m.chosen_provider_id {
+        Some(id) => m.providers.iter().find(|p| p.id == id).and_then(|p| p.price),
+        None => m.providers.iter().filter_map(|p| p.price).reduce(f64::min),
+    }
+}
+
+/// ln(fiyat / butce). Fiyat ya da butce yoksa, ya da fiyat 0 ise bos.
+fn overage_ln(price: Option<f64>, budget: Option<f64>) -> Option<f64> {
+    match (price, budget) {
+        (Some(p), Some(b)) if p > 0.0 && b > 0.0 => Some((p / b).ln()),
+        _ => None,
+    }
+}
+
+/// Teklif ya da butce degisince asimi yeniden turetir: tek kural yeri `apply`'dir (bos yama).
+async fn refresh_overage(conn: &mut sqlx::PgConnection, material: Uuid) -> Result<()> {
+    let mut rows: Vec<Material> = sqlx::query_as(concat!("select ", material_cols!(), " from materials m where m.id = $1"))
+        .bind(material).fetch_all(&mut *conn).await?;
+    attach_providers(&mut *conn, &mut rows).await?;
+    let m = apply(rows.pop().ok_or(AppError::NotFound)?, MaterialPatch::default())?;
+    sqlx::query("update materials set overage_ln = $2 where id = $1")
+        .bind(material).bind(m.overage_ln).execute(&mut *conn).await?;
     Ok(())
 }
 
@@ -957,7 +1026,7 @@ async fn require_unpurchased(pool: &PgPool, material: Uuid) -> Result<()> {
 }
 
 /// Kismi: gelen alan degisir. `notes: null` notu siler, `notes` yoksa dokunmaz.
-#[derive(Deserialize)]
+#[derive(Deserialize, Default)]
 pub struct MaterialPatch {
     #[serde(default)]
     name: Option<String>,
@@ -988,18 +1057,27 @@ pub struct MaterialPatch {
     /// Teslim alindi: yalniz onayli (state 3) ve elde olmayan kalem.
     #[serde(default)]
     delivered: Option<bool>,
+    /// Kalem butcesi (TL); `null` siler. Tedarik kararinin parcasi: satin alinmis kalemde kilitli.
+    #[serde(default, deserialize_with = "common::present")]
+    budget: Option<Option<f64>>,
 }
 
 const QTY_MAX: i32 = 1_000_000;
 
 /// Kalemin yeni hali: mevcut satir + PATCH -> tutarli satir. Saf (DB'ye gitmez);
-/// kurallar burada, `018_purchases_v2.sql` kisitlari ikinci kapi.
+/// kurallar burada, `018_purchases_v2.sql` kisitlari ikinci kapi. Asim her zaman burada turetilir.
 fn apply(mut m: Material, b: MaterialPatch) -> Result<Material> {
     if m.purchased && (b.name.is_some() || b.kind.is_some() || b.qty.is_some() || b.state.is_some()
         || b.owned.is_some() || b.has_sponsor.is_some() || b.sponsor_qty.is_some()
-        || b.sponsor_date.is_some() || b.chosen.is_some())
+        || b.sponsor_date.is_some() || b.chosen.is_some() || b.budget.is_some())
     {
         return Err(AppError::Conflict("purchased_locked"));
+    }
+    if let Some(v) = b.budget {
+        if v.is_some_and(|v| !(v > 0.0 && v <= PRICE_MAX)) {
+            return Err(AppError::BadRequest("invalid_budget"));
+        }
+        m.budget = v;
     }
     if let Some(n) = b.name {
         m.name = common::text(Some(n), TITLE_MAX, "invalid_name")?.ok_or(AppError::BadRequest("invalid_name"))?;
@@ -1063,6 +1141,7 @@ fn apply(mut m: Material, b: MaterialPatch) -> Result<Material> {
         if d && (m.state != 3 || m.owned) { return Err(AppError::BadRequest("not_approved")); }
         m.delivered = d;
     }
+    m.overage_ln = overage_ln(card_price(&m), m.budget);
     Ok(m)
 }
 
@@ -1078,9 +1157,13 @@ pub async fn patch_material(
     let id = common::id(&raw)?;
     let event = material_event(&st.pool, id).await?;
     require_scope(&st, &me, "manage_purchases").await?;
+    // Butce ayri yetki: tedarik yazmak butce degistirmeye yetmez.
+    if b.budget.is_some() { require_scope(&st, &me, "manage_budgets").await?; }
     let mut tx = st.pool.begin().await?;
-    let cur: Material = sqlx::query_as(concat!("select ", material_cols!(), " from materials m where m.id = $1 for update"))
+    let mut cur: Material = sqlx::query_as(concat!("select ", material_cols!(), " from materials m where m.id = $1 for update"))
         .bind(id).fetch_one(&mut *tx).await?;
+    // Asim kart fiyatindan turer: teklifler de lazim.
+    attach_providers(&mut *tx, std::slice::from_mut(&mut cur)).await?;
     let m = apply(cur, b)?;
     // Secilen teklif bu kalemin: bileske FK de zorlar, ama 500 yerine 400 donelim.
     if let Some(pid) = m.chosen_provider_id {
@@ -1092,11 +1175,12 @@ pub async fn patch_material(
         "update materials set name = $2, notes = $3, type = $4, priority = $5, state = $6, qty = $7,
                 owned = $8, has_sponsor = $9, chosen_provider_id = $10, sponsor_chosen = $11,
                 sponsor_qty = $12, sponsor_date = $13, in_sponsor_record = $14, delivered = $15,
-                updated_at = now()
+                budget = round($16::numeric, 2), overage_ln = $17, updated_at = now()
           where id = $1")
         .bind(id).bind(&m.name).bind(&m.notes).bind(m.kind).bind(m.priority).bind(m.state).bind(m.qty)
         .bind(m.owned).bind(m.has_sponsor).bind(m.chosen_provider_id).bind(m.sponsor_chosen)
         .bind(m.sponsor_qty).bind(m.sponsor_date).bind(m.in_sponsor_record).bind(m.delivered)
+        .bind(m.budget).bind(m.overage_ln)
         .execute(&mut *tx).await?;
     tx.commit().await?;
     reply(&st, &me, event).await
@@ -1117,6 +1201,8 @@ pub async fn delete_material(
 pub struct NewProvider {
     contact: String,
     #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
     price: Option<f64>,
     #[serde(default)]
     arrival_date: Option<NaiveDate>,
@@ -1135,13 +1221,15 @@ pub async fn add_provider(
     if b.price.is_some_and(|p| !p.is_finite() || !(0.0..=PRICE_MAX).contains(&p)) {
         return Err(AppError::BadRequest("invalid_price"));
     }
+    let name = common::text(b.name, TITLE_MAX, "invalid_name")?;
     let mut tx = st.pool.begin().await?;
     // Para numeric'te: float yalniz tasima, kayitta kurusa yuvarlanir.
     sqlx::query(
-        "insert into material_providers (material_id, contact, price, arrival_date)
-         values ($1, $2, round($3::numeric, 2), $4)")
-        .bind(id).bind(contact).bind(b.price).bind(b.arrival_date).execute(&mut *tx).await?;
+        "insert into material_providers (material_id, contact, name, price, arrival_date)
+         values ($1, $2, $3, round($4::numeric, 2), $5)")
+        .bind(id).bind(contact).bind(name).bind(b.price).bind(b.arrival_date).execute(&mut *tx).await?;
     sqlx::query("update materials set updated_at = now() where id = $1").bind(id).execute(&mut *tx).await?;
+    refresh_overage(&mut tx, id).await?;
     tx.commit().await?;
     reply(&st, &me, event).await
 }
@@ -1156,6 +1244,7 @@ pub async fn delete_provider(
     let mut tx = st.pool.begin().await?;
     sqlx::query("delete from material_providers where id = $1").bind(id).execute(&mut *tx).await?;
     sqlx::query("update materials set updated_at = now() where id = $1").bind(material).execute(&mut *tx).await?;
+    refresh_overage(&mut tx, material).await?;
     tx.commit().await?;
     reply(&st, &me, event).await
 }
@@ -1173,6 +1262,8 @@ async fn provider_owner(pool: &PgPool, id: Uuid) -> Result<(Uuid, Uuid)> {
 pub struct ProviderPatch {
     #[serde(default)]
     contact: Option<String>,
+    #[serde(default, deserialize_with = "common::present")]
+    name: Option<Option<String>>,
     #[serde(default, deserialize_with = "common::present")]
     price: Option<Option<f64>>,
     #[serde(default, deserialize_with = "common::present")]
@@ -1195,18 +1286,25 @@ pub async fn patch_provider(
     if b.price.flatten().is_some_and(|p| !p.is_finite() || !(0.0..=PRICE_MAX).contains(&p)) {
         return Err(AppError::BadRequest("invalid_price"));
     }
+    let name = match b.name {
+        Some(n) => Some(common::text(n, TITLE_MAX, "invalid_name")?),
+        None => None,
+    };
     let mut tx = st.pool.begin().await?;
     sqlx::query(
         "update material_providers set
             contact = coalesce($2, contact),
-            price = case when $3 then round($4::numeric, 2) else price end,
-            arrival_date = case when $5 then $6 else arrival_date end
+            name = case when $3 then $4::text else name end,
+            price = case when $5 then round($6::numeric, 2) else price end,
+            arrival_date = case when $7 then $8 else arrival_date end
           where id = $1")
         .bind(id).bind(contact)
+        .bind(name.is_some()).bind(name.flatten())
         .bind(b.price.is_some()).bind(b.price.flatten())
         .bind(b.arrival_date.is_some()).bind(b.arrival_date.flatten())
         .execute(&mut *tx).await?;
     sqlx::query("update materials set updated_at = now() where id = $1").bind(material).execute(&mut *tx).await?;
+    refresh_overage(&mut tx, material).await?;
     tx.commit().await?;
     reply(&st, &me, event).await
 }
@@ -1238,6 +1336,7 @@ pub async fn set_purchased(
     let mut m: Vec<Material> = sqlx::query_as(concat!("select ", material_cols!(), " from materials m where m.id = $1"))
         .bind(id).fetch_all(&st.pool).await?;
     attach_providers(&st.pool, &mut m).await?;
+    fill_levels(&st.pool, &mut m).await?;
     Ok(Json(m.pop().ok_or(AppError::NotFound)?))
 }
 
@@ -1251,8 +1350,13 @@ mod material_tests {
             priority: Priority::Medium, state: 3, qty: 1, has_sponsor: true, owned: false,
             chosen_provider_id: None, sponsor_chosen: true, sponsor_qty: Some(2),
             sponsor_date: None, in_sponsor_record: true, delivered: false, purchased: false,
-            purchased_at: None, created_by: None, updated_at: Utc::now(), providers: vec![],
+            purchased_at: None, created_by: None, updated_at: Utc::now(), budget: None,
+            overage_ln: None, overage_level: None, providers: vec![],
         }
+    }
+    fn offer(price: f64) -> Provider {
+        Provider { id: Uuid::new_v4(), material_id: Uuid::nil(), contact: "x".into(), name: None,
+            price: Some(price), arrival_date: None, overage_level: None }
     }
     fn patch(json: &str) -> MaterialPatch { serde_json::from_str(json).unwrap() }
     fn code(r: Result<Material>) -> &'static str {
@@ -1299,5 +1403,51 @@ mod material_tests {
         assert_eq!(code(apply(bought(), patch(r#"{"qty": 3}"#))), "purchased_locked");
         assert_eq!(code(apply(bought(), patch(r#"{"state": 1}"#))), "purchased_locked");
         assert!(apply(bought(), patch(r#"{"delivered": true, "priority": "high", "notes": "x"}"#)).is_ok());
+        assert_eq!(code(apply(bought(), patch(r#"{"budget": 500}"#))), "purchased_locked");
+    }
+
+    #[test]
+    fn asim_ln_kart_fiyatindan_ve_butceden_turer() {
+        let mut m = mat();
+        m.sponsor_chosen = false;
+        m.budget = Some(100.0);
+        m.providers = vec![offer(150.0), offer(120.0)];
+        // Secim yok: en dusuk teklif (120) / butce (100).
+        let m = apply(m, MaterialPatch::default()).unwrap();
+        assert!((m.overage_ln.unwrap() - (1.2f64).ln()).abs() < 1e-12);
+        // Sponsor secilince asim yok (fiyat 0).
+        let m = apply(m, patch(r#"{"has_sponsor": true, "chosen": "sponsor"}"#)).unwrap();
+        assert_eq!(m.overage_ln, None);
+        // Butce kalkinca da yok.
+        let mut m = apply(m, patch(r#"{"chosen": null}"#)).unwrap();
+        m.sponsor_chosen = false;
+        let m = apply(m, patch(r#"{"budget": null}"#)).unwrap();
+        assert_eq!((m.budget, m.overage_ln), (None, None));
+    }
+
+    #[test]
+    fn butce_pozitif_olmali() {
+        assert_eq!(code(apply(mat(), patch(r#"{"budget": 0}"#))), "invalid_budget");
+        assert_eq!(code(apply(mat(), patch(r#"{"budget": -5}"#))), "invalid_budget");
+    }
+
+    #[test]
+    fn kademe_tabandan_turer() {
+        let y = 0.5 * 2f64.ln();
+        assert_eq!(overage_level(None, y), None);
+        assert_eq!(overage_level(Some(-0.1), y), Some(0)); // butce altinda
+        assert_eq!(overage_level(Some(0.0), y), Some(0)); // tam butce: asim yok
+        assert_eq!(overage_level(Some(0.3), y), Some(1)); // %35 asim
+        assert_eq!(overage_level(Some(0.4), y), Some(2)); // %49 asim
+    }
+
+    #[test]
+    fn taban_kayit_zamanina_gore_secilir() {
+        let t = |d: i64| DateTime::<Utc>::from_timestamp(d, 0).unwrap();
+        let bases = vec![(t(100), 0.3), (t(200), 0.5)];
+        assert_eq!(base_at(&bases, t(50)), Some(0.3)); // ilk taban oncesi: ilki
+        assert_eq!(base_at(&bases, t(150)), Some(0.3));
+        assert_eq!(base_at(&bases, t(250)), Some(0.5));
+        assert_eq!(base_at(&[], t(0)), None);
     }
 }

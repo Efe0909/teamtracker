@@ -139,7 +139,7 @@ function EventView({ e }: { e: EventDetail }) {
                       return <Otf key={w.id} eventId={e.id} event={e} canEdit={e.can_edit}
                         onRemove={canStructure && e.can_edit ? drop : undefined} />;
                     }
-                    return <Purchases key={w.id} eventId={e.id} items={e.materials}
+                    return <Purchases key={w.id} eventId={e.id} eventDate={e.date} items={e.materials}
                       onRemove={canStructure && e.can_edit ? drop : undefined} />;
                   })}
                   {pending.map((tid) => (

@@ -1,0 +1,854 @@
+/* Satin alimlar widget'i: pano, liste, sponsor seridi ve detay penceresi
+   (Purchases.tsx, MaterialDetail.tsx). Ham renk YOK — yalniz token. */
+
+/* --- baslik ve ozet -------------------------------------------------------- */
+.health {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-sm);
+  color: var(--dim);
+}
+.healthDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--line-strong);
+}
+.health[data-health="ok"] .healthDot {
+  background: var(--ok);
+}
+.health[data-health="warn"] .healthDot {
+  background: var(--warn);
+}
+.health[data-health="err"] .healthDot {
+  background: var(--err);
+}
+.grow {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.sums {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.chip {
+  padding: 2px 8px;
+  border-radius: var(--r-sm);
+  background: var(--tint);
+  font-size: var(--fs-sm);
+  color: var(--dim);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.chip b {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  color: var(--txt);
+}
+.chipErr {
+  background: var(--err-bg);
+  color: var(--err-text);
+}
+
+/* --- etiketler, oncelik ------------------------------------------------------ */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: var(--r-sm);
+  background: var(--tint);
+  font-size: var(--fs-xs);
+  color: var(--dim);
+  white-space: nowrap;
+}
+.tagErr {
+  background: var(--err-bg);
+  color: var(--err-text);
+}
+.tagOk {
+  background: var(--ok-bg);
+  color: var(--ok-text);
+}
+.tagAcc {
+  background: var(--acc-bg);
+  color: var(--acc-strong);
+}
+.prio {
+  flex: none;
+  display: inline-flex;
+  color: var(--dim);
+}
+.prio[data-p="critical"] {
+  color: var(--err-text);
+}
+.prio[data-p="high"] {
+  color: var(--warn-text);
+}
+.lead {
+  flex: none;
+  display: inline-flex;
+}
+.lead[data-kind="delivered"],
+.lead[data-kind="owned"] {
+  color: var(--ok-text);
+}
+.price {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  color: var(--txt);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- pano ------------------------------------------------------------------- */
+.board {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s-2);
+}
+.col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  min-height: 140px;
+  padding: var(--s-2);
+  border: 1.5px solid transparent;
+  border-radius: var(--r-md);
+  background: var(--panel2);
+}
+.over {
+  border-color: var(--acc);
+  background: var(--acc-bg);
+}
+.colHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+  font-size: var(--fs-md);
+}
+.colHead b {
+  font-weight: 500;
+}
+.colCount {
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--tint);
+  font-size: var(--fs-sm);
+  text-align: center;
+  color: var(--dim);
+}
+.colSum {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  color: var(--dim);
+}
+.empty {
+  margin: 4px 2px;
+  font-size: var(--fs-sm);
+  color: var(--dim);
+}
+.mcard {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--panel);
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: grab;
+}
+.mcard:hover {
+  border-color: var(--line-strong);
+}
+.mcard:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: 2px;
+}
+.mcardCrit {
+  border-color: var(--err);
+}
+.mcardOwn .mcName {
+  color: var(--dim);
+}
+.dragging {
+  opacity: 0.45;
+}
+.mcTop {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-2);
+}
+.mcName {
+  min-width: 0;
+  font-weight: 500;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.mcMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+}
+
+/* ekleme: tek alan, dugmesiz; Enter ekler */
+.addForm {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: auto;
+  padding: 0 var(--s-2);
+  border-radius: var(--r-md);
+  color: var(--dim);
+}
+.addForm:hover,
+.addForm:focus-within {
+  background: var(--tint);
+}
+.addForm input {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 0;
+  border: 0;
+  background: transparent;
+  font-size: var(--fs-md);
+  color: var(--txt);
+  outline: none;
+}
+.addForm input::placeholder {
+  color: var(--dim);
+}
+.addList {
+  margin-top: var(--s-2);
+}
+
+/* --- sponsor seridi ------------------------------------------------------------ */
+.lane {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px var(--s-2);
+  margin-top: var(--s-2);
+  padding: var(--s-2) var(--s-3);
+  border: 1.5px dashed var(--acc);
+  border-radius: var(--r-md);
+  background: var(--panel2);
+}
+.laneOver {
+  background: var(--acc-bg);
+}
+.laneHead {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin-right: 4px;
+  font-size: var(--fs-md);
+}
+.laneHead b {
+  font-weight: 500;
+}
+.laneChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 2px 10px 2px 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  font: inherit;
+  font-size: var(--fs-sm);
+  color: inherit;
+  cursor: pointer;
+}
+.laneChip:hover {
+  border-color: var(--acc);
+}
+.laneHint {
+  font-size: var(--fs-sm);
+  color: var(--dim);
+}
+.laneActs {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+}
+
+/* --- liste ---------------------------------------------------------------------- */
+.list {
+  display: flex;
+  flex-direction: column;
+}
+.lrow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 210px 86px 56px;
+  align-items: center;
+  gap: var(--s-3);
+  padding: 9px 4px;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: none;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+}
+.lrow:first-child {
+  border-top: 0;
+}
+.lrow:hover {
+  background: var(--panel2);
+}
+.lrowOwn {
+  opacity: 0.65;
+}
+.lname {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px var(--s-2);
+  min-width: 0;
+}
+.lname b {
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.qty {
+  font-size: var(--fs-sm);
+  color: var(--dim);
+  white-space: nowrap;
+}
+.pipe {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.pipeBars {
+  display: flex;
+  gap: 2px;
+}
+.pipeBars span {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line-strong);
+}
+.pipeBars span[data-done="true"] {
+  background: var(--acc);
+}
+.pipeLabel {
+  font-size: var(--fs-xs);
+  color: var(--dim);
+}
+.ldate {
+  font-size: var(--fs-sm);
+  color: var(--dim);
+  text-align: right;
+  white-space: nowrap;
+}
+.lrow .price {
+  margin: 0;
+  text-align: right;
+}
+
+/* --- detay penceresi --------------------------------------------------------------- */
+.nameInput {
+  width: 100%;
+  padding: 4px 6px;
+  margin-left: -6px;
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  background: transparent;
+  font-size: var(--fs-xl);
+  font-weight: 600;
+  color: var(--txt);
+}
+.nameInput:hover {
+  border-color: var(--line-strong);
+}
+.nameInput:focus-visible {
+  outline: none;
+  border-color: var(--acc);
+  background: var(--panel);
+}
+.sec {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+.label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px var(--s-2);
+  font-size: var(--fs-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+.label small {
+  font-size: var(--fs-sm);
+  letter-spacing: 0;
+  text-transform: none;
+}
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+}
+.textarea {
+  width: 100%;
+  min-height: 56px;
+  padding: 8px 10px;
+  border: 1px solid var(--line-field);
+  border-radius: var(--r-md);
+  background: var(--panel);
+  font: inherit;
+  font-size: var(--fs-md);
+  line-height: 1.5;
+  color: var(--txt);
+  resize: vertical;
+}
+.textarea:focus-visible {
+  outline: none;
+  border-color: var(--acc);
+}
+/* Ust satir: Picker, sayi alanlari ve dugmeler tek yukseklik, tek cerceve, tek yuvarlaklik.
+ *  `.chipRow .chip.chip` Picker'in kendi `look-chip` kuralini (kesikli, 28px) gecer. */
+.chipRow .chip.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  box-sizing: border-box;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--panel);
+  font: inherit;
+  font-size: var(--fs-md);
+  color: var(--dim);
+  cursor: pointer;
+}
+.chipRow .chip.chip:hover:not(:disabled) {
+  background: var(--panel2);
+  color: var(--txt);
+}
+.chipRow .chip.chip[aria-pressed="true"] {
+  border-color: var(--acc);
+  background: var(--acc-bg);
+  color: var(--acc-strong);
+  font-weight: 500;
+}
+.chipRow .chip.chip:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.chipRow .chip.chip:focus-within {
+  border-color: var(--acc);
+}
+.chipField {
+  cursor: text;
+}
+.chipInput {
+  width: 96px;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: var(--txt);
+  outline: none;
+  font-variant-numeric: tabular-nums;
+}
+.chipInput::placeholder {
+  color: var(--dim);
+}
+.chipInput[readonly] {
+  opacity: 0.45;
+}
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--panel);
+  font: inherit;
+  font-size: var(--fs-md);
+  color: var(--dim);
+  cursor: pointer;
+}
+.toggle:hover:not(:disabled) {
+  background: var(--panel2);
+  color: var(--txt);
+}
+.toggle[aria-pressed="true"] {
+  border-color: var(--acc);
+  background: var(--acc-bg);
+  color: var(--acc-strong);
+  font-weight: 500;
+}
+.toggle:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+/* Yol: noktalar bir cizgiyle bagli. Nokta, kendisine varan cizgiyi de boyar (aria-pressed). */
+.road {
+  display: flex;
+  align-items: flex-start;
+}
+.pt {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: var(--fs-sm);
+  color: var(--dim);
+  cursor: pointer;
+}
+/* Cizgi iki noktanin KENARLARI arasinda (merkezden merkeze degil): nokta icine girmez. */
+.pt::before {
+  content: "";
+  position: absolute;
+  top: 9px;
+  left: calc(-50% + 10px);
+  right: calc(50% + 10px);
+  height: 2px;
+  background: var(--line-field);
+}
+.pt:first-child::before {
+  display: none;
+}
+.pt[aria-pressed="true"]::before {
+  background: var(--ok-text);
+}
+.pt[aria-pressed="true"] {
+  color: var(--txt);
+}
+.pt:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.dot {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid var(--line-field);
+  background: var(--panel);
+  color: var(--panel);
+}
+.pt[aria-pressed="true"] .dot {
+  border-color: var(--ok-text);
+  background: var(--ok-text);
+}
+.ptLabel {
+  text-align: center;
+  line-height: 1.25;
+}
+/* Teslim: son nokta, kargo ikonu; kendi rengi (onayli adimdan ayri). */
+.ptDelivered[aria-pressed="true"]::before {
+  background: var(--acc);
+}
+.ptDelivered[aria-pressed="true"] .dot {
+  border-color: var(--acc);
+  background: var(--acc);
+}
+.ptDelivered[aria-pressed="true"] {
+  color: var(--acc-strong);
+}
+.note {
+  margin: 0;
+  font-size: var(--fs-md);
+  color: var(--dim);
+}
+.linkNote {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-md);
+  color: var(--acc-strong);
+}
+.locked {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: var(--r-md);
+  background: var(--panel2);
+  font-size: var(--fs-md);
+  color: var(--dim);
+}
+
+/* zaman cizgisi: teklif varis tarihleri ve etkinlik gunu */
+.tl {
+  position: relative;
+  height: 104px;
+  margin: 0 34px;
+}
+.tlTrack {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 40px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line-strong);
+}
+.tlLate {
+  position: absolute;
+  top: 40px;
+  right: 0;
+  height: 4px;
+  border-radius: 0 2px 2px 0;
+  background: var(--err);
+  opacity: 0.45;
+}
+.tlEvent {
+  position: absolute;
+  top: 30px;
+  width: 2px;
+  height: 24px;
+  background: var(--txt);
+  transform: translateX(-1px);
+}
+.tlTop {
+  position: absolute;
+  top: 6px;
+  transform: translateX(-50%);
+  font-size: var(--fs-sm);
+  color: var(--dim);
+  white-space: nowrap;
+}
+.tlTopEvent {
+  color: var(--txt);
+  font-weight: 500;
+}
+.tlDot {
+  position: absolute;
+  top: 35px;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--panel);
+  border-radius: 50%;
+  background: var(--ok);
+  transform: translateX(-50%);
+}
+.tlDotLate {
+  background: var(--err);
+}
+.tlDotSel {
+  box-shadow: 0 0 0 2px var(--txt);
+}
+.tlLabel {
+  position: absolute;
+  transform: translateX(-50%);
+  font-size: var(--fs-xs);
+  color: var(--dim);
+  white-space: nowrap;
+}
+
+/* teklif kartlari */
+.pvs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: var(--s-2);
+}
+.pv {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+}
+.pvSel {
+  border-color: var(--ok);
+  box-shadow: 0 0 0 1px var(--ok);
+}
+.pvSponsor {
+  background: var(--acc-bg);
+  border-color: var(--acc-soft);
+}
+.pvEdit {
+  gap: var(--s-2);
+  border-color: var(--acc);
+}
+.pvEdit label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--fs-xs);
+  color: var(--dim);
+}
+.pvTop {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+}
+.letter {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--tint);
+  font: 500 var(--fs-xs) var(--font-mono);
+  color: var(--dim);
+}
+.pvName {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--fs-md);
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.pvName a,
+.pvLink {
+  color: var(--acc-strong);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.pvName a:hover,
+.pvLink:hover {
+  text-decoration-thickness: 2px;
+}
+/* Telefon: isim ve numara yan yana; dar ekranda alt alta. */
+.pair {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 6px;
+}
+.kindRow {
+  grid-column: 1 / -1;
+}
+.overage {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+.tagWarn {
+  background: var(--warn-bg);
+  color: var(--warn-text);
+}
+.bigRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+}
+.big {
+  font: 500 var(--fs-xl) var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.ln {
+  font-size: var(--fs-sm);
+  color: var(--dim);
+}
+.okT {
+  color: var(--ok-text);
+}
+.errT {
+  color: var(--err-text);
+}
+.warnT {
+  color: var(--warn-text);
+}
+.pvGap {
+  flex: 1;
+  min-height: 6px;
+}
+.pvBtns {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: auto;
+}
+.pvForm {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1.2fr) auto;
+  align-items: end;
+  gap: 6px;
+}
+.pvForm label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--fs-xs);
+  color: var(--dim);
+}
+.foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3);
+  padding-top: var(--s-3);
+  border-top: 1px solid var(--line);
+}
+.stamp {
+  margin-left: auto;
+  font-size: var(--fs-sm);
+  color: var(--dim);
+}
+.confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+  font-size: var(--fs-md);
+}
+
+@media (max-width: 760px) {
+  .board {
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 84%);
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    padding-bottom: 6px;
+  }
+  .col {
+    scroll-snap-align: start;
+  }
+  .lrow {
+    grid-template-columns: minmax(0, 1fr) 76px;
+  }
+  .lrow .pipe {
+    grid-column: 1 / -1;
+  }
+  .ldate {
+    display: none;
+  }
+  .steps {
+    grid-template-columns: 1fr;
+  }
+  .pvForm {
+    grid-template-columns: 1fr 1fr;
+  }
+}

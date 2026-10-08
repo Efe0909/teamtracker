@@ -244,9 +244,14 @@ export interface CheckpointRequest {
 
 export interface MaterialProvider {
   id: Uuid;
+  /** Baglanti ya da telefon. */
   contact: string;
+  /** Telefonda kisi/firma adi; baglantida null. */
+  name: string | null;
   price: number | null;
   arrival_date: IsoDate | null;
+  /** Teklifin kademesi (kalemin butcesine gore): 0 $, 1 $$, 2 $$$. Bos: butce ya da fiyat yok. */
+  overage_level: number | null;
 }
 
 export interface Material {
@@ -255,12 +260,32 @@ export interface Material {
   notes: string | null;
   type: MaterialType;
   priority: Priority;
-  /** Tamamlanan adim sayisi. */
+  /** Tamamlanan adim sayisi (0..3): Gerekli mi? · Tedarikci bulundu · Onaylandi. */
   state: number;
+  /** Adet; birim fiyat tekliften turetilir, saklanmaz. */
+  qty: number;
+  /** "Sponsordan istendi": surec adimi degil, ayri istek. */
   has_sponsor: boolean;
   /** "Zaten var": surece girmez. */
   owned: boolean;
+  /** Secilen teklif; bos ve `sponsor_chosen` ise sponsor secildi, ikisi de bos ise secim yok. */
+  chosen_provider_id: Uuid | null;
+  sponsor_chosen: boolean;
+  sponsor_qty: number | null;
+  sponsor_date: IsoDate | null;
+  /** Sponsorluk kaydinin aciklamasina islendi mi. */
+  in_sponsor_record: boolean;
+  /** Teslim alindi (yalniz onayli kalem). */
+  delivered: boolean;
+  /** Yalniz maliye incelemesi; widget onayi satin alindi demek DEGIL. Doluyken tedarik donar. */
+  purchased: boolean;
+  purchased_at: IsoTime | null;
+  created_by: Uuid | null;
   updated_at: IsoTime;
+  /** Kalem butcesi (TL); bos: girilmemis. */
+  budget: number | null;
+  /** Kademe: 0 $ (butce icinde), 1 $$, 2 $$$. Bos: fiyat ya da butce yok, ya da sponsor secili. */
+  overage_level: number | null;
   providers: MaterialProvider[];
 }
 
@@ -357,8 +382,22 @@ export interface MaterialPatch {
   type?: MaterialType;
   priority?: Priority;
   state?: number;
+  qty?: number;
   has_sponsor?: boolean;
+  sponsor_qty?: number | null;
+  sponsor_date?: IsoDate | null;
+  /** Teklif id'si, `"sponsor"` ya da `null` (secimi kaldir). */
+  chosen?: Uuid | "sponsor" | null;
   owned?: boolean;
+  delivered?: boolean;
+  budget?: number | null;
+}
+
+export interface ProviderPatch {
+  contact?: string;
+  name?: string | null;
+  price?: number | null;
+  arrival_date?: IsoDate | null;
 }
 
 export type AccessMode = "public" | "request" | "private";

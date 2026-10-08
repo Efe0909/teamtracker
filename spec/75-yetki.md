@@ -103,6 +103,7 @@ sahip sayılır.
 | `manage_events` | Her etkinliği düzenleme (`editable`), checkpoint ekleme ve tarihini değiştirme, onaylayıcı olma, etkinliğin sorumlusunu değiştirme (A2) | `/api/events/*`, `/api/event-checkpoints/*`, `/api/checkpoint-requests/*`, OTF yazma |
 | `manage_event_widgets` | Şablon widget'ı ekleme ve silme (`record` türü hariç) | `POST /api/events/{id}/widgets`, `DELETE /api/event-widgets/{id}` |
 | `manage_purchases` | Malzeme ve tedarikçi yazma. Etkinliği düzenleme yetkisi ayrıca aranmaz. Satın alınmış (`purchased`) kalemin tedariki donar: yalnız not, öncelik ve teslim işareti yazılır (`purchased_locked`). | `POST /api/events/{id}/materials`, `/api/materials/{id}`, `/api/materials/{id}/providers`, `/api/material-providers/*` |
+| `manage_budgets` | Kalem bütçesini yazma ya da silme (`budget`). Satın alım yetkisine ek: `PATCH /api/materials/{id}` içinde `budget` alanı bu yetkiyi ister, tedarik yetkisi tek başına yetmez. | `PATCH /api/materials/{id}` (`budget`) |
 | `review_purchases` | Kalemi "satın alındı" işaretleme ve geri alma (maliye incelemesi). Widget'taki onay (`state` 3) satın alındı demek değildir; yalnız onaylı, elde olmayan kalem işaretlenir (`not_approved`). | `PATCH /api/materials/{id}/purchased` |
 
 ## 4. Uç matrisi

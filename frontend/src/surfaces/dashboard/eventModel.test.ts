@@ -1,6 +1,21 @@
 import { expect, it } from "vitest";
 import type { Material, MetaNode } from "../../api/types";
-import { bestOffer, kindTemplate, materialSteps, placeLabel, purchaseHealth } from "./eventModel";
+import { bestOffer, columnOf, daysBefore, etaOf, isLate, isPhone, kindTemplate, overPct, placeLabel, priceOf, purchaseHealth, purchaseTotals, unitPrice } from "./eventModel";
+
+it("butce asimi yuzdesi: fiyat ya da butce yoksa null", () => {
+  expect(overPct(150, 100)).toBe(50);
+  expect(overPct(80, 100)).toBe(-20);
+  expect(overPct(150, null)).toBeNull();
+  expect(overPct(null, 100)).toBeNull();
+  expect(overPct(150, 0)).toBeNull();
+});
+
+it("teklif metni: telefon ya da baglanti", () => {
+  expect(isPhone("0532 555 01 17")).toBe(true);
+  expect(isPhone("+90 212 555 01 42")).toBe(true);
+  expect(isPhone("https://devreci.example/uno-set")).toBe(false);
+  expect(isPhone("firma.com")).toBe(false);
+});
 
 const n = (id: string, parent_id: string | null, attrs: MetaNode["attrs"] = {}, is_active = true): MetaNode => ({
   id, parent_id, name: id, node_type: "option", is_active, depth: 0, key: null, root_key: "event_types", shape: "leaf", attrs,
@@ -29,22 +44,21 @@ it("yer: konum seciliyse adi, yoksa metin", () => {
 });
 
 const m = (p: Partial<Material>): Material => ({
-  id: "x", name: "x", notes: null, type: "consumable", priority: "medium", state: 0,
-  has_sponsor: false, owned: false, updated_at: "2026-10-01T00:00:00Z", providers: [], ...p,
+  id: "x", name: "x", notes: null, type: "consumable", priority: "medium", state: 0, qty: 1,
+  has_sponsor: false, owned: false, chosen_provider_id: null, sponsor_chosen: false, sponsor_qty: null,
+  sponsor_date: null, in_sponsor_record: false, delivered: false, purchased: false, purchased_at: null,
+  created_by: null, updated_at: "2026-10-01T00:00:00Z", budget: null, overage_level: null, providers: [], ...p,
 });
-
-it("sponsorlu malzemeye bir adim eklenir", () => {
-  expect(materialSteps(m({}))).toHaveLength(3);
-  expect(materialSteps(m({ has_sponsor: true }))).toHaveLength(4);
-});
+const prov = (id: string, price: number | null, arrival_date: string | null) => ({ id, contact: id, name: null, price, arrival_date, overage_level: null });
 
 it("baslik noktasi yalniz 'gerekli' adimini gecmis, elde olmayanlara bakar", () => {
   expect(purchaseHealth([])).toBe("none");
   // gerekli adimini gecmemis kritik malzeme sayilmaz
   expect(purchaseHealth([m({ priority: "critical" })])).toBe("none");
   expect(purchaseHealth([m({ state: 3 })])).toBe("ok");
-  // sponsorlu: 3 adim yetmez, 4 gerekir
-  expect(purchaseHealth([m({ state: 3, has_sponsor: true })])).toBe("warn");
+  // sponsor istegi adim eklemez: 3 yeter
+  expect(purchaseHealth([m({ state: 3, has_sponsor: true })])).toBe("ok");
+  expect(purchaseHealth([m({ state: 2, has_sponsor: true })])).toBe("warn");
   expect(purchaseHealth([m({ state: 1, priority: "critical" }), m({ state: 3 })])).toBe("err");
   // elde olan surece girmez
   expect(purchaseHealth([m({ state: 1, priority: "critical", owned: true })])).toBe("none");
@@ -53,8 +67,42 @@ it("baslik noktasi yalniz 'gerekli' adimini gecmis, elde olmayanlara bakar", () 
 it("en iyi teklif tedarikcilerden turetilir", () => {
   expect(bestOffer(m({}))).toEqual({ price: null, date: null });
   expect(bestOffer(m({ providers: [
-    { id: "a", contact: "a", price: 1450, arrival_date: "2026-10-07" },
-    { id: "b", contact: "b", price: 1300, arrival_date: null },
-    { id: "c", contact: "c", price: null, arrival_date: "2026-10-05" },
+    { id: "a", contact: "a", name: null, price: 1450, arrival_date: "2026-10-07", overage_level: null },
+    { id: "b", contact: "b", name: null, price: 1300, arrival_date: null, overage_level: null },
+    { id: "c", contact: "c", name: null, price: null, arrival_date: "2026-10-05", overage_level: null },
   ] }))).toEqual({ price: 1300, date: "2026-10-05" });
+});
+
+it("kart fiyati: sponsor secildiyse 0, secili teklif, yoksa en dusuk", () => {
+  const providers = [prov("a", 7200, "2026-10-17"), prov("b", 6900, "2026-10-28")];
+  expect(priceOf(m({ providers }))).toBe(6900);
+  expect(priceOf(m({ providers, chosen_provider_id: "a" }))).toBe(7200);
+  expect(priceOf(m({ providers, has_sponsor: true, sponsor_chosen: true }))).toBe(0);
+  expect(priceOf(m({}))).toBeNull();
+  expect(unitPrice(7200, 12)).toBe(600);
+  expect(unitPrice(null, 12)).toBeNull();
+});
+
+it("gecikme: secili teklifin ya da sponsorun varisi etkinlikten sonraysa", () => {
+  const providers = [prov("a", 7200, "2026-10-17"), prov("b", 6900, "2026-10-28")];
+  const day = "2026-10-24";
+  expect(etaOf(m({ providers }))).toBe("2026-10-17"); // secim yok: en yakin tarih
+  expect(isLate(m({ providers }), day)).toBe(false);
+  expect(isLate(m({ providers, chosen_provider_id: "b" }), day)).toBe(true);
+  expect(isLate(m({ providers, chosen_provider_id: "b", delivered: true }), day)).toBe(false);
+  expect(isLate(m({ has_sponsor: true, sponsor_chosen: true, sponsor_date: "2026-10-30" }), day)).toBe(true);
+  expect(isLate(m({ providers, chosen_provider_id: "b" }), null)).toBe(false); // etkinlik tarihsiz (havuz)
+  expect(daysBefore(day, "2026-10-17")).toBe(7);
+  expect(daysBefore(day, "2026-10-28")).toBe(-4);
+});
+
+it("pano sutunu ve toplamlar: zaten var Onaylandi'da, toplama girmez", () => {
+  expect([0, 1, 2, 3].map((state) => columnOf({ state, owned: false }))).toEqual([0, 0, 1, 2]);
+  expect(columnOf({ state: 0, owned: true })).toBe(2);
+  const items = [
+    m({ state: 3, providers: [prov("a", 340, null)] }),
+    m({ state: 2, providers: [prov("b", 2480, null)] }),
+    m({ owned: true, state: 3, providers: [prov("c", 999, null)] }),
+  ];
+  expect(purchaseTotals(items)).toEqual({ total: 2820, approved: 340 });
 });

@@ -242,57 +242,76 @@ Yeni widget türü tanımlandıkça ilgili türlerin şablonuna eklenir.
 
 ## 5. Satın alımlar widget'ı (ilk tanımlı widget)
 
-```sql
-create table materials (
-  id          uuid primary key default gen_random_uuid(),
-  event_id    uuid not null references events(id) on delete cascade,
-  name        text not null check (length(name) between 1 and 200),
-  notes       text,
-  type        text not null check (type in ('consumable','equipment','service')),
-  priority    text not null default 'medium'
-              check (priority in ('critical','high','medium','low')),
-  state       smallint not null default 0,   -- tamamlanan adım sayısı
-  has_sponsor boolean not null default false,
-  owned       boolean not null default false, -- "zaten var": sürece girmez
-  updated_at  timestamptz not null default now(),
-  check (state between 0 and case when has_sponsor then 4 else 3 end)
-);
-create index on materials(event_id);
+Şema `010_events.sql` + `018_purchases_v2.sql` (kaynak orası; burada kurallar):
 
-create table material_providers (
-  id           uuid primary key default gen_random_uuid(),
-  material_id  uuid not null references materials(id) on delete cascade,
-  contact      text not null,                 -- bağlantı ya da telefon
-  price        numeric(12,2) check (price >= 0),
-  arrival_date date
-);
-create index on material_providers(material_id);
-```
-
-- **Süreç adımları** (sıra sabit): Gerekli mi? → Tedarikçi bulundu → (sponsorluysa
-  **Sponsor**) → Onaylandı. `state` tamamlanan adım sayısı; adımlar **elle**
-  ileri/geri alınır. `has_sponsor` kapatılırken `state` 4 ise 3'e iner (kısıt bunu zorlar).
+- **Kalem etkinlikten bağımsızdır.** `materials` etkinlik FK'sı tutmaz; bağ
+  `event_materials(material_id pk, event_id)`. Etkinlik silinince yalnız bağ gider,
+  kalem sahipsiz kalabilir (ileride maliye sayfası bütün kalemleri arar ve toplar;
+  etkinlik/ay bazlı dışa aktarım buradan). `created_by` kalemi kimin eklediğini tutar.
+- **Süreç adımları** (sabit, 3): Gerekli mi? → Tedarikçi bulundu → Onaylandı.
+  `state` tamamlanan adım sayısı (0..3); adımlar **elle** ileri/geri alınır.
+  **Sponsor adım değildir**: `has_sponsor` = "sponsordan istendi". Sponsorun süreci
+  arayüzde görünmez; son seçim yetkilidedir.
+- **Adet** (`qty`, varsayılan 1, isteğe bağlı). Teklif fiyatı **toplam tutardır**;
+  birim fiyat `price / qty` ile türetilir, saklanmaz.
+- **Teklif seçimi**: `chosen_provider_id` (bileşke FK: aynı kalemin teklifi) YA DA
+  `sponsor_chosen`. Sponsor teklifler arasında bir **seçenektir** (₺0; `sponsor_qty`
+  ve `sponsor_date` isteğe bağlı, yalnız `has_sponsor` iken dolu). Kartta görünen
+  fiyat: sponsor seçiliyse "Sponsor", seçili teklif, yoksa en düşük teklif.
+- **`delivered`** (teslim edildi) sütun/adım değil, detaydaki işaret; yalnız onaylı
+  (`state = 3`) ve elde olmayan kalemde. Kalem geri adıma alınınca kalkar. Panoda
+  öncelik ikonu yerine kargo ikonu.
+- **`purchased`** (+ `purchased_at/by`) YALNIZ maliye incelemesiyle (`review_purchases`,
+  `PATCH /api/materials/{id}/purchased`). Widget'taki onay satın alındı demek DEĞİL.
+  Satın alınmış kalemin tedariki donar (`purchased_locked`): yalnız not, öncelik ve
+  teslim işareti yazılır.
+- **Bütçe** (`budget numeric(12,2)`, boş olabilir, > 0): kalem başına tek tutar, detayda
+  girilir; her teklifin toplamıyla karşılaştırılır (kademe teklifin yanında). Yazmak
+  `manage_budgets` ister (ayrı yetki). Satın alınmış kalemde kilitli (`purchased_locked`).
+  Panoda gösterilmez.
+- **Aşım** (`overage_ln double precision`): `ln(kart fiyatı / bütçe)` ham değer olarak
+  saklanır; fiyat ya da bütçe yoksa, ya da sponsor seçiliyse boş. Kademe ($, $$, $$$)
+  saklanmaz, okumada türetilir: `ln <= 0` → `$` (bütçe içinde), `ln <= yellow_max_ln`
+  → `$$`, üstü → `$$$`. Eşik `overage_base(effective_from, yellow_max_ln)` tablosunda,
+  zamanlı: her değişiklik yeni satır, eski silinmez. Bir kalemin kademesi, kendi
+  `updated_at` zamanındaki tabanla (`effective_from <= zaman`) gösterilir. Taban ilk
+  değeri `ln(√2)` (%41 üstü `$$$`). Ham değer hiç değişmez; KPI'lar (avg_price, std_price,
+  avg_overpay) ondan okunur. Eşik her ~50 üründe kantil tabanlı yeniden hesaplanabilir.
+  `overage_ln` `apply()` içinde türetilir; teklif değişince `refresh_overage` aynı kuralı
+  çağırır.
+- **Teklif adı** (`material_providers.name`, boş olabilir): telefon teklifinde kişi/firma
+  adı; bağlantı teklifinde boş. Telefon/bağlantı türü metinden çıkarılır (`isPhone`).
 - **Hizmet de satın alımdır** (lazer kesim gibi dışarıda yaptırılan iş): `type = 'service'`.
-- **En iyi fiyat / en yakın tarih saklanmaz** — `material_providers`'tan `min()`.
+- **En iyi fiyat / en yakın tarih saklanmaz** — tekliflerden türetilir.
   İki kaynak ayrışamaz.
 - **Para `numeric(12,2)`**, float değil: toplanacak ve dökülecek. Para birimi TL;
   çoklu para birimi yok.
+- **Gecikme**: seçili teklifin (sponsor seçiliyse sponsorun, seçim yoksa en yakın
+  tekliflin) varışı etkinlik gününden sonraysa kartta "Teslim geç". Teslim edilmiş
+  ya da elde olan kalem sayılmaz; tarihsiz (havuz) etkinlikte uyarı yok.
 - **Başlık noktası**: "Gerekli mi?" adımını geçmiş ve elde olmayan malzemelere bakar.
   Hepsi onaylı → yeşil · kritik bekleyen var → kırmızı · başka bekleyen var → turuncu ·
-  hiçbiri yok → gri. Yanında son güncelleme (`max(updated_at)`).
-- Satırda: öncelik ikonu, ad, tür, adım noktaları, en iyi fiyat, en yakın tarih.
-  Tıklayınca not + tedarikçi tablosu açılır, tedarikçi eklenir. "Zaten var"
-  satırı soluk, adımları gizli, listenin sonunda.
+  hiçbiri yok → gri. Yanında toplam, onaylı tutar ve son güncelleme (`max(updated_at)`).
+- **Pano** (varsayılan) ya da **liste**. Pano sütunları: Gerekli mi? (karar bekleyen ve
+  tedarikçi aranan) · Tedarikçi bulundu · Onaylandı; "zaten var" kalem Onaylandı'da
+  ev ikonuyla durur, toplama girmez. Kart sütunlar arasında sürüklenir (`state` yazar);
+  altta **sponsor şeridi**: oraya bırakmak kalemi yerinden almaz, `has_sponsor`
+  koyar (kopyası şeritte ad + öncelik olarak görünür). Karta/satıra basınca aynı
+  **detay penceresi** açılır: ad, öncelik, tür, adet, sponsor/zaten var, etiketli
+  adımlar, teslim, not, etkinlik gününe göre teklif zaman çizgisi ve teklif kartları
+  (düzenle, seç, sil, ekle).
 
 ### Yetki
 
 Malzeme eklemek, adım ilerletmek/geri almak, tedarikçi ve fiyat yazmak **scope
-ister**: yeni `manage_purchases`. Okumak etkinliği görebilen herkese açık;
-yetkisiz görünüm salt okunur (adım noktaları tıklanmaz, ekleme formu yerine
-yetki notu). Ön yüz yalnız gösterir; karar Rust'ta (`spec/70-guvenlik.md`).
+ister**: `manage_purchases`. "Satın alındı" işaretlemek ayrı scope: `review_purchases`
+(maliye). Okumak etkinliği görebilen herkese açık; yetkisiz görünüm salt okunur
+(kart sürüklenmez, detay alanları kapalı, ekleme formu yerine yetki notu). Ön yüz
+yalnız gösterir; karar Rust'ta (`spec/70-guvenlik.md`).
 
-Yeni scope'lar (`010_events.sql`): `manage_events`, `manage_event_widgets`,
-`manage_purchases`. Ekrandaki adları `frontend/src/lib/labels.ts` `SCOPE`'ta.
+Scope'lar: `manage_events`, `manage_event_widgets`, `manage_purchases`
+(`010_events.sql`), `review_purchases` (`018_purchases_v2.sql`). Ekrandaki adları
+`frontend/src/lib/labels.ts` `SCOPE`'ta.
 
 ---
 

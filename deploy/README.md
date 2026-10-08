@@ -164,6 +164,7 @@ açılışta bu e-postalar aktif admin yapılır.
 - [`release-handoff-alpha-2.1.md`](release-handoff-alpha-2.1.md) — alpha-2.1'e özel devir notu (tarihî).
 - `references/python/deploy/DOCKER.md` — (0.1) konteyner yığını.
 - `spec/70-guvenlik.md` — tehdit modeli, kimlik, CSRF, denetim izi.
+- [`testdb.sh`](testdb.sh) — **yayın değil**, yerel deneme: atılıp yıkılan `ekiptakip_testdb` + sahte kimlikli API + dolu örnek etkinlik (`up` / `down`). Ekrana bakmak için `up`, sonra `cd frontend && npm run dev`.
 
 ## Bu kurulumun kapatmadıkları
 

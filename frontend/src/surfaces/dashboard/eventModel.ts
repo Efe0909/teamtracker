@@ -52,15 +52,83 @@ export const MATERIAL_TYPE: Record<MaterialType, string> = {
   service: "Hizmet",
 };
 
-/** Malzemenin surec adimlari; sponsorlu malzemeye bir adim eklenir. */
-export function materialSteps(m: Pick<Material, "has_sponsor">): string[] {
-  return m.has_sponsor ? ["Gerekli mi?", "Tedarikçi bulundu", "Sponsor", "Onaylandı"] : ["Gerekli mi?", "Tedarikçi bulundu", "Onaylandı"];
+/** Surec adimlari (sabit, 3). Sponsor adim DEGIL: ayri istek (`has_sponsor`). */
+export const MATERIAL_STEPS = ["Gerekli mi?", "Tedarikçi bulundu", "Onaylandı"] as const;
+export const MAX_STATE = MATERIAL_STEPS.length;
+
+/** `state` 0..3'un ekran karsiligi (kart etiketi, liste). */
+export const MATERIAL_STAGE = ["Karar bekliyor", "Tedarikçi aranıyor", "Tedarikçi bulundu", "Onaylandı"] as const;
+
+/** Pano sutunlari; `state` = bu sutuna birakilinca yazilan deger. "Gerekli mi?" sutunu
+ *  hem karar bekleyeni (0) hem tedarikci arananı (1) tutar. */
+export const BOARD_COLUMNS = [
+  { name: "Gerekli mi?", state: 1 },
+  { name: "Tedarikçi bulundu", state: 2 },
+  { name: "Onaylandı", state: 3 },
+] as const;
+
+/** Kalemin pano sutunu; "zaten var" kalem Onaylandi'da durur (ikonuyla ayrilir). */
+export function columnOf(m: Pick<Material, "state" | "owned">): number {
+  return m.owned ? 2 : m.state <= 1 ? 0 : m.state - 1;
 }
 
 export function bestOffer(m: Pick<Material, "providers">): { price: number | null; date: string | null } {
   const prices = m.providers.flatMap((p) => (p.price === null ? [] : [p.price]));
   const dates = m.providers.flatMap((p) => (p.arrival_date === null ? [] : [p.arrival_date])).sort();
   return { price: prices.length === 0 ? null : Math.min(...prices), date: dates[0] ?? null };
+}
+
+/** Karttaki fiyat: sponsor secildiyse 0, secili teklif, yoksa en dusuk teklif. null = fiyat yok. */
+export function priceOf(m: Pick<Material, "providers" | "chosen_provider_id" | "sponsor_chosen">): number | null {
+  if (m.sponsor_chosen) return 0;
+  const picked = m.providers.find((p) => p.id === m.chosen_provider_id);
+  return picked !== undefined ? picked.price : bestOffer(m).price;
+}
+
+/** Beklenen varis: sponsor secildiyse sponsor tarihi, secili teklif, yoksa en yakin teklif tarihi. */
+export function etaOf(m: Pick<Material, "providers" | "chosen_provider_id" | "sponsor_chosen" | "sponsor_date">): string | null {
+  if (m.sponsor_chosen) return m.sponsor_date;
+  const picked = m.providers.find((p) => p.id === m.chosen_provider_id);
+  return picked !== undefined ? picked.arrival_date : bestOffer(m).date;
+}
+
+/** Etkinlik gunu belliyse ve beklenen varis ondan sonraysa. Teslim edilen ya da elde olan sayilmaz. */
+export function isLate(m: Pick<Material, "providers" | "chosen_provider_id" | "sponsor_chosen" | "sponsor_date" | "owned" | "delivered">, eventDate: string | null): boolean {
+  const eta = etaOf(m);
+  return eventDate !== null && eta !== null && !m.owned && !m.delivered && eta > eventDate;
+}
+
+/** Toplam tutar adedi hesaba katmaz: teklif zaten TOPLAM tutardir, birim fiyat turetilir. */
+export function unitPrice(price: number | null, qty: number): number | null {
+  return price === null ? null : Math.round((price / qty) * 100) / 100;
+}
+
+// --- butce asimi ----------------------------------------------------------------------
+// Kademe sunucuda turetilir (`overage_level`: ln(fiyat/butce) ve tarihli taban). Burada
+// yalniz ekran karsiligi ve yuzde. Kademe 0 = butce icinde, 1 = hafif asim, 2 = belirgin asim.
+
+export const OVERAGE_MARK = ["$", "$$", "$$$"] as const;
+
+/** Butce asiminin yuzdesi (negatif: altinda). Fiyat ya da butce yoksa null. */
+export function overPct(price: number | null, budget: number | null): number | null {
+  if (price === null || budget === null || budget <= 0) return null;
+  return Math.round((price / budget - 1) * 100);
+}
+
+/** Teklif metni telefon mu (rakam, bosluk, +, parantez, tire); degilse baglanti. */
+export function isPhone(contact: string): boolean {
+  return /^[+\d][\d\s()-]{6,}$/.test(contact.trim());
+}
+
+/** Etkinlik gunune kac gun kala (negatif = gec). */
+export function daysBefore(eventDate: string, arrival: string): number {
+  return Math.round((Date.parse(eventDate) - Date.parse(arrival)) / 86_400_000);
+}
+
+export function purchaseTotals(items: Material[]): { total: number; approved: number } {
+  const live = items.filter((m) => !m.owned);
+  const sum = (xs: Material[]) => xs.reduce((a, m) => a + (priceOf(m) ?? 0), 0);
+  return { total: sum(live), approved: sum(live.filter((m) => m.state === MAX_STATE)) };
 }
 
 export type PurchaseHealth = "none" | "ok" | "warn" | "err";
@@ -70,7 +138,9 @@ export type PurchaseHealth = "none" | "ok" | "warn" | "err";
 export function purchaseHealth(items: Material[]): PurchaseHealth {
   const live = items.filter((m) => !m.owned && m.state >= 1);
   if (live.length === 0) return "none";
-  const left = live.filter((m) => m.state < materialSteps(m).length);
+  const left = live.filter((m) => m.state < MAX_STATE);
   if (left.length === 0) return "ok";
   return left.some((m) => m.priority === "critical") ? "err" : "warn";
 }
+
+export const money = new Intl.NumberFormat("tr", { style: "currency", currency: "TRY", minimumFractionDigits: 0, maximumFractionDigits: 2 });
