@@ -8,10 +8,9 @@ yalnız uygulamanın sözleşmesini taşır: `module.nix` (NixOS modülü), `rel
 | Ortam | Nerede | Ne çalıştırır |
 |---|---|---|
 | **Yerel geliştirme** | bu depo | `make dev` — Docker'da Postgres + `cargo run` + `npm run dev`, sahte kimlik |
-| **VM** (192.168.64.8) | `~/nix` → `.#teamtracker0.2` | aynı VM'de 0.2 (Rust + React); `.#teamtracker0.1` eski Python+Docker |
 | **Üretim** | `~/nix` → `.#evsunucu` | Raspberry Pi, aynı yapılandırma |
 
-**Hedef makine derlemez.** Ne VM ne Pi `cargo`/`npm` çalıştırır; ikili ve ön yüz Mac'te
+**Hedef makine derlemez.** Pi `cargo`/`npm` çalıştırmaz; ikili ve ön yüz Mac'te
 derlenir, GitHub release'e yüklenir, makine hazır tarball'i indirir.
 
 ---
@@ -87,29 +86,29 @@ git add deploy/release.nix && git commit -m "release: <tag>" && git push
 cd ~/nix && nix flake update teamtracker-alpha02
 git commit -am "teamtracker-alpha02: <tag>" && git push
 
-# 4. Önce VM
-sudo nixos-rebuild switch --flake .#teamtracker0.2     # VM'de (geri: .#teamtracker0.1)
-
-# 5. Sonra Pi — VM doğrulaması geçince
+# 4. Pi: aşağıdaki "Pi'ye uygulamak"
 ```
 
 `release.sh` ne yapar: `npm ci && npm run build`, her hedef için
-(`aarch64-linux` Pi/VM, `x86_64-linux` VDS) statik musl ikili derler, ikili + `frontend/dist`
+(`aarch64-linux` Pi, `x86_64-linux` VDS) statik musl ikili derler, ikili + `frontend/dist`
 tarball'ını `rust-<sha>` etiketli prerelease olarak yükler, **yükleme başarılıysa**
 `deploy/release.nix`'e url + hash yazar. `release.nix` üretilmiş dosyadır, elle düzenleme.
 
 ### Pi'ye uygulamak
 
-Pi'de `~/nix` klonu yok; yapılandırma GitHub'dan çekilir. Yukarıda `~/nix`'i **push'ladıktan**
-sonra Pi'de (SSH bağlantısı kopsa da iş sürsün diye `systemd-run` altında):
+Pi'de `~/nix` klonu var ve Pi'nin kendi GitHub ed25519 anahtarı ile `git pull` yapar.
+Yukarıda `~/nix`'i **push'ladıktan** sonra Pi'ye SSH ile bağlan; bağlantı kopsa da iş
+sürsün diye `tmux` içinde çalıştır:
 
 ```bash
-sudo systemd-run --unit=rebuild --setenv=PATH=/run/current-system/sw/bin \
-  nixos-rebuild switch --flake github:Efe0909/nix/<~/nix commit sha>#evsunucu
-journalctl -u rebuild -f
+ssh evsunucu
+tmux                       # yeni oturum
+cd ~/nix && git pull && sudo nixos-rebuild switch --flake .#evsunucu
+exit                       # bitince tmux'tan çık (oturum kapanır), sonra SSH'tan
 ```
 
-Commit sha'yı vermek önbellekteki eski `main` ucunu çekmeyi önler.
+Sürüm `~/nix`'in `flake.lock`'unda (`nix flake update` ile çekilip push'landı); elle sha
+yazılmaz.
 
 ### Doğrulama
 
@@ -123,7 +122,7 @@ Commit sha'yı vermek önbellekteki eski `main` ucunu çekmeyi önler.
 
 `~/nix`'te `flake.lock` değişikliğini geri al (`git revert`), commit + push, aynı
 `nixos-rebuild switch`. Göçler ileri yönlüdür (yeni tablo/sütun, veri silmez); eski ikili
-yeni sütunları yok sayar, veri kaybı olmaz. 0.1'e dönüş (yalnız VM): `.#teamtracker0.1`.
+yeni sütunları yok sayar, veri kaybı olmaz.
 
 ### Sık takılanlar
 

@@ -73,7 +73,6 @@ denemek için anahtarı ortama ver.
 
 - `cargo test` — birim (ağaç, filtre, hız sınırı, karar modeli yanıtı, manifest).
 - `tools/local_test.sh` — atılıp-yıkılan yerel DB + iki süreç (sahte kimlik + Google kipi), `check_api.sh` JSON sözleşmesi.
-- `tools/vm_test.sh` — aynısı VM'de: Mac'te cross-derler, geçici dizin + veritabanı, sonra siler.
 - `tools/import_v1.sh` — TEK SEFERLİK: 0.1'in kullanıcı/ağaç/takım/rol verisini 0.2'ye
   (iş kayıtları, sohbet, ekler TAŞINMAZ). VM'de 2026-09-22'de yapıldı; Pi'de bir kez daha.
 - `tools/release.sh` — yayın tarball'ı (ikili + ön yüz), GitHub release, `deploy/release.nix`. Adımlar: `deploy/README.md` §2.

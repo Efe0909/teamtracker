@@ -71,4 +71,12 @@ fi
 gh release create "$TAG" "${ASSETS[@]}" --repo "$REPO" --prerelease \
   --title "Rust $SHA" --notes "linux-musl, statik (aarch64 + x86_64). Kaynak: $SHA"
 echo "$PIN" > deploy/release.nix
-echo "yuklendi. deploy/release.nix guncellendi — commit'le."
+echo "yuklendi. deploy/release.nix guncellendi. Sirayla kopyala:"
+cat <<EOF
+
+git add deploy/release.nix && git commit -m "release: $TAG" && git push
+
+cd ~/nix && nix flake update teamtracker-alpha02 && git commit -am "teamtracker-alpha02: $TAG" && git push
+
+ssh evsunucu   # tmux; cd ~/nix && git pull && sudo nixos-rebuild switch --flake .#evsunucu
+EOF

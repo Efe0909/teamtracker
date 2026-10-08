@@ -58,7 +58,6 @@ docker exec ekiptakip-db createdb -U ekiptakip ekiptakip_alpha02
 | `npm run build` | CSS Modules tipleri + ham renk denetimi + `tsc` strict + Vite |
 | `npm test` | vitest + testing-library |
 | `backend/tools/local_test.sh` | JSON sözleşmesi yerelde: atılıp yıkılan DB + iki süreç |
-| `backend/tools/vm_test.sh` | aynısı VM'de |
 
 ## Yayına alma
 
@@ -136,5 +135,4 @@ karşılıkları yorumlarda bu yollara atıf yapar; `backend/tools/gen_seed.py` 
 cd references/python && make up     # Postgres kökteki docker-compose.yml'den
 ```
 
-VM'deki 0.1 hedefi (`~/nix` `.#teamtracker0.1`) `e02d71d`'ye pinli; bu taşımadan etkilenmez.
 Yeni özellik buraya yazılmaz.

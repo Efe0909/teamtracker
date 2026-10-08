@@ -1,6 +1,6 @@
 # EkipTakip — ajanlar için proje notları
 
-## Ortamlar: yerel / VM / Pi
+## Ortamlar: yerel / Pi
 
 Makine yapılandırması **bu depoda değil** — `~/nix` (github:Efe0909/nix), reproducible
 NixOS. `deploy/` yalnız uygulamanın sözleşmesini anlatır (konteyner yığını, medya
@@ -9,7 +9,6 @@ dizini, tünel). Elle kurulum yok; macOS ve Debian şablonları kaldırıldı.
 | Ortam | Nerede | Ne |
 |---|---|---|
 | Yerel geliştirme | bu depo | Docker'da Postgres + `cargo run` + `npm run dev`, sahte kimlik |
-| VM testi | `~/nix` `.#teamtracker0.1` / `.#teamtracker0.2` | aynı VM (192.168.64.8), iki sürüm: 0.1 Python+Docker (e02d71d'ye pinli), 0.2 Rust+React (release) |
 | Üretim | `~/nix` `.#evsunucu` | Raspberry Pi, aynı `configuration.nix` |
 
 ### alpha-0.2: Rust API + React
@@ -33,8 +32,7 @@ docker compose up -d && docker exec ekiptakip-db createdb -U ekiptakip ekiptakip
 - Denetim: `cargo clippy --all-targets` (panik/`todo!` derlemeyi düşürür),
   `npm run build` (CSS Modules tipleri + ham renk denetimi + tsc strict),
   `npm test` (vitest + testing-library, `frontend/src/**/*.test.tsx`),
-  `backend/tools/local_test.sh` (JSON sözleşmesi yerelde: atılıp yıkılan DB + iki süreç),
-  `backend/tools/vm_test.sh` (aynısı VM'de).
+  `backend/tools/local_test.sh` (JSON sözleşmesi yerelde: atılıp yıkılan DB + iki süreç).
 - Ön yüz yapısı `spec/16-on-yuz.md` §3: `api/` (istemci, tipler, kancalar), `ui/`
   (alan bilmez), `features/` (kayıt, sohbet — iki yüz ortak), `surfaces/` (yerleşim +
   rota). Renk yalnız `src/tokens.css`'te.
@@ -82,8 +80,8 @@ backend/tools/release.sh                          # Mac: derle + GitHub release 
 git commit -am "release: <tag>" && git push
 cd ~/nix && nix flake update teamtracker-alpha02  # 0.2'yi yeni pine çek
 git commit -am "teamtracker-alpha02: <tag>"
-# VM'de (yalnız yapılandırma dosyaları kurulur, uygulama release'ten iner):
-sudo nixos-rebuild switch --flake .#teamtracker0.2   # geri: .#teamtracker0.1
+# Pi'de (yalnız yapılandırma dosyaları kurulur, uygulama release'ten iner):
+sudo nixos-rebuild switch --flake .#evsunucu
 ```
 
 Alan adları (zon `polonyum.com`): `app.` mobil kökte, `dashboard.` masaüstü,
