@@ -72,6 +72,7 @@ export const SCOPE: Readonly<Partial<Record<string, string>>> = {
   manage_event_locations: "Etkinlik yerlerini yönet — yer listesini düzenle (Veri Yönetimi)",
   manage_event_widgets: "Etkinlik widget'larını düzenle — şablondan gelen widget'ları ekle/kaldır",
   manage_purchases: "Satın alımları yönet — adım ilerlet, tedarikçi ve fiyat yaz",
+  review_purchases: "Satın alımları incele — kalemi “satın alındı” olarak işaretle (maliye)",
 };
 
 /** Secim listelerinin sirasi (Record anahtar sirasi garanti degil). */

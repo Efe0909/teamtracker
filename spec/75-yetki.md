@@ -102,7 +102,8 @@ sahip sayılır.
 | `create_tags` | Yeni etiket adı tanımlama (`tag_media` kapısından sonra sorulur) | `POST /api/attachments/{id}/tags` (slug yoksa) |
 | `manage_events` | Her etkinliği düzenleme (`editable`), checkpoint ekleme ve tarihini değiştirme, onaylayıcı olma, etkinliğin sorumlusunu değiştirme (A2) | `/api/events/*`, `/api/event-checkpoints/*`, `/api/checkpoint-requests/*`, OTF yazma |
 | `manage_event_widgets` | Şablon widget'ı ekleme ve silme (`record` türü hariç) | `POST /api/events/{id}/widgets`, `DELETE /api/event-widgets/{id}` |
-| `manage_purchases` | Malzeme ve tedarikçi yazma. Etkinliği düzenleme yetkisi ayrıca aranmaz. | `POST /api/events/{id}/materials`, `/api/materials/*`, `/api/material-providers/*` |
+| `manage_purchases` | Malzeme ve tedarikçi yazma. Etkinliği düzenleme yetkisi ayrıca aranmaz. Satın alınmış (`purchased`) kalemin tedariki donar: yalnız not, öncelik ve teslim işareti yazılır (`purchased_locked`). | `POST /api/events/{id}/materials`, `/api/materials/{id}`, `/api/materials/{id}/providers`, `/api/material-providers/*` |
+| `review_purchases` | Kalemi "satın alındı" işaretleme ve geri alma (maliye incelemesi). Widget'taki onay (`state` 3) satın alındı demek değildir; yalnız onaylı, elde olmayan kalem işaretlenir (`not_approved`). | `PATCH /api/materials/{id}/purchased` |
 
 ## 4. Uç matrisi
 
@@ -200,6 +201,8 @@ Satırın sonundaki `dosya:satır` handler'ın yeridir. Toplam 97 uç.
 | `DELETE /api/materials/{id}` | `manage_purchases` | `:916` |
 | `POST /api/materials/{id}/providers` | `manage_purchases` | `:935` |
 | `DELETE /api/material-providers/{id}` | `manage_purchases` | `:958` |
+| `PATCH /api/material-providers/{id}` | `manage_purchases` | Teklif düzenleme. |
+| `PATCH /api/materials/{id}/purchased` | `review_purchases` | Maliye; kalem etkinliğe bağlı olmak zorunda değil. |
 
 ### Sohbet (`chats.rs`)
 
