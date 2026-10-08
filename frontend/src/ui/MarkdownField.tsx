@@ -31,7 +31,10 @@ export function MarkdownText({ value, className, linkTextOnly = false }: { value
   const L = useLookup();
   const lines = useMemo(() => renderLines(value), [value]);
   const flat = lines.length === 1 && lines[0]?.kind === undefined;
-  const body = (line: RenderedLine) => line.segments.map((part, i) => segment(part, i, L.meta.users, linkTextOnly));
+  // Liste işareti editördeki gibi sabit genişlikli kutu: sarılan satırlar metne hizalanır.
+  const body = (line: RenderedLine) => line.segments.map((part, i) => line.kind === "list" && i === 0
+    ? <span key={i} className={part.text === "• " ? s.bullet : s.listMark}>{part.text}</span>
+    : segment(part, i, L.meta.users, linkTextOnly));
   return (
     <span className={`${s.rendered} ${flat ? "" : s.block} ${className ?? ""}`}>
       {flat ? body(lines[0] ?? { segments: [] }) : lines.map((line, i) => (
