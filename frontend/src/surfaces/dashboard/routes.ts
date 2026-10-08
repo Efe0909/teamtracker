@@ -17,6 +17,7 @@ export type Route =
   | { name: "pillars" }
   | { name: "pillar"; id: Uuid }
   | { name: "tree" }
+  | { name: "notifications" }
   | { name: "admin" }
   | { name: "notFound" };
 
@@ -61,6 +62,7 @@ export function parse(url: URL): Route {
   if (a === "pillars" && seg.length === 1) return { name: "pillars" };
   if (a === "pillars" && b !== undefined && seg.length === 2) return { name: "pillar", id: b };
   if (a === "outcome-tree" && seg.length === 1) return { name: "tree" };
+  if (a === "notifications" && seg.length === 1) return { name: "notifications" };
   if (a === "admin" && seg.length === 1) return { name: "admin" };
   return { name: "notFound" };
 }
@@ -91,6 +93,8 @@ export function href(r: Route): string {
       return "/outcome-tree";
     case "people":
       return "/people";
+    case "notifications":
+      return "/notifications";
     case "admin":
       return "/admin";
   }
