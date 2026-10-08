@@ -93,6 +93,7 @@ export type ApiErrorCode =
   | "self_permissions"
   | "grant_not_held"
   | "grant_manage_users"
+  | "name_not_allowed"
   | "owner_change_denied"
   | "network"
   | "name_too_short"
@@ -196,6 +197,7 @@ export const ERRORS = {
   self_permissions: "Kendi yetkilerini değiştiremezsin. Bir yöneticiden iste.",
   grant_not_held: "Yalnız kendinde olan yetkiyi, rolü ya da dalı verip alabilirsin.",
   grant_manage_users: "Kişi yönetimi yetkisini yalnız bir yönetici verip alabilir.",
+  name_not_allowed: "Ad değiştirmek için “kullanıcı adını değiştir” yetkisi gerekir. Bir yöneticiden iste.",
   owner_change_denied: "Sorumluyu yalnız mevcut sorumlu, konunun dal yetkilisi ya da yönetici değiştirebilir. Sorumlusuz kaydı kendin üstlenebilirsin.",
   network: "Sunucuya ulaşılamadı. Bağlantını kontrol et.",
   name_too_short: "Ad en az 5 karakter olmalı.",

@@ -61,6 +61,7 @@ export const SCOPE: Readonly<Partial<Record<string, string>>> = {
   edit_nodes: "Yapıyı düzenle — düğüm ekle, adlandır, taşı, pasifleştir",
   hard_delete_nodes: "Bağımlısı olan düğümü kalıcı sil (kayıtlar ve alt ağaç dahil)",
   manage_users: "Kullanıcı ekle, kapat, yetki ver",
+  edit_user_names: "Kullanıcı adını değiştir — kendi adını ve başkalarınınkini",
   manage_teams: "Takım kur, üye ekle ve çıkar",
   create_tags: "Etiket sözlüğünü genişlet — yeni etiket adı tanımla",
   edit_deadline: "Son tarih değiştir — kayıtların ve eylemlerin teslim tarihi (etkinlik adımları hariç)",
