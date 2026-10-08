@@ -112,6 +112,17 @@ ok "$(jq -c '.me.favorite_nodes' <<<"$R")" '[]' "favoriler bos"
 ok "$(jq '[.nodes[]|select(.depth==0)]|length > 0' <<<"$R")" true "agac koku"
 ok "$(jq '.users[0]|has("email")' <<<"$R")" false "e-posta sizmaz"
 
+t websocket_gate
+# Yukseltme istegi: oturum + Origin kapisi. Olaylarin kendisi (abonelik, yetki)
+# Rust birim testlerinde; burada yalniz el sikismanin durum kodu. curl 101'den
+# sonra bekler, -m 1 keser (cikis kodu 28, durum kodu yine yazilir).
+UP=(-H "Connection: Upgrade" -H "Upgrade: websocket" -H "Sec-WebSocket-Version: 13" -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==")
+ok "$(code -m 1 "${UP[@]}" "$B/api/ws")" 401 "oturumsuz"
+ok "$(code -m 1 -b "$J/w" "${UP[@]}" -H "Origin: https://evil.example" "$B/api/ws")" 403 "yabanci Origin"
+ok "$(curl -s -m 1 -b "$J/w" "${UP[@]}" -H "Origin: https://evil.example" "$B/api/ws" | jq -r .error)" bad_origin "kod bad_origin"
+ok "$(code -m 1 -b "$J/w" "${UP[@]}" "$B/api/ws")" 101 "Origin'siz (tarayici disi) gecer"
+ok "$(code -m 1 -b "$J/w" "${UP[@]}" -H "Origin: ${B}" "$B/api/ws")" 101 "ayni Origin gecer"
+
 t records_list
 ok "$(g w /api/records | jq length)" 5 "hepsi"
 ok "$(g w '/api/records?status=uydurma&sort=x' | jq length)" 5 "gecersiz filtre duser"

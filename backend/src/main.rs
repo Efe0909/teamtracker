@@ -25,6 +25,7 @@ mod otf;
 mod refdata;
 mod push;
 mod ratelimit;
+mod realtime;
 mod state;
 mod webpush;
 
@@ -74,9 +75,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // axum'da SON eklenen katman EN DISTA calisir:
-    //   TraceLayer -> denetim (403) -> CSRF kapisi -> rotalar
-    // Denetim CSRF'in disinda: kapinin reddi de bir 403.
+    //   TraceLayer -> denetim (403) -> CSRF kapisi -> yazma olaylari -> rotalar
+    // Denetim CSRF'in disinda: kapinin reddi de bir 403. Yazma olaylari
+    // CSRF'in ICINDE: reddedilen istek kimseyi uyandirmaz.
     let app = api::router()
+        .layer(axum::middleware::from_fn_with_state(state.clone(), realtime::publish_writes))
         .layer(axum::middleware::from_fn_with_state(state.clone(), csrf::gate))
         .layer(axum::middleware::from_fn_with_state(state.clone(), audit::forbidden))
         .layer(TraceLayer::new_for_http())

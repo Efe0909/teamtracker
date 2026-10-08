@@ -32,6 +32,8 @@ use uuid::Uuid;
 
 use crate::{auth::CurrentUser, error::{AppError, Result}, media, state::AppState};
 
+pub(crate) use chats::authorize_read as authorize_chat_read;
+
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/api/me", get(me))
@@ -40,6 +42,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/auth/logout", post(auth::logout))
         .route("/api/auth/dev-login", get(auth::dev_login))
         .route("/api/meta", get(meta::meta))
+        .route("/api/ws", get(crate::realtime::connect))
         .route("/api/me/profile", patch(profile::patch))
         .route("/api/home", get(home::home))
         .route("/api/pins/{slug}", post(home::pin).delete(home::unpin))
