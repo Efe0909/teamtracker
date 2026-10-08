@@ -19,6 +19,8 @@ export type ApiErrorCode =
   | "unknown_user"
   | "unknown_team"
   | "open_actions"
+  | "stale_field"
+  | "bad_origin"
   | "invalid_name"
   | "invalid_parent"
   | "inactive_parent"
@@ -123,6 +125,8 @@ export const ERRORS = {
   unknown_user: "Seçilen kişi bulunamadı ya da hesabı kapalı.",
   unknown_team: "Seçilen takım bulunamadı.",
   open_actions: "Kayıt, açık eylemleri varken kapanmaz. Önce eylemleri kapat.",
+  bad_origin: "Canlı bağlantı bu adresten kurulamaz. Sayfayı uygulamanın kendi adresinden aç.",
+  stale_field: "Bu alanı sen bakarken başkası değiştirdi. Güncel değer yüklendi; hâlâ istiyorsan yeniden uygula.",
   invalid_name: "Ad boş olamaz ve 200 karakteri aşamaz.",
   invalid_parent: "Seçilen üst düğüm bulunamadı.",
   inactive_parent: "Pasif bir düğümün altına düğüm eklenemez ya da taşınamaz.",

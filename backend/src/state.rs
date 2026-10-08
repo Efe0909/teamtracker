@@ -56,6 +56,9 @@ pub struct AppState {
     /// Kalite kapisinin sorulari ve esikleri (`quality_config`); yonetimden
     /// degisince burasi da guncellenir. Kilit await boyunca tutulmaz.
     pub quality: Arc<RwLock<crate::decision::QualityConfig>>,
+    /// Gercek zamanli kanal (`realtime.rs`): WebSocket baglantilari ve konulari.
+    /// Surec bellekte; tek surec sartinin (KNOW-85) bir sebebi daha.
+    pub hub: Arc<crate::realtime::Hub>,
 }
 
 impl FromRef<AppState> for Key {
@@ -99,6 +102,7 @@ impl AppState {
             login_limit: Arc::new(RateLimit::new(10, std::time::Duration::from_secs(60))),
             presence: Arc::default(),
             structure: Arc::default(),
+            hub: Arc::default(),
         })
     }
 

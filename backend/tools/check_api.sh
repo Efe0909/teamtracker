@@ -112,6 +112,17 @@ ok "$(jq -c '.me.favorite_nodes' <<<"$R")" '[]' "favoriler bos"
 ok "$(jq '[.nodes[]|select(.depth==0)]|length > 0' <<<"$R")" true "agac koku"
 ok "$(jq '.users[0]|has("email")' <<<"$R")" false "e-posta sizmaz"
 
+t websocket_gate
+# Yukseltme istegi: oturum + Origin kapisi. Olaylarin kendisi (abonelik, yetki)
+# Rust birim testlerinde; burada yalniz el sikismanin durum kodu. curl 101'den
+# sonra bekler, -m 1 keser (cikis kodu 28, durum kodu yine yazilir).
+UP=(-H "Connection: Upgrade" -H "Upgrade: websocket" -H "Sec-WebSocket-Version: 13" -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==")
+ok "$(code -m 1 "${UP[@]}" "$B/api/ws")" 401 "oturumsuz"
+ok "$(code -m 1 -b "$J/w" "${UP[@]}" -H "Origin: https://evil.example" "$B/api/ws")" 403 "yabanci Origin"
+ok "$(curl -s -m 1 -b "$J/w" "${UP[@]}" -H "Origin: https://evil.example" "$B/api/ws" | jq -r .error)" bad_origin "kod bad_origin"
+ok "$(code -m 1 -b "$J/w" "${UP[@]}" "$B/api/ws")" 101 "Origin'siz (tarayici disi) gecer"
+ok "$(code -m 1 -b "$J/w" "${UP[@]}" -H "Origin: ${B}" "$B/api/ws")" 101 "ayni Origin gecer"
+
 t records_list
 ok "$(g w /api/records | jq length)" 5 "hepsi"
 ok "$(g w '/api/records?status=uydurma&sort=x' | jq length)" 5 "gecersiz filtre duser"
@@ -138,6 +149,26 @@ ok "$(DB "select detail from activity where verb='field_changed' and target_labe
 w w PATCH "$WT" "/api/records/$BUTCE" '{"field":"priority","value":"low"}' >/dev/null
 ok "$(DB "select count(*) from activity where verb='field_changed'")" 1 "degismeyen deger iz birakmaz"
 ok "$(w w PATCH "$WT" "/api/records/$BUTCE" "{\"field\":\"unit_id\",\"value\":\"$SELIN\"}" | jq -r .error)" invalid_unit "birim dugum olmali"
+
+t record_patch_stale
+# `base` = istemcinin GORDUGU deger. Alan baska biri tarafindan degistiyse
+# yazma reddedilir (409 stale_field), sessiz son-yazan-kazanir olmaz.
+ok "$(w w PATCH "$WT" "/api/records/$BUTCE" '{"field":"priority","value":"high","base":"critical"}' | jq -r .error)" stale_field "bayat base"
+ok "$(wc_ w PATCH "$WT" "/api/records/$BUTCE" '{"field":"priority","value":"high","base":"critical"}')" 409 "409"
+ok "$(DB "select priority from records where id='$BUTCE'")" low "bayat yazma uygulanmadi"
+ok "$(DB "select count(*) from activity where verb='field_changed'")" 1 "reddedilen yazma iz birakmaz"
+ok "$(w w PATCH "$WT" "/api/records/$BUTCE" '{"field":"priority","value":"high","base":"low"}' | jq -r .record.priority)" high "guncel base kabul"
+ok "$(DB "select detail from activity where verb='field_changed' and target_label='priority' order by created_at desc limit 1")" '{"from":"low","to":"high"}' "gunluk eski degeri islemden alir"
+# Hedef deger zaten orada (iki kisi ayni seyi yapti): hata degil, no-op.
+ok "$(w w PATCH "$WT" "/api/records/$BUTCE" '{"field":"priority","value":"high","base":"critical"}' | jq -r .record.priority)" high "hedef zaten orada"
+# Farkli alan baskasinin degisikligine takilmaz: yalniz kendi alani karsilastirilir.
+ok "$(w w PATCH "$WT" "/api/records/$BUTCE" '{"field":"due_date","value":"2030-01-01"}' | jq -r .record.due_date)" 2030-01-01 "base yok = kontrol yok"
+ok "$(w w PATCH "$WT" "/api/records/$BUTCE" '{"field":"due_date","value":null,"base":"2030-01-01"}' | jq -r .record.due_date)" null "tarih -> null"
+# null gecerli bir base: "bos gormustu".
+ok "$(w w PATCH "$WT" "/api/records/$BUTCE" '{"field":"due_date","value":"2031-01-01","base":null}' | jq -r .record.due_date)" 2031-01-01 "base null, alan bos"
+ok "$(w w PATCH "$WT" "/api/records/$BUTCE" '{"field":"due_date","value":"2032-01-01","base":null}' | jq -r .error)" stale_field "base null ama alan dolu"
+w w PATCH "$WT" "/api/records/$BUTCE" '{"field":"due_date","value":null}' >/dev/null
+w w PATCH "$WT" "/api/records/$BUTCE" '{"field":"priority","value":"low"}' >/dev/null
 
 t record_permissions
 ok "$(g n "/api/records/$VEKALET" | jq -r .access.can_edit)" false "uye kapsam disi"

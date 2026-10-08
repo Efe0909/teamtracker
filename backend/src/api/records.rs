@@ -477,6 +477,16 @@ pub struct RecordPatchBody {
     closing_note: Option<String>,
     #[serde(default)]
     quality_override: bool,
+    /// Istemcinin GORDUGU deger (alan basina; bkz. `patch`). Yoksa kontrol yok
+    /// (eski istemci); `null` gecerli bir degerdir ("sorumlusuz gormustu").
+    #[serde(default, deserialize_with = "present")]
+    base: Option<serde_json::Value>,
+}
+
+/// `Option<Value>` icin "alan var" ayrimi: serde varsayilaninda `null` ile
+/// eksik alan ikisi de `None` olur; burada `null` -> `Some(Value::Null)`.
+fn present<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<Option<serde_json::Value>, D::Error> {
+    serde_json::Value::deserialize(d).map(Some)
 }
 
 pub async fn patch(
@@ -485,7 +495,7 @@ pub async fn patch(
 ) -> Result<Json<Patched>> {
     let rec = load(&st.pool, common::id(&raw)?).await?;
     require_edit(&st, &me, &rec).await?;
-    let RecordPatchBody { patch: p, closing_note, quality_override } = body;
+    let RecordPatchBody { patch: p, closing_note, quality_override, base } = body;
     let bypass_quality = common::has_scope(&st, &me, "bypass_text_quality").await?;
     // Kapanis notu (closed'a geciste dolu) ve model onayi atlandiysa nedenleri.
     let mut note: Option<String> = None;
@@ -493,8 +503,9 @@ pub async fn patch(
     // Modelin bu istekteki karari: yalniz degerlendirme tetiklendiyse yanita girer.
     let mut quality: Option<decision::Quality> = None;
 
-    // (alan, sql, eski, yeni) — SQL SABIT, kullanici girdisi yalniz bind.
-    let (field, sql, from, to): (&str, &str, serde_json::Value, serde_json::Value) = match p {
+    // (alan, sql, yeni) — SQL SABIT, kullanici girdisi yalniz bind. ESKI deger
+    // burada okunmaz: islemde satir kilitlenip taze okunur (asagida).
+    let (field, sql, to): (&str, &str, serde_json::Value) = match p {
         RecordPatch::Status(v) => {
             if matches!(v, RecordStatus::Closed) {
                 let open: i64 = sqlx::query_scalar(
@@ -512,35 +523,31 @@ pub async fn patch(
                 }
             }
             ("status", "update records set status = $2 where id = $1",
-             rec.status.clone().into(), serde_json::to_value(v).unwrap_or_default())
+             serde_json::to_value(v).unwrap_or_default())
         }
         RecordPatch::Priority(v) => ("priority", "update records set priority = $2 where id = $1",
-            rec.priority.clone().into(), serde_json::to_value(v).unwrap_or_default()),
+            serde_json::to_value(v).unwrap_or_default()),
         RecordPatch::OwnerId(v) => {
             check_user(&st.pool, v).await?;
             if !may_set_owner(&st, &me, &rec, v).await? {
                 return Err(AppError::Denied("owner_change_denied"));
             }
             ("owner_id", "update records set owner_id = $2 where id = $1",
-             serde_json::to_value(rec.owner_id).unwrap_or_default(),
              serde_json::to_value(v).unwrap_or_default())
         }
         RecordPatch::TeamId(v) => {
             check_team(&st.pool, v).await?;
             ("team_id", "update records set team_id = $2 where id = $1",
-             serde_json::to_value(rec.team_id).unwrap_or_default(),
              serde_json::to_value(v).unwrap_or_default())
         }
         RecordPatch::PillarId(v) => {
             check_pillar(&st.pool, v).await?;
             ("pillar_id", "update records set pillar_id = $2 where id = $1",
-             serde_json::to_value(rec.pillar_id).unwrap_or_default(),
              serde_json::to_value(v).unwrap_or_default())
         }
         RecordPatch::UnitId(v) => {
             check_unit(&st, v)?;
             ("unit_id", "update records set unit_id = $2 where id = $1",
-             serde_json::to_value(rec.unit_id).unwrap_or_default(),
              serde_json::to_value(v).unwrap_or_default())
         }
         RecordPatch::DueDate(v) => {
@@ -548,7 +555,6 @@ pub async fn patch(
                 return Err(AppError::Forbidden);
             }
             ("due_date", "update records set due_date = $2 where id = $1",
-             serde_json::to_value(rec.due_date).unwrap_or_default(),
              serde_json::to_value(v).unwrap_or_default())
         }
         RecordPatch::AccessMode(v) => {
@@ -559,9 +565,7 @@ pub async fn patch(
             if !matches!(v.as_str(), "public" | "request" | "private") {
                 return Err(AppError::BadRequest("invalid_access_mode"));
             }
-            let old: String = sqlx::query_scalar("select access_mode from records where id = $1")
-                .bind(rec.id).fetch_one(&st.pool).await?;
-            ("access_mode", "update records set access_mode = $2 where id = $1", old.into(), v.into())
+            ("access_mode", "update records set access_mode = $2 where id = $1", v.into())
         }
         RecordPatch::Title(v) => {
             let v = common::text(Some(v), TITLE_MAX, "invalid_title")?
@@ -573,7 +577,7 @@ pub async fn patch(
                     &decision::entry_state(&v, rec.description.as_deref()), quality_override).await?;
                 (reasons, quality) = (r, Some(q));
             }
-            ("title", "update records set title = $2 where id = $1", rec.title.clone().into(), v.into())
+            ("title", "update records set title = $2 where id = $1", v.into())
         }
         RecordPatch::Description(v) => {
             let v = common::text(v, TEXT_MAX, "invalid_description")?;
@@ -587,13 +591,25 @@ pub async fn patch(
                 (reasons, quality) = (r, Some(q));
             }
             ("description", "update records set description = $2 where id = $1",
-             serde_json::to_value(&rec.description).unwrap_or_default(),
              serde_json::to_value(v).unwrap_or_default())
         }
     };
 
+    // Satiri KILITLE, alanin GUNCEL degerini islemin icinde oku: yukaridaki
+    // `rec` istek basinda okundu, arada baska biri yazmis olabilir. Gunluge
+    // yazilan "eski" deger de buradan gelir (eskiden bayat `rec`ten geliyordu).
+    let mut tx = st.pool.begin().await?;
+    let from = sqlx::query_scalar::<_, Option<serde_json::Value>>(
+        "select to_jsonb(r) -> $2::text from records r where r.id = $1 for update")
+        .bind(rec.id).bind(field).fetch_one(&mut *tx).await?
+        .unwrap_or_default();
     if from != to {
-        let mut tx = st.pool.begin().await?;
+        // Son yazan kazanir ANCAK sessizce degil: istemci baska bir deger
+        // gormusken alan degismisse 409. Ayni alana yazan ikinci kisi
+        // hedef degeri zaten bulduysa (yukaridaki `from != to`) hata degil, no-op.
+        if base.as_ref().is_some_and(|b| *b != from) {
+            return Err(AppError::Conflict("stale_field"));
+        }
         bind_value(sqlx::query(sql).bind(rec.id), field, &to)?
             .execute(&mut *tx).await?;
         log(&mut tx, rec.chat_id, me.id, "field_changed", &rec.title, Some(field),

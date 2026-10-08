@@ -47,7 +47,7 @@ export function RecordHead({ d, showPath = true, titleExtra }: { d: RecordDetail
       </div>
       <div className={s.descWrap}>
         <InlineDescription value={r.description} canEdit={d.access.can_edit} bypassQuality={L.can("bypass_text_quality")}
-          save={(description, quality_override) => patchRecord.mutateAsync({ field: "description", value: description, quality_override })} />
+          save={(description, quality_override, base) => patchRecord.mutateAsync({ field: "description", value: description, quality_override, base })} />
       </div>
       {r.status === "closed" && r.closing_note && <MarkdownText value={`Kapanış notu: ${r.closing_note}`} className={s.muted} />}
       {editTitle && <TitleEdit d={d} onClose={() => setEditTitle(false)} />}
@@ -59,14 +59,25 @@ function TitleEdit({ d, onClose }: { d: RecordDetail; onClose: () => void }) {
   const L = useLookup();
   const bypassQuality = L.can("bypass_text_quality");
   const m = usePatchRecord(d.record.id);
-  const [v, setV] = useState(d.record.title);
+  const live = d.record.title;
+  const [v, setV] = useState(live);
+  // Duzenleme ACILDIGINDA gorulen baslik: yazarken baskasi degistirirse sunucu 409 doner.
+  const [opened] = useState(live);
+  // 409'dan sonra kullanici guncel basligi gordu: bilerek ustune yazar (taban = guncel).
+  const [stale, setStale] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [qualityReasons, setQualityReasons] = useState<string[] | null>(null);
   const submit = (quality_override = false) => {
-    m.mutate({ field: "title", value: v, quality_override }, {
+    setErr(null);
+    m.mutate({ field: "title", value: v, quality_override, base: stale ? live : opened }, {
       onSuccess: onClose,
-      onError: (x) => x instanceof ApiError && x.code === "low_quality"
-        ? setQualityReasons(x.reasons) : setErr(errorText(x)),
+      onError: (x) => {
+        if (x instanceof ApiError && x.code === "low_quality") setQualityReasons(x.reasons);
+        else {
+          setStale(x instanceof ApiError && x.code === "stale_field");
+          setErr(errorText(x));
+        }
+      },
     });
   };
   return (
@@ -79,6 +90,7 @@ function TitleEdit({ d, onClose }: { d: RecordDetail; onClose: () => void }) {
         }}
       >
         {err !== null && <p className={ui.error} role="alert">{err}</p>}
+        {stale && <small className={ui.fieldHint}>Güncel hâli: {live}</small>}
         {/* Gorunur etiket dialog basligi; alan adini ondan alir. */}
         <input className={ui.input} aria-labelledby="dlg-title" value={v} onChange={(e) => setV(e.target.value)}
           maxLength={200} required autoFocus />
@@ -88,7 +100,7 @@ function TitleEdit({ d, onClose }: { d: RecordDetail; onClose: () => void }) {
           <Button onClick={onClose}>Vazgeç</Button>
           <Button type="submit" variant="primary" aria-busy={m.isPending}
             disabled={m.isPending || v.trim() === "" || (!bypassQuality && Array.from(v.trim()).length < 5)}>
-            {m.isPending ? "Kaydediliyor…" : "Kaydet"}
+            {m.isPending ? "Kaydediliyor…" : stale ? "Yine de kaydet" : "Kaydet"}
           </Button>
         </div>
       </form>

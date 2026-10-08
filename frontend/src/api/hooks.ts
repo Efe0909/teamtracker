@@ -5,7 +5,8 @@
 // GET atmadan tazelenir, liste/ana sayfa gecersiz sayilir.
 
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
-import { qs, request } from "./client";
+import { ApiError, qs, request } from "./client";
+import { useRealtimeUp, useTopic, type RealtimeEvent } from "./realtime";
 import type {
   ActionPatch,
   AdminView,
@@ -112,24 +113,32 @@ export function useRecords(q: RecordQuery, enabled = true) {
 }
 
 export function useRecord(id: Uuid) {
+  useTopic(`record:${id}`);
   return useQuery({ queryKey: keys.record(id), queryFn: () => request<RecordDetail>("GET", `/api/records/${id}`) });
 }
 
-/** Sohbet yoklamayla tazelenir; sekme gizliyken durur (Query varsayilani). */
+/** Sohbet gercek zamanli tazelenir (`chat:` konusu); soket kapaliyken yoklama
+ *  geri doner. Sekme gizliyken durur (Query varsayilani). */
 export function useFeed(chat: Uuid | undefined) {
+  const up = useRealtimeUp();
+  useTopic(chat === undefined ? undefined : `chat:${chat}`);
   return useQuery({
     queryKey: keys.feed(chat ?? ""),
     queryFn: () => request<Feed>("GET", `/api/chats/${chat ?? ""}/feed`),
     enabled: chat !== undefined,
-    refetchInterval: 15_000,
+    refetchInterval: up ? false : 15_000,
   });
 }
 
+/** Soket aciksa `lists` olayi zaten tazeler; yoklama yalniz kacirilana karsi yavas yedek. */
+const SLOW_FALLBACK = 5 * 60_000;
+
 export function useInbox() {
+  const up = useRealtimeUp();
   return useQuery({
     queryKey: keys.inbox,
     queryFn: () => request<InboxChat[]>("GET", "/api/chats/inbox"),
-    refetchInterval: 30_000,
+    refetchInterval: up ? SLOW_FALLBACK : 30_000,
   });
 }
 
@@ -142,10 +151,11 @@ export function useTeam(id: Uuid) {
 }
 
 export function useNotifications() {
+  const up = useRealtimeUp();
   return useQuery({
     queryKey: keys.notifications,
     queryFn: () => request<NoticeList>("GET", "/api/notifications"),
-    refetchInterval: 60_000,
+    refetchInterval: up ? SLOW_FALLBACK : 60_000,
   });
 }
 
@@ -168,6 +178,48 @@ export function useNodeTree() {
   return useQuery({ queryKey: keys.nodes, queryFn: () => request<TreeView>("GET", "/api/nodes") });
 }
 
+// --- gercek zamanli olaylar ------------------------------------------------
+
+/** Olay yagmurunu (bir kayit yazimi: record + lists + chat) tek tazelemeye indirir.
+ *  `invalidateQueries` yarim kalan istegi iptal edip bastan baslatir; ardisik
+ *  olaylarda ayni sorgu bos yere defalarca cekilmesin. */
+const BATCH_MS = 250;
+const pending = new Map<string, { qc: QueryClient; e: RealtimeEvent }>();
+let flushTimer: ReturnType<typeof setTimeout> | undefined;
+
+function invalidateFor(qc: QueryClient, e: RealtimeEvent): void {
+  const stale = (queryKey: readonly unknown[]) => void qc.invalidateQueries({ queryKey });
+  switch (e.t) {
+    case "record":
+      stale(keys.record(e.id));
+      // Alan, eylem, kart degisikligi sohbet akisina da satir yazar.
+      stale(["feed"]);
+      break;
+    case "chat":
+      stale(keys.feed(e.id));
+      break;
+    case "lists":
+      [keys.recordsAll, keys.home, keys.myActions, keys.inbox, keys.notifications].forEach(stale);
+      break;
+  }
+}
+
+/** Sunucu olayi: ilgili sorgulari bayat say (acik olanlar yeniden cekilir). */
+export function onRealtimeEvent(qc: QueryClient, e: RealtimeEvent): void {
+  pending.set(e.t === "lists" ? "lists" : `${e.t}:${e.id}`, { qc, e });
+  flushTimer ??= setTimeout(() => {
+    flushTimer = undefined;
+    const batch = [...pending.values()];
+    pending.clear();
+    batch.forEach((b) => invalidateFor(b.qc, b.e));
+  }, BATCH_MS);
+}
+
+/** Yeniden baglandi: kacirilan olaylar tekrar oynatilmaz, hepsi tazelenir. */
+export function resyncAll(qc: QueryClient): void {
+  void qc.invalidateQueries();
+}
+
 // --- yazmalar --------------------------------------------------------------
 
 function afterRecordWrite(qc: QueryClient, d: RecordDetail) {
@@ -178,12 +230,26 @@ function afterRecordWrite(qc: QueryClient, d: RecordDetail) {
   void qc.invalidateQueries({ queryKey: keys.myActions });
 }
 
+/** Alan yazmasina "gordugum deger"i ekler: yazma, o alan arada baska biri
+ *  tarafindan degistiyse reddedilir (son yazan sessizce kazanmaz). Cagiran
+ *  `base` verdiyse (acilista goruleni korumasi gereken metin duzenleyici) ona dokunmaz. */
+function withBase(qc: QueryClient, id: Uuid, p: RecordPatch): RecordPatch {
+  if (p.base !== undefined) return p;
+  const seen = qc.getQueryData<RecordDetail>(keys.record(id))?.record;
+  // Onbellekte karsiligi olmayan alan (ornegin access_mode) kontrolsuz kalir.
+  return seen !== undefined && p.field in seen ? { ...p, base: seen[p.field as keyof typeof seen] } : p;
+}
+
 export function usePatchRecord(id: Uuid) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (p: RecordPatch) => request<RecordPatched>("PATCH", `/api/records/${id}`, p),
+    mutationFn: (p: RecordPatch) => request<RecordPatched>("PATCH", `/api/records/${id}`, withBase(qc, id, p)),
     // Onbellege kalite girmez: GET'te yok, bayat karar kayitla yasamasin.
     onSuccess: ({ quality: _, ...d }) => afterRecordWrite(qc, d),
+    // Baska biri alani degistirmis: ekrandaki bayat degeri hemen tazele.
+    onError: (e) => {
+      if (e instanceof ApiError && e.code === "stale_field") void qc.invalidateQueries({ queryKey: keys.record(id) });
+    },
   });
 }
 

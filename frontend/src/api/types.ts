@@ -442,7 +442,13 @@ export type RecordPatch = (
   | { field: "title"; value: string }
   | { field: "description"; value: string | null }
   | { field: "access_mode"; value: AccessMode }
-) & { closing_note?: string; quality_override?: boolean };
+) & {
+  closing_note?: string;
+  quality_override?: boolean;
+  /** Kullanicinin GORDUGU deger; alan baska biri tarafindan degistiyse 409 `stale_field`.
+   *  Verilmezse kancada onbellekteki kayittan doldurulur (`usePatchRecord`). */
+  base?: unknown;
+};
 
 export type ActionPatch = (
   | { field: "status"; value: ActionStatus }
