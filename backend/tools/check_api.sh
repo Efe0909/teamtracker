@@ -139,6 +139,26 @@ w w PATCH "$WT" "/api/records/$BUTCE" '{"field":"priority","value":"low"}' >/dev
 ok "$(DB "select count(*) from activity where verb='field_changed'")" 1 "degismeyen deger iz birakmaz"
 ok "$(w w PATCH "$WT" "/api/records/$BUTCE" "{\"field\":\"unit_id\",\"value\":\"$SELIN\"}" | jq -r .error)" invalid_unit "birim dugum olmali"
 
+t record_patch_stale
+# `base` = istemcinin GORDUGU deger. Alan baska biri tarafindan degistiyse
+# yazma reddedilir (409 stale_field), sessiz son-yazan-kazanir olmaz.
+ok "$(w w PATCH "$WT" "/api/records/$BUTCE" '{"field":"priority","value":"high","base":"critical"}' | jq -r .error)" stale_field "bayat base"
+ok "$(wc_ w PATCH "$WT" "/api/records/$BUTCE" '{"field":"priority","value":"high","base":"critical"}')" 409 "409"
+ok "$(DB "select priority from records where id='$BUTCE'")" low "bayat yazma uygulanmadi"
+ok "$(DB "select count(*) from activity where verb='field_changed'")" 1 "reddedilen yazma iz birakmaz"
+ok "$(w w PATCH "$WT" "/api/records/$BUTCE" '{"field":"priority","value":"high","base":"low"}' | jq -r .record.priority)" high "guncel base kabul"
+ok "$(DB "select detail from activity where verb='field_changed' and target_label='priority' order by created_at desc limit 1")" '{"from":"low","to":"high"}' "gunluk eski degeri islemden alir"
+# Hedef deger zaten orada (iki kisi ayni seyi yapti): hata degil, no-op.
+ok "$(w w PATCH "$WT" "/api/records/$BUTCE" '{"field":"priority","value":"high","base":"critical"}' | jq -r .record.priority)" high "hedef zaten orada"
+# Farkli alan baskasinin degisikligine takilmaz: yalniz kendi alani karsilastirilir.
+ok "$(w w PATCH "$WT" "/api/records/$BUTCE" '{"field":"due_date","value":"2030-01-01"}' | jq -r .record.due_date)" 2030-01-01 "base yok = kontrol yok"
+ok "$(w w PATCH "$WT" "/api/records/$BUTCE" '{"field":"due_date","value":null,"base":"2030-01-01"}' | jq -r .record.due_date)" null "tarih -> null"
+# null gecerli bir base: "bos gormustu".
+ok "$(w w PATCH "$WT" "/api/records/$BUTCE" '{"field":"due_date","value":"2031-01-01","base":null}' | jq -r .record.due_date)" 2031-01-01 "base null, alan bos"
+ok "$(w w PATCH "$WT" "/api/records/$BUTCE" '{"field":"due_date","value":"2032-01-01","base":null}' | jq -r .error)" stale_field "base null ama alan dolu"
+w w PATCH "$WT" "/api/records/$BUTCE" '{"field":"due_date","value":null}' >/dev/null
+w w PATCH "$WT" "/api/records/$BUTCE" '{"field":"priority","value":"low"}' >/dev/null
+
 t record_permissions
 ok "$(g n "/api/records/$VEKALET" | jq -r .access.can_edit)" false "uye kapsam disi"
 ok "$(wc_ n PATCH "$NT" "/api/records/$VEKALET" '{"field":"priority","value":"low"}')" 403 "alan 403"
