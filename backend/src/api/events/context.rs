@@ -16,6 +16,13 @@
 use axum::extract::Query;
 use chrono::Datelike;
 
+// Malzeme onerisi icin daraltilmis istek. Cagiran (modele istek atan islev) henuz yok;
+// o gelene kadar olu kod uyarisi susturuldu.
+#[allow(dead_code)]
+mod materials;
+#[allow(unused_imports)]
+pub(crate) use materials::{material_request, MaterialRequest};
+
 use super::*;
 use crate::{
     otf::SECTIONS,
