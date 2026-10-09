@@ -322,12 +322,18 @@ pub(crate) async fn llm_context(
     State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>, Query(q): Query<Params>,
 ) -> Result<Json<Context>> {
     let id = common::id(&raw)?;
-    require_visible(&st, &me, id).await?;
+    Ok(Json(build_context(&st, &me, id, q.free_text).await?))
+}
+
+/// Uc ile dahili cagiranlarin (modele istek kuran islevler) ortak yolu: ayni gorunurluk
+/// denetimi, ayni `free_text_allowed` kapisi, ayni temizleme.
+async fn build_context(st: &AppState, me: &User, id: Uuid, free_text: bool) -> Result<Context> {
+    require_visible(st, me, id).await?;
     let cfg = crate::api::llm::load(&st.pool).await?;
-    if q.free_text && !cfg.free_text_allowed {
+    if free_text && !cfg.free_text_allowed {
         return Err(AppError::BadRequest("free_text_disabled"));
     }
-    let s = Scrub { rules: &cfg.rules, known: known_names(&st).await?, free_text: q.free_text };
+    let s = Scrub { rules: &cfg.rules, known: known_names(st).await?, free_text };
 
     let head: Head = sqlx::query_as(
         "select e.title, k.name as kind, e.status, e.priority, e.date,
@@ -370,9 +376,9 @@ pub(crate) async fn llm_context(
     attach_providers(&st.pool, &mut materials).await?;
     fill_levels(&st.pool, &mut materials).await?;
 
-    Ok(Json(Context {
+    Ok(Context {
         club: redact::CLUB,
-        free_text: q.free_text,
+        free_text,
         event: EventCtx {
             kind: head.kind,
             status: head.status,
@@ -389,10 +395,10 @@ pub(crate) async fn llm_context(
             place_description: s.free(head.place_description.as_deref()),
         },
         outcomes,
-        otf: otf_ctx(&st, &s, id).await?,
+        otf: otf_ctx(st, &s, id).await?,
         checkpoints,
         materials: materials.into_iter().map(|m| material_ctx(&s, m)).collect(),
-    }))
+    })
 }
 
 #[derive(Deserialize)]
