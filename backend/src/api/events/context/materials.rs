@@ -3,73 +3,53 @@
 //! `llm_context` her is icin ortak, GENIS yuktur: adimlar, teklifler, sponsor, butce,
 //! durumlar... Malzeme onermek icin bunlarin cogu gurultu. Burada `Context`'ten YALNIZ
 //! onerinin dayanacagi alanlar elle secilir:
-//!   * etkinlik: tur, tarih, saat araligi, katilimci sayisi (miktar olcegi)
+//!   * etkinlik: tur, tarih, saat araligi
 //!   * kazanimlar ve OTF: ne yapilacagi, universiteden zaten ne istendigi
 //!   * mevcut kalemler: yalniz ad, tur, adet (ayni sey tekrar onerilmesin)
 //!
 //! YOK: adimlar, durum/oncelik, teklif ve fiyat, butce, sponsor, teslim/satin alma
-//! durumu, kisi ve takim sayilari, kulup/yer yer tutucusu.
+//! durumu, kisi ve takim sayilari, beklenen katilim (sayilari her zaman insan belirler),
+//! kulup/yer yer tutucusu.
 //!
 //! Kaynak her zaman zaten temizlenmis `Context`: bu katman yeni bir veri yolu acmaz,
-//! yalniz daraltir. Fiyat modele gitmez, cevapta da istenmez; gecmis fiyat vektor
-//! indeksi gelince oradan beslenir (spec/73 §6b).
+//! yalniz daraltir. Gecmis fiyat vektor indeksi gelince oradan beslenir (spec/79 §9).
+//!
+//! SISTEM ISTEMI YOK (simdilik): model secilince ayrica yazilir. Burada yalniz ozet ve
+//! cevap semasi var.
 //!
 //! HTTP ucu DEGIL: modele cagri yapan islev `material_request`'i cagirir, donen
 //! `MaterialRequest`'i kendi saglayicisinin govdesine koyar.
 
 use super::*;
 
-const SYSTEM: &str = r#"You help a student club plan events. The user message is a JSON brief of one event.
-Suggest the materials (things to buy, make or rent) the club still needs for it.
-
-Brief:
-- event: kind, date, start_time, end_time, attendees; title, description and place_description only when present.
-- outcomes: what the event should teach or achieve.
-- otf: the facility request sent to the university. otf.items are services the university provides (projector, microphone, cleaning, ...). age_group, purpose and notes appear only when present.
-- existing: materials already on the event's list.
-
-Rules:
-- Suggest only what the brief supports. A thin brief gets a short list, possibly empty. At most 15 items.
-- Never suggest anything already in `existing`, and never suggest what the university provides through `otf.items`.
-- For per-person items scale qty to `attendees`; otherwise use the smallest quantity that works. If attendees is missing, do not guess a headcount: use qty 1 and say so in the reason.
-- type: consumable is used up (paper, food, tape), equipment is reusable (cables, banners), service is hired or booked (printing, catering).
-- Text like {{KISI}} or {{NO}} masks private details. Keep it as it is; never guess what it hides.
-- No prices, no brands, no names of people or companies.
-- Write name and reason in Turkish. name: short generic noun phrase. reason: one sentence tied to something in the brief.
-
-Answer with JSON that matches the given schema, nothing else."#;
-
-/// Cevabin uymasi gereken sema. Alanlar `materials` sutunlariyla hizali: `reason` kalemin
-/// notuna, oncelik insanda kalir (varsayilan). Adet `1..=QTY_MAX` olmali; sema sinir
-/// koymaz (bazi saglayicilar `minimum`'u reddeder), kalemi yazan taraf denetler.
+/// Cevabin uymasi gereken sema (spec/79 §9): yalniz `{items: [{name, description}]}`.
+/// `name` -> `materials.name`, `description` -> `materials.notes`. Adet, tur, oncelik ve
+/// fiyat sorulmaz. Uzunluk/bos denetimi sema degil, kalemi yazan taraf yapar (bazi
+/// saglayicilar `minLength`/`maxLength`'i reddeder).
 fn response_schema() -> serde_json::Value {
     serde_json::json!({
         "type": "object",
         "properties": {
-            "materials": {
+            "items": {
                 "type": "array",
                 "items": {
                     "type": "object",
                     "properties": {
                         "name": { "type": "string" },
-                        "type": { "type": "string", "enum": ["consumable", "equipment", "service"] },
-                        "qty": { "type": "integer" },
-                        "reason": { "type": "string" }
+                        "description": { "type": "string" }
                     },
-                    "required": ["name", "type", "qty", "reason"],
+                    "required": ["name", "description"],
                     "additionalProperties": false
                 }
             }
         },
-        "required": ["materials"],
+        "required": ["items"],
         "additionalProperties": false
     })
 }
 
 /// Modele giden istegin saglayicidan bagimsiz hali.
 pub struct MaterialRequest {
-    /// Sabit talimat.
-    pub system: &'static str,
     /// Kullanici mesaji: `MaterialBrief` JSON'u (sikistirilmis).
     pub user: String,
     /// Cevap semasi (JSON Schema).
@@ -99,8 +79,6 @@ struct EventBrief {
     /// OTF'ten gelir.
     #[serde(skip_serializing_if = "Option::is_none")]
     end_time: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    attendees: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     title: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -179,7 +157,6 @@ impl MaterialBrief {
                 date: c.event.date,
                 start_time: c.event.start_time.clone(),
                 end_time: c.otf.as_ref().and_then(|o| o.end_time.clone()),
-                attendees: c.event.attendees,
                 title: c.event.title.clone(),
                 description: c.event.description.clone(),
                 place_description: c.event.place_description.clone(),
@@ -196,7 +173,6 @@ impl MaterialBrief {
 
     pub fn request(&self) -> MaterialRequest {
         MaterialRequest {
-            system: SYSTEM,
             // Duz structlar: serilestirme hata veremez (repo'daki `to_value(..).unwrap_or_default()` gibi).
             user: serde_json::to_string(self).unwrap_or_default(),
             response_schema: response_schema(),
@@ -206,7 +182,7 @@ impl MaterialBrief {
 
 /// Modele cagri yapan islevin giris noktasi. Gorunurluk denetimi, `free_text_allowed`
 /// kapisi ve temizleme `llm_context` ile AYNI (`build_context`). `free_text` varsayilan
-/// olarak KAPALI verilmeli (spec/73 §6b): acinca baslik, aciklama ve notlar da gider.
+/// olarak KAPALI verilmeli (spec/79 §2 madde 4): acinca baslik, aciklama ve notlar da gider.
 pub(crate) async fn material_request(
     st: &AppState, me: &User, id: Uuid, free_text: bool,
 ) -> Result<MaterialRequest> {
@@ -263,7 +239,7 @@ mod tests {
         assert_eq!(got, json!({
             "event": {
                 "kind": "Eğitim", "date": "2026-10-25", "start_time": "14:00", "end_time": "17:00",
-                "attendees": 40, "title": "Lehim atölyesi", "description": "Temel lehim",
+                "title": "Lehim atölyesi", "description": "Temel lehim",
                 "place_description": "Projeksiyonlu sınıf"
             },
             "outcomes": [{ "name": "Devre okuma", "description": "Şema çözümleme" }],
@@ -290,7 +266,7 @@ mod tests {
         });
         let got = serde_json::to_value(MaterialBrief::from_context(&c)).unwrap();
         assert_eq!(got["event"], json!({
-            "kind": "Eğitim", "date": "2026-10-25", "start_time": "14:00", "end_time": "17:00", "attendees": 40
+            "kind": "Eğitim", "date": "2026-10-25", "start_time": "14:00", "end_time": "17:00"
         }));
         assert_eq!(got["otf"], json!({ "items": [{ "label": "Projeksiyon" }] }));
     }
@@ -318,16 +294,18 @@ mod tests {
         let sent: serde_json::Value = serde_json::from_str(&req.user).unwrap();
         assert_eq!(sent, serde_json::to_value(&brief).unwrap());
         assert!(!req.user.contains('\n'), "kullanici mesaji sikistirilmis olmali");
-        assert!(req.system.contains("existing") && req.system.contains("Turkish"));
 
-        let item = &req.response_schema["properties"]["materials"]["items"];
-        assert_eq!(item["required"], json!(["name", "type", "qty", "reason"]));
-        // Sema degerleri `MaterialType` ile ayni olmali; yeni deger eklenince burasi derlenmez.
-        for v in item["properties"]["type"]["enum"].as_array().unwrap() {
-            match serde_json::from_value::<MaterialType>(v.clone()).unwrap() {
-                MaterialType::Consumable | MaterialType::Equipment | MaterialType::Service => {}
-            }
+        // Yalniz ad ve aciklama: adet, tur, oncelik, fiyat sorulmaz (spec/79 §9).
+        let item = &req.response_schema["properties"]["items"]["items"];
+        assert_eq!(item["required"], json!(["name", "description"]));
+        assert_eq!(item["properties"].as_object().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn brief_has_no_headcount_or_counts() {
+        let sent = MaterialBrief::from_context(&full()).request().user;
+        for key in ["attendees", "participant_count", "team_count"] {
+            assert!(!sent.contains(key), "{key} ozete girmemeli");
         }
-        assert_eq!(item["properties"]["type"]["enum"].as_array().unwrap().len(), 3);
     }
 }

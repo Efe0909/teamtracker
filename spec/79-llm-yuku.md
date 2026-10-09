@@ -190,11 +190,14 @@ silik "öneri kartları". Üretken yapay zekâ ilk kez kullanıcıya görünür.
 12. **Arayüz.** Silik kart; üzerine gelince ✓ / ✕ (dokunmatikte hep görünür). Düşünme
     göstergesi yok: istek yükleniyor durumunda iskelet kart.
 
-**Mevcut koda farkları** (`aef4d3b` `MaterialRequest` bu tasarıma göre yeniden işlenir):
-`attendees` özetten, `qty`/`type`/`reason` şemadan çıkar, `reason` → `description`; sistem
-istemindeki "adedi `attendees`'e göre ölçekle" kuralı kalkar; `rejected` girişi ve sunucu süzgeci
-eklenir; `llm-context`/`llm-restore` kapsam ister; göç 023 `use_generative_ai` kapsamını ekler,
-`labels.ts` ve 75'e satır.
+**Sistem istemi bu spec'te yok.** Model seçilince, çıktı denenerek ayrıca yazılır; şimdilik
+kodda da yok. Önceki taslağın istemi (adet ölçekleme, tür tarifi vb.) kaldırıldı.
+
+**Durum (kod).** Yapıldı: `MaterialBrief` `attendees`'siz, `MaterialRequest` istemsiz
+(`user` + `response_schema`), şema `{items:[{name, description}]}`. Yapılacak: `rejected`
+girişi ve sunucu süzgeci (madde 5, 8, 9), `llm-context`/`llm-restore` için kapsam, göç 023
+(`use_generative_ai`), `labels.ts` ve 75'e satır, `material-suggestions` ucu ve model
+çağrısı, ön yüz (silik kartlar, `sessionStorage`).
 
 ## 10. Sınama
 
