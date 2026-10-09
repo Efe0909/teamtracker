@@ -37,6 +37,9 @@ zorundadır.
    kapatılabilir (§4), kapı kapatılamaz.
 6. **Yetki.** Yükü etkinliği görebilen herkes alır (gizli ikiz → 403, ikizin sohbeti gibi).
    Temizleme ayarını yalnız admin okur ve yazar. Kontrol her ucun ilk satırında.
+   **Değişecek (§9):** üretken yapay zekâ özellikleri `use_generative_ai` kapsamı ister;
+   `llm-context` ve `llm-restore` da (yalnız bu özellikler için anlamlılar) görünürlüğe
+   ek olarak bu kapsamı arayacak.
 7. **Ayar veridir.** Temizleme kuralları DB'de (`llm_config`, tek satır), yeniden derleme
    gerekmez; değişiklik `security_events`'e yazılır (`llm_config_changed`/`_reset`), ayar
    gövdesi yazılmaz.
@@ -133,10 +136,67 @@ anahtarı tutar), `free_text_allowed` ana anahtarı ve kalite sayfasındaki gibi
 - Temizleyici gerçek veride ölçülmedi. TASK-370'teki gibi örnek kümesiyle (serbest
   metinlerden 30-50 tanesi) kaçak/fazla-maskeleme oranına bakılmalı; ölçülmeden "yüksek"
   önayarı varsayılan yapılmaz.
-- Görev başına daraltma (madde 9) ayrı yük tipleri olarak mı, tam yükü süzen tek bir
-  filtre olarak mı kurulacak; hangisi seçilirse §3 tablosuna "hangi görevde" sütunu eklenir.
+- Görev başına daraltma (madde 9): malzeme önerisi için ayrı, tipli bir özet (`MaterialBrief`,
+  `Context`'ten alan alan seçilir) kuruldu; mail taslağı da kendi özetini alacak. Ortak bir
+  süzgeç yok. Mail özetinin alanları yazılırken §3'e "hangi görevde" sütunu eklenir.
+- Parti büyüklüğü (9) ve sayfa boyu (3) ölçümle ayarlanır: reddedilme oranı yüksekse parti
+  küçülür. Kabul/ret sayısı bugün hiçbir yere yazılmıyor (ret istemcide kalır).
 
-## 9. Sınama
+## 9. Malzeme önerisi akışı
+
+**Durum: tasarım** (2026-10-09, Efe). Satın alımlar panosunda, malzeme ekleme alanında
+silik "öneri kartları". Üretken yapay zekâ ilk kez kullanıcıya görünür.
+
+1. **Kapsam.** `use_generative_ai` (tüm üretken özellikler için tek kapsam; mail taslağı da
+   bunu kullanacak). Kapsamı olmayan kullanıcıya **pasif öneri bile gösterilmez**: ön yüz
+   `L.can("use_generative_ai")` yoksa hiçbir şey çizmez, uç 403 döner. Öneriyi kabul
+   edebilmek için `manage_purchases` de gerekir (ikisi birden); kabul edemeyen kişiye
+   gösterilmez. Admin diğer kapsamlar gibi geçer.
+2. **Model.** Düşünme kapalı, yapılandırılmış çıktı veren bir model. Model adı ve kill
+   switch 76'daki `decision_model` / `external_off` kalıbıyla manifestte.
+3. **Çıktı.** Modelden yalnız `{items: [{name, description}]}` istenir; arayüz yalnız listeyi
+   kullanır. `notes`/`metadata` modele yazdırılmaz (kullanılmayan jeton); metadata
+   (model adı, süre, parti kimliği) sunucuda üretilir, kayıt tutulur. `name` →
+   `materials.name`, `description` → `materials.notes`.
+4. **Sayı yok.** Model adet, tür, öncelik, fiyat ya da "N kişiye şu kadar" kuralı üretmez;
+   sayıları her zaman insan belirler. Bu yüzden `attendees` özetten çıkar, şemada `qty`/`type`
+   yok. Kabulde kart varsayılanlarla doğar (`qty = 1`, varsayılan tür, öncelik orta).
+5. **Tekrar yok.** `existing` (etkinliğin `event_materials` kalemleri) özette gider; ayrıca
+   sunucu son süzgeci uygular: önerinin adı (`redact::fold` ile katlanmış) mevcut
+   kalemlerle ve `rejected` ile eşleşirse atılır. Model "yok sayarım" demekle yetinilmez.
+6. **Parti.** Bir istek tek model çağrısıyla N öneri üretir (varsayılan **9**, yapılandırılır);
+   arayüz **3'erli** gösterir. Üçlünün hepsi kabul ya da retle bitmeden sonraki üçlü
+   gelmez. Saklanan parti tükenince yeni istek atılır. Aynı çağrıda üretmek, öneriler
+   arasındaki tekrarı da azaltır.
+7. **Durum istemcide.** Bekleyen parti ve reddedilenler `sessionStorage`'da (etkinlik
+   başına anahtar); sekme kapanınca gider. Sunucu **durumsuz**: JWT ya da çerez yok.
+   Gerekçe: öneri güvenilmeyen gösterim verisidir, kabul normal malzeme ekleme ucundan
+   (yetki ve doğrulama orada) geçer; imzalamak bir şey korumaz. Başka gün reddedilen bir
+   öneri geri gelebilir, bu kabul edilen davranıştır.
+8. **Uç.** `POST /api/events/{id}/material-suggestions` `{rejected: string[]}` →
+   `{items: [{name, description}], batch_id}`. Görünürlük + `use_generative_ai` +
+   `manage_purchases`. İstemciden gelen `rejected` güvenilmez metindir: en çok 50 öğe, öğe
+   başına ≤ 80 karakter, modele gitmeden `redact`'tan geçer (§2 madde 5).
+9. **Çıktı doğrulaması (sunucu).** Boş ad, ≤ 200 sınırını aşan ad, `TEXT_MAX`'ı aşan açıklama
+   atılır; `{{…}}` yer tutucusu içeren öneri atılır (maskeler `materials`'a sızmasın);
+   liste en çok N öğe. Serbest metin açıkken kullanıcı metni modele gidebildiğinden
+   (prompt injection) çıktı yalnız **öneri** sayılır: kabul eden insandır, model hiçbir şeyi
+   kendisi yazmaz.
+10. **Kabul / ret.** Kabul = mevcut `POST …/materials` (kart silikten gerçeğe döner).
+    Ret = istemci listesine eklenir, sunucuya yazılmaz.
+11. **Kötüye kullanım.** "3'ü bitmeden yenisi yok" **yalnız arayüz kuralı**; sunucu
+    zorlamaz (durumsuz). Maliyeti sınırlayan kullanıcı başına hız sınırı (`ratelimit`) ve
+    kill switch.
+12. **Arayüz.** Silik kart; üzerine gelince ✓ / ✕ (dokunmatikte hep görünür). Düşünme
+    göstergesi yok: istek yükleniyor durumunda iskelet kart.
+
+**Mevcut koda farkları** (`aef4d3b` `MaterialRequest` bu tasarıma göre yeniden işlenir):
+`attendees` özetten, `qty`/`type`/`reason` şemadan çıkar, `reason` → `description`; sistem
+istemindeki "adedi `attendees`'e göre ölçekle" kuralı kalkar; `rejected` girişi ve sunucu süzgeci
+eklenir; `llm-context`/`llm-restore` kapsam ister; göç 023 `use_generative_ai` kapsamını ekler,
+`labels.ts` ve 75'e satır.
+
+## 10. Sınama
 
 `redact.rs` birim testleri (kalıplar, tarih/adet dokunulmaz, ek alan adlar, büyük harf,
 kapalı kural, geri doldurma); `backend/tools/check_api.sh` `llm_context` bölümü
