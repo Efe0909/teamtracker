@@ -92,6 +92,7 @@ export type ApiErrorCode =
   | "otf_unreviewed"
   | "root_locked"
   | "operational_locked"
+  | "name_locked"
   | "shape_violation"
   | "type_not_allowed"
   | "invalid_attrs"
@@ -205,6 +206,7 @@ export const ERRORS = {
   otf_unreviewed: "Form başka bir etkinlikten kopyalandı; indirmeden önce gözden geçirip işaretle.",
   root_locked: "Kök düğümler kodla gelir: yalnız adı ve açıklaması değişir; taşınamaz, kapatılamaz, silinemez.",
   operational_locked: "Bu düğüm sistemin yapısının parçası: yalnız adı ve açıklaması değişir.",
+  name_locked: "Bu düğümün adı koddan gelir ve değişmez (Adımlar, Widget'lar, widget'lar); açıklaması değişebilir.",
   shape_violation: "Bu düğümün yapısına uymuyor (yaprak düğüme alt düğüm eklenemez; listede bütün öğeler aynı türde olmalı).",
   type_not_allowed: "Bu tür buraya eklenemez ya da taşınamaz.",
   invalid_attrs: "Düğüm ayarları geçersiz.",

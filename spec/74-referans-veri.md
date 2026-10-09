@@ -72,6 +72,37 @@ create table node_favorites (
      değerlerinden tohumlanır; `events.location_id` eklenir (§5b).
 - Ağaç indeksi (`TreeIndex`) açılışta kurulur; göçten sonra yeniden başlatma yeter.
 
+## 3b. Etkinlik Yönetimi kökü (2026-10-09, Efe)
+
+Etkinlikle ilgili referans veri tek kökün altında toplandı (göç `020_event_management_root.sql`):
+
+```
+Birimler                  [kök, key=units, tree]
+Etkinlik Yönetimi         [kök, key=event_management, list]
+├─ Etkinlik Türleri       [bölüm, key=event_types, list → option]
+├─ Etkinlik Yerleri       [bölüm, key=event_locations, list → location]
+└─ Etkinlik Kazanımları   [bölüm, key=event_outcomes, list → outcome]
+```
+
+- **`key` artık yalnız kökte değil**: kök mutlaka key taşır (`parent_id is null` ⇒ key),
+  ama key'li düğüm kök olmak zorunda değil. Bölümler operational kalır; kilit
+  etiketi "Bölüm" (`locked = operational`), yalnız gerçek kök "Kök" (`root`).
+- **`TreeIndex::root_key(id)` = en yakın key'li ata** (kendisi dahil). Seçiciler,
+  şemalar (`child_rule`, `editor`) ve `under()` bölüm key'iyle çalışmaya devam
+  eder; Etkinlik Yönetimi'nin kendisi `event_management` döner. Bölümler arası
+  taşıma `type_not_allowed`.
+- **Etkinlik Yönetimi** kökünü yalnız admin düzenler (`Editor::Admin`); altına
+  düğüm eklenmez, bölümleri göç yaratır.
+- **Etkinlik Kazanımları**: yer listesi gibi düz liste (`outcome`, leaf), `manage_event_outcomes`
+  scope'u. Görünen ad kısa, **açıklama** ayırt edici: LLM'lerin ve insanların
+  benzer kazanımları birbirinden ayırması için. Henüz etkinliğe bağlanmadı
+  (`events` tablosunda kazanım alanı yok) — liste önce dolsun, bağlama ayrı iş.
+- **Sabit adlar**: adı koddan belli düğümlerin adı değişmez (`409 name_locked`),
+  açıklaması değişir: şablon slotları ("Adımlar", "Widget'lar") ve widget'lar
+  (ad `attrs.widget`'ın katalog adı: "Etkinlik talep formu (OTF)", "Satın alımlar").
+  Widget eklerken ad sorulmaz; türü değişirse ad yeni kataloğu izler. Göç mevcut
+  adları kataloğa çeker.
+
 ## 4. Kurallar
 
 ### 4.1 Kökler

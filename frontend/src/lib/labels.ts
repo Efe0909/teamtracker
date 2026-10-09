@@ -53,6 +53,7 @@ export const NODE_TYPE: Record<NodeType, string> = {
   checkpoint: "Adım",
   widget: "Widget",
   location: "Yer",
+  outcome: "Kazanım",
 };
 
 /** Kapsam anahtari -> ne yapmaya izin verdigi (Python `SCOPES` degerleri).
@@ -71,6 +72,7 @@ export const SCOPE: Readonly<Partial<Record<string, string>>> = {
   manage_events: "Etkinlikleri yönet — her etkinliği düzenle, checkpoint ekle/sil/tarihini değiştir",
   manage_event_types: "Etkinlik türlerini yönet — tür ekle, adımlarını ve widget'larını düzenle (Veri Yönetimi)",
   manage_event_locations: "Etkinlik yerlerini yönet — yer listesini düzenle (Veri Yönetimi)",
+  manage_event_outcomes: "Etkinlik kazanımlarını yönet — kazanım listesini ve açıklamalarını düzenle (Veri Yönetimi)",
   manage_event_widgets: "Etkinlik widget'larını düzenle — şablondan gelen widget'ları ekle/kaldır",
   manage_purchases: "Satın alımları yönet — adım ilerlet, tedarikçi ve fiyat yaz",
   manage_budgets: "Bütçe yaz — kalem bütçesini gir ya da sil (satın alım yetkisine ek)",

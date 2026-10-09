@@ -16,11 +16,13 @@ export type Priority = "critical" | "high" | "medium" | "low";
 /** Hangi turun nerede olabilecegini kok semasi soyler (Rust refdata.rs, spec/74). */
 export type NodeType =
   | "cell" | "machine" | "task" | "step" | "operational" | "generic"
-  | "option" | "checkpoint" | "widget" | "location";
+  | "option" | "checkpoint" | "widget" | "location" | "outcome";
 /** Cocuklara izin: leaf = cocuk yok; list = butun cocuklar ayni turde; tree = serbest. */
 export type Shape = "leaf" | "list" | "tree";
-/** Gocle dogan koklerin sabit anahtarlari: kod koku adla degil bununla bulur. */
-export type RootKey = "units" | "event_types" | "event_locations";
+/** Gocle dogan kok ve bolumlerin sabit anahtarlari: kod bunlari adla degil bununla bulur.
+ *  `event_management` kok; `event_types` / `event_locations` / `event_outcomes` onun bolumleri.
+ *  Dugumun `root_key`'i en yakin key'li atasidir (kendisi dahil). */
+export type RootKey = "units" | "event_management" | "event_types" | "event_locations" | "event_outcomes";
 export type TeamRole = "lead" | "mentor" | "member";
 
 // --- /api/meta -------------------------------------------------------------

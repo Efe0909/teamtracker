@@ -107,7 +107,8 @@ ok "$(jq -c '.teams[0]|keys' <<<"$R")" '["banner_id","chat_id","color","descript
 ok "$(jq '[.teams[]|select(.pillar_id!=null)]|length' <<<"$R")" 2 "pillar takimlari pillar_id tasir"
 ok "$(jq '[.teams[]|select(.name=="Satın Alım")|.node_ids|length][0]' <<<"$R")" 2 "team_nodes: Satin Alim iki dugumde"
 ok "$(jq -c '[.nodes[].node_type]|unique' <<<"$R")" '["cell","checkpoint","generic","machine","operational","option","step","widget"]' "agacta team/pillar turu yok"
-ok "$(jq -c '[.nodes[]|select(.parent_id==null).key]' <<<"$R")" '["units","event_types","event_locations"]' "kokler key ile (spec/74)"
+ok "$(jq -c '[.nodes[]|select(.parent_id==null).key]' <<<"$R")" '["units","event_management"]' "kokler key ile (spec/74)"
+ok "$(jq -c '[.nodes[]|select(.depth==1 and .root_key!="units").key]' <<<"$R")" '["event_types","event_locations","event_outcomes"]' "Etkinlik Yonetimi bolumleri key ile"
 ok "$(jq -c '.me.favorite_nodes' <<<"$R")" '[]' "favoriler bos"
 ok "$(jq '[.nodes[]|select(.depth==0)]|length > 0' <<<"$R")" true "agac koku"
 ok "$(jq '.users[0]|has("email")' <<<"$R")" false "e-posta sizmaz"
@@ -323,7 +324,8 @@ t node_roots_code_only
 UNITS=$(DB "select id from nodes where key='units'")
 TYPES=$(DB "select id from nodes where key='event_types'")
 PLACES=$(DB "select id from nodes where key='event_locations'")
-ok "$(DB "select count(*) from nodes where parent_id is null")" 3 "uc kok (units, event_types, event_locations)"
+ok "$(DB "select count(*) from nodes where parent_id is null")" 2 "iki kok (units, event_management)"
+ok "$(DB "select count(*) from nodes where key is not null and parent_id is not null")" 3 "uc bolum Etkinlik Yonetimi'nin altinda"
 ok "$(DB "select parent_id from nodes where id='$ROOT1'")" "$UNITS" "eski kok Birimler altinda"
 ok "$(DB "select node_type from nodes where id='$ROOT1'")" generic "elle operational generic oldu"
 ok "$(w w POST "$WT" /api/nodes '{"name":"Selin kok denemesi","node_type":"generic","parent_id":null}' | jq -r .error)" root_locked "admin bile kok yaratamaz"
@@ -372,6 +374,37 @@ DB "insert into user_scopes (user_id,scope) values ('$DENIZ','manage_event_types
 ok "$(wc_ n POST "$NT" /api/nodes "{\"name\":\"Deniz turu\",\"parent_id\":\"$TYPES\"}")" 200 "scope ile ekler (dal izni gerekmez)"
 DB "delete from user_scopes where user_id='$DENIZ' and scope='manage_event_types'" >/dev/null
 ok "$(w w POST "$WT" /api/records "{\"kind\":\"task\",\"title\":\"Gecersiz birim kaydi\",\"description\":\"Bu kayit etkinlik turunu birim olarak kullanamaz.\",\"unit_id\":\"$ATOLYE\"}" | jq -r .error)" unit_outside_units "tur birim degil"
+
+t node_event_management
+# Etkinlik Yonetimi: kok yalniz admin; bolumler key'li ama kok degil ("Bolum").
+MGMT=$(DB "select id from nodes where key='event_management'")
+OUTCOMES=$(DB "select id from nodes where key='event_outcomes'")
+R=$(g w /api/nodes)
+ok "$(jq -r ".nodes[]|select(.id==\"$TYPES\").locked" <<<"$R")" operational "bolum kok degil, slot gibi kilitli"
+ok "$(jq -r ".nodes[]|select(.id==\"$MGMT\").locked" <<<"$R")" root "Etkinlik Yonetimi kok"
+ok "$(w w PATCH "$WT" "/api/nodes/$TYPES" '{"is_active":false}' | jq -r .error)" operational_locked "bolum kapatilamaz"
+ok "$(w w PATCH "$WT" "/api/nodes/$TYPES" "{\"parent_id\":\"$PLACES\"}" | jq -r .error)" operational_locked "bolum tasinamaz"
+ok "$(w w DELETE "$WT" "/api/nodes/$PLACES" '' | jq -r .error)" operational_locked "bolum silinemez"
+ok "$(w w POST "$WT" /api/nodes "{\"name\":\"Bolum denemesi\",\"parent_id\":\"$MGMT\"}" | jq -r .error)" type_not_allowed "kokun altina bolum eklenmez"
+ok "$(w n PATCH "$NT" "/api/nodes/$MGMT" '{"description":"Deniz bunu duzenleyemez ki."}' | jq -r .error)" forbidden "kok yalniz admin"
+ok "$(w n POST "$NT" /api/nodes "{\"name\":\"Deniz kazanimi\",\"parent_id\":\"$OUTCOMES\"}" | jq -r .error)" forbidden "manage_event_outcomes yok"
+R=$(w w POST "$WT" /api/nodes "{\"name\":\"Marka bilinirliği\",\"description\":\"Kulübün kampüste tanınırlığını artırır.\",\"parent_id\":\"$OUTCOMES\"}")
+ok "$(jq -r '.nodes[]|select(.name=="Marka bilinirliği").node_type' <<<"$R")" outcome "kazanim turu sunucudan"
+ok "$(jq -r '.nodes[]|select(.name=="Marka bilinirliği").root_key' <<<"$R")" event_outcomes "bolum key'i"
+ok "$(jq -r '.nodes[]|select(.name=="Marka bilinirliği").description' <<<"$R")" "Kulübün kampüste tanınırlığını artırır." "aciklama tutulur"
+DB "insert into user_scopes (user_id,scope) values ('$DENIZ','manage_event_outcomes')" >/dev/null
+ok "$(wc_ n POST "$NT" /api/nodes "{\"name\":\"Deniz kazanimi\",\"parent_id\":\"$OUTCOMES\"}")" 200 "scope ile kazanim ekler"
+DB "delete from user_scopes where user_id='$DENIZ' and scope='manage_event_outcomes'" >/dev/null
+# Sabit adlar: slot ve widget adi koddan; aciklama serbest.
+WID=$(DB "select id from nodes where parent_id='$ATOLYE' and attrs->>'slot'='widgets'")
+ok "$(w w PATCH "$WT" "/api/nodes/$STEPS" '{"name":"Baska ad"}' | jq -r .error)" name_locked "slot adi sabit"
+ok "$(wc_ w PATCH "$WT" "/api/nodes/$STEPS" '{"description":"Hazırlık adımları burada durur."}')" 200 "slot aciklamasi degisir"
+R=$(w w POST "$WT" /api/nodes "{\"name\":\"otf form\",\"parent_id\":\"$WID\",\"attrs\":{\"widget\":\"otf\"}}")
+OTFW=$(jq -r ".nodes[]|select(.parent_id==\"$WID\").id" <<<"$R")
+ok "$(jq -r ".nodes[]|select(.id==\"$OTFW\").name" <<<"$R")" "Etkinlik talep formu (OTF)" "widget adi katalogdan, istekteki ad yok sayilir"
+ok "$(w w PATCH "$WT" "/api/nodes/$OTFW" '{"name":"otf form"}' | jq -r .error)" name_locked "widget adi sabit"
+R=$(w w PATCH "$WT" "/api/nodes/$OTFW" '{"attrs":{"widget":"supplies"}}')
+ok "$(jq -r ".nodes[]|select(.id==\"$OTFW\").name" <<<"$R")" "Satın alımlar" "widget turu degisince ad katalogu izler"
 
 t node_favorites
 ok "$(w w PUT "$WT" "/api/nodes/$MALZEME/favorite" '' | jq -c .)" "[\"$MALZEME\"]" "favori eklenir"
