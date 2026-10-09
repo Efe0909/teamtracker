@@ -426,6 +426,19 @@ Satın alma önerisi, üye maili taslağı gibi işler için modele verilecek ve
   `?free_text=true` `free_text_disabled` döner. Temizleyici garanti değil
   (kayıtsız tek bir ad `capitalized` kapalıyken geçer); ana güvence serbest metnin
   varsayılan kapalı olması. Değişiklik `security_events`'e `llm_config_changed` yazar.
+- **Malzeme önerisi isteği** (`events/context/materials.rs`). `llm-context` her iş için
+  ortak ve geniştir; malzeme önerecek modele adımlar, teklifler, sponsor, bütçe, durum ve
+  öncelik gürültüdür. `MaterialBrief::from_context(&Context)` yalnız önerinin dayandığı
+  alanları elle seçer: tür, tarih, saat aralığı, katılımcı sayısı, kazanımlar, OTF
+  (istenen hizmetler, yaş grubu, amaç, notlar) ve mevcut kalemlerin ad/tür/adedi. **HTTP
+  ucu değil**: modele çağrı yapan işlev `material_request(st, me, id, free_text)` çağırır,
+  `MaterialRequest { system, user, response_schema }` alır, kendi sağlayıcısının gövdesine
+  koyar. Kaynak her zaman temizlenmiş `Context` olduğundan yeni bir veri yolu açılmaz;
+  `free_text` kapısı ve yer tutucular aynen geçerli. OTF'ten istenen hizmetler
+  (projeksiyon, mikrofon...) üniversite sağlar, model bunları malzeme diye önermez.
+  Fiyat ne gönderilir ne istenir. Cevap: `{materials: [{name, type, qty, reason}]}`;
+  `reason` kalemin notuna gider, öncelik insanda kalır, adet `1..=QTY_MAX` denetimini
+  kalemi yazan taraf yapar (şema sınır koymaz).
 - **Sonra:** malzeme ve etkinlikler için vektör indeksi (embedding) gelince geçmişten
   benzer kalem/fiyat bu yükü genişletmeden oradan beslenir; bu yüke geçmiş özeti konmadı.
 
