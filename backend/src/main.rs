@@ -22,6 +22,7 @@ mod mentions;
 mod models;
 mod mail;
 mod otf;
+mod purchases_xlsx;
 mod redact;
 mod refdata;
 mod push;

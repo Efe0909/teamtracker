@@ -85,6 +85,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/materials/{id}/providers", post(events::add_provider))
         .route("/api/material-providers/{id}", patch(events::patch_provider).delete(events::delete_provider))
         .route("/api/materials/{id}/purchased", patch(events::set_purchased))
+        .route("/api/events/{id}/purchases.xlsx", get(events::purchases_xlsx))
         .route("/api/chats/{id}/feed", get(chats::feed))
         .route("/api/chats/{id}/messages", post(chats::post))
         .route("/api/chats/inbox", get(chats::inbox))

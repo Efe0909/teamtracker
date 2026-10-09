@@ -12,7 +12,7 @@ import r from "../../features/record/record.module.css";
 import { ago, formatDay } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
 import { Icon } from "../../ui/icons";
-import { cx, IconButton, Segmented, useToast } from "../../ui/ui";
+import { cx, IconButton, Segmented, ui, useToast } from "../../ui/ui";
 import {
   BOARD_COLUMNS, columnOf, etaOf, isLate, MATERIAL_STAGE, MATERIAL_TYPE, money, priceOf, purchaseHealth,
   purchaseTotals, type PurchaseHealth,
@@ -146,6 +146,10 @@ export function Purchases({ eventId, eventDate, items, onRemove }: {
           {HEALTH[health]}
         </span>
         <span className={s.grow} />
+        <a className={cx(ui.btn, ui["z-sm"])} href={`/api/events/${eventId}/purchases.xlsx`} download
+          title="Onaylı ve teslim edilen kalemler, Excel">
+          <Icon name="download" size={14} /> Excel
+        </a>
         <Segmented label="Görünüm" value={view} onChange={setView}
           options={[{ value: "board", label: "Pano" }, { value: "list", label: "Liste" }]} />
         {onRemove !== undefined && (

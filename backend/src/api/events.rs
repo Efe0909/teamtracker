@@ -15,6 +15,8 @@
 
 use axum::{
     extract::{Path, State},
+    http::header,
+    response::{IntoResponse, Response},
     Json,
 };
 use chrono::{DateTime, NaiveDate, NaiveTime, Utc};
@@ -23,6 +25,7 @@ use sqlx::{PgPool, Postgres};
 use uuid::Uuid;
 
 use crate::{
+    purchases_xlsx,
     api::{common::{self, Body}, records},
     auth::CurrentUser,
     decision,
@@ -1344,6 +1347,86 @@ pub async fn set_purchased(
     Ok(Json(m.pop().ok_or(AppError::NotFound)?))
 }
 
+// --- satin alim Excel'i (assets/satin-alimlar.xlsx) -------------------------------
+
+/// Dokumdeki kalemler: onayli (state 3) ve elde olmayan. Teslim edilenler de onaylidir, burada.
+fn purchase_rows(materials: &[Material]) -> Vec<&Material> {
+    materials.iter().filter(|m| m.state == 3 && !m.owned).collect()
+}
+
+/// Kalemin tedarikcisi: secili teklif, yoksa en dusuk fiyatli (kart kuraliyla ayni).
+fn supplier_of(m: &Material) -> Option<&Provider> {
+    m.chosen_provider_id.and_then(|id| m.providers.iter().find(|p| p.id == id))
+        .or_else(|| m.providers.iter().filter_map(|p| p.price.map(|v| (v, p)))
+            .min_by(|a, b| a.0.total_cmp(&b.0)).map(|(_, p)| p))
+}
+
+/// Excel satiri: sablonun sutunlari (A Malzeme … I Not). Tedarikci ve toplam, "Mail özet"in
+/// okudugu alanlar; sponsor secildiyse tedarikci "Sponsor", toplam 0.
+fn xlsx_row(m: &Material) -> purchases_xlsx::Row {
+    let supplier = if m.sponsor_chosen {
+        "Sponsor".to_string()
+    } else {
+        supplier_of(m).map(|p| p.name.clone().unwrap_or_else(|| p.contact.clone())).unwrap_or_default()
+    };
+    purchases_xlsx::Row {
+        name: m.name.clone(),
+        kind: match m.kind {
+            MaterialType::Consumable => "Sarf",
+            MaterialType::Equipment => "Alet / ekipman",
+            MaterialType::Service => "Hizmet",
+        }.into(),
+        qty: m.qty,
+        supplier,
+        total: if m.sponsor_chosen { Some(0.0) } else { card_price(m) },
+        budget: m.budget,
+        arrival: eta_of(m).map(excel_serial),
+        notes: m.notes.clone().unwrap_or_default(),
+    }
+}
+
+/// Excel seri numarasi: 1899-12-30'dan itibaren gun sayisi (1900 sicrama hatasi sonrasi icin dogru).
+fn excel_serial(d: NaiveDate) -> i64 {
+    NaiveDate::from_ymd_opt(1899, 12, 30).map_or(0, |epoch| (d - epoch).num_days())
+}
+
+/// Kart varisi (`eventModel.etaOf` ile ayni kural): sponsor secildiyse sponsor tarihi, secili
+/// teklifin tarihi, secim yoksa en erken teklif tarihi.
+fn eta_of(m: &Material) -> Option<NaiveDate> {
+    if m.sponsor_chosen { return m.sponsor_date; }
+    match m.chosen_provider_id.and_then(|id| m.providers.iter().find(|p| p.id == id)) {
+        Some(p) => p.arrival_date,
+        None => m.providers.iter().filter_map(|p| p.arrival_date).min(),
+    }
+}
+
+/// `GET /api/events/{id}/purchases.xlsx`: satin alim dokumu. Okuma etkinlik gibi gorunur olmaya bagli.
+pub async fn purchases_xlsx(
+    State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>,
+) -> Result<Response> {
+    let id = common::id(&raw)?;
+    require_visible(&st, &me, id).await?;
+    let ev = load(&st.pool, id).await?;
+    let date = ev.date.map(|d| d.format("%d.%m.%Y").to_string()).unwrap_or_else(|| "tarihsiz".into());
+    let title = format!("Satın alımlar — {}", ev.title);
+    let summary = format!("Etkinlik tarihi: {date} · Yalnız onaylı ve teslim edilen kalemler · dışa aktarım {}",
+        Utc::now().format("%d.%m.%Y"));
+    let detail = detail_of(&st, &me, ev).await?;
+    let rows: Vec<purchases_xlsx::Row> = purchase_rows(&detail.materials).into_iter().map(xlsx_row).collect();
+    let bytes = purchases_xlsx::render(&title, &summary, &rows).map_err(|e| {
+        tracing::error!("satin alim xlsx: {e}");
+        AppError::Conflict("xlsx_template")
+    })?;
+    Ok((
+        [
+            (header::CONTENT_TYPE, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet".to_string()),
+            (header::CACHE_CONTROL, "no-store".into()),
+            (header::CONTENT_DISPOSITION, format!("attachment; filename=\"satin-alimlar-{id}.xlsx\"")),
+        ],
+        bytes,
+    ).into_response())
+}
+
 #[cfg(test)]
 mod material_tests {
     use super::*;
@@ -1427,6 +1510,21 @@ mod material_tests {
         m.sponsor_chosen = false;
         let m = apply(m, patch(r#"{"budget": null}"#)).unwrap();
         assert_eq!((m.budget, m.overage_ln), (None, None));
+    }
+
+    #[test]
+    fn excel_seri_no_dogru() {
+        assert_eq!(NaiveDate::from_ymd_opt(2026, 10, 14).map(excel_serial), Some(46_309));
+    }
+
+    #[test]
+    fn xlsx_yalniz_onayli_ve_elde_olmayan_kalemler() {
+        let v = vec![
+            Material { state: 3, ..mat() },
+            Material { state: 2, ..mat() },
+            Material { state: 3, owned: true, ..mat() },
+        ];
+        assert_eq!(purchase_rows(&v).len(), 1);
     }
 
     #[test]

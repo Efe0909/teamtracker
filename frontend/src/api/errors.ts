@@ -77,6 +77,7 @@ export type ApiErrorCode =
   | "invalid_contact"
   | "invalid_price"
   | "invalid_budget"
+  | "xlsx_template"
   | "invalid_qty"
   | "invalid_provider"
   | "no_sponsor"
@@ -192,6 +193,7 @@ export const ERRORS = {
   invalid_contact: "Tedarikçi boş olamaz ve 300 karakteri aşamaz.",
   invalid_price: "Fiyat geçersiz.",
   invalid_budget: "Bütçe 0'dan büyük olmalı; boş bırakmak bütçeyi siler.",
+  xlsx_template: "Excel dosyası hazırlanamadı. Sunucu kaydı bakılmalı.",
   invalid_qty: "Adet 1 ile 1.000.000 arasında olmalı.",
   invalid_provider: "Seçilen teklif bu kaleme ait değil. Sayfayı yenile.",
   no_sponsor: "Önce kalemi sponsordan iste.",
