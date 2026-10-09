@@ -24,7 +24,8 @@ use crate::{
     api::{common::{self, Body}, events},
     auth::CurrentUser,
     error::{AppError, Result},
-    otf,
+    models::enums::NodeType,
+    otf, refdata,
     state::AppState,
 };
 
@@ -89,6 +90,12 @@ pub struct View {
     fields: Fields,
     items: Vec<Item>,
     contacts: Vec<Uuid>,
+    /// Etkinlik Kazanimlari listesinden secilenler (`event_otf_outcomes`);
+    /// `outcomes` alani yalniz listede olmayan serbest metin.
+    outcome_ids: Vec<Uuid>,
+    /// Secilebilir kazanimlar, agac sirasinda: aktif olanlar + formda secili
+    /// olup sonradan pasiflesenler. `description` ayirt etmek icin.
+    outcome_options: Vec<OutcomeOption>,
     /// Kutu katalogu: ekran bolum ve etiketleri buradan cizer (tek kaynak Rust).
     catalog: Vec<CatalogSection>,
     club_name: String,
@@ -103,6 +110,14 @@ pub struct View {
     autofill_source: Option<Source>,
     /// Bu form kopyayla dolduysa: kaynak ve gozden gecirme durumu.
     review: Option<Review>,
+}
+
+#[derive(Serialize)]
+pub struct OutcomeOption {
+    id: Uuid,
+    name: String,
+    description: Option<String>,
+    is_active: bool,
 }
 
 #[derive(Serialize, sqlx::FromRow)]
@@ -145,7 +160,9 @@ async fn source_of(pool: &PgPool, id: Uuid) -> Result<Option<Source>> {
 async fn snapshot(pool: &PgPool, id: Uuid) -> Result<serde_json::Value> {
     let mut items = load_items(pool, id).await?;
     items.sort_by(|a, b| a.item.cmp(&b.item));
-    Ok(serde_json::json!([load_fields(pool, id).await?, items, load_contacts(pool, id).await?]))
+    let mut outcomes = load_outcome_ids(pool, id).await?;
+    outcomes.sort();
+    Ok(serde_json::json!([load_fields(pool, id).await?, items, load_contacts(pool, id).await?, outcomes]))
 }
 
 #[derive(sqlx::FromRow)]
@@ -184,6 +201,60 @@ async fn load_contacts(pool: &PgPool, id: Uuid) -> Result<Vec<Uuid>> {
         .bind(id).fetch_all(pool).await?)
 }
 
+/// Formdaki "KAZANIMLAR" alani: secilen kazanim adlari satir satir, ardindan
+/// listede olmayan serbest metin. DB'de ayri durur, birlesim yalniz Word'de.
+fn outcomes_text(picked: &[String], free: Option<&str>) -> String {
+    picked.iter().map(String::as_str).chain(free.filter(|s| !s.trim().is_empty()))
+        .collect::<Vec<_>>().join("\n")
+}
+
+/// Secili kazanim id'leri (sirasiz; sira icin `in_tree_order`).
+async fn load_outcome_ids(pool: &PgPool, id: Uuid) -> Result<Vec<Uuid>> {
+    Ok(sqlx::query_scalar("select outcome_id from event_otf_outcomes where event_id = $1")
+        .bind(id).fetch_all(pool).await?)
+}
+
+fn in_tree_order(st: &AppState, mut ids: Vec<Uuid>) -> Vec<Uuid> {
+    let tree = common::tree(st);
+    let rank: std::collections::HashMap<Uuid, usize> =
+        tree.order().iter().enumerate().map(|(i, id)| (*id, i)).collect();
+    ids.sort_by_key(|i| rank.get(i).copied().unwrap_or(usize::MAX));
+    ids
+}
+
+/// Secilebilir kazanimlar: aktif olanlar + formda secili kalan pasifler.
+async fn outcome_options(st: &AppState, selected: &[Uuid]) -> Result<Vec<OutcomeOption>> {
+    let ids: Vec<Uuid> = {
+        let tree = common::tree(st);
+        tree.order().iter().copied()
+            .filter(|i| tree.get(*i).is_some_and(|n| n.node_type == NodeType::Outcome
+                && (n.is_active || selected.contains(i)) && refdata::under(&tree, *i, refdata::EVENT_OUTCOMES)))
+            .collect()
+    };
+    let described: std::collections::HashMap<Uuid, Option<String>> =
+        sqlx::query_as("select id, description from nodes where id = any($1)")
+            .bind(&ids).fetch_all(&st.pool).await?.into_iter().collect();
+    let tree = common::tree(st);
+    Ok(ids.into_iter().filter_map(|i| tree.get(i).map(|n| OutcomeOption {
+        id: i, name: n.name.clone(), is_active: n.is_active,
+        description: described.get(&i).cloned().flatten(),
+    })).collect())
+}
+
+/// Her id Etkinlik Kazanimlari altinda bir `outcome` olmali; yeni secilen aktif
+/// olmali (formda zaten secili pasif kalabilir).
+fn check_outcomes(st: &AppState, ids: &[Uuid], current: &[Uuid]) -> Result<()> {
+    let tree = common::tree(st);
+    for id in ids {
+        let ok = tree.get(*id).is_some_and(|n| n.node_type == NodeType::Outcome
+            && (n.is_active || current.contains(id)) && refdata::under(&tree, *id, refdata::EVENT_OUTCOMES));
+        if !ok {
+            return Err(AppError::BadRequest("invalid_outcome"));
+        }
+    }
+    Ok(())
+}
+
 /// Etkinlikten N is gunu once (hafta sonlari sayilmaz; resmi tatil bilinmiyor).
 fn deadline(date: NaiveDate) -> NaiveDate {
     let mut d = date;
@@ -217,6 +288,8 @@ fn view(
     let deadline = ev.date.map(deadline);
     View {
         fields, items, contacts, autofill_source, review,
+        // Kazanimlar `reply`'de dolar (agac + aciklama sorgusu ister).
+        outcome_ids: Vec::new(), outcome_options: Vec::new(),
         catalog: otf::SECTIONS.iter().map(|s| CatalogSection {
             key: s.key, label: s.label,
             items: s.items.iter().map(|(key, label)| CatalogItem { key, label }).collect(),
@@ -242,8 +315,13 @@ pub async fn get(
 
 async fn reply(st: &AppState, id: Uuid) -> Result<Json<View>> {
     let ev = event_info(&st.pool, id).await?;
-    Ok(Json(view(st, &ev, load_fields(&st.pool, id).await?, load_items(&st.pool, id).await?,
-        load_contacts(&st.pool, id).await?, source_of(&st.pool, id).await?, load_review(&st.pool, id).await?)))
+    let selected = in_tree_order(st, load_outcome_ids(&st.pool, id).await?);
+    let options = outcome_options(st, &selected).await?;
+    let mut v = view(st, &ev, load_fields(&st.pool, id).await?, load_items(&st.pool, id).await?,
+        load_contacts(&st.pool, id).await?, source_of(&st.pool, id).await?, load_review(&st.pool, id).await?);
+    v.outcome_ids = selected;
+    v.outcome_options = options;
+    Ok(Json(v))
 }
 
 #[derive(Deserialize)]
@@ -254,6 +332,9 @@ pub struct Input {
     items: Vec<Item>,
     #[serde(default)]
     contacts: Vec<Uuid>,
+    /// Etkinlik Kazanimlari'ndan secilenler (sira onemsiz; kayit agac sirasinda okunur).
+    #[serde(default)]
+    outcome_ids: Vec<Uuid>,
     /// "Formu gozden gecirdim": kopyayla dolan formun kilidini acar. Kopyadan
     /// sonra en az bir alan degismediyse 409 `otf_review_needs_edit`.
     #[serde(default)]
@@ -293,6 +374,10 @@ pub async fn autofill(
     sqlx::query("insert into event_otf_contacts (event_id, user_id, position)
                  select $1, user_id, position from event_otf_contacts where event_id = $2")
         .bind(id).bind(src).execute(&mut *tx).await?;
+    sqlx::query("delete from event_otf_outcomes where event_id = $1").bind(id).execute(&mut *tx).await?;
+    sqlx::query("insert into event_otf_outcomes (event_id, outcome_id)
+                 select $1, outcome_id from event_otf_outcomes where event_id = $2")
+        .bind(id).bind(src).execute(&mut *tx).await?;
     tx.commit().await?;
     reply(&st, id).await
 }
@@ -328,6 +413,7 @@ pub async fn put(
     for c in &b.contacts {
         crate::api::records::check_user(&st.pool, Some(*c)).await?;
     }
+    check_outcomes(&st, &b.outcome_ids, &load_outcome_ids(&st.pool, id).await?)?;
 
     let before = snapshot(&st.pool, id).await?;
     let mut tx = st.pool.begin().await?;
@@ -357,6 +443,12 @@ pub async fn put(
         sqlx::query("insert into event_otf_contacts (event_id, user_id, position) values ($1, $2, $3)
                      on conflict do nothing")
             .bind(id).bind(c).bind(i as i16).execute(&mut *tx).await?;
+    }
+    sqlx::query("delete from event_otf_outcomes where event_id = $1").bind(id).execute(&mut *tx).await?;
+    for o in &b.outcome_ids {
+        sqlx::query("insert into event_otf_outcomes (event_id, outcome_id) values ($1, $2)
+                     on conflict do nothing")
+            .bind(id).bind(o).execute(&mut *tx).await?;
     }
     tx.commit().await?;
 
@@ -398,6 +490,12 @@ pub async fn docx(
           where c.event_id = $1 order by c.position")
         .bind(id).fetch_all(&st.pool).await?;
 
+    // Kazanimlar: listeden secilenlerin ADLARI (agac sirasinda), sonra serbest metin.
+    let picked_outcomes: Vec<String> = {
+        let ids = in_tree_order(&st, load_outcome_ids(&st.pool, id).await?);
+        let tree = common::tree(&st);
+        ids.iter().filter_map(|i| tree.get(*i)).map(|n| n.name.clone()).collect()
+    };
     let mut text: Vec<(&str, String)> = vec![
         ("club", st.cfg.club_name.clone()),
         ("name_purpose", [Some(ev.title.clone()), f.purpose.clone()].into_iter().flatten()
@@ -414,7 +512,7 @@ pub async fn docx(
         ("advisor", f.advisor.clone().unwrap_or_default()),
         ("attendees", ev.attendees.map(|n| n.to_string()).unwrap_or_default()),
         ("age_group", f.age_group.clone().unwrap_or_default()),
-        ("outcomes", f.outcomes.clone().unwrap_or_default()),
+        ("outcomes", outcomes_text(&picked_outcomes, f.outcomes.as_deref())),
     ];
     // Bolum aciklamasi: once adetli kalemler, sonra serbest not. Bicim universitenin
     // gonderim kuralindan: ekipmanin yanina "+" ve adet ("Projeksiyon+2"; gercek
@@ -473,6 +571,15 @@ mod tests {
         assert_eq!(deadline(d(2026, 10, 26)), d(2026, 10, 21));
         // Cuma etkinligi -> Salı
         assert_eq!(deadline(d(2026, 10, 23)), d(2026, 10, 20));
+    }
+
+    #[test]
+    fn outcomes_text_joins_picked_then_free() {
+        let p = vec!["Marka bilinirliği".to_string(), "Ekip içi bağ".to_string()];
+        assert_eq!(outcomes_text(&p, Some("Sponsor tanışması")), "Marka bilinirliği\nEkip içi bağ\nSponsor tanışması");
+        assert_eq!(outcomes_text(&p, None), "Marka bilinirliği\nEkip içi bağ");
+        assert_eq!(outcomes_text(&[], Some("  ")), "", "bos serbest metin satir eklemez");
+        assert_eq!(outcomes_text(&[], Some("yalniz metin")), "yalniz metin");
     }
 
     #[test]

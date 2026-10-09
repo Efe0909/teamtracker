@@ -905,6 +905,32 @@ ok "$(wc_ n PUT "$NT" "/api/cards/$KP/signup" '{"answer":"yes"}')" 200 "onayli u
 ok "$(w n PUT "$NT" "/api/cards/$KP/vote" '{"options":[0]}' | jq -r .error)" invalid_card_type "onayli uye oy kapisindan gecer"
 w w PATCH "$WT" "/api/records/$KR" '{"field":"access_mode","value":"public"}' >/dev/null
 
+t otf_outcomes
+# OTF kazanimlari: listeden secilenler ayri iliski tablosunda (n:m), serbest
+# metin event_otf.outcomes'ta; Word'de ikisi birlesir.
+OC1=$(DB "select id from nodes where name='Marka bilinirliği' and node_type='outcome'")
+R=$(w w PUT "$WT" "/api/events/$EVID/otf" "{\"outcomes\":\"Sponsor tanışması\",\"outcome_ids\":[\"$OC1\"],\"items\":[],\"contacts\":[]}")
+ok "$(jq -c '.outcome_ids' <<<"$R")" "[\"$OC1\"]" "secilen kazanim doner"
+ok "$(jq -r '.outcomes' <<<"$R")" "Sponsor tanışması" "serbest metin ayri kalir"
+ok "$(jq -r ".outcome_options[]|select(.id==\"$OC1\").description" <<<"$R")" "Kulübün kampüste tanınırlığını artırır." "secenek aciklamayi tasir"
+ok "$(DB "select outcomes from event_otf where event_id='$EVID'")" "Sponsor tanışması" "DB'de yalniz serbest metin"
+ok "$(DB "select count(*) from event_otf_outcomes where event_id='$EVID' and outcome_id='$OC1'")" 1 "iliski tablosunda satir"
+ok "$(w w PUT "$WT" "/api/events/$EVID/otf" "{\"outcome_ids\":[\"$TYPES\"]}" | jq -r .error)" invalid_outcome "baska bolumun dugumu kazanim degil"
+ok "$(w w PUT "$WT" "/api/events/$EVID/otf" "{\"outcome_ids\":[\"$OUTCOMES\"]}" | jq -r .error)" invalid_outcome "bolumun kendisi secilemez"
+ok "$(w w PUT "$WT" "/api/events/$EVID/otf" '{"outcome_ids":["00000000-0000-0000-0000-000000000000"]}' | jq -r .error)" invalid_outcome "olmayan dugum"
+ok "$(DB "select count(*) from event_otf_outcomes where event_id='$EVID'")" 1 "reddedilen kayit iliskiyi bozmadi"
+curl -s -b "$J/w" -o "$J/otf.docx" "$B/api/events/$EVID/otf.docx"
+ok "$(unzip -p "$J/otf.docx" word/document.xml | grep -c "Marka bilinirliği.*Sponsor tanışması")" 1 "Word'de once kazanim adi, sonra serbest metin"
+ok "$(w w DELETE "$WT" "/api/nodes/$OC1" '' | jq -r .error)" node_in_use "kullanilan kazanim silinmez"
+w w PATCH "$WT" "/api/nodes/$OC1" '{"is_active":false}' >/dev/null
+ok "$(g w "/api/events/$EVID/otf" | jq -c "[.outcome_options[]|select(.id==\"$OC1\")|.is_active]")" "[false]" "pasif ama secili kazanim secenekte kalir"
+ok "$(wc_ w PUT "$WT" "/api/events/$EVID/otf" "{\"outcome_ids\":[\"$OC1\"]}")" 200 "secili pasif tutulabilir"
+w w PUT "$WT" "/api/events/$EVID/otf" '{"outcome_ids":[]}' >/dev/null
+ok "$(w w PUT "$WT" "/api/events/$EVID/otf" "{\"outcome_ids\":[\"$OC1\"]}" | jq -r .error)" invalid_outcome "pasif kazanim yeni secilemez"
+ok "$(g w "/api/events/$EVID/otf" | jq -c "[.outcome_options[]|select(.id==\"$OC1\")]|length")" 0 "secili degil + pasif: secenekte yok"
+w w PATCH "$WT" "/api/nodes/$OC1" '{"is_active":true}' >/dev/null
+w w PUT "$WT" "/api/events/$EVID/otf" '{"outcomes":null,"outcome_ids":[]}' >/dev/null
+
 t private_event_and_attachments
 # A4: ikizi gizli etkinlik, ikizin sohbeti gibi uye olmayana 403.
 # A5: gizli kayda bagli ek de; profil fotografi yine herkese.

@@ -95,8 +95,12 @@ Etkinlik Yönetimi         [kök, key=event_management, list]
   düğüm eklenmez, bölümleri göç yaratır.
 - **Etkinlik Kazanımları**: yer listesi gibi düz liste (`outcome`, leaf), `manage_event_outcomes`
   scope'u. Görünen ad kısa, **açıklama** ayırt edici: LLM'lerin ve insanların
-  benzer kazanımları birbirinden ayırması için. Henüz etkinliğe bağlanmadı
-  (`events` tablosunda kazanım alanı yok) — liste önce dolsun, bağlama ayrı iş.
+  benzer kazanımları birbirinden ayırması için. Kullanıcısı OTF widget'ı: formdaki
+  Kazanımlar alanı bu listeden seçilir (`event_otf_outcomes`, n:m, göç 021;
+  silme `node_in_use`, pasifleştirilen seçili kalanlar gösterilmeye devam eder).
+  Listede olmayanlar serbest metin olarak `event_otf.outcomes`'ta durur; Word
+  üretilirken önce seçilen kazanım adları, sonra serbest metin alt alta yazılır.
+  `events` tablosunda kazanım alanı yok.
 - **Sabit adlar**: adı koddan belli düğümlerin adı değişmez (`409 name_locked`),
   açıklaması değişir: şablon slotları ("Adımlar", "Widget'lar") ve widget'lar
   (ad `attrs.widget`'ın katalog adı: "Etkinlik talep formu (OTF)", "Satın alımlar").

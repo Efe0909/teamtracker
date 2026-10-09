@@ -358,11 +358,25 @@ export interface OtfInput extends OtfFields {
   items: OtfItem[];
   /** En cok 3 etkinlik sorumlusu, formdaki sirayla; telefon profilden. */
   contacts: Uuid[];
+  /** Etkinlik Kazanimlari'ndan secilenler (DB'de `event_otf_outcomes`, n:m).
+   *  `outcomes` alani yalniz listede olmayan serbest metin; Word'de ikisi birlesir. */
+  outcome_ids: Uuid[];
   /** "Formu gozden gecirdim" — yalniz PUT'ta; kopyayla dolan formun kilidini acar. */
   reviewed?: boolean;
 }
 
+export interface OtfOutcomeOption {
+  id: Uuid;
+  name: string;
+  /** Benzer kazanimlari ayirt etmek icin (Veri Yonetimi'nde yazilir). */
+  description: string | null;
+  /** Pasif ama formda secili kalanlar da listelenir. */
+  is_active: boolean;
+}
+
 export interface OtfView extends OtfInput {
+  /** Secilebilir kazanimlar, agac sirasinda. */
+  outcome_options: OtfOutcomeOption[];
   /** Kutu katalogu (tek kaynak Rust otf::SECTIONS). `key` bolumun aciklama alanini secer: `${key}_notes`. */
   catalog: { key: "layout" | "av" | "tech" | "host" | "care" | "other"; label: string; items: { key: string; label: string }[] }[];
   club_name: string;

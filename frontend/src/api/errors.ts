@@ -84,6 +84,7 @@ export type ApiErrorCode =
   | "not_approved"
   | "purchased_locked"
   | "invalid_otf_item"
+  | "invalid_outcome"
   | "invalid_quantity"
   | "too_many_contacts"
   | "otf_template"
@@ -198,6 +199,7 @@ export const ERRORS = {
   not_approved: "Önce kalemi Onaylandı adımına getir.",
   purchased_locked: "Maliye satın alındı olarak işaretlemiş. Tedariği değiştirmek için önce o işaret kaldırılmalı.",
   invalid_otf_item: "Formda olmayan bir kalem seçildi. Sayfayı yenile.",
+  invalid_outcome: "Seçilen kazanım listede yok ya da kapatılmış. Sayfayı yenile.",
   invalid_quantity: "Adet 1 ile 10000 arasında olmalı.",
   too_many_contacts: "Formda en çok 3 etkinlik sorumlusu yer alır.",
   otf_template: "Form şablonu okunamadı. Yöneticiye haber ver.",

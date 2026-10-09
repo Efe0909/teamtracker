@@ -330,8 +330,10 @@ Eski formatta, geç ya da kurala uymayan OTF işleme alınmaz.
   yapar: `{{anahtar}}` → değer, işaretli kutu → ☒. Yayında Python yok.
   Üniversite yeni sürüm yayınlarsa araç yeniden koşar; etiket eşleşmezse durur.
   `otf.rs` testleri her anahtarın şablonda olduğunu doğrular.
-- **Veri:** `event_otf` (amaç, bitiş saati, danışman, yaş grubu, kazanımlar,
-  altı bölüm açıklaması), `event_otf_items` (işaretli kutu + isteğe bağlı adet),
+- **Veri:** `event_otf` (amaç, bitiş saati, danışman, yaş grubu, serbest metin
+  kazanımlar, altı bölüm açıklaması), `event_otf_outcomes` (Etkinlik
+  Kazanımları listesinden seçilenler, n:m; Word'de adları serbest metinden önce
+  yazılır — spec/74 §3b), `event_otf_items` (işaretli kutu + isteğe bağlı adet),
   `event_otf_contacts` (en çok 3 sorumlu; telefon profilden). Etkinlikten
   gelenler (ad, tarih, başlangıç saati, yer, katılımcı sayısı) **tekrar tutulmaz**,
   dosya üretilirken okunur.
