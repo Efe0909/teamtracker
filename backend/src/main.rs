@@ -22,6 +22,7 @@ mod mentions;
 mod models;
 mod mail;
 mod otf;
+mod redact;
 mod refdata;
 mod push;
 mod ratelimit;

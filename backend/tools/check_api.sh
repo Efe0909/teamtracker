@@ -931,6 +931,32 @@ ok "$(g w "/api/events/$EVID/otf" | jq -c "[.outcome_options[]|select(.id==\"$OC
 w w PATCH "$WT" "/api/nodes/$OC1" '{"is_active":true}' >/dev/null
 w w PUT "$WT" "/api/events/$EVID/otf" '{"outcomes":null,"outcome_ids":[]}' >/dev/null
 
+t llm_context
+# LLM yuku: kisi/firma/iletisim yapisal olarak YOK, serbest metin varsayilan kapali,
+# acilinca temizleyiciden gecer; yonetim ayari yalniz admin.
+DESC0=$(DB "select coalesce(description,'') from events where id='$EVID'")
+DB "update events set description='Selin ile gorus, ahmet@firma.com, 0532 555 01 17' where id='$EVID'" >/dev/null
+LM=$(uuidgen | tr A-Z a-z)
+DB "insert into materials (id, name) values ('$LM', 'Lazer kesim')" >/dev/null
+DB "insert into event_materials (material_id, event_id) values ('$LM','$EVID')" >/dev/null
+DB "insert into material_providers (material_id, contact, name, price) values ('$LM','0212 555 01 42','Kesimhane Ltd',2480)" >/dev/null
+R=$(g w "/api/events/$EVID/llm-context")
+ok "$(jq -r .club <<<"$R")" "{{KULUP}}" "kulup yer tutucu"
+ok "$(jq -r '.event|has("title") or has("description")' <<<"$R")" false "serbest metin varsayilan kapali"
+ok "$(jq -r '.materials[]|select(.name=="Lazer kesim")|.offers[0]|[.label,.price]|@csv' <<<"$R")" '"Teklif A",2480.0' "teklif: etiket + fiyat"
+ok "$(grep -ciE 'kesimhane|0212|owner_id|created_by|user_id|record_id' <<<"$R")" 0 "firma, iletisim, kimlik alani yok"
+R=$(g w "/api/events/$EVID/llm-context?free_text=true")
+ok "$(jq -r .event.description <<<"$R")" "{{KISI}} ile gorus, {{EPOSTA}}, {{NO}}" "serbest metin temizlenir"
+ok "$(grep -c '@' <<<"$R")" 0 "e-posta sizmadi"
+ok "$(w w PUT "$WT" /api/admin/llm '{"free_text_allowed":false,"rules":{"patterns":true,"known_names":true,"capitalized":false}}' | jq -r .customized)" true "admin ayari kaydeder"
+ok "$(g w "/api/events/$EVID/llm-context?free_text=true" | jq -r .error)" free_text_disabled "serbest metin ana anahtardan kapatilabilir"
+ok "$(wc_ n PUT "$NT" /api/admin/llm '{"free_text_allowed":true,"rules":{"patterns":false,"known_names":false,"capitalized":false}}')" 403 "admin degil ayar yazamaz"
+ok "$(w w PUT "$WT" /api/admin/llm '{"bogus":1}' | jq -r .error)" invalid_body "bilinmeyen alan reddedilir"
+ok "$(w w DELETE "$WT" /api/admin/llm '' | jq -r .customized)" false "varsayilana don"
+ok "$(w w POST "$WT" "/api/events/$EVID/llm-restore" '{"text":"{{KULUP}} / {{YER}}"}' | jq -r .text | grep -c '{{')" 0 "yer tutucular dolar"
+DB "delete from materials where id='$LM'" >/dev/null
+DB "update events set description=nullif('$DESC0','') where id='$EVID'" >/dev/null
+
 t private_event_and_attachments
 # A4: ikizi gizli etkinlik, ikizin sohbeti gibi uye olmayana 403.
 # A5: gizli kayda bagli ek de; profil fotografi yine herkese.

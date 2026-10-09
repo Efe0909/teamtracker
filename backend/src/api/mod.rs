@@ -12,6 +12,7 @@ mod chats;
 mod common;
 mod events;
 mod home;
+mod llm;
 mod meta;
 mod nodes;
 mod notify;
@@ -70,6 +71,8 @@ pub fn router() -> Router<AppState> {
         .route("/api/events/{id}/checkpoints", post(events::add_checkpoint))
         .route("/api/events/{id}/widgets", post(events::add_widget))
         .route("/api/events/{id}/materials", post(events::add_material))
+        .route("/api/events/{id}/llm-context", get(events::llm_context))
+        .route("/api/events/{id}/llm-restore", post(events::llm_restore))
         .route("/api/events/{id}/otf", get(otf::get).put(otf::put))
         .route("/api/events/{id}/otf/autofill", post(otf::autofill))
         .route("/api/events/{id}/otf.docx", get(otf::docx))
@@ -117,6 +120,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/admin/activity", get(admin::activity))
         .route("/api/admin/quality", get(quality::get).put(quality::put).delete(quality::reset))
         .route("/api/admin/quality/try", post(quality::try_it))
+        .route("/api/admin/llm", get(llm::get).put(llm::put).delete(llm::reset))
         .route("/api/admin/users", post(admin::add_user))
         .route("/api/admin/users/{id}", patch(admin::patch_user))
         .route("/api/admin/roles", post(admin::create_role))

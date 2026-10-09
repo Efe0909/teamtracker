@@ -401,6 +401,34 @@ Eski formatta, geç ya da kurala uymayan OTF işleme alınmaz.
   `PATCH/DELETE /api/materials/{id}`, `POST /api/materials/{id}/providers`,
   `DELETE /api/material-providers/{id}`. Yazma uçları güncel ayrıntıyı döner.
 
+## 6b. LLM yükü — kişisel ve kurumsal veri içermeyen etkinlik JSON'u
+
+Satın alma önerisi, üye maili taslağı gibi işler için modele verilecek veri. Uçlar:
+`GET /api/events/{id}/llm-context[?free_text=true]` (etkinliği görebilen herkes),
+`POST …/llm-restore` `{text}` → `{text}`, `GET/PUT/DELETE /api/admin/llm` (yalnız admin).
+
+- **Yapısal güvence.** Yük `events/context.rs`'teki elle seçilmiş structlardan kurulur;
+  `EventRow`/`users` satırı olduğu gibi serileşmez. Yükte YOK: sorumlu, katılımcı,
+  OTF sorumlusu ve danışman, tedarikçi/sponsor adı ve iletişimi (telefon, bağlantı),
+  kulüp adı, yer adı, kayıt/oluşturan kimlikleri. Yeni sütun eklense yüke kendiliğinden
+  girmez. Katılımcı ve takım yalnız sayı; teklifler "Teklif A/B", yalnız fiyat ve tarih.
+- **Yer tutucular.** Kulüp `{{KULUP}}`, yer `{{YER}}` gider; model cevabındaki
+  yer tutucuyu `llm-restore` gerçek değerle doldurur (gerçek değer modele hiç gitmez).
+- **Serbest metin varsayılan KAPALI.** Başlık, açıklama, yer açıklaması, malzeme notu,
+  elle eklenmiş adım etiketi ve OTF metinleri yalnız `?free_text=true` ile gider.
+  Her zaman giden kısa etiketler (malzeme adı, kazanım adı/açıklaması, şablon adım
+  etiketi) de temizleyiciden geçer. Mutlak tarih (`date`) ve haftanın günü gider.
+- **Temizleyici** (`src/redact.rs`), yönetimden (`llm_config`, tek satır JSON) üç kural
+  ayrı ayrı açılıp kapanır: `patterns` (e-posta, bağlantı, 10+ haneli sayı: telefon,
+  TC no, IBAN), `known_names` (veritabanındaki kullanıcı, takım, tedarikçi, kulüp adları;
+  ek alan kelimeler dahil: "Ahmet'e"), `capitalized` (cümle ortasındaki her büyük
+  harfli kelime; kaba, yalnız yüksek şiddet). Ek: `free_text_allowed` kapalıyken
+  `?free_text=true` `free_text_disabled` döner. Temizleyici garanti değil
+  (kayıtsız tek bir ad `capitalized` kapalıyken geçer); ana güvence serbest metnin
+  varsayılan kapalı olması. Değişiklik `security_events`'e `llm_config_changed` yazar.
+- **Sonra:** malzeme ve etkinlikler için vektör indeksi (embedding) gelince geçmişten
+  benzer kalem/fiyat bu yükü genişletmeden oradan beslenir; bu yüke geçmiş özeti konmadı.
+
 ## 6a. Açık sorular
 
 - **Bütçe kaynağı** (sponsor / üniversite): bugün yalnız `has_sponsor`. Maliye

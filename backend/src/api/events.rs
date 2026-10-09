@@ -216,6 +216,10 @@ struct Provider {
     overage_level: Option<u8>,
 }
 
+// LLM yuku (kisisel/kurumsal veriden arindirilmis); `material_cols!` yukarida tanimli.
+mod context;
+pub(crate) use context::{llm_context, llm_restore};
+
 async fn detail_of(st: &AppState, me: &User, event: EventRow) -> Result<Detail> {
     let twin = records::load(&st.pool, event.record_id).await?;
     let can_manage = common::has_scope(st, me, "manage_events").await?;

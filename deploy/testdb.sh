@@ -17,7 +17,7 @@ cd "$(dirname "$0")/.."
 DBN=ekiptakip_testdb
 CT=ekiptakip-db
 STATE=/tmp/ekiptakip-testdb
-PORT=8000
+PORT=${PORT:-8000}   # 8000 baska bir calisma agacinin API'sinde doluysa: PORT=8010 deploy/testdb.sh up
 B=http://127.0.0.1:$PORT
 
 # Postgres iki yerden gelir (PG_MODE ile zorlanabilir):
