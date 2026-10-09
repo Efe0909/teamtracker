@@ -403,44 +403,10 @@ Eski formatta, geç ya da kurala uymayan OTF işleme alınmaz.
 
 ## 6b. LLM yükü — kişisel ve kurumsal veri içermeyen etkinlik JSON'u
 
-Satın alma önerisi, üye maili taslağı gibi işler için modele verilecek veri. Uçlar:
-`GET /api/events/{id}/llm-context[?free_text=true]` (etkinliği görebilen herkes),
-`POST …/llm-restore` `{text}` → `{text}`, `GET/PUT/DELETE /api/admin/llm` (yalnız admin).
-
-- **Yapısal güvence.** Yük `events/context.rs`'teki elle seçilmiş structlardan kurulur;
-  `EventRow`/`users` satırı olduğu gibi serileşmez. Yükte YOK: sorumlu, katılımcı,
-  OTF sorumlusu ve danışman, tedarikçi/sponsor adı ve iletişimi (telefon, bağlantı),
-  kulüp adı, yer adı, kayıt/oluşturan kimlikleri. Yeni sütun eklense yüke kendiliğinden
-  girmez. Katılımcı ve takım yalnız sayı; teklifler "Teklif A/B", yalnız fiyat ve tarih.
-- **Yer tutucular.** Kulüp `{{KULUP}}`, yer `{{YER}}` gider; model cevabındaki
-  yer tutucuyu `llm-restore` gerçek değerle doldurur (gerçek değer modele hiç gitmez).
-- **Serbest metin varsayılan KAPALI.** Başlık, açıklama, yer açıklaması, malzeme notu,
-  elle eklenmiş adım etiketi ve OTF metinleri yalnız `?free_text=true` ile gider.
-  Her zaman giden kısa etiketler (malzeme adı, kazanım adı/açıklaması, şablon adım
-  etiketi) de temizleyiciden geçer. Mutlak tarih (`date`) ve haftanın günü gider.
-- **Temizleyici** (`src/redact.rs`), yönetimden (`llm_config`, tek satır JSON) üç kural
-  ayrı ayrı açılıp kapanır: `patterns` (e-posta, bağlantı, 10+ haneli sayı: telefon,
-  TC no, IBAN), `known_names` (veritabanındaki kullanıcı, takım, tedarikçi, kulüp adları;
-  ek alan kelimeler dahil: "Ahmet'e"), `capitalized` (cümle ortasındaki her büyük
-  harfli kelime; kaba, yalnız yüksek şiddet). Ek: `free_text_allowed` kapalıyken
-  `?free_text=true` `free_text_disabled` döner. Temizleyici garanti değil
-  (kayıtsız tek bir ad `capitalized` kapalıyken geçer); ana güvence serbest metnin
-  varsayılan kapalı olması. Değişiklik `security_events`'e `llm_config_changed` yazar.
-- **Malzeme önerisi isteği** (`events/context/materials.rs`). `llm-context` her iş için
-  ortak ve geniştir; malzeme önerecek modele adımlar, teklifler, sponsor, bütçe, durum ve
-  öncelik gürültüdür. `MaterialBrief::from_context(&Context)` yalnız önerinin dayandığı
-  alanları elle seçer: tür, tarih, saat aralığı, katılımcı sayısı, kazanımlar, OTF
-  (istenen hizmetler, yaş grubu, amaç, notlar) ve mevcut kalemlerin ad/tür/adedi. **HTTP
-  ucu değil**: modele çağrı yapan işlev `material_request(st, me, id, free_text)` çağırır,
-  `MaterialRequest { system, user, response_schema }` alır, kendi sağlayıcısının gövdesine
-  koyar. Kaynak her zaman temizlenmiş `Context` olduğundan yeni bir veri yolu açılmaz;
-  `free_text` kapısı ve yer tutucular aynen geçerli. OTF'ten istenen hizmetler
-  (projeksiyon, mikrofon...) üniversite sağlar, model bunları malzeme diye önermez.
-  Fiyat ne gönderilir ne istenir. Cevap: `{materials: [{name, type, qty, reason}]}`;
-  `reason` kalemin notuna gider, öncelik insanda kalır, adet `1..=QTY_MAX` denetimini
-  kalemi yazan taraf yapar (şema sınır koymaz).
-- **Sonra:** malzeme ve etkinlikler için vektör indeksi (embedding) gelince geçmişten
-  benzer kalem/fiyat bu yükü genişletmeden oradan beslenir; bu yüke geçmiş özeti konmadı.
+Satın alma önerisi ve üye maili taslağı gibi işler için modele, kişisel ve kurumsal veri
+içermeyen etkinlik JSON'u verilir: `GET /api/events/{id}/llm-context`, `POST …/llm-restore`,
+`GET/PUT/DELETE /api/admin/llm`. Değişmezler, yük şeması, temizleyici ve kararlar
+**`79-llm-yuku.md`**'de.
 
 ## 6a. Açık sorular
 
