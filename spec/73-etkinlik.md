@@ -292,8 +292,11 @@ Yeni widget türü tanımlandıkça ilgili türlerin şablonuna eklenir.
 - **Başlık noktası**: "Gerekli mi?" adımını geçmiş ve elde olmayan malzemelere bakar.
   Hepsi onaylı → yeşil · kritik bekleyen var → kırmızı · başka bekleyen var → turuncu ·
   hiçbiri yok → gri. Yanında toplam, onaylı tutar ve son güncelleme (`max(updated_at)`).
-- **Pano** (varsayılan) ya da **liste**. Pano sütunları: Gerekli mi? (karar bekleyen ve
-  tedarikçi aranan) · Tedarikçi bulundu · Onaylandı; "zaten var" kalem Onaylandı'da
+- **Pano** (varsayılan) ya da **liste**. Pano sütunları: **Planlanan** (`state` 0) ·
+  **Tedarikçi aranıyor** (1 ve 2: tedarikçi bulunsa da onay gelene kadar aranıyor sayılır;
+  kartın etiketi aranıyor/bulundu ayrımını gösterir) · **Onaylandı** (3). Sütuna
+  bırakınca yazılan `state`: Planlanan 0, Onaylandı 3, ortadaki sütun teklifi olan kalem
+  için 2, olmayan için 1 (zaten ortadaki kalem değişmez). "Zaten var" kalem Onaylandı'da
   ev ikonuyla durur, toplama girmez. Kart sütunlar arasında sürüklenir (`state` yazar);
   altta **sponsor şeridi**: oraya bırakmak kalemi yerinden almaz, `has_sponsor`
   koyar (kopyası şeritte ad + öncelik olarak görünür). Karta/satıra basınca aynı

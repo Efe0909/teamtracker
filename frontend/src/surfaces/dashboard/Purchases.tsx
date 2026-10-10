@@ -14,7 +14,7 @@ import { useLookup } from "../../lib/lookup";
 import { Icon } from "../../ui/icons";
 import { cx, IconButton, Segmented, ui, useToast } from "../../ui/ui";
 import {
-  BOARD_COLUMNS, columnOf, etaOf, isLate, MATERIAL_STAGE, MATERIAL_TYPE, money, priceOf, purchaseHealth,
+  BOARD_COLUMNS, columnOf, dropState, etaOf, isLate, MATERIAL_STAGE, MATERIAL_TYPE, money, priceOf, purchaseHealth,
   purchaseTotals, type PurchaseHealth,
 } from "./eventModel";
 import d from "./dashboard.module.css";
@@ -79,7 +79,8 @@ export function Purchases({ eventId, eventDate, items, onRemove }: {
       if (m.owned) toast({ text: "Elinde olan kalem sponsordan istenmez.", error: true });
       else if (!m.has_sponsor) run(eventOps.material(id, { has_sponsor: true }));
     } else if (columnOf(m) !== to) {
-      run(eventOps.material(id, m.owned ? { owned: false, state: BOARD_COLUMNS[to]!.state } : { state: BOARD_COLUMNS[to]!.state }));
+      const state = dropState(to, m);
+      run(eventOps.material(id, m.owned ? { owned: false, state } : { state }));
     }
   };
 
@@ -183,7 +184,7 @@ export function Purchases({ eventId, eventDate, items, onRemove }: {
                     <b>{c.name}</b><span className={s.colCount}>{its.length}</span>
                     <span className={s.colSum}>{sum > 0 ? money.format(sum) : ""}</span>
                   </div>
-                  {its.length === 0 ? <p className={s.empty}>Boş.{canEdit ? " Bir kartı buraya sürükle." : ""}</p> : its.map((m) => card(m, i === 0))}
+                  {its.length === 0 ? <p className={s.empty}>Boş.{canEdit ? " Bir kartı buraya sürükle." : ""}</p> : its.map((m) => card(m, i === 1))}
                   {i === 0 && canSuggest && (
                     <SuggestCards key={eventId} eventId={eventId} existing={names} run={run} busy={w.isPending} />
                   )}

@@ -57,19 +57,27 @@ export const MATERIAL_STEPS = ["Gerekli mi?", "Tedarikçi bulundu", "Onaylandı"
 export const MAX_STATE = MATERIAL_STEPS.length;
 
 /** `state` 0..3'un ekran karsiligi (kart etiketi, liste). */
-export const MATERIAL_STAGE = ["Karar bekliyor", "Tedarikçi aranıyor", "Tedarikçi bulundu", "Onaylandı"] as const;
+export const MATERIAL_STAGE = ["Planlanan", "Tedarikçi aranıyor", "Tedarikçi bulundu", "Onaylandı"] as const;
 
-/** Pano sutunlari; `state` = bu sutuna birakilinca yazilan deger. "Gerekli mi?" sutunu
- *  hem karar bekleyeni (0) hem tedarikci arananı (1) tutar. */
+/** Pano sutunlari. Ortadaki, tedarikci bulunsa da onay gelene kadar "aranıyor"dur (1 ve 2);
+ *  kartin etiketi aranıyor/bulundu ayrimini gosterir. */
 export const BOARD_COLUMNS = [
-  { name: "Gerekli mi?", state: 1 },
-  { name: "Tedarikçi bulundu", state: 2 },
-  { name: "Onaylandı", state: 3 },
+  { name: "Planlanan" },
+  { name: "Tedarikçi aranıyor" },
+  { name: "Onaylandı" },
 ] as const;
 
 /** Kalemin pano sutunu; "zaten var" kalem Onaylandi'da durur (ikonuyla ayrilir). */
 export function columnOf(m: Pick<Material, "state" | "owned">): number {
-  return m.owned ? 2 : m.state <= 1 ? 0 : m.state - 1;
+  return m.owned ? 2 : m.state === 0 ? 0 : m.state === 3 ? 2 : 1;
+}
+
+/** Kart `col` sutununa birakilinca yazilan `state`. Ortadaki sutun: teklifi olan kalem
+ *  "tedarikci bulundu" (2), yoksa "aranıyor" (1); zaten orada olan kalem degismez. */
+export function dropState(col: number, m: Pick<Material, "state" | "providers">): number {
+  if (col === 0) return 0;
+  if (col === 2) return 3;
+  return m.state === 1 || m.state === 2 ? m.state : m.providers.length > 0 ? 2 : 1;
 }
 
 export function bestOffer(m: Pick<Material, "providers">): { price: number | null; date: string | null } {

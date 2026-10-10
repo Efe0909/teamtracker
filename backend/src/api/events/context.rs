@@ -28,7 +28,7 @@ use crate::{
 
 const WEEKDAYS: [&str; 7] = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"];
 /// `materials.state` 0..=3'un ekran karsiligi (frontend `MATERIAL_STAGE`).
-const STAGES: [&str; 4] = ["Karar bekliyor", "Tedarikçi aranıyor", "Tedarikçi bulundu", "Onaylandı"];
+const STAGES: [&str; 4] = ["Planlanan", "Tedarikçi aranıyor", "Tedarikçi bulundu", "Onaylandı"];
 const RESTORE_MAX: usize = 20_000;
 /// Uretken yapay zeka ozellikleri kapsami (spec/79 §9): yuk uclari ve oneri bunu arar.
 const USE_AI: &str = "use_generative_ai";
