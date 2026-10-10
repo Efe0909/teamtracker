@@ -103,7 +103,7 @@ export interface Meta {
   /** sort_order, sonra ad; pasifler de gelir. */
   pillars: MetaPillar[];
   nodes: MetaNode[];
-  external_off?: ("decision" | "resend" | "push")[];
+  external_off?: ("decision" | "resend" | "push" | "suggest")[];
   /** Manifest (backend/manifest.json): uygulama surumu ve gelistirici e-postasi. */
   version?: string;
   contact_email?: string;

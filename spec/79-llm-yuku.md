@@ -152,8 +152,13 @@ silik "öneri kartları". Üretken yapay zekâ ilk kez kullanıcıya görünür.
    `L.can("use_generative_ai")` yoksa hiçbir şey çizmez, uç 403 döner. Öneriyi kabul
    edebilmek için `manage_purchases` de gerekir (ikisi birden); kabul edemeyen kişiye
    gösterilmez. Admin diğer kapsamlar gibi geçer.
-2. **Model.** Düşünme kapalı, yapılandırılmış çıktı veren bir model. Model adı ve kill
-   switch 76'daki `decision_model` / `external_off` kalıbıyla manifestte.
+2. **Model.** `deepseek/deepseek-v4.1-flash`, OpenRouter sohbet tamamlama
+   (`/api/v1/chat/completions`) üzerinden. Düşünme kapalı (`reasoning.enabled = false`),
+   yapılandırılmış çıktı (`response_format = json_schema`, `strict`) ve
+   `provider.require_parameters` (şemayı desteklemeyen sağlayıcıya yönlenmesin).
+   Model adı manifestte `suggest_model` (isteğe bağlı, yoksa bu varsayılan), kill switch
+   `external_off: ["suggest"]`; **anahtar `decision` ile aynı `OPENROUTER_API_KEY`**. İstem
+   ve cevap gövdesi loglanmaz (`src/openrouter.rs`).
 3. **Çıktı.** Modelden yalnız `{items: [{name, description}]}` istenir; arayüz yalnız listeyi
    kullanır. `notes`/`metadata` modele yazdırılmaz (kullanılmayan jeton); metadata
    (model adı, süre, parti kimliği) sunucuda üretilir, kayıt tutulur. `name` →

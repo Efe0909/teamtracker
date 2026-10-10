@@ -22,6 +22,8 @@ mod mentions;
 mod models;
 mod mail;
 mod otf;
+#[allow(dead_code)] // `material-suggestions` ucu gelince (spec/79 §9)
+mod openrouter;
 mod purchases_xlsx;
 mod redact;
 mod refdata;

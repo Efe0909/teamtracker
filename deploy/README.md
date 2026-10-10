@@ -29,8 +29,9 @@ derlenir, GitHub release'e yüklenir, makine hazır tarball'i indirir.
 |---|---|
 | `version` | `/api/meta.version`, profil penceresinin altında görünür. `backend/Cargo.toml` ve `frontend/package.json` ile **aynı olmak zorunda** — `cargo test` denetler |
 | `contact_email` | geliştirici e-postası (`/api/meta.contact_email`; `VAPID_SUB` yoksa web push `sub` varsayılanı) |
-| `external_off` | kapatılan dış servisler: `"decision"`, `"resend"`, `"push"` ya da `["all"]`. Bilinmeyen ad **açılışı durdurur** |
-| `decision_model` | OpenRouter model adı |
+| `external_off` | kapatılan dış servisler: `"decision"`, `"resend"`, `"push"`, `"suggest"` ya da `["all"]`. Bilinmeyen ad **açılışı durdurur** |
+| `decision_model` | OpenRouter model adı (kalite denetimi) |
+| `suggest_model` | OpenRouter model adı (malzeme önerisi); isteğe bağlı, yoksa `deepseek/deepseek-v4.1-flash` |
 
 Sürümü yükseltmek: üç yeri (`manifest.json`, `Cargo.toml`, `package.json`) aynı değere
 çek; `cargo update -p ekiptakip --offline` ve `npm install --package-lock-only` kilit
@@ -51,6 +52,7 @@ satırı argümanına, commit'e **yazma**; depo public.
 | Servis | Anahtar (sır) | Anahtar yoksa / `external_off`'taysa |
 |---|---|---|
 | `decision` — kalite denetimi (OpenRouter) | `OPENROUTER_API_KEY` | yalnız uzunluk kuralı (başlık ≥ 5, açıklama ≥ 30 karakter) çalışır |
+| `suggest` — malzeme önerisi (OpenRouter, spec/79 §9) | `OPENROUTER_API_KEY` (`decision` ile **aynı** sır) | öneri üretilmez; kalite denetimi etkilenmez |
 | `resend` — davet postası | `RESEND_API_KEY` | posta `mail_outbox`'ta bekler |
 | `push` — web push | `VAPID_PRIVATE` | bildirim listesi çalışır, push gitmez |
 
