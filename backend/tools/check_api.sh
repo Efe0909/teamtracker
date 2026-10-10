@@ -962,6 +962,11 @@ DB "insert into user_scopes (user_id, scope) values ('$DENIZ','use_generative_ai
 ok "$(code -b "$J/n" "$B/api/events/$EVID/llm-context")" 200 "kapsamli yuku alir"
 ok "$(wc_ n POST "$NT" "/api/events/$EVID/material-suggestions" '{}')" 403 "use_generative_ai tek basina yetmez (manage_purchases de)"
 DB "delete from user_scopes where user_id='$DENIZ' and scope='use_generative_ai'" >/dev/null
+# Kabul edilen oneri: kalem aciklamasini not olarak tasir; asiri uzun not reddedilir.
+R=$(w w POST "$WT" "/api/events/$EVID/materials" '{"name":"Oneri kalemi","notes":"neden gerekli"}')
+ok "$(jq -r '.materials[]|select(.name=="Oneri kalemi")|.notes' <<<"$R")" "neden gerekli" "onerinin aciklamasi not olur"
+ok "$(w w POST "$WT" "/api/events/$EVID/materials" "{\"name\":\"Uzun not\",\"notes\":\"$(head -c 4001 /dev/zero | tr '\0' a)\"}" | jq -r .error)" invalid_notes "asiri uzun not reddedilir"
+DB "delete from materials where name in ('Oneri kalemi','Uzun not')" >/dev/null
 # Anahtarsiz ortam: servis kapali -> 503, hata kodu on yuzde cevrilir.
 ok "$(w w POST "$WT" "/api/events/$EVID/material-suggestions" '{}' | jq -r .error)" suggest_unavailable "anahtarsiz: servis kapali"
 DB "delete from materials where id='$LM'" >/dev/null

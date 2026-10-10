@@ -21,6 +21,7 @@ import type {
   IsoDate,
   MaterialPatch,
   MaterialProvider,
+  MaterialSuggestions,
   ProviderPatch,
   NewEvent,
   OtfInput,
@@ -365,7 +366,9 @@ export const eventOps = {
   addWidget: (id: Uuid, type: WidgetType, record_id: Uuid | null = null): EventOp =>
     ({ method: "POST", path: `/api/events/${id}/widgets`, body: { type, record_id } }),
   dropWidget: (wid: Uuid): EventOp => ({ method: "DELETE", path: `/api/event-widgets/${wid}` }),
-  addMaterial: (id: Uuid, name: string): EventOp => ({ method: "POST", path: `/api/events/${id}/materials`, body: { name } }),
+  /** `notes`: kabul edilen önerinin açıklaması (isteğe bağlı). */
+  addMaterial: (id: Uuid, name: string, notes?: string): EventOp =>
+    ({ method: "POST", path: `/api/events/${id}/materials`, body: notes === undefined ? { name } : { name, notes } }),
   material: (mid: Uuid, p: MaterialPatch): EventOp => ({ method: "PATCH", path: `/api/materials/${mid}`, body: p }),
   dropMaterial: (mid: Uuid): EventOp => ({ method: "DELETE", path: `/api/materials/${mid}` }),
   addProvider: (mid: Uuid, p: Omit<MaterialProvider, "id" | "overage_level">): EventOp =>
@@ -385,6 +388,15 @@ export function useEventWrite() {
       void qc.invalidateQueries({ queryKey: keys.recordsAll });
       void qc.invalidateQueries({ queryKey: keys.record(d.record_id) });
     },
+  });
+}
+
+/** Bir parti malzeme önerisi (tek model çağrısı, ~9 öneri). Sunucu durumsuz: reddedilenler
+ *  istekle gider. Cache'e yazılmaz; parti `lib/suggestions.ts`'te oturum boyunca tutulur. */
+export function useMaterialSuggestions(eventId: Uuid) {
+  return useMutation({
+    mutationFn: (rejected: string[]) =>
+      request<MaterialSuggestions>("POST", `/api/events/${eventId}/material-suggestions`, { rejected }),
   });
 }
 

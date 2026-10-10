@@ -392,6 +392,17 @@ export interface OtfView extends OtfInput {
   review: { copied_from: Uuid | null; copied_title: string | null; needs_review: boolean; edited: boolean } | null;
 }
 
+/** Yapay zekâ önerisi (spec/79 §9): ad + açıklama; sayı yok. Kabulde kalem olur (açıklama = not). */
+export interface MaterialSuggestion {
+  name: string;
+  description: string;
+}
+
+export interface MaterialSuggestions {
+  items: MaterialSuggestion[];
+  batch_id: Uuid;
+}
+
 export interface MaterialPatch {
   name?: string;
   notes?: string | null;

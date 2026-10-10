@@ -220,8 +220,13 @@ düzeni, çay-kahve; 6 mevcut kalem). Sonuç:
 `use_generative_ai` kapsamı (göç 023, `labels.ts`, 75) ve `llm-context`/`llm-restore`/öneri
 ucunda kontrolü; `POST /api/events/{id}/material-suggestions` ve OpenRouter çağrısı
 (`openrouter.rs`); sözleşme testleri (kapsam, anahtarsız 503). Model **gerçek anahtarla
-denenmedi** (`deploy/suggest_try.sh` ile denenir). Yapılacak: ön yüz (silik kartlar,
-`sessionStorage`), kullanıcı başına hız sınırı, istemin denemeyle yazılması.
+denenmedi** (`deploy/suggest_try.sh` ile denenir). Ön yüz yapıldı (`SuggestCards.tsx`,
+`lib/suggestions.ts`): silik kartlar, ✓/✕, 3'erli gösterim, `sessionStorage`; yeni parti
+**yalnız düğmeyle** çekilir (her parti para harcar, hız sınırı henüz yok); kabul edilen
+önerinin açıklaması `POST …/materials` `notes` alanıyla kalemin notu olur. Kapsamı olmayana,
+`manage_purchases`'ı olmayana ya da `external_off: ["suggest"]` iken hiçbir şey çizilmez.
+Yapılacak: istemin denemeyle yazılması; hız sınırı ve çağrı geçmişi/maliyet/model ayarı
+yönetim sayfasına bırakıldı (`spec/llm-yonetim-prompt.md`).
 
 ## 10. Sınama
 

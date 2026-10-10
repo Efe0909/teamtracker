@@ -934,6 +934,9 @@ pub async fn delete_widget(
 #[derive(Deserialize)]
 pub struct NewMaterial {
     name: String,
+    /// Isteğe bağlı: kabul edilen öneri açıklamasıyla gelir (spec/79 §9 madde 10).
+    #[serde(default)]
+    notes: Option<String>,
 }
 
 pub async fn add_material(
@@ -945,10 +948,12 @@ pub async fn add_material(
     require_scope(&st, &me, "manage_purchases").await?;
     let name = common::text(Some(b.name), TITLE_MAX, "invalid_name")?
         .ok_or(AppError::BadRequest("invalid_name"))?;
+    let notes = common::text(b.notes, TEXT_MAX, "invalid_notes")?;
     // Kalem bagimsiz dogar, etkinlige `event_materials` ile baglanir.
     let mut tx = st.pool.begin().await?;
-    let material: Uuid = sqlx::query_scalar("insert into materials (name, created_by) values ($1, $2) returning id")
-        .bind(name).bind(me.id).fetch_one(&mut *tx).await?;
+    let material: Uuid = sqlx::query_scalar(
+        "insert into materials (name, notes, created_by) values ($1, $2, $3) returning id")
+        .bind(name).bind(notes).bind(me.id).fetch_one(&mut *tx).await?;
     sqlx::query("insert into event_materials (material_id, event_id) values ($1, $2)")
         .bind(material).bind(id).execute(&mut *tx).await?;
     tx.commit().await?;
