@@ -112,8 +112,6 @@ struct OtfBrief {
 #[derive(Serialize)]
 struct ItemBrief {
     label: &'static str,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    quantity: Option<i32>,
 }
 
 #[derive(Serialize)]
@@ -134,7 +132,7 @@ impl OtfBrief {
     /// bos nesne modele gitmesin.
     fn from_ctx(o: &OtfCtx) -> Option<Self> {
         let brief = OtfBrief {
-            items: o.items.iter().map(|i| ItemBrief { label: i.label, quantity: i.quantity }).collect(),
+            items: o.items.iter().map(|i| ItemBrief { label: i.label }).collect(),
             age_group: o.age_group.clone(),
             purpose: o.purpose.clone(),
             free_outcomes: o.free_outcomes.clone(),
@@ -243,7 +241,7 @@ mod tests {
             },
             "outcomes": [{ "name": "Devre okuma", "description": "Şema çözümleme" }],
             "otf": {
-                "items": [{ "label": "Projeksiyon", "quantity": 1 }],
+                "items": [{ "label": "Projeksiyon" }],
                 "age_group": "18-25", "purpose": "Tanıtım", "free_outcomes": "Lehim temeli",
                 "notes": [{ "section": "Teknik hizmetler", "text": "Uzatma kablosu" }]
             },
@@ -303,7 +301,7 @@ mod tests {
     #[test]
     fn brief_has_no_headcount_or_counts() {
         let sent = MaterialBrief::from_context(&full()).request().user;
-        for key in ["attendees", "participant_count", "team_count"] {
+        for key in ["attendees", "participant_count", "team_count", "quantity", "qty"] {
             assert!(!sent.contains(key), "{key} ozete girmemeli");
         }
     }
