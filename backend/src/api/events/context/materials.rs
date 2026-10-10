@@ -5,7 +5,7 @@
 //! onerinin dayanacagi alanlar elle secilir:
 //!   * etkinlik: tur, tarih, saat araligi
 //!   * kazanimlar ve OTF: ne yapilacagi, universiteden zaten ne istendigi
-//!   * mevcut kalemler: yalniz ad, tur, adet (ayni sey tekrar onerilmesin)
+//!   * mevcut kalemler: yalniz ad ve tur (ayni sey tekrar onerilmesin; adet yok)
 //!
 //! YOK: adimlar, durum/oncelik, teklif ve fiyat, butce, sponsor, teslim/satin alma
 //! durumu, kisi ve takim sayilari, beklenen katilim (sayilari her zaman insan belirler),
@@ -102,9 +102,9 @@ struct OtfBrief {
     age_group: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     purpose: Option<String>,
-    /// Listede olmayan serbest kazanim metni.
+    /// Listede olmayan serbest kazanim metni (`llm_context`'teki ad ile ayni).
     #[serde(skip_serializing_if = "Option::is_none")]
-    other_outcomes: Option<String>,
+    free_outcomes: Option<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     notes: Vec<NoteBrief>,
 }
@@ -127,7 +127,6 @@ struct ExistingBrief {
     name: String,
     #[serde(rename = "type")]
     kind: MaterialType,
-    qty: i32,
 }
 
 impl OtfBrief {
@@ -138,11 +137,11 @@ impl OtfBrief {
             items: o.items.iter().map(|i| ItemBrief { label: i.label, quantity: i.quantity }).collect(),
             age_group: o.age_group.clone(),
             purpose: o.purpose.clone(),
-            other_outcomes: o.free_outcomes.clone(),
+            free_outcomes: o.free_outcomes.clone(),
             notes: o.notes.iter().map(|n| NoteBrief { section: n.section, text: n.text.clone() }).collect(),
         };
         let empty = brief.items.is_empty() && brief.age_group.is_none() && brief.purpose.is_none()
-            && brief.other_outcomes.is_none() && brief.notes.is_empty();
+            && brief.free_outcomes.is_none() && brief.notes.is_empty();
         (!empty).then_some(brief)
     }
 }
@@ -166,7 +165,7 @@ impl MaterialBrief {
                 .collect(),
             otf: c.otf.as_ref().and_then(OtfBrief::from_ctx),
             existing: c.materials.iter()
-                .map(|m| ExistingBrief { name: m.name.clone(), kind: m.kind, qty: m.qty })
+                .map(|m| ExistingBrief { name: m.name.clone(), kind: m.kind })
                 .collect(),
         }
     }
@@ -245,10 +244,10 @@ mod tests {
             "outcomes": [{ "name": "Devre okuma", "description": "Şema çözümleme" }],
             "otf": {
                 "items": [{ "label": "Projeksiyon", "quantity": 1 }],
-                "age_group": "18-25", "purpose": "Tanıtım", "other_outcomes": "Lehim temeli",
+                "age_group": "18-25", "purpose": "Tanıtım", "free_outcomes": "Lehim temeli",
                 "notes": [{ "section": "Teknik hizmetler", "text": "Uzatma kablosu" }]
             },
-            "existing": [{ "name": "Lehim teli", "type": "consumable", "qty": 10 }]
+            "existing": [{ "name": "Lehim teli", "type": "consumable" }]
         }));
     }
 
