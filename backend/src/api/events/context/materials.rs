@@ -199,12 +199,17 @@ const NAME_MAX: usize = 200;
 /// spec'ten: sayi yok, tekrar yok, universitenin sagladigi onerilmez, maske kopyalanmaz.
 const SYSTEM: &str = "You help a student club plan events. The user message is a JSON brief of one event. \
 Suggest materials (things to buy, make or rent) the club may still need for it.\n\
-- Suggest only what the brief supports; a thin brief gets a short list, possibly empty. At most 9 items.\n\
-- Never repeat anything in `existing` or `rejected`, and never suggest what the university already \
-provides (`otf.items`).\n\
+- Be selective: suggest only items this event clearly needs, given its kind, purpose and what \
+participants will do. Skip generic filler (notebooks, tablecloths, trays, display stands) unless the \
+brief points to it. A thin brief gets a short list, possibly empty. At most 9 items.\n\
+- Never repeat anything in `existing` or `rejected`. Do not suggest parts that normally come inside an \
+`existing` item (for example a kit's own boards or cables).\n\
+- Do not suggest what the university already covers: whatever `otf.items` lists (a seating layout \
+covers tables and chairs, for example) and whatever the `otf` notes ask the university to arrange.\n\
 - No quantities, prices, brands, or names of people or companies.\n\
 - Text like {{KISI}} or {{NO}} masks private details: never guess what it hides, never copy it.\n\
-- name: short generic noun phrase in Turkish. description: one short Turkish sentence tied to the brief.";
+- name: short generic noun phrase in plain, common Turkish. description: one short sentence (at most \
+12 words) saying what it is used for in this event.";
 
 #[derive(Deserialize)]
 pub struct SuggestIn {

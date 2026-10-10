@@ -200,6 +200,21 @@ silik "öneri kartları". Üretken yapay zekâ ilk kez kullanıcıya görünür.
 (sayı yok, tekrar yok, üniversitenin sağladığı önerilmez, maske kopyalanmaz). Denemeden
 çıkan sonuçla değiştirilecek; önceki taslağın istemi (adet ölçekleme, tür tarifi) kaldırıldı.
 
+**İlk deneme (2026-10-10, `deepseek/deepseek-v4.1-flash`, deneysel istem v1).** "Robotik
+atölyesi" örneği (18 kişi, OTF'te Arduino/robot kolu amacı; projeksiyon, mikrofon, sınıf
+düzeni, çay-kahve; 6 mevcut kalem). Sonuç:
+- Parametreler kabul edildi (400 yok): `reasoning.enabled=false`, `json_schema strict`,
+  `require_parameters`. Süre 3,4-6 sn, parti 7-8 öneri (9'a ulaşmıyor). Cevap hep şemaya uydu;
+  sunucu süzgeci hiçbir şey atmadı (`asked == kept`), model mevcut kalemleri kendi tekrar etmedi.
+- `rejected` işe yaradı: ilk 3 öneri ikinci partide gelmedi.
+- Serbest metin açıkken (amaç: "robot kolu") öneriler belirgin biçimde daha ilgili (servo motor,
+  havya istasyonu); kapalıyken genel elektronik atölyesi listesi.
+- Sorunlar (istem v2'nin hedefi): (1) dolgu öneriler (not defteri, masa örtüsü, atölye tepsisi,
+  sergi standı); (2) üniversitenin sağladığını önerme (OTF'te sınıf düzeni varken "çalışma
+  masası", notta priz isteniyorken "uzatmalı priz"); (3) mevcut Arduino setinin içindekini
+  önerme (breadboard, jumper kablo); (4) Türkçe hatası ("Yan keski — eleştirme ve kesme işleri").
+  v2 bunlara kural ekledi; yeniden denenmedi.
+
 **Durum (kod).** Yapıldı: `MaterialBrief` sayısız, şema `{items:[{name, description}]}`;
 `rejected` girişi; sunucu süzgeci (`sanitize`: tekrar, maske, boş/uzun, en çok 9);
 `use_generative_ai` kapsamı (göç 023, `labels.ts`, 75) ve `llm-context`/`llm-restore`/öneri
