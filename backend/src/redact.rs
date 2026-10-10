@@ -89,7 +89,7 @@ fn matches(list: &[String], word: &str) -> bool {
 }
 
 /// Kucuk harfe, Turkce harfler ASCII'ye: "AYŞE", "Ayşe", "ayse" ayni kelime.
-fn fold(w: &str) -> String {
+pub fn fold(w: &str) -> String {
     w.chars()
         .map(|c| match c {
             'İ' | 'I' | 'ı' => 'i',

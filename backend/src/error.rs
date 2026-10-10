@@ -22,6 +22,8 @@ pub enum AppError {
     /// Karar modeli metni zayif buldu (spec/76): 422 `low_quality` + `reasons`
     /// (soru adlari). Istemci `quality_override: true` ile yine gonderebilir.
     LowQuality(Vec<&'static str>),
+    /// Dis servis kapali ya da cevap vermedi (ornegin "suggest_unavailable"): 503.
+    Unavailable(&'static str),
     Db(sqlx::Error),
 }
 
@@ -44,6 +46,7 @@ impl IntoResponse for AppError {
             AppError::NotFound => (StatusCode::NOT_FOUND, "not_found"),
             AppError::BadRequest(c) => (StatusCode::BAD_REQUEST, *c),
             AppError::Conflict(c) => (StatusCode::CONFLICT, *c),
+            AppError::Unavailable(c) => (StatusCode::SERVICE_UNAVAILABLE, *c),
             AppError::LowQuality(reasons) => {
                 return (StatusCode::UNPROCESSABLE_ENTITY,
                     Json(serde_json::json!({ "error": "low_quality", "reasons": reasons }))).into_response();

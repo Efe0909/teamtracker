@@ -16,12 +16,9 @@
 use axum::extract::Query;
 use chrono::Datelike;
 
-// Malzeme onerisi icin daraltilmis istek. Cagiran (modele istek atan islev) henuz yok;
-// o gelene kadar olu kod uyarisi susturuldu.
-#[allow(dead_code)]
+// Malzeme onerisi: daraltilmis istek + model cagrisi + sunucu suzgeci (spec/79 §9).
 mod materials;
-#[allow(unused_imports)]
-pub(crate) use materials::{material_request, MaterialRequest};
+pub(crate) use materials::material_suggestions;
 
 use super::*;
 use crate::{
@@ -33,6 +30,8 @@ const WEEKDAYS: [&str; 7] = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "C
 /// `materials.state` 0..=3'un ekran karsiligi (frontend `MATERIAL_STAGE`).
 const STAGES: [&str; 4] = ["Karar bekliyor", "Tedarikçi aranıyor", "Tedarikçi bulundu", "Onaylandı"];
 const RESTORE_MAX: usize = 20_000;
+/// Uretken yapay zeka ozellikleri kapsami (spec/79 §9): yuk uclari ve oneri bunu arar.
+const USE_AI: &str = "use_generative_ai";
 
 #[derive(Deserialize)]
 pub struct Params {
@@ -332,9 +331,10 @@ pub(crate) async fn llm_context(
     Ok(Json(build_context(&st, &me, id, q.free_text).await?))
 }
 
-/// Uc ile dahili cagiranlarin (modele istek kuran islevler) ortak yolu: ayni gorunurluk
-/// denetimi, ayni `free_text_allowed` kapisi, ayni temizleme.
+/// Uc ile dahili cagiranlarin (modele istek kuran islevler) ortak yolu: ayni kapsam ve
+/// gorunurluk denetimi, ayni `free_text_allowed` kapisi, ayni temizleme.
 async fn build_context(st: &AppState, me: &User, id: Uuid, free_text: bool) -> Result<Context> {
+    require_scope(st, me, USE_AI).await?;
     require_visible(st, me, id).await?;
     let cfg = crate::api::llm::load(&st.pool).await?;
     if free_text && !cfg.free_text_allowed {
@@ -424,6 +424,7 @@ pub(crate) async fn llm_restore(
     State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>, Body(b): Body<RestoreIn>,
 ) -> Result<Json<RestoreOut>> {
     let id = common::id(&raw)?;
+    require_scope(&st, &me, USE_AI).await?;
     require_visible(&st, &me, id).await?;
     if b.text.chars().count() > RESTORE_MAX {
         return Err(AppError::BadRequest("invalid_body"));

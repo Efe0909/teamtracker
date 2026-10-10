@@ -954,6 +954,16 @@ ok "$(wc_ n PUT "$NT" /api/admin/llm '{"free_text_allowed":true,"rules":{"patter
 ok "$(w w PUT "$WT" /api/admin/llm '{"bogus":1}' | jq -r .error)" invalid_body "bilinmeyen alan reddedilir"
 ok "$(w w DELETE "$WT" /api/admin/llm '' | jq -r .customized)" false "varsayilana don"
 ok "$(w w POST "$WT" "/api/events/$EVID/llm-restore" '{"text":"{{KULUP}} / {{YER}}"}' | jq -r .text | grep -c '{{')" 0 "yer tutucular dolar"
+# Kapsam: use_generative_ai yoksa yuk ucu ve oneri 403; oneri ayrica manage_purchases ister.
+ok "$(code -b "$J/n" "$B/api/events/$EVID/llm-context")" 403 "kapsamsiz kullanici yuku alamaz"
+ok "$(wc_ n POST "$NT" "/api/events/$EVID/llm-restore" '{"text":"x"}')" 403 "geri doldurma da kapsam ister"
+ok "$(wc_ n POST "$NT" "/api/events/$EVID/material-suggestions" '{}')" 403 "kapsamsiz oneri"
+DB "insert into user_scopes (user_id, scope) values ('$DENIZ','use_generative_ai') on conflict do nothing" >/dev/null
+ok "$(code -b "$J/n" "$B/api/events/$EVID/llm-context")" 200 "kapsamli yuku alir"
+ok "$(wc_ n POST "$NT" "/api/events/$EVID/material-suggestions" '{}')" 403 "use_generative_ai tek basina yetmez (manage_purchases de)"
+DB "delete from user_scopes where user_id='$DENIZ' and scope='use_generative_ai'" >/dev/null
+# Anahtarsiz ortam: servis kapali -> 503, hata kodu on yuzde cevrilir.
+ok "$(w w POST "$WT" "/api/events/$EVID/material-suggestions" '{}' | jq -r .error)" suggest_unavailable "anahtarsiz: servis kapali"
 DB "delete from materials where id='$LM'" >/dev/null
 DB "update events set description=nullif('$DESC0','') where id='$EVID'" >/dev/null
 

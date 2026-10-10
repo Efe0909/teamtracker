@@ -195,14 +195,18 @@ silik "öneri kartları". Üretken yapay zekâ ilk kez kullanıcıya görünür.
 12. **Arayüz.** Silik kart; üzerine gelince ✓ / ✕ (dokunmatikte hep görünür). Düşünme
     göstergesi yok: istek yükleniyor durumunda iskelet kart.
 
-**Sistem istemi bu spec'te yok.** Model seçilince, çıktı denenerek ayrıca yazılır; şimdilik
-kodda da yok. Önceki taslağın istemi (adet ölçekleme, tür tarifi vb.) kaldırıldı.
+**Sistem istemi bu spec'te yok.** Gerçek istem, model denenerek ayrıca yazılır. Kodda şimdilik
+**deneysel** kısa bir istem duruyor (`materials.rs` `SYSTEM`): spec'teki kuralları söyler
+(sayı yok, tekrar yok, üniversitenin sağladığı önerilmez, maske kopyalanmaz). Denemeden
+çıkan sonuçla değiştirilecek; önceki taslağın istemi (adet ölçekleme, tür tarifi) kaldırıldı.
 
-**Durum (kod).** Yapıldı: `MaterialBrief` `attendees`'siz, `MaterialRequest` istemsiz
-(`user` + `response_schema`), şema `{items:[{name, description}]}`. Yapılacak: `rejected`
-girişi ve sunucu süzgeci (madde 5, 8, 9), `llm-context`/`llm-restore` için kapsam, göç 023
-(`use_generative_ai`), `labels.ts` ve 75'e satır, `material-suggestions` ucu ve model
-çağrısı, ön yüz (silik kartlar, `sessionStorage`).
+**Durum (kod).** Yapıldı: `MaterialBrief` sayısız, şema `{items:[{name, description}]}`;
+`rejected` girişi; sunucu süzgeci (`sanitize`: tekrar, maske, boş/uzun, en çok 9);
+`use_generative_ai` kapsamı (göç 023, `labels.ts`, 75) ve `llm-context`/`llm-restore`/öneri
+ucunda kontrolü; `POST /api/events/{id}/material-suggestions` ve OpenRouter çağrısı
+(`openrouter.rs`); sözleşme testleri (kapsam, anahtarsız 503). Model **gerçek anahtarla
+denenmedi** (`deploy/suggest_try.sh` ile denenir). Yapılacak: ön yüz (silik kartlar,
+`sessionStorage`), kullanıcı başına hız sınırı, istemin denemeyle yazılması.
 
 ## 10. Sınama
 

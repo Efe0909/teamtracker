@@ -17,8 +17,8 @@
 //! SISTEM ISTEMI YOK (simdilik): model secilince ayrica yazilir. Burada yalniz ozet ve
 //! cevap semasi var.
 //!
-//! HTTP ucu DEGIL: modele cagri yapan islev `material_request`'i cagirir, donen
-//! `MaterialRequest`'i kendi saglayicisinin govdesine koyar.
+//! Uc: `material_suggestions` (kapsam + `manage_purchases`), `openrouter::structured` ile
+//! modeli cagirir, cevabi `sanitize` ile suzer.
 
 use super::*;
 
@@ -67,6 +67,9 @@ pub struct MaterialBrief {
     otf: Option<OtfBrief>,
     /// Bos olsa da gider: "listede hicbir sey yok" bilgisi.
     existing: Vec<ExistingBrief>,
+    /// Kullanicinin onceki istekte reddettigi oneri adlari (temizlenmis); bos ise anahtar yok.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    rejected: Vec<String>,
 }
 
 #[derive(Serialize)]
@@ -165,7 +168,13 @@ impl MaterialBrief {
             existing: c.materials.iter()
                 .map(|m| ExistingBrief { name: m.name.clone(), kind: m.kind })
                 .collect(),
+            rejected: Vec::new(),
         }
+    }
+
+    pub fn with_rejected(mut self, rejected: Vec<String>) -> Self {
+        self.rejected = rejected;
+        self
     }
 
     pub fn request(&self) -> MaterialRequest {
@@ -177,14 +186,126 @@ impl MaterialBrief {
     }
 }
 
-/// Modele cagri yapan islevin giris noktasi. Gorunurluk denetimi, `free_text_allowed`
-/// kapisi ve temizleme `llm_context` ile AYNI (`build_context`). `free_text` varsayilan
-/// olarak KAPALI verilmeli (spec/79 §2 madde 4): acinca baslik, aciklama ve notlar da gider.
-pub(crate) async fn material_request(
-    st: &AppState, me: &User, id: Uuid, free_text: bool,
-) -> Result<MaterialRequest> {
-    let ctx = build_context(st, me, id, free_text).await?;
-    Ok(MaterialBrief::from_context(&ctx).request())
+// --- uc ------------------------------------------------------------------------
+
+/// Bir istekte uretilen oneri sayisi; arayuz 3'erli gosterir (spec/79 §9 madde 6).
+const BATCH: usize = 9;
+/// Istemciden gelen `rejected`: en yeni bu kadar, her biri en cok bu uzunlukta.
+const REJECTED_MAX: usize = 50;
+const REJECTED_LEN: usize = 80;
+const NAME_MAX: usize = 200;
+
+/// DENEYSEL istem (spec/79 §9: gercek istem model denenerek yazilacak). Kalibi sartlar
+/// spec'ten: sayi yok, tekrar yok, universitenin sagladigi onerilmez, maske kopyalanmaz.
+const SYSTEM: &str = "You help a student club plan events. The user message is a JSON brief of one event. \
+Suggest materials (things to buy, make or rent) the club may still need for it.\n\
+- Suggest only what the brief supports; a thin brief gets a short list, possibly empty. At most 9 items.\n\
+- Never repeat anything in `existing` or `rejected`, and never suggest what the university already \
+provides (`otf.items`).\n\
+- No quantities, prices, brands, or names of people or companies.\n\
+- Text like {{KISI}} or {{NO}} masks private details: never guess what it hides, never copy it.\n\
+- name: short generic noun phrase in Turkish. description: one short Turkish sentence tied to the brief.";
+
+#[derive(Deserialize)]
+pub struct SuggestIn {
+    /// Onceki partilerde reddedilenler; yalniz modele ipucu, guvenilmeyen girdi.
+    #[serde(default)]
+    rejected: Vec<String>,
+    /// Varsayilan KAPALI (spec/79 §2 madde 4).
+    #[serde(default)]
+    free_text: bool,
+}
+
+#[derive(Deserialize)]
+struct Raw {
+    items: Vec<RawItem>,
+}
+
+#[derive(Deserialize)]
+struct RawItem {
+    name: String,
+    description: String,
+}
+
+#[derive(Serialize, Debug, PartialEq)]
+pub struct Suggestion {
+    name: String,
+    description: String,
+}
+
+#[derive(Serialize)]
+pub struct SuggestOut {
+    items: Vec<Suggestion>,
+    /// Sunucu tarafi uretim kimligi (log/olcum icin).
+    batch_id: Uuid,
+}
+
+/// Karsilastirma anahtari: Turkce harf katlamali, yalniz harf/rakam ("Lehim teli." = "lehim teli").
+fn key(s: &str) -> String {
+    redact::fold(s).chars().filter(|c| c.is_alphanumeric()).collect()
+}
+
+/// Model cevabini suzer (spec/79 §9 madde 5, 9): bos/uzun olan, `{{..}}` maskesi tasiyan,
+/// mevcut kalem ya da reddedilenle (ya da kendi icinde) ayni adli olan atilir; en cok `BATCH`.
+fn sanitize(raw: Vec<RawItem>, existing: &[String], rejected: &[String]) -> Vec<Suggestion> {
+    let mut seen: std::collections::HashSet<String> =
+        existing.iter().chain(rejected).map(|s| key(s)).collect();
+    let mut out = Vec::new();
+    for r in raw {
+        let (name, description) = (r.name.trim(), r.description.trim());
+        let bad = name.is_empty() || name.chars().count() > NAME_MAX
+            || description.chars().count() > TEXT_MAX
+            || name.contains("{{") || description.contains("{{");
+        let k = key(name);
+        if bad || k.is_empty() || !seen.insert(k) {
+            continue;
+        }
+        out.push(Suggestion { name: name.to_string(), description: description.to_string() });
+        if out.len() == BATCH {
+            break;
+        }
+    }
+    out
+}
+
+/// `POST /api/events/{id}/material-suggestions`: tek model cagrisiyla bir parti oneri.
+/// `use_generative_ai` (build_context icinde) + `manage_purchases` ister; kabul edemeyen
+/// kisiye oneri cikmaz. Durumsuz: reddedilenleri ve bekleyen partiyi istemci tutar.
+pub(crate) async fn material_suggestions(
+    State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>, Body(b): Body<SuggestIn>,
+) -> Result<Json<SuggestOut>> {
+    let id = common::id(&raw)?;
+    require_scope(&st, &me, "manage_purchases").await?;
+    let ctx = build_context(&st, &me, id, b.free_text).await?;
+
+    let cfg = crate::api::llm::load(&st.pool).await?;
+    let known = known_names(&st).await?;
+    let skip = b.rejected.len().saturating_sub(REJECTED_MAX);
+    let rejected: Vec<String> = b.rejected.iter().skip(skip).map(|r| r.trim().to_string())
+        .filter(|r| !r.is_empty() && r.chars().count() <= REJECTED_LEN).collect();
+    let cleaned = rejected.iter().map(|r| redact::redact(r, &cfg.rules, &known)).collect();
+
+    let req = MaterialBrief::from_context(&ctx).with_rejected(cleaned).request();
+    let started = std::time::Instant::now();
+    let reply = crate::openrouter::structured(
+        &st, &st.cfg.suggest_model, Some(SYSTEM), &req.user, "material_suggestions", &req.response_schema,
+    ).await.map_err(|_| AppError::Unavailable("suggest_unavailable"))?;
+    let parsed: Raw = serde_json::from_value(reply).map_err(|_| {
+        tracing::warn!("oneri modeli: yanit beklenen semada degil");
+        AppError::Unavailable("suggest_unavailable")
+    })?;
+
+    // Mevcut kalemler HAM adlariyla (ozet temizlenmis adi tasir; eslesme gercek adla olmali).
+    let existing: Vec<String> = sqlx::query_scalar(
+        "select m.name from materials m join event_materials em on em.material_id = m.id where em.event_id = $1")
+        .bind(id).fetch_all(&st.pool).await?;
+    let asked = parsed.items.len();
+    let items = sanitize(parsed.items, &existing, &rejected);
+    let batch_id = Uuid::new_v4();
+    // Icerik loglanmaz: yalniz sayilar ve sure.
+    tracing::info!(event = %id, %batch_id, model = %st.cfg.suggest_model, ms = started.elapsed().as_millis() as u64,
+        asked, kept = items.len(), rejected = rejected.len(), "malzeme onerisi");
+    Ok(Json(SuggestOut { items, batch_id }))
 }
 
 #[cfg(test)]
@@ -296,6 +417,44 @@ mod tests {
         let item = &req.response_schema["properties"]["items"]["items"];
         assert_eq!(item["required"], json!(["name", "description"]));
         assert_eq!(item["properties"].as_object().unwrap().len(), 2);
+    }
+
+    fn item(name: &str, description: &str) -> RawItem {
+        RawItem { name: name.into(), description: description.into() }
+    }
+
+    #[test]
+    fn sanitize_drops_repeats_masks_and_junk() {
+        let raw = vec![
+            item("Lehim teli", "var"),                       // mevcut kalem
+            item("  Kablo  ", " uzatma için "),              // kalir, kirpilir
+            item("kablo.", "yinelenen ad"),                  // oncekiyle ayni anahtar
+            item("PROJEKSİYON", "reddedilmisti"),            // reddedilenle ayni (Turkce katlama)
+            item("{{KISI}} için hediye", "maske"),           // maske sizdirir
+            item("Bant", "iyi {{NO}} bant"),                 // aciklamada maske
+            item("   ", "bos ad"),
+            item(&"x".repeat(NAME_MAX + 1), "uzun ad"),
+            item("Makas", "kesmek için"),
+        ];
+        let got = sanitize(raw, &["Lehim Teli".into()], &["projeksiyon".into()]);
+        assert_eq!(got, vec![
+            Suggestion { name: "Kablo".into(), description: "uzatma için".into() },
+            Suggestion { name: "Makas".into(), description: "kesmek için".into() },
+        ]);
+    }
+
+    #[test]
+    fn sanitize_caps_the_batch() {
+        let raw = (0..20).map(|i| item(&format!("Kalem {i}"), "d")).collect();
+        assert_eq!(sanitize(raw, &[], &[]).len(), BATCH);
+    }
+
+    #[test]
+    fn rejected_is_sent_only_when_present() {
+        let brief = MaterialBrief::from_context(&full());
+        assert!(!brief.request().user.contains("rejected"));
+        let with = brief.with_rejected(vec!["Makas".into()]).request().user;
+        assert!(with.contains(r#""rejected":["Makas"]"#));
     }
 
     #[test]

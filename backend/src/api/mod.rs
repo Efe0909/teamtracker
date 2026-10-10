@@ -73,6 +73,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/events/{id}/materials", post(events::add_material))
         .route("/api/events/{id}/llm-context", get(events::llm_context))
         .route("/api/events/{id}/llm-restore", post(events::llm_restore))
+        .route("/api/events/{id}/material-suggestions", post(events::material_suggestions))
         .route("/api/events/{id}/otf", get(otf::get).put(otf::put))
         .route("/api/events/{id}/otf/autofill", post(otf::autofill))
         .route("/api/events/{id}/otf.docx", get(otf::docx))
