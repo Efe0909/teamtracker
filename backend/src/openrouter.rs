@@ -54,6 +54,25 @@ pub fn reply(resp: &Value) -> Option<Value> {
     serde_json::from_str(text.trim()).ok()
 }
 
+/// Cevaptaki kullanim: OpenRouter her non-stream cevapta `usage` icinde jeton sayilarini ve
+/// `cost` (USD) verir; `id` OpenRouter panosundaki uretim kimligidir (mutabakat icin).
+#[derive(Debug, Default, PartialEq)]
+pub struct Usage {
+    pub id: Option<String>,
+    pub prompt_tokens: Option<u64>,
+    pub completion_tokens: Option<u64>,
+    pub cost: Option<f64>,
+}
+
+pub fn usage(resp: &Value) -> Usage {
+    Usage {
+        id: resp.get("id").and_then(Value::as_str).map(str::to_string),
+        prompt_tokens: resp.pointer("/usage/prompt_tokens").and_then(Value::as_u64),
+        completion_tokens: resp.pointer("/usage/completion_tokens").and_then(Value::as_u64),
+        cost: resp.pointer("/usage/cost").and_then(Value::as_f64),
+    }
+}
+
 pub async fn structured(
     st: &AppState, model: &str, system: Option<&str>, user: &str, schema_name: &str, schema: &Value,
 ) -> Result<Value, CallError> {
@@ -77,6 +96,10 @@ pub async fn structured(
         tracing::warn!("oneri modeli: bozuk yanit: {e}");
         CallError::Failed
     })?;
+    // Maliyet cevap semaya uymasa da dogar: kullanimi cevaptan ONCE yaz.
+    let u = usage(&parsed);
+    tracing::info!(gen_id = ?u.id, tokens_in = ?u.prompt_tokens, tokens_out = ?u.completion_tokens,
+        cost_usd = ?u.cost, "oneri modeli: kullanim");
     reply(&parsed).ok_or_else(|| {
         tracing::warn!("oneri modeli: yanit semaya uymuyor ya da bos");
         CallError::Failed
@@ -105,6 +128,18 @@ mod tests {
         let b = body("m", Some("talimat"), "u", "n", &json!({}));
         assert_eq!(b["messages"][0], json!({ "role": "system", "content": "talimat" }));
         assert_eq!(b["messages"][1]["role"], "user");
+    }
+
+    #[test]
+    fn kullanim_ve_maliyet_okunur_yoksa_none() {
+        let r = json!({ "id": "gen-abc123", "choices": [],
+            "usage": { "prompt_tokens": 12, "completion_tokens": 24, "total_tokens": 36, "cost": 0.001 } });
+        assert_eq!(usage(&r), Usage {
+            id: Some("gen-abc123".into()), prompt_tokens: Some(12), completion_tokens: Some(24), cost: Some(0.001),
+        });
+        // Maliyet alani yoksa sessizce 0 sayma: None kalir (log'da gorunur).
+        assert_eq!(usage(&json!({ "usage": { "prompt_tokens": 5 } })).cost, None);
+        assert_eq!(usage(&json!({})), Usage::default());
     }
 
     #[test]
