@@ -1,193 +1,213 @@
-// Yonetim > Veri isleme ve LLM: ayar ekranlari (spec/79 §11.4-11.8).
-// Modeller (+ Dene, fiyat tablosu), Limitler, Istemler, Temizleme, Veri.
-// Kurallar sunucuda: model degisikligi ve istem etkinlestirme son 30 dk'daki basarili
-// bir "Dene" ister; burada yalniz akis ve anlatim.
+// Yonetim > Veri isleme ve LLM: ayar ekranlari ve ortak parcalar (spec/79 §11).
+//
+// "Modeller ve gorevler" genel bakisi: solda PROFILLER (model + parametre + limit), sagda
+// GOREVLER (sozlesme + istem + hangi profil). Her kart tam sayfa ayrintiya gider
+// (AdminLlmProfile.tsx, AdminLlmTask.tsx). Temizleme ve Veri de burada.
+// Kurallar sunucuda: model degisikligi, goreve profil baglama ve istem etkinlestirme son
+// 30 dk'daki basarili bir "Dene" ister; burada yalniz akis ve anlatim.
 
-import { useEffect, useState } from "react";
+import { useState, type ReactNode } from "react";
 import { errorText } from "../../api/client";
 import {
-  useLlmConfig, useLlmConfigWrite, useLlmFeatures, useLlmFeatureWrite, useLlmLimits, useLlmLimitWrite, useLlmModels,
-  useLlmPrompts, useLlmPromptWrite, useLlmRedactTry, useLlmStatus, useLlmTry, useLlmUsage,
+  useLlmConfig, useLlmConfigWrite, useLlmModels, useLlmProfiles, useLlmProfileWrite, useLlmRedactTry, useLlmStatus,
+  useLlmTasks, useLlmTaskWrite, useLlmTry, useLlmUsage,
 } from "../../api/hooks";
 import type {
-  LlmConfig, LlmFeature, LlmFeatureView, LlmModelInfo, LlmModelsView, LlmParams, LlmRules, LlmTryOut,
+  LlmConfig, LlmEndpoint, LlmFeature, LlmModelInfo, LlmModelsView, LlmParams, LlmRules, LlmTaskView, LlmTryOut,
 } from "../../api/types";
 import { ago } from "../../lib/labels";
-import {
-  breakdown, bytes, compat, count, isoDay, ms, STATUS_LABEL, UNIT_MINUTES, usd, validWindow, windowLabel, WINDOWS,
-  type WindowUnit,
-} from "../../lib/llm";
-import { Button, Empty, Loading, Segmented, Tag, ui, useToast } from "../../ui/ui";
+import { breakdown, bytes, count, featureLabel, isoDay, ms, STATUS_LABEL, usd, windowLabel } from "../../lib/llm";
+import { navigate } from "../../lib/router";
+import { Icon } from "../../ui/icons";
+import { Button, Empty, Link, Loading, Segmented, Tag, ui, useToast } from "../../ui/ui";
+import { href } from "./routes";
 import c from "./AdminLlm.module.css";
+import s from "./dashboard.module.css";
 
-const MODEL_LIST = "llm-model-list";
+export const MODEL_LIST = "llm-model-list";
+
+export const ENDPOINT_LABEL: Record<LlmEndpoint, string> = { chat: "sohbet · json_schema", decisions: "karar ucu · noul" };
 
 /** OpenRouter model adlari (`<datalist>`): elle yazmak da serbest. */
-function ModelOptions({ models }: { models: LlmModelInfo[] }) {
+export function ModelOptions({ models }: { models: LlmModelInfo[] }) {
   return <datalist id={MODEL_LIST}>{models.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</datalist>;
 }
 
-// --- Modeller ----------------------------------------------------------------------
+/** Profil ve gorev ayrintisinin kabugu: konum satiri, baslik, alt baslik. */
+export function LlmPage(props: { title: string; sub?: ReactNode; tags?: ReactNode; children: ReactNode }) {
+  return (
+    <div className={s.page} style={{ maxWidth: 980 }}>
+      <nav className={s.crumb} aria-label="Konum">
+        <Link href={href({ name: "admin" })}>Yönetim</Link>
+        <Icon name="chevron" size={13} />
+        <Link href={href({ name: "admin" })}>Veri işleme ve LLM</Link>
+        <Icon name="chevron" size={13} />
+        <b>{props.title}</b>
+      </nav>
+      <div className={s.pageHead}>
+        <div className={s.pageTitle}>
+          <h1 style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>{props.title} {props.tags}</h1>
+          {props.sub !== undefined && <p className={s.pageSub}>{props.sub}</p>}
+        </div>
+      </div>
+      {props.children}
+    </div>
+  );
+}
+
+/** Ayrinti sayfasinda bir bolum. */
+export function Section(props: { title: string; sub?: ReactNode; aside?: ReactNode; children: ReactNode }) {
+  return (
+    <section className={c.feature} aria-label={props.title}>
+      <div className={c.cardHead}>
+        <div><h3 style={{ margin: 0 }}>{props.title}</h3>{props.sub !== undefined && <span className={c.sub}>{props.sub}</span>}</div>
+        {props.aside}
+      </div>
+      {props.children}
+    </section>
+  );
+}
+
+// --- Modeller ve gorevler (genel bakis) -----------------------------------------------
 
 export function AdminLlmModels() {
-  const f = useLlmFeatures();
+  const p = useLlmProfiles();
+  const t = useLlmTasks();
   const [refresh, setRefresh] = useState(0);
   const m = useLlmModels(refresh);
-  if (f.data === undefined) return <Loading />;
-  const models = m.data?.models ?? [];
+  if (p.data === undefined || t.data === undefined) return <Loading />;
+  const tasks = t.data;
   return (
     <>
       <p className={c.note}>
-        Her özellik kodda bir sözleşmedir (uç, cevap şeması, sunucu süzgeci); hangi model ve hangi parametrelerle
-        çağrılacağı buradan değişir, dağıtım gerekmez. Model değişikliği, aynı model için son 30 dakikada başarılı bir
-        “Dene” ister.
+        <b>Profil</b> hangi modelin hangi ayarla ve ne kadar parayla çağrılacağıdır; <b>görev</b> koddaki bir işin
+        (sözleşme, istem) hangi profili kullanacağıdır. Profilin modelini değiştirmek ona bağlı bütün görevleri değiştirir.
       </p>
-      <ModelOptions models={models} />
-      {f.data.map((v) => <FeatureEditor key={`${v.feature}-${v.updated_at ?? ""}`} v={v} models={models} />)}
+      <div className={c.grid2} style={{ alignItems: "start" }}>
+        <section aria-label="Profiller">
+          <div className={c.cardHead}><h3 style={{ margin: 0 }}>Profiller</h3><span className={c.sub}>model · parametre · limit</span></div>
+          {p.data.map((v) => (
+            <Link key={v.id} href={href({ name: "llmProfile", id: v.id })} className={c.linkCard}>
+              <div className={c.listHead}>
+                <b>{v.name}</b>
+                <Tag tone="neutral">{v.endpoint === "chat" ? "sohbet" : "karar"}</Tag>
+              </div>
+              <div className={c.mono}>{v.model}</div>
+              <div className={c.listSub}>
+                <span>{v.limits.length === 0 ? "limit yok" : v.limits.map((l) => `${usd(l.usd)}/${windowLabel(l.window_minutes)}`).join(" · ")}</span>
+                <span>{v.used_by.length === 0 ? "kullanılmıyor" : v.used_by.map(featureLabel).join(", ")}</span>
+              </div>
+            </Link>
+          ))}
+          <NewProfile />
+        </section>
+        <section aria-label="Görevler">
+          <div className={c.cardHead}><h3 style={{ margin: 0 }}>Görevler</h3><span className={c.sub}>sözleşme · istem · profil</span></div>
+          {tasks.map((v) => (
+            <Link key={v.feature} href={href({ name: "llmTask", feature: v.feature })} className={c.linkCard}>
+              <div className={c.listHead}>
+                <b>{v.label}</b>
+                <span style={{ display: "inline-flex", gap: 6 }}>
+                  {!v.effective.enabled && <Tag tone="high">kapalı</Tag>}
+                  {!v.service_on && <Tag tone="critical">servis kapalı</Tag>}
+                  <Tag tone="info">{v.profile?.name ?? "profil yok"}</Tag>
+                </span>
+              </div>
+              <div className={c.mono}>{v.effective.model}</div>
+              <div className={c.listSub}>
+                <span>{taskSummary(v)}</span>
+                <span>{ENDPOINT_LABEL[v.endpoint]}</span>
+              </div>
+            </Link>
+          ))}
+        </section>
+      </div>
+      <ModelOptions models={m.data?.models ?? []} />
       <PriceTable data={m.data} onRefresh={() => setRefresh(refresh + 1)} />
     </>
   );
 }
 
-interface Draft {
-  model: string;
-  max_tokens: string;
-  temperature: string;
-  timeout_s: string;
-  reasoning_off: boolean;
-  batch: string;
-  enabled: boolean;
-  store_bodies: boolean;
+function taskSummary(v: LlmTaskView): string {
+  const parts: string[] = [];
+  if (v.has_prompt) parts.push(v.effective.prompt_version === 0 ? "koddaki istem" : `istem sürüm ${v.effective.prompt_version}`);
+  if (v.feature === "quality_gate") parts.push("kalite soruları");
+  if (v.has_batch) parts.push(`parti ${v.effective.batch}`);
+  if (v.effective.store_bodies) parts.push("gövde saklanıyor");
+  return parts.join(" · ");
 }
 
-function draftOf(v: LlmFeatureView): Draft {
-  const p = v.params;
-  const s = (n: number | undefined) => (n === undefined ? "" : String(n));
-  return {
-    model: v.effective.model, max_tokens: s(p.max_tokens), temperature: s(p.temperature),
-    timeout_s: p.timeout_ms === undefined ? "" : String(p.timeout_ms / 1000), reasoning_off: v.effective.reasoning_off,
-    batch: s(p.batch), enabled: v.effective.enabled, store_bodies: v.effective.store_bodies,
-  };
-}
-
-/** Bos alan = sozlesmenin varsayilani (gonderilmez). */
-function paramsOf(d: Draft, v: LlmFeatureView): LlmParams {
-  const num = (s: string) => (s.trim() === "" ? undefined : Number(s.replace(",", ".")));
-  const timeout = num(d.timeout_s);
-  const p: LlmParams = {};
-  if (timeout !== undefined) p.timeout_ms = Math.round(timeout * 1000);
-  if (v.endpoint === "chat") {
-    const mt = num(d.max_tokens);
-    const t = num(d.temperature);
-    if (mt !== undefined) p.max_tokens = mt;
-    if (t !== undefined) p.temperature = t;
-    if (!d.reasoning_off) p.reasoning_off = false;
-    if (v.has_batch) {
-      const b = num(d.batch);
-      if (b !== undefined) p.batch = b;
-    }
-  }
-  return p;
-}
-
-function FeatureEditor({ v, models }: { v: LlmFeatureView; models: LlmModelInfo[] }) {
-  const write = useLlmFeatureWrite();
-  const toast = useToast();
-  const [d, setD] = useState<Draft>(() => draftOf(v));
+function NewProfile() {
+  const w = useLlmProfileWrite();
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [endpoint, setEndpoint] = useState<LlmEndpoint>("chat");
+  const [model, setModel] = useState("");
   const [err, setErr] = useState<string | null>(null);
-  const set = (p: Partial<Draft>) => setD({ ...d, ...p });
-  const params = paramsOf(d, v);
-  const info = models.find((m) => m.id === d.model.trim());
-  const cp = models.length === 0 ? null : compat(info, v.endpoint, d.reasoning_off);
-  const chat = v.endpoint === "chat";
-  const save = () => {
-    setErr(null);
-    write.mutate({ feature: v.feature, body: { model: d.model.trim(), params, enabled: d.enabled, store_bodies: d.store_bodies } }, {
-      onSuccess: () => toast({ text: `${v.label}: kaydedildi`, error: false }),
-      onError: (x) => setErr(errorText(x)),
-    });
-  };
+  if (!open) {
+    return (
+      <button type="button" className={c.linkCard} style={{ borderStyle: "dashed", width: "100%", textAlign: "left", cursor: "pointer" }}
+        onClick={() => setOpen(true)}>
+        <span className={c.sub}><Icon name="plus" size={13} /> Profil ekle</span>
+      </button>
+    );
+  }
   return (
-    <section className={c.feature} aria-label={v.label}>
-      <div className={c.featureHead}>
-        <h3>{v.label}</h3>
-        <Tag tone="neutral">{chat ? "sohbet · json_schema" : "karar ucu · noul"}</Tag>
-        {!v.effective.enabled && <Tag tone="high">kapalı</Tag>}
-        {!v.service_on && <Tag tone="critical">servis kapalı</Tag>}
-        {v.customized && v.tested_at === null && <Tag tone="high">denenmeden kaydedildi</Tag>}
-        <span className={c.sub}>
-          {v.customized && v.updated_at !== null ? `Son değişiklik ${ago(v.updated_at)}` : `Varsayılan (manifest): ${v.default_model}`}
-        </span>
-      </div>
-      <div className={c.fields}>
-        <label className={`${ui.field} ${c.wide}`}>
-          <span>Model <span className={ui.fieldHint}>(OpenRouter adı: sağlayıcı/model)</span></span>
-          <input className={ui.input} list={MODEL_LIST} value={d.model} onChange={(e) => set({ model: e.target.value })} spellCheck={false} />
+    <form className={c.linkCard} onSubmit={(e) => {
+      e.preventDefault();
+      setErr(null);
+      w.mutate({ create: { name: name.trim(), endpoint, model: model.trim(), params: {} } }, {
+        onSuccess: (v) => { if (!Array.isArray(v)) navigate(href({ name: "llmProfile", id: v.id })); },
+        onError: (x) => setErr(errorText(x)),
+      });
+    }}>
+      <div className={c.fields} style={{ marginBottom: 8 }}>
+        <label className={ui.field}><span>Ad</span>
+          <input className={ui.input} value={name} onChange={(e) => setName(e.target.value)} placeholder="Tasarım" required />
         </label>
-        {chat && (
-          <label className={ui.field}>
-            <span>En çok jeton <span className={ui.fieldHint}>(boş: {v.effective.max_tokens})</span></span>
-            <input className={ui.input} inputMode="numeric" value={d.max_tokens} placeholder={String(v.effective.max_tokens)}
-              onChange={(e) => set({ max_tokens: e.target.value })} />
-          </label>
-        )}
-        {chat && (
-          <label className={ui.field}>
-            <span>Sıcaklık <span className={ui.fieldHint}>(0–2, boş: modelin)</span></span>
-            <input className={ui.input} inputMode="decimal" value={d.temperature} onChange={(e) => set({ temperature: e.target.value })} />
-          </label>
-        )}
-        <label className={ui.field}>
-          <span>Zaman aşımı, sn <span className={ui.fieldHint}>(boş: {v.effective.timeout_ms / 1000})</span></span>
-          <input className={ui.input} inputMode="decimal" value={d.timeout_s} placeholder={String(v.effective.timeout_ms / 1000)}
-            onChange={(e) => set({ timeout_s: e.target.value })} />
+        <label className={ui.field}><span>Tür</span>
+          <select className={ui.input} value={endpoint} onChange={(e) => setEndpoint(e.target.value as LlmEndpoint)}>
+            <option value="chat">Sohbet (json_schema)</option>
+            <option value="decisions">Karar (noul)</option>
+          </select>
         </label>
-        {chat && v.has_batch && (
-          <label className={ui.field}>
-            <span>Parti <span className={ui.fieldHint}>(3–15 öneri)</span></span>
-            <input className={ui.input} inputMode="numeric" value={d.batch} placeholder={String(v.effective.batch)}
-              onChange={(e) => set({ batch: e.target.value })} />
-          </label>
-        )}
-      </div>
-      <div className={c.fields}>
-        {chat && (
-          <label className={c.check}>
-            <input type="checkbox" checked={d.reasoning_off} onChange={(e) => set({ reasoning_off: e.target.checked })} />
-            Düşünme kapalı (kısa yapılandırılmış çıktı)
-          </label>
-        )}
-        <label className={c.check}>
-          <input type="checkbox" checked={d.enabled} onChange={(e) => set({ enabled: e.target.checked })} />
-          Özellik açık
-        </label>
-        <label className={c.check}>
-          <input type="checkbox" checked={d.store_bodies} onChange={(e) => set({ store_bodies: e.target.checked })} />
-          Gövdeyi 7 gün sakla
+        <label className={`${ui.field} ${c.wide}`}><span>Model</span>
+          <input className={ui.input} list={MODEL_LIST} value={model} onChange={(e) => setModel(e.target.value)} placeholder="sağlayıcı/model" spellCheck={false} required />
         </label>
       </div>
-      {cp !== null && (
-        <div className={c.compat} data-level={cp.level} role="note">
-          {cp.level === "ok" ? "OpenRouter listesine göre uyumlu." : "Uyumluluk:"}
-          {info !== undefined && info.prompt_per_m !== null && ` Fiyat ${usd(info.prompt_per_m)} / ${usd(info.completion_per_m)} (1M jeton, giriş/çıkış).`}
-          {cp.notes.length > 0 && <ul>{cp.notes.map((n) => <li key={n}>{n}</li>)}</ul>}
-        </div>
-      )}
       {err !== null && <p className={ui.error} role="alert">{err}</p>}
       <div className={ui.dact}>
-        <Button variant="primary" disabled={write.isPending || d.model.trim() === ""} onClick={save}>Kaydet</Button>
-        <Button disabled={write.isPending} onClick={() => setD(draftOf(v))}>Geri al</Button>
+        <Button type="submit" variant="primary" disabled={w.isPending}>Oluştur</Button>
+        <Button onClick={() => setOpen(false)}>Vazgeç</Button>
       </div>
-      <TryBox v={v} model={d.model.trim()} params={params} />
-    </section>
+      <p className={ui.fieldHint} style={{ margin: 0 }}>Tür sonradan değişmez: görev yalnız kendi türündeki profili kullanabilir.</p>
+    </form>
   );
 }
 
-function TryBox({ v, model, params }: { v: LlmFeatureView; model: string; params: LlmParams }) {
+// --- Dene ------------------------------------------------------------------------
+
+/** Bir gorevi bir profille (taslak model/parametre/parti/istem) dener; kaydetmez. */
+export function TryBox(props: {
+  tasks: LlmTaskView[];
+  profileId: string;
+  model?: string;
+  params?: LlmParams;
+  batch?: number;
+  promptVersion?: number;
+  serviceOn: boolean;
+  /** Profil sayfasinda gorev secilir; gorev sayfasinda sabit. */
+  fixedFeature?: LlmFeature;
+  hint?: ReactNode;
+}) {
   const t = useLlmTry();
-  const [input, setInput] = useState(() => JSON.stringify(v.sample_input, null, 2));
+  const first = props.tasks.find((x) => x.feature === props.fixedFeature) ?? props.tasks[0];
+  const [feature, setFeature] = useState<LlmFeature | undefined>(first?.feature);
+  const task = props.tasks.find((x) => x.feature === feature) ?? first;
+  const [input, setInput] = useState(() => JSON.stringify(first?.sample_input ?? {}, null, 2));
   const [res, setRes] = useState<LlmTryOut | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  if (task === undefined) return <p className={c.sub}>Bu türde görev yok: denenecek bir şey yok.</p>;
   const run = () => {
     setErr(null);
     setRes(null);
@@ -198,22 +218,38 @@ function TryBox({ v, model, params }: { v: LlmFeatureView; model: string; params
       setErr("Girdi JSON değil.");
       return;
     }
-    t.mutate({ feature: v.feature, model, params, input: parsed }, { onSuccess: setRes, onError: (x) => setErr(errorText(x)) });
+    t.mutate({
+      feature: task.feature, profile_id: props.profileId, input: parsed,
+      ...(props.model !== undefined ? { model: props.model } : {}),
+      ...(props.params !== undefined ? { params: props.params } : {}),
+      ...(props.batch !== undefined ? { batch: props.batch } : {}),
+      ...(props.promptVersion !== undefined ? { prompt_version: props.promptVersion } : {}),
+    }, { onSuccess: setRes, onError: (x) => setErr(errorText(x)) });
   };
   return (
-    <div className={c.tryBox}>
-      <h4 style={{ margin: "0 0 4px" }}>Dene</h4>
+    <div>
       <p className={ui.fieldHint}>
-        Yukarıdaki (kaydedilmemiş) model ve parametrelerle gerçek uca tek çağrı; kaydetmez ama harcamaya sayılır.
-        {v.endpoint === "chat"
+        Gerçek uca tek çağrı; kaydetmez ama harcamaya sayılır.
+        {task.endpoint === "chat"
           ? " Girdi örnek bir özet ({\"brief\": …}) ya da gerçek etkinlik ({\"event_id\": …, \"free_text\": false}) olabilir."
           : " Girdi {\"kind\": \"entry\" | \"closing\", \"state\": …}."}
-        {" "}Gerçek kişi adı ya da telefon yazma.
+        {" "}Gerçek kişi adı ya da telefon yazma. {props.hint}
       </p>
-      <textarea className={`${ui.input} ${c.mono}`} rows={8} value={input} onChange={(e) => setInput(e.target.value)} aria-label={`${v.label} deneme girdisi`} />
+      {props.fixedFeature === undefined && props.tasks.length > 1 && (
+        <label className={ui.field} style={{ maxWidth: 280 }}><span>Görev</span>
+          <select className={ui.input} value={task.feature} onChange={(e) => {
+            const next = props.tasks.find((x) => x.feature === e.target.value);
+            setFeature(next?.feature);
+            setInput(JSON.stringify(next?.sample_input ?? {}, null, 2));
+          }}>
+            {props.tasks.map((x) => <option key={x.feature} value={x.feature}>{x.label}</option>)}
+          </select>
+        </label>
+      )}
+      <textarea className={`${ui.input} ${c.mono}`} rows={8} value={input} onChange={(e) => setInput(e.target.value)} aria-label={`${task.label} deneme girdisi`} />
       <div className={ui.dact}>
-        <Button disabled={t.isPending || model === "" || !v.service_on} onClick={run}>{t.isPending ? "Soruluyor…" : "Dene"}</Button>
-        {!v.service_on && <span className={c.sub}>Servis kapalı: deneme yapılamaz.</span>}
+        <Button disabled={t.isPending || !props.serviceOn} onClick={run}>{t.isPending ? "Soruluyor…" : "Dene"}</Button>
+        {!props.serviceOn && <span className={c.sub}>Servis kapalı: deneme yapılamaz.</span>}
       </div>
       {err !== null && <p className={ui.error} role="alert">{err}</p>}
       {res !== null && <TryResult r={res} />}
@@ -248,7 +284,7 @@ export function TryResult({ r }: { r: LlmTryOut }) {
   );
 }
 
-function PriceTable({ data, onRefresh }: { data: LlmModelsView | undefined; onRefresh: () => void }) {
+export function PriceTable({ data, onRefresh }: { data: LlmModelsView | undefined; onRefresh: () => void }) {
   const [search, setSearch] = useState("");
   const all = useLlmUsage({ from: "2020-01-01", to: isoDay(new Date()), feature: "", model: "", user: "", status: "" });
   const ours = new Map(breakdown(all.data?.rows ?? [], "model").map((b) => [b.key, b]));
@@ -308,193 +344,6 @@ function PriceTable({ data, onRefresh }: { data: LlmModelsView | undefined; onRe
         </div>
       )}
     </section>
-  );
-}
-
-// --- Limitler ----------------------------------------------------------------------
-
-export function AdminLlmLimits() {
-  const l = useLlmLimits();
-  const f = useLlmFeatures();
-  const m = useLlmModels(0);
-  const w = useLlmLimitWrite();
-  const toast = useToast();
-  const used = [...new Set((f.data ?? []).map((x) => x.effective.model))];
-  const [model, setModel] = useState("");
-  const [preset, setPreset] = useState<string>("1440");
-  const [amount, setAmount] = useState("1");
-  const [unit, setUnit] = useState<WindowUnit>("sa");
-  const [usdText, setUsd] = useState("");
-  const [err, setErr] = useState<string | null>(null);
-  useEffect(() => {
-    if (model === "" && used[0] !== undefined) setModel(used[0]);
-  }, [model, used]);
-  const minutes = preset === "custom" ? Math.round(Number(amount.replace(",", ".")) * UNIT_MINUTES[unit]) : Number(preset);
-  const value = Number(usdText.replace(",", "."));
-  const ok = model.trim() !== "" && validWindow(minutes) && Number.isFinite(value) && value > 0;
-  const add = () => {
-    setErr(null);
-    w.mutate({ put: { model: model.trim(), window_minutes: minutes, usd: value } }, {
-      onSuccess: () => { setUsd(""); toast({ text: "Limit kaydedildi", error: false }); },
-      onError: (x) => setErr(errorText(x)),
-    });
-  };
-  const byModel = new Map<string, NonNullable<typeof l.data>>();
-  for (const r of l.data ?? []) byModel.set(r.model, [...(byModel.get(r.model) ?? []), r]);
-  return (
-    <>
-      <p className={c.note}>
-        Model başına dolar tavanı; pencere kayar (“1 ay” = son 30 gün). Bir modele istediğin kadar pencere eklenir; herhangi
-        biri dolunca o modelle yeni çağrı yapılmaz: öneri “limit doldu” der, kalite kapısı kullanıcıyı engellemeden atlanır.
-        Limit yoksa harcama sınırsızdır. Maliyeti bilinmeyen çağrılar (ör. değişken fiyatlı karar modeli) tavana sayılmaz.
-      </p>
-      <ModelOptions models={m.data?.models ?? []} />
-      <section className={c.card} aria-label="Limit ekle" style={{ marginBottom: "var(--s-4)" }}>
-        <div className={c.inline}>
-          <label>Model
-            <input className={ui.input} list={MODEL_LIST} value={model} onChange={(e) => setModel(e.target.value)} spellCheck={false} style={{ minWidth: 240 }} />
-          </label>
-          <label>Pencere
-            <select className={ui.input} value={preset} onChange={(e) => setPreset(e.target.value)}>
-              {WINDOWS.map((x) => <option key={x.minutes} value={String(x.minutes)}>{x.label}</option>)}
-              <option value="custom">Özel…</option>
-            </select>
-          </label>
-          {preset === "custom" && (
-            <>
-              <label>Süre
-                <input className={ui.input} inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} style={{ width: 80 }} />
-              </label>
-              <label>Birim
-                <select className={ui.input} value={unit} onChange={(e) => setUnit(e.target.value as WindowUnit)}>
-                  {(Object.keys(UNIT_MINUTES) as WindowUnit[]).map((u) => <option key={u} value={u}>{u}</option>)}
-                </select>
-              </label>
-            </>
-          )}
-          <label>Tavan (USD)
-            <input className={ui.input} inputMode="decimal" placeholder="ör. 2,5" value={usdText} onChange={(e) => setUsd(e.target.value)} style={{ width: 110 }} />
-          </label>
-          <Button variant="primary" disabled={!ok || w.isPending} onClick={add}>Ekle</Button>
-        </div>
-        {preset === "custom" && !validWindow(minutes) && <p className={ui.fieldHint}>Pencere 15 dakika ile 31 gün arasında olmalı.</p>}
-        {err !== null && <p className={ui.error} role="alert">{err}</p>}
-      </section>
-      {l.data === undefined ? <Loading /> : l.data.length === 0 ? <Empty title="Limit yok: harcama sınırsız." icon="wallet" /> : (
-        [...byModel.entries()].map(([mod, rows]) => (
-          <section key={mod} className={c.card} aria-label={`${mod} limitleri`} style={{ marginBottom: "var(--s-3)" }}>
-            <div className={c.cardHead}><h3 className={c.mono}>{mod}</h3><span className={c.sub}>{rows.length} pencere</span></div>
-            <ul className={c.list}>
-              {rows.map((r) => (
-                <li key={r.id}>
-                  <div className={c.listHead}>
-                    <span>{windowLabel(r.window_minutes)}</span>
-                    <span style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
-                      <b>{usd(r.spent)} / {usd(r.usd)}</b>
-                      <Button size="sm" variant="ghost" disabled={w.isPending} onClick={() => w.mutate({ remove: r.id }, { onError: (x) => setErr(errorText(x)) })}>Sil</Button>
-                    </span>
-                  </div>
-                  <div className={c.progress}>
-                    <div className={c.progressFill} data-full={r.spent >= r.usd} style={{ width: `${Math.min(100, (r.spent / r.usd) * 100)}%` }} />
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </section>
-        ))
-      )}
-    </>
-  );
-}
-
-// --- Istemler ----------------------------------------------------------------------
-
-export function AdminLlmPrompts() {
-  const f = useLlmFeatures();
-  const withPrompt = (f.data ?? []).filter((v) => v.has_prompt);
-  const [picked, setPicked] = useState<LlmFeature | null>(null);
-  const v = withPrompt.find((x) => x.feature === picked) ?? withPrompt[0];
-  if (f.data === undefined) return <Loading />;
-  if (v === undefined) return <Empty title="Düzenlenir istemi olan özellik yok." />;
-  return (
-    <>
-      <p className={c.note}>
-        İstem sürümlüdür: yeni sürüm etkin olmadan kaydedilir; o sürümle başarılı bir “Dene”den sonra (30 dk içinde)
-        etkinleştirilir. İstem güvence değildir: kişi alanlarının yükte olmaması, serbest metin kapısı ve sunucu süzgeci
-        istemden bağımsız çalışır (spec/79 §2). Kalite kapısının “istemi” Kalite kapısı alt sekmesindeki sorulardır.
-      </p>
-      {withPrompt.length > 1 && (
-        <Segmented label="Özellik" value={v.feature} onChange={setPicked} options={withPrompt.map((x) => ({ value: x.feature, label: x.label }))} />
-      )}
-      <PromptEditor key={v.feature} v={v} />
-    </>
-  );
-}
-
-function PromptEditor({ v }: { v: LlmFeatureView }) {
-  const p = useLlmPrompts(v.feature);
-  const w = useLlmPromptWrite(v.feature);
-  const t = useLlmTry();
-  const toast = useToast();
-  const [body, setBody] = useState<string | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-  const [res, setRes] = useState<{ version: number; out: LlmTryOut } | null>(null);
-  if (p.data === undefined) return <Loading />;
-  const data = p.data;
-  const activeBody = data.active === 0 ? data.code_default : data.versions.find((x) => x.version === data.active)?.body ?? data.code_default;
-  const text = body ?? activeBody;
-  const versions = [...data.versions, { version: 0, body: data.code_default, created_by: null, created_at: "" }];
-  const tryVersion = (version: number) => {
-    setErr(null);
-    setRes(null);
-    t.mutate({ feature: v.feature, model: v.effective.model, params: v.params, prompt_version: version, input: v.sample_input }, {
-      onSuccess: (out) => setRes({ version, out }),
-      onError: (x) => setErr(errorText(x)),
-    });
-  };
-  return (
-    <>
-      <section className={c.card} style={{ margin: "var(--s-3) 0 var(--s-4)" }} aria-label="Yeni sürüm">
-        <div className={c.cardHead}>
-          <h3>Yeni sürüm</h3>
-          <span className={c.sub}>Etkin: {data.active === 0 ? "koddaki" : `sürüm ${data.active}`} · model {v.effective.model}</span>
-        </div>
-        <textarea className={`${ui.input} ${c.mono}`} rows={14} value={text} onChange={(e) => setBody(e.target.value)} aria-label="İstem metni" />
-        <p className={ui.fieldHint}>Özet JSON'u `max_items` (parti büyüklüğü) taşır; istem “en çok `max_items`” diyebilir. En çok 8000 karakter.</p>
-        <div className={ui.dact}>
-          <Button variant="primary" disabled={w.isPending || text.trim() === "" || text === activeBody} onClick={() => w.mutate({ add: text }, {
-            onSuccess: () => { setBody(null); toast({ text: "Yeni sürüm kaydedildi (etkin değil)", error: false }); },
-            onError: (x) => setErr(errorText(x)),
-          })}>Yeni sürüm olarak kaydet</Button>
-        </div>
-      </section>
-      {err !== null && <p className={ui.error} role="alert">{err}</p>}
-      <ul className={c.versions} aria-label="Sürümler">
-        {versions.map((x) => (
-          <li key={x.version} className={c.version} data-active={x.version === data.active}>
-            <div className={c.versionHead}>
-              <span>
-                <b>{x.version === 0 ? "Koddaki istem" : `Sürüm ${x.version}`}</b>
-                {x.version === data.active && <> <Tag tone="info">etkin</Tag></>}
-                {x.created_at !== "" && <span className={c.sub}> · {ago(x.created_at)}</span>}
-              </span>
-              <span style={{ display: "inline-flex", gap: 8 }}>
-                <Button size="sm" disabled={t.isPending || !v.service_on} onClick={() => tryVersion(x.version)}>Dene</Button>
-                <Button size="sm" disabled={w.isPending || x.version === data.active} onClick={() => w.mutate({ activate: x.version }, {
-                  onSuccess: () => toast({ text: "İstem etkinleştirildi", error: false }),
-                  onError: (e) => setErr(errorText(e)),
-                })}>Etkinleştir</Button>
-              </span>
-            </div>
-            <details>
-              <summary className={c.sub}>Metni göster</summary>
-              <pre className={c.pre}>{x.body}</pre>
-            </details>
-            {res !== null && res.version === x.version && <TryResult r={res.out} />}
-          </li>
-        ))}
-      </ul>
-    </>
   );
 }
 
@@ -592,16 +441,20 @@ export function AdminLlmCleaning() {
 
 export function AdminLlmData() {
   const s = useLlmStatus();
-  const f = useLlmFeatures();
-  const write = useLlmFeatureWrite();
+  const t = useLlmTasks();
+  const write = useLlmTaskWrite();
   const toast = useToast();
-  if (s.data === undefined || f.data === undefined) return <Loading />;
+  if (s.data === undefined || t.data === undefined) return <Loading />;
   const st = s.data;
-  const toggle = (v: LlmFeatureView, on: boolean) =>
-    write.mutate({ feature: v.feature, body: { model: v.effective.model, params: v.params, enabled: v.effective.enabled, store_bodies: on } }, {
+  const toggle = (v: LlmTaskView, on: boolean) => {
+    if (v.profile === null) return;
+    write.mutate({ feature: v.feature, body: {
+      profile_id: v.profile.id, enabled: v.effective.enabled, store_bodies: on, ...(v.batch !== null ? { batch: v.batch } : {}),
+    } }, {
       onSuccess: () => toast({ text: on ? `${v.label}: gövdeler 7 gün saklanacak` : `${v.label}: gövde saklama kapandı`, error: false }),
       onError: (x) => toast({ text: errorText(x), error: true }),
     });
+  };
   return (
     <>
       <div className={c.kpis}>
@@ -611,12 +464,12 @@ export function AdminLlmData() {
         <div className={c.kpi}><div className={c.kpiLabel}>Boyut</div><div className={c.kpiValue}>{bytes(st.size_bytes)}</div><div className={c.kpiSub}>{st.oldest_call === null ? "kayıt yok" : `en eski ${ago(st.oldest_call)}`}</div></div>
       </div>
       <section className={c.card} aria-label="Gövde saklama">
-        <div className={c.cardHead}><h3>Gövde saklama</h3><span className={c.sub}>özellik başına, varsayılan kapalı</span></div>
+        <div className={c.cardHead}><h3>Gövde saklama</h3><span className={c.sub}>görev başına, varsayılan kapalı</span></div>
         <p className={c.sub}>
           Açıkken modele giden istek (temizlenmiş haliyle) ve cevap {st.body_ttl_days} gün saklanır; amaç hata ayıklamak. Kalite
           kapısında istek kaydın ham başlık ve açıklamasıdır (temizleyiciden geçmez). Açıp kapamak denetim izine yazılır.
         </p>
-        {f.data.map((v) => (
+        {t.data.map((v) => (
           <label key={v.feature} className={c.check} style={{ marginTop: 8 }}>
             <input type="checkbox" checked={v.effective.store_bodies} disabled={write.isPending} onChange={(e) => toggle(v, e.target.checked)} />
             {v.label}

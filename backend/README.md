@@ -79,9 +79,11 @@ OPENROUTER_API_KEY=stub-key EKIPTAKIP_OPENROUTER_URL=http://127.0.0.1:18101 \
 `EKIPTAKIP_OPENROUTER_URL` yalnız geliştirmede okunur; yayında adres sabittir (anahtar
 başka bir yere gönderilemez).
 
-LLM çağrıları tek yoldan (`src/llm.rs` `run`): servis kapısı → model başına dolar limiti →
-OpenRouter (`src/openrouter.rs`) → `llm_calls` satırı (+ açıksa 7 günlük gövde). Ayar,
-model ve istem `llm_features`/`llm_prompts`'ta; gece süpürmesi günlük özeti yazar ve
+LLM çağrıları tek yoldan (`src/llm.rs` `run`): servis kapısı → profil başına dolar limiti →
+OpenRouter (`src/openrouter.rs`) → `llm_calls` satırı (+ açıksa 7 günlük gövde). Görev
+(`llm_tasks`: koddaki sözleşme + istem) bir profile (`llm_profiles`: model + parametre +
+limit) bağlıdır; açılışta eksik profil/görev satırı manifestin modelleriyle oluşur
+(`llm::ensure_defaults`). İstemler `llm_prompts`'ta; gece süpürmesi günlük özeti yazar ve
 180/7 gün saklamayı uygular (spec/79 §11).
 
 ## Sınama

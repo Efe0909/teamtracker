@@ -1,20 +1,38 @@
--- Yonetim > Veri isleme ve LLM (spec/79 §11): model ayari, cagri kaydi, maliyet,
--- dolar limitleri, surumlu istem, istege bagli govde saklama.
+-- Yonetim > Veri isleme ve LLM (spec/79 §11): profil (model + parametre + limit),
+-- gorev (sozlesme + istem + profil), cagri kaydi, maliyet, surumlu istem, istege bagli
+-- govde saklama.
 --
--- Ozellik (feature) KODDA sabittir (sozlesme: uc turu, sema, suzgec); burada yalniz
--- verisi durur. Satir yoksa kodun ve manifestin varsayilani gecerli.
+-- Gorev (task) KODDA sabittir (sozlesme: uc turu, sema, suzgec); burada yalniz verisi
+-- durur. Acilista her uc turu icin bir profil ve her gorev icin bir satir yoksa
+-- olusturulur (llm::ensure_defaults; modeller manifestten).
 
-create table llm_features (
+-- Profil: hangi model, hangi parametrelerle, ne kadar parayla. Gorevler profile baglanir;
+-- profilin modeli degisince ona bagli butun gorevler degisir.
+create table llm_profiles (
+    id         uuid primary key default gen_random_uuid(),
+    name       text not null unique check (char_length(btrim(name)) between 1 and 60),
+    -- Sozlesme turu: yalniz ayni turdeki gorev bu profili secebilir.
+    endpoint   text not null check (endpoint in ('chat', 'decisions')),
+    model      text not null,
+    -- Uc turune gore dogrulanir (llm.rs `Params`); bilinmeyen alan reddedilir.
+    params     jsonb not null default '{}',
+    -- Modelin son basarili "Dene"si kayitta kullanildiysa zamani; NULL = denenmeden kaydedildi.
+    tested_at  timestamptz,
+    created_at timestamptz not null default now(),
+    updated_by uuid references users(id) on delete set null,
+    updated_at timestamptz not null default now()
+);
+
+create table llm_tasks (
     feature        text primary key,
-    model          text not null,
-    -- Sozlesmeye gore dogrulanir (llm.rs `Params`); bilinmeyen alan reddedilir.
-    params         jsonb not null default '{}',
+    -- Kullanilan profil silinemez (restrict).
+    profile_id     uuid not null references llm_profiles(id) on delete restrict,
+    -- Goreve ozgu parametre (malzeme onerisi: parti buyuklugu). NULL = varsayilan.
+    batch          int check (batch between 3 and 15),
     enabled        boolean not null default true,
     store_bodies   boolean not null default false,
     -- NULL = koddaki istem (surum 0).
     prompt_version int,
-    -- Modelin son basarili "Dene"si kayitta kullanildiysa zamani; NULL = denenmeden kaydedildi.
-    tested_at      timestamptz,
     updated_by     uuid references users(id) on delete set null,
     updated_at     timestamptz not null default now()
 );
@@ -27,6 +45,8 @@ create table llm_calls (
     created_at        timestamptz not null default now(),
     feature           text not null,
     model             text not null,
+    -- Limit profile gore toplanir; profil silinirse satir kalir (model adi yeter).
+    profile_id        uuid references llm_profiles(id) on delete set null,
     user_id           uuid references users(id) on delete set null,
     event_id          uuid references events(id) on delete set null,
     is_try            boolean not null default false,
@@ -48,7 +68,7 @@ create table llm_calls (
     -- Kalite kapisi karari: pass | low.
     outcome           text
 );
-create index llm_calls_model_time on llm_calls (model, created_at);
+create index llm_calls_profile_time on llm_calls (profile_id, created_at);
 create index llm_calls_time on llm_calls (created_at);
 
 create table llm_call_bodies (
@@ -74,18 +94,19 @@ create table llm_usage_daily (
     primary key (day, feature, model)
 );
 
--- Model basina dolar tavani; pencere kayan (son N dakika). Model basina istenen kadar.
+-- Profil basina dolar tavani; pencere kayan (son N dakika). Profil basina istenen kadar.
+-- Profil silinince limitleri de gider.
 create table llm_limits (
     id             uuid primary key default gen_random_uuid(),
-    model          text not null,
+    profile_id     uuid not null references llm_profiles(id) on delete cascade,
     window_minutes int not null check (window_minutes between 15 and 44640),
     usd            double precision not null check (usd > 0 and usd < 100000),
     created_by     uuid references users(id) on delete set null,
     created_at     timestamptz not null default now(),
-    unique (model, window_minutes)
+    unique (profile_id, window_minutes)
 );
 
--- Istem surumleri: yalniz ekleme. Etkin olan llm_features.prompt_version.
+-- Istem surumleri: yalniz ekleme. Etkin olan llm_tasks.prompt_version.
 create table llm_prompts (
     feature    text not null,
     version    int not null check (version > 0),
@@ -109,5 +130,6 @@ alter table security_events add constraint security_events_event_type_check
                         'role_deleted','admin_granted','admin_revoked',
                         'quality_config_changed','quality_config_reset',
                         'llm_config_changed','llm_config_reset',
-                        'llm_feature_changed','llm_prompt_changed','llm_limit_changed',
+                        'llm_profile_changed','llm_task_changed',
+                        'llm_prompt_changed','llm_limit_changed',
                         'llm_bodies_on','llm_bodies_off'));

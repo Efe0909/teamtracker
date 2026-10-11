@@ -14,14 +14,17 @@ import type {
   LlmCallsView,
   LlmConfig,
   LlmConfigView,
+  LlmEndpoint,
   LlmFeature,
-  LlmFeatureIn,
-  LlmFeatureView,
+  LlmProfileIn,
+  LlmProfileView,
+  LlmTaskIn,
+  LlmTaskView,
+  LlmTryIn,
   LlmFilter,
   LlmKeyView,
   LlmLimit,
   LlmModelsView,
-  LlmParams,
   LlmPromptsView,
   LlmStatusView,
   LlmTryOut,
@@ -799,29 +802,56 @@ export function useLlmModels(refresh: number) {
   });
 }
 
-export function useLlmFeatures() {
-  return useQuery({ queryKey: [...keys.llm, "features"], queryFn: () => request<LlmFeatureView[]>("GET", "/api/admin/llm/features") });
+// Profil ve gorev yazmalari birbirini etkiler (gorev profilin modelini gosterir, profil
+// kullanan gorevleri listeler): ikisi de yazilinca LLM onbellegi butunuyle tazelenir.
+const invalidateLlm = (qc: QueryClient) => void qc.invalidateQueries({ queryKey: keys.llm });
+
+export function useLlmProfiles() {
+  return useQuery({ queryKey: [...keys.llm, "profiles"], queryFn: () => request<LlmProfileView[]>("GET", "/api/admin/llm/profiles") });
 }
 
-export function useLlmFeatureWrite() {
+export function useLlmProfile(id: Uuid) {
+  return useQuery({ queryKey: [...keys.llm, "profile", id], queryFn: () => request<LlmProfileView>("GET", `/api/admin/llm/profiles/${id}`) });
+}
+
+export function useLlmProfileWrite() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ feature, body }: { feature: LlmFeature; body: LlmFeatureIn }) =>
-      request<LlmFeatureView[]>("PUT", `/api/admin/llm/features/${feature}`, body),
-    onSuccess: (v) => {
-      qc.setQueryData([...keys.llm, "features"], v);
-      void qc.invalidateQueries({ queryKey: [...keys.llm, "status"] });
-    },
+    mutationFn: (
+      op: { create: LlmProfileIn & { endpoint: LlmEndpoint } } | { put: Uuid; body: LlmProfileIn } | { remove: Uuid },
+    ): Promise<LlmProfileView | LlmProfileView[]> =>
+      "create" in op ? request<LlmProfileView>("POST", "/api/admin/llm/profiles", op.create)
+        : "put" in op ? request<LlmProfileView>("PUT", `/api/admin/llm/profiles/${op.put}`, op.body)
+        : request<LlmProfileView[]>("DELETE", `/api/admin/llm/profiles/${op.remove}`),
+    onSuccess: () => invalidateLlm(qc),
+  });
+}
+
+export function useLlmTasks() {
+  return useQuery({ queryKey: [...keys.llm, "tasks"], queryFn: () => request<LlmTaskView[]>("GET", "/api/admin/llm/tasks") });
+}
+
+export function useLlmTask(feature: LlmFeature) {
+  return useQuery({ queryKey: [...keys.llm, "task", feature], queryFn: () => request<LlmTaskView>("GET", `/api/admin/llm/tasks/${feature}`) });
+}
+
+export function useLlmTaskWrite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ feature, body }: { feature: LlmFeature; body: LlmTaskIn }) =>
+      request<LlmTaskView>("PUT", `/api/admin/llm/tasks/${feature}`, body),
+    onSuccess: () => invalidateLlm(qc),
   });
 }
 
 export function useLlmTry() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ feature, ...b }: { feature: LlmFeature; model: string; params: LlmParams; prompt_version?: number; input: unknown }) =>
-      request<LlmTryOut>("POST", `/api/admin/llm/features/${feature}/try`, b),
-    // Dene de bir cagri: gecmis ve maliyet tazelensin.
-    onSettled: () => void qc.invalidateQueries({ queryKey: keys.llm, predicate: (q) => q.queryKey[2] !== "features" }),
+    mutationFn: (b: LlmTryIn) => request<LlmTryOut>("POST", "/api/admin/llm/try", b),
+    // Dene de bir cagri: gecmis ve maliyet tazelensin (ayar formlari yerinde kalsin).
+    onSettled: () => void qc.invalidateQueries({
+      queryKey: keys.llm, predicate: (q) => ["usage", "calls", "status", "limits"].includes(String(q.queryKey[2])),
+    }),
   });
 }
 
@@ -841,23 +871,27 @@ export function useLlmPromptWrite(feature: LlmFeature) {
         : request<LlmPromptsView>("PUT", `/api/admin/llm/prompts/${feature}/active`, { version: op.activate }),
     onSuccess: (v) => {
       qc.setQueryData([...keys.llm, "prompts", feature], v);
-      void qc.invalidateQueries({ queryKey: [...keys.llm, "features"] });
+      void qc.invalidateQueries({ queryKey: [...keys.llm, "task", feature] });
+      void qc.invalidateQueries({ queryKey: [...keys.llm, "tasks"] });
     },
   });
 }
 
+/** Butun limitler (Genel'deki "en dolu limitler"). */
 export function useLlmLimits() {
   return useQuery({ queryKey: [...keys.llm, "limits"], queryFn: () => request<LlmLimit[]>("GET", "/api/admin/llm/limits") });
 }
 
+/** Profil limitleri: ekle (ayni pencere guncellenir) ya da sil; cevap profilin guncel hali. */
 export function useLlmLimitWrite() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (op: { put: { model: string; window_minutes: number; usd: number } } | { remove: Uuid }) =>
-      "put" in op
-        ? request<LlmLimit[]>("POST", "/api/admin/llm/limits", op.put)
-        : request<LlmLimit[]>("DELETE", `/api/admin/llm/limits/${op.remove}`),
-    onSuccess: (v) => qc.setQueryData([...keys.llm, "limits"], v),
+    mutationFn: (op: { profile: Uuid; window_minutes: number; usd: number } | { remove: Uuid }) =>
+      "remove" in op
+        ? request<LlmProfileView>("DELETE", `/api/admin/llm/limits/${op.remove}`)
+        : request<LlmProfileView>("POST", `/api/admin/llm/profiles/${op.profile}/limits`,
+            { window_minutes: op.window_minutes, usd: op.usd }),
+    onSuccess: () => invalidateLlm(qc),
   });
 }
 

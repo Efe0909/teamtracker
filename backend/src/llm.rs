@@ -1,9 +1,11 @@
 //! Uretken yapay zeka cagrilarinin TEK yolu (spec/79 §11).
 //!
-//! Ozellik (feature) KODDA bir sozlesmedir: adi, uc turu (`chat` / `decisions`), cevap
-//! semasi ve sunucu suzgeci. Model adi, parametreler, istem, acik/kapali ve govde saklama
-//! VERIDIR (`llm_features`, `llm_prompts`); satir yoksa kodun ve manifestin varsayilani.
-//! Kod model adi bilmez: her model "takilip cikarilir", uyumlulugu yonetimdeki "Dene" kanitlar.
+//! Gorev (task/feature) KODDA bir sozlesmedir: adi, uc turu (`chat` / `decisions`), cevap
+//! semasi ve sunucu suzgeci. Gorev bir PROFILE baglanir: profil = model + parametre + dolar
+//! limiti (`llm_profiles`); gorevin kendi verisi istem, parti, acik/kapali ve govde saklama
+//! (`llm_tasks`, `llm_prompts`). Kod model adi bilmez: her model "takilip cikarilir",
+//! uyumlulugu yonetimdeki "Dene" kanitlar. Acilista eksik profil/gorev satiri manifestin
+//! modelleriyle olusur (`ensure_defaults`).
 //!
 //! Her cagri `run`'dan gecer: servis kapisi -> limit -> istek -> `llm_calls` satiri
 //! (basarisiz ve ucret dogmus olanlar dahil) -> (aciksa) govde. Servis kapaliyken satir
@@ -35,13 +37,31 @@ pub const BODY_TTL_DAYS: i32 = 7;
 /// Model ya da istem degisikligi bu kadar dakika icindeki basarili bir "Dene" ister.
 pub const TESTED_WITHIN_MIN: i32 = 30;
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Endpoint {
     /// `/api/v1/chat/completions` + `json_schema` (her sohbet modeli).
     Chat,
     /// `/api/alpha/decisions` + `noul` (karar modeli, spec/76).
     Decisions,
+}
+
+impl Endpoint {
+    pub const ALL: [Endpoint; 2] = [Endpoint::Chat, Endpoint::Decisions];
+
+    /// `llm_profiles.endpoint` degeri.
+    pub fn key(self) -> &'static str {
+        match self { Endpoint::Chat => "chat", Endpoint::Decisions => "decisions" }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        Endpoint::ALL.into_iter().find(|e| e.key() == s)
+    }
+
+    /// Acilista olusan profilin adi.
+    fn default_name(self) -> &'static str {
+        match self { Endpoint::Chat => "Genel amaçlı", Endpoint::Decisions => "Karar" }
+    }
 }
 
 pub struct Contract {
@@ -91,7 +111,7 @@ covers tables and chairs, for example) and whatever the `otf` notes ask the univ
 
 // --- ayar ------------------------------------------------------------------------
 
-/// `llm_features.params`. Hepsi istege bagli; yoksa sozlesmenin varsayilani.
+/// Profil parametreleri (`llm_profiles.params`). Hepsi istege bagli; yoksa uc turunun varsayilani.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Params {
@@ -105,33 +125,45 @@ pub struct Params {
     /// desteklemeyen modelde `require_parameters` cagriyi dusurur; o zaman kapatilir.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reasoning_off: Option<bool>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub batch: Option<u32>,
 }
 
 impl Params {
-    /// Sozlesmeye gore sinirlar; hata kodu istemciye gider.
-    pub fn validate(&self, c: &Contract) -> Result<(), &'static str> {
+    /// Uc turune gore sinirlar; hata kodu istemciye gider.
+    pub fn validate(&self, endpoint: Endpoint) -> Result<(), &'static str> {
         const BAD: &str = "llm_params_invalid";
         let within = |v: Option<u32>, lo: u32, hi: u32| v.is_none_or(|v| (lo..=hi).contains(&v));
-        match c.endpoint {
+        match endpoint {
             Endpoint::Decisions => {
-                let only_timeout = self.max_tokens.is_none() && self.temperature.is_none()
-                    && self.reasoning_off.is_none() && self.batch.is_none();
+                let only_timeout = self.max_tokens.is_none() && self.temperature.is_none() && self.reasoning_off.is_none();
                 if !only_timeout || !within(self.timeout_ms, 1000, 20_000) {
                     return Err(BAD);
                 }
             }
             Endpoint::Chat => {
                 let temp_ok = self.temperature.is_none_or(|t| t.is_finite() && (0.0..=2.0).contains(&t));
-                let batch_ok = if c.has_batch { within(self.batch, 3, 15) } else { self.batch.is_none() };
-                if !within(self.max_tokens, 1, 8000) || !temp_ok || !within(self.timeout_ms, 1000, 60_000) || !batch_ok {
+                if !within(self.max_tokens, 1, 8000) || !temp_ok || !within(self.timeout_ms, 1000, 60_000) {
                     return Err(BAD);
                 }
             }
         }
         Ok(())
     }
+}
+
+/// Gorevin parti buyuklugu (yalniz `has_batch` sozlesmede): 3-15, NULL = varsayilan.
+pub fn valid_batch(c: &Contract, b: Option<i32>) -> bool {
+    match b {
+        None => true,
+        Some(b) => c.has_batch && (3..=15).contains(&b),
+    }
+}
+
+pub const DEFAULT_BATCH: u32 = 9;
+
+/// Profil adi: bos degil, en cok 60 karakter.
+pub fn valid_profile_name(s: &str) -> bool {
+    let n = s.trim().chars().count();
+    (1..=60).contains(&n)
 }
 
 /// Model adi OpenRouter bicimi: `saglayici/model[:varyant]`. Bos, uzun ya da garip
@@ -142,9 +174,12 @@ pub fn valid_model(m: &str) -> bool {
         && m.contains('/')
 }
 
-/// Gecerli (etkin) ayar: satir + varsayilanlar.
+/// Gecerli (etkin) ayar: profil + gorev satiri + varsayilanlar.
 #[derive(Clone, Debug, Serialize)]
 pub struct Effective {
+    /// `None` yalniz DB okunamayinca (manifest varsayilaniyla devam): limit uygulanmaz.
+    pub profile_id: Option<Uuid>,
+    pub profile_name: String,
     pub model: String,
     pub max_tokens: u32,
     pub temperature: Option<f64>,
@@ -161,18 +196,21 @@ pub struct Effective {
 }
 
 impl Effective {
-    pub fn resolve(c: &Contract, model: String, p: &Params) -> Self {
-        let (timeout, max_tokens) = match c.endpoint {
+    /// Profil parametreleri + uc turunun varsayilanlari; gorev alanlari varsayilan.
+    pub fn resolve(endpoint: Endpoint, model: String, p: &Params) -> Self {
+        let (timeout, max_tokens) = match endpoint {
             Endpoint::Chat => (30_000, 1500),
             Endpoint::Decisions => (3000, 0),
         };
         Effective {
+            profile_id: None,
+            profile_name: String::new(),
             model,
             max_tokens: p.max_tokens.unwrap_or(max_tokens),
             temperature: p.temperature,
             timeout_ms: p.timeout_ms.unwrap_or(timeout),
             reasoning_off: p.reasoning_off.unwrap_or(true),
-            batch: p.batch.unwrap_or(9),
+            batch: DEFAULT_BATCH,
             enabled: true,
             store_bodies: false,
             prompt_version: 0,
@@ -189,67 +227,130 @@ impl Effective {
     }
 }
 
-pub fn default_model(st: &AppState, c: &Contract) -> String {
-    match c.endpoint {
-        Endpoint::Chat => st.cfg.suggest_model.clone(),
-        Endpoint::Decisions => st.cfg.decision_model.clone(),
+/// Manifestteki model: yalniz acilistaki tohum profilin modeli ve DB okunamazsa yedek.
+pub fn default_model(cfg: &crate::config::Config, endpoint: Endpoint) -> String {
+    match endpoint {
+        Endpoint::Chat => cfg.suggest_model.clone(),
+        Endpoint::Decisions => cfg.decision_model.clone(),
     }
 }
 
-#[derive(sqlx::FromRow)]
-pub struct FeatureRow {
+#[derive(Clone, sqlx::FromRow)]
+pub struct ProfileRow {
+    pub id: Uuid,
+    pub name: String,
+    pub endpoint: String,
     pub model: String,
     pub params: Value,
-    pub enabled: bool,
-    pub store_bodies: bool,
-    pub prompt_version: Option<i32>,
-    pub prompt: Option<String>,
     pub tested_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub updated_by: Option<Uuid>,
 }
 
-pub async fn row(pool: &PgPool, feature: &str) -> Result<Option<FeatureRow>, sqlx::Error> {
+impl ProfileRow {
+    /// Parametreler okunamazsa (sema degisti) varsayilan: cagri dusmesin.
+    pub fn params(&self) -> Params {
+        serde_json::from_value(self.params.clone()).unwrap_or_else(|_| {
+            tracing::warn!("llm_profiles.params okunamadi: varsayilanlar kullaniliyor");
+            Params::default()
+        })
+    }
+
+    pub fn endpoint(&self) -> Endpoint {
+        Endpoint::parse(&self.endpoint).unwrap_or(Endpoint::Chat)
+    }
+
+    /// Profilin etkin parametreleri (gorev alanlari varsayilan).
+    pub fn effective(&self) -> Effective {
+        Effective {
+            profile_id: Some(self.id),
+            profile_name: self.name.clone(),
+            ..Effective::resolve(self.endpoint(), self.model.clone(), &self.params())
+        }
+    }
+}
+
+pub async fn profile(pool: &PgPool, id: Uuid) -> Result<Option<ProfileRow>, sqlx::Error> {
+    sqlx::query_as("select id, name, endpoint, model, params, tested_at, created_at, updated_at, updated_by
+                      from llm_profiles where id = $1")
+        .bind(id).fetch_optional(pool).await
+}
+
+#[derive(Clone, sqlx::FromRow)]
+pub struct TaskRow {
+    pub profile_id: Uuid,
+    pub batch: Option<i32>,
+    pub enabled: bool,
+    pub store_bodies: bool,
+    pub prompt_version: Option<i32>,
+    pub prompt: Option<String>,
+    pub updated_at: DateTime<Utc>,
+    pub updated_by: Option<Uuid>,
+}
+
+pub async fn task(pool: &PgPool, feature: &str) -> Result<Option<TaskRow>, sqlx::Error> {
     sqlx::query_as(
-        "select f.model, f.params, f.enabled, f.store_bodies, f.prompt_version, p.body as prompt,
-                f.tested_at, f.updated_at, f.updated_by
-           from llm_features f
-           left join llm_prompts p on p.feature = f.feature and p.version = f.prompt_version
-          where f.feature = $1")
+        "select t.profile_id, t.batch, t.enabled, t.store_bodies, t.prompt_version,
+                p.body as prompt, t.updated_at, t.updated_by
+           from llm_tasks t
+           left join llm_prompts p on p.feature = t.feature and p.version = t.prompt_version
+          where t.feature = $1")
         .bind(feature).fetch_optional(pool).await
 }
 
-/// Satirdaki parametreler okunamazsa (sema degisti) varsayilan: cagri dusmesin.
-pub fn stored_params(r: &FeatureRow) -> Params {
-    serde_json::from_value(r.params.clone()).unwrap_or_else(|_| {
-        tracing::warn!("llm_features.params okunamadi: varsayilanlar kullaniliyor");
-        Params::default()
-    })
-}
-
-pub fn effective(st: &AppState, c: &Contract, r: Option<&FeatureRow>) -> Effective {
-    match r {
-        None => Effective::resolve(c, default_model(st, c), &Params::default()),
-        Some(r) => Effective {
-            enabled: r.enabled,
-            store_bodies: r.store_bodies,
-            prompt_version: r.prompt_version.unwrap_or(0),
-            prompt: r.prompt.clone(),
-            ..Effective::resolve(c, r.model.clone(), &stored_params(r))
-        },
+/// Profil + gorev -> etkin ayar.
+pub fn combine(p: &ProfileRow, t: &TaskRow) -> Effective {
+    Effective {
+        batch: t.batch.and_then(|b| u32::try_from(b).ok()).unwrap_or(DEFAULT_BATCH),
+        enabled: t.enabled,
+        store_bodies: t.store_bodies,
+        prompt_version: t.prompt_version.unwrap_or(0),
+        prompt: t.prompt.clone(),
+        ..p.effective()
     }
 }
 
-/// Cagri aninda gecerli ayar. DB okunamazsa varsayilan (cagiran yine dener; kayit da
-/// zaten yazilamayacak, loga duser).
+/// Cagri aninda gecerli ayar. DB okunamazsa manifest varsayilani (cagiran yine dener;
+/// kayit da zaten yazilamayacak, loga duser).
 pub async fn settings(st: &AppState, c: &Contract) -> Effective {
-    match row(&st.pool, c.feature).await {
-        Ok(r) => effective(st, c, r.as_ref()),
+    let read = async {
+        let Some(t) = task(&st.pool, c.feature).await? else { return Ok(None) };
+        Ok::<_, sqlx::Error>(profile(&st.pool, t.profile_id).await?.map(|p| combine(&p, &t)))
+    };
+    match read.await {
+        Ok(Some(e)) => e,
+        Ok(None) => Effective::resolve(c.endpoint, default_model(&st.cfg, c.endpoint), &Params::default()),
         Err(e) => {
-            tracing::error!("llm_features okunamadi: {e}");
-            effective(st, c, None)
+            tracing::error!("llm ayari okunamadi: {e}");
+            Effective::resolve(c.endpoint, default_model(&st.cfg, c.endpoint), &Params::default())
         }
     }
+}
+
+/// Acilista: her sozlesme turu icin profil yoksa manifestin modeliyle olusturur, her
+/// gorev icin satir yoksa o turun en eski profiline baglar. Tekrar kosmasi guvenli;
+/// var olani degistirmez (manifest sonradan degisirse yalniz yeni kurulumu etkiler).
+pub async fn ensure_defaults(pool: &PgPool, cfg: &crate::config::Config) -> Result<(), sqlx::Error> {
+    for endpoint in Endpoint::ALL {
+        if !CONTRACTS.iter().any(|c| c.endpoint == endpoint) {
+            continue;
+        }
+        sqlx::query(
+            "insert into llm_profiles (name, endpoint, model)
+             select $1, $2, $3 where not exists (select 1 from llm_profiles where endpoint = $2)
+             on conflict (name) do nothing")
+            .bind(endpoint.default_name()).bind(endpoint.key()).bind(default_model(cfg, endpoint))
+            .execute(pool).await?;
+    }
+    for c in &CONTRACTS {
+        sqlx::query(
+            "insert into llm_tasks (feature, profile_id)
+             select $1, id from llm_profiles where endpoint = $2 order by created_at, name limit 1
+             on conflict (feature) do nothing")
+            .bind(c.feature).bind(c.endpoint.key()).execute(pool).await?;
+    }
+    Ok(())
 }
 
 pub fn service_on(st: &AppState, c: &Contract) -> bool {
@@ -259,34 +360,35 @@ pub fn service_on(st: &AppState, c: &Contract) -> bool {
 /// DB'de kapatilmis ozelliklerin servis anahtarlari (`/api/meta` `external_off`'a eklenir:
 /// on yuz kapali ozelligi cizmesin).
 pub async fn disabled_services(pool: &PgPool) -> Result<Vec<&'static str>, sqlx::Error> {
-    let off: Vec<String> = sqlx::query_scalar("select feature from llm_features where not enabled")
+    let off: Vec<String> = sqlx::query_scalar("select feature from llm_tasks where not enabled")
         .fetch_all(pool).await?;
     Ok(off.iter().filter_map(|f| contract(f)).map(|c| c.service.key()).collect())
 }
 
-/// Modelin herhangi bir penceresinde harcama tavana ulasti mi (spec/79 §11.3). Kayan
+/// Profilin herhangi bir penceresinde harcama tavana ulasti mi (spec/79 §11.3). Kayan
 /// pencere, toplam DB'den: cok surecte de dogru. Maliyeti NULL cagri 0 sayilir.
-pub async fn over_limit(pool: &PgPool, model: &str) -> Result<bool, sqlx::Error> {
+pub async fn over_limit(pool: &PgPool, profile_id: Uuid) -> Result<bool, sqlx::Error> {
     sqlx::query_scalar(
         "select exists (
            select 1 from llm_limits l
-            where l.model = $1
+            where l.profile_id = $1
               and l.usd <= (select coalesce(sum(c.cost_usd), 0) from llm_calls c
-                             where c.model = $1 and c.created_at > now() - make_interval(mins => l.window_minutes)))")
-        .bind(model).fetch_one(pool).await
+                             where c.profile_id = $1 and c.created_at > now() - make_interval(mins => l.window_minutes)))")
+        .bind(profile_id).fetch_one(pool).await
 }
 
-/// Son `TESTED_WITHIN_MIN` dakikadaki basarili "Dene"nin zamani. `prompt_version` verilirse
-/// o istemle yapilmis olmali.
+/// Son `TESTED_WITHIN_MIN` dakikada bu profil + model ile basarili bir "Dene"nin zamani.
+/// `feature` verilirse o gorevle, `prompt_version` verilirse o istemle yapilmis olmali.
 pub async fn tested(
-    pool: &PgPool, feature: &str, model: &str, prompt_version: Option<i32>,
+    pool: &PgPool, feature: Option<&str>, profile_id: Uuid, model: &str, prompt_version: Option<i32>,
 ) -> Result<Option<DateTime<Utc>>, sqlx::Error> {
     sqlx::query_scalar(
         "select max(created_at) from llm_calls
-          where is_try and status = 'ok' and feature = $1 and model = $2
-            and ($3::int is null or coalesce(prompt_version, 0) = $3)
-            and created_at > now() - make_interval(mins => $4)")
-        .bind(feature).bind(model).bind(prompt_version).bind(TESTED_WITHIN_MIN)
+          where is_try and status = 'ok' and profile_id = $2 and model = $3
+            and ($1::text is null or feature = $1)
+            and ($4::int is null or coalesce(prompt_version, 0) = $4)
+            and created_at > now() - make_interval(mins => $5)")
+        .bind(feature).bind(profile_id).bind(model).bind(prompt_version).bind(TESTED_WITHIN_MIN)
         .fetch_one(pool).await
 }
 
@@ -394,8 +496,8 @@ pub async fn run<T>(
         return none(Fail::Disabled);
     }
     let prompt_version = (c.endpoint == Endpoint::Chat).then_some(e.prompt_version);
-    if !who.is_try {
-        match over_limit(&st.pool, &e.model).await {
+    if let (false, Some(profile_id)) = (who.is_try, e.profile_id) {
+        match over_limit(&st.pool, profile_id).await {
             Ok(false) => {}
             Ok(true) => {
                 let mut t = trace(Status::Limit, None, 0, body);
@@ -470,13 +572,14 @@ async fn record(
     let id: Result<Uuid, _> = sqlx::query_scalar(
         "insert into llm_calls (feature, model, user_id, event_id, is_try, prompt_version, status,
                                 http_status, error, ms, prompt_tokens, completion_tokens, cost_usd,
-                                or_gen_id, batch_id, asked, kept, outcome)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+                                or_gen_id, batch_id, asked, kept, outcome, profile_id)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
          returning id")
         .bind(c.feature).bind(&e.model).bind(who.user_id).bind(who.event_id).bind(who.is_try)
         .bind(prompt_version).bind(t.status.key()).bind(t.http_status.map(i32::from)).bind(&t.error)
         .bind(i32::try_from(t.ms).unwrap_or(i32::MAX)).bind(to_i32(t.prompt_tokens)).bind(to_i32(t.completion_tokens))
         .bind(t.cost_usd).bind(&t.or_gen_id).bind(batch_id).bind(t.asked).bind(t.kept).bind(t.outcome)
+        .bind(e.profile_id)
         .fetch_one(&st.pool).await;
     let id = match id {
         Ok(id) => id,
@@ -614,35 +717,74 @@ mod tests {
     }
 
     #[test]
-    fn parametre_sinirlari_sozlesmeye_gore() {
-        let ok = Params { max_tokens: Some(2000), temperature: Some(0.3), timeout_ms: Some(20_000), reasoning_off: Some(false), batch: Some(12) };
-        assert_eq!(ok.validate(chat()), Ok(()));
-        assert_eq!(Params::default().validate(chat()), Ok(()));
+    fn parametre_sinirlari_uc_turune_gore() {
+        let ok = Params { max_tokens: Some(2000), temperature: Some(0.3), timeout_ms: Some(20_000), reasoning_off: Some(false) };
+        assert_eq!(ok.validate(Endpoint::Chat), Ok(()));
+        assert_eq!(Params::default().validate(Endpoint::Chat), Ok(()));
         for bad in [
             Params { max_tokens: Some(0), ..Params::default() },
             Params { max_tokens: Some(9000), ..Params::default() },
             Params { temperature: Some(f64::NAN), ..Params::default() },
             Params { temperature: Some(2.5), ..Params::default() },
             Params { timeout_ms: Some(500), ..Params::default() },
-            Params { batch: Some(2), ..Params::default() },
-            Params { batch: Some(16), ..Params::default() },
         ] {
-            assert_eq!(bad.validate(chat()), Err("llm_params_invalid"), "{bad:?}");
+            assert_eq!(bad.validate(Endpoint::Chat), Err("llm_params_invalid"), "{bad:?}");
         }
         // Karar ucu yalniz zaman asimi alir.
-        assert_eq!(Params { timeout_ms: Some(5000), ..Params::default() }.validate(gate()), Ok(()));
-        assert_eq!(Params { max_tokens: Some(100), ..Params::default() }.validate(gate()), Err("llm_params_invalid"));
-        assert_eq!(Params { timeout_ms: Some(30_000), ..Params::default() }.validate(gate()), Err("llm_params_invalid"));
-        // Bilinmeyen alan sessizce yutulmaz.
+        assert_eq!(Params { timeout_ms: Some(5000), ..Params::default() }.validate(Endpoint::Decisions), Ok(()));
+        assert_eq!(Params { max_tokens: Some(100), ..Params::default() }.validate(Endpoint::Decisions), Err("llm_params_invalid"));
+        assert_eq!(Params { timeout_ms: Some(30_000), ..Params::default() }.validate(Endpoint::Decisions), Err("llm_params_invalid"));
+        // Bilinmeyen alan sessizce yutulmaz; parti artik gorevin, profilin degil.
         assert!(serde_json::from_value::<Params>(serde_json::json!({ "max_token": 5 })).is_err());
+        assert!(serde_json::from_value::<Params>(serde_json::json!({ "batch": 5 })).is_err());
     }
 
     #[test]
-    fn varsayilanlar_sozlesmeden() {
-        let e = Effective::resolve(chat(), "m/x".into(), &Params::default());
+    fn parti_yalniz_partili_gorevde() {
+        assert!(valid_batch(chat(), None) && valid_batch(chat(), Some(3)) && valid_batch(chat(), Some(15)));
+        assert!(!valid_batch(chat(), Some(2)) && !valid_batch(chat(), Some(16)));
+        assert!(!valid_batch(gate(), Some(9)), "kapinin partisi yok");
+        assert!(valid_batch(gate(), None));
+    }
+
+    #[test]
+    fn profil_adi_ve_uc_turu() {
+        assert!(valid_profile_name("Genel amaçlı") && valid_profile_name(&"ş".repeat(60)));
+        assert!(!valid_profile_name("  ") && !valid_profile_name(&"a".repeat(61)));
+        assert_eq!(Endpoint::parse("decisions"), Some(Endpoint::Decisions));
+        assert_eq!(Endpoint::parse("image"), None);
+        for e in Endpoint::ALL {
+            assert_eq!(Endpoint::parse(e.key()), Some(e));
+        }
+    }
+
+    #[test]
+    fn profil_ve_gorev_birlesir() {
+        let now = Utc::now();
+        let p = ProfileRow {
+            id: Uuid::new_v4(), name: "Genel amaçlı".into(), endpoint: "chat".into(), model: "a/b".into(),
+            params: serde_json::json!({ "max_tokens": 700 }), tested_at: None, created_at: now, updated_at: now, updated_by: None,
+        };
+        let t = TaskRow {
+            profile_id: p.id, batch: Some(5), enabled: false, store_bodies: true,
+            prompt_version: Some(2), prompt: Some("istem".into()), updated_at: now, updated_by: None,
+        };
+        let e = combine(&p, &t);
+        assert_eq!((e.profile_id, e.model.as_str(), e.max_tokens, e.timeout_ms), (Some(p.id), "a/b", 700, 30_000));
+        assert_eq!((e.batch, e.enabled, e.store_bodies, e.prompt_version), (5, false, true, 2));
+        assert_eq!(e.system(chat()).as_deref(), Some("istem"));
+        // Bozuk parametre satiri cagriyi dusurmez: varsayilan.
+        let bad = ProfileRow { params: serde_json::json!({ "bogus": 1 }), ..p };
+        assert_eq!(bad.effective().max_tokens, 1500);
+    }
+
+    #[test]
+    fn varsayilanlar_uc_turunden() {
+        let e = Effective::resolve(Endpoint::Chat, "m/x".into(), &Params::default());
         assert_eq!((e.max_tokens, e.timeout_ms, e.reasoning_off, e.batch, e.temperature), (1500, 30_000, true, 9, None));
+        assert_eq!(e.profile_id, None, "DB'siz yedek: limit uygulanmaz");
         assert_eq!(e.system(chat()).as_deref(), Some(SUGGEST_PROMPT), "satir yok: koddaki istem");
-        let g = Effective::resolve(gate(), "typesafe/jev".into(), &Params::default());
+        let g = Effective::resolve(Endpoint::Decisions, "typesafe/jev".into(), &Params::default());
         assert_eq!(g.timeout_ms, 3000, "kapi kaydi bekletmesin");
         assert_eq!(g.system(gate()), None);
     }

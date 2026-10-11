@@ -154,7 +154,7 @@ mod tests {
 
     fn eff(model: &str) -> Effective {
         Effective {
-            model: model.into(), max_tokens: 1500, temperature: None, timeout_ms: 30_000,
+            profile_id: None, profile_name: String::new(), model: model.into(), max_tokens: 1500, temperature: None, timeout_ms: 30_000,
             reasoning_off: true, batch: 9, enabled: true, store_bodies: false, prompt_version: 0, prompt: None,
         }
     }

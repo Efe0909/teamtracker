@@ -260,9 +260,9 @@ testi: `backend/tools/check_api.sh` `csrf_gate` ve `record_permissions` bölüml
 `quality_config_changed/_reset` ve `llm_config_changed/_reset`'i tanımıyordu: bu yazmalar
 kısıtta düşüyor, `audit::log_event` hatayı yalnız loga yazdığı için istek yine geçiyordu
 (kalite ve temizleme ayarı değişiklikleri hiç iz bırakmadı). 024 listeyi koddaki her türü
-kapsayacak biçimde genişletti ve LLM yönetim olaylarını ekledi: `llm_feature_changed`
-(ayrıntı: özellik + model), `llm_prompt_changed` (özellik + sürüm), `llm_limit_changed`
-(model + pencere + tutar), `llm_bodies_on/off` (özellik). Yeni bir tür eklemek = göçte
+kapsayacak biçimde genişletti ve LLM yönetim olaylarını ekledi: `llm_profile_changed`
+(ayrıntı: profil adı + model), `llm_task_changed` (görev → profil adı), `llm_prompt_changed` (özellik + sürüm), `llm_limit_changed`
+(profil + pencere + tutar), `llm_bodies_on/off` (görev). Yeni bir tür eklemek = göçte
 kısıtı genişletmek; `check_api.sh` en az bir yazmayı tabloda arar.
 
 **LLM çağrı kaydı (spec/79 §11).** `llm_calls`: kim, hangi özellik/model, durum, süre, jeton,

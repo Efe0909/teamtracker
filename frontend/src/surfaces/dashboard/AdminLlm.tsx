@@ -16,31 +16,25 @@ import { useSort, type Accessors } from "../../lib/sort";
 import { useStored } from "../../lib/stored";
 import { SortTh } from "../../ui/SortTh";
 import { Button, cx, Empty, IconButton, Loading, Segmented, ui } from "../../ui/ui";
-import { AdminLlmCleaning, AdminLlmData, AdminLlmLimits, AdminLlmModels, AdminLlmPrompts } from "./AdminLlmSettings";
-import { AdminQuality } from "./AdminQuality";
+import { AdminLlmCleaning, AdminLlmData, AdminLlmModels } from "./AdminLlmSettings";
 import c from "./AdminLlm.module.css";
 
-type Sub = "overview" | "analysis" | "calls" | "models" | "limits" | "prompts" | "quality" | "cleaning" | "data";
+type Sub = "overview" | "analysis" | "calls" | "models" | "cleaning" | "data";
 
+// Model, istem, limit ve kalite sorulari tek yerde: "Modeller ve gorevler" (profil ve gorev
+// kartlari), her birinin ayrintisi tam sayfa (AdminLlmProfile, AdminLlmTask).
 const SUBS: { value: Sub; label: string }[] = [
   { value: "overview", label: "Genel" },
   { value: "analysis", label: "Analiz" },
   { value: "calls", label: "Çağrılar" },
-  { value: "models", label: "Modeller" },
-  { value: "limits", label: "Limitler" },
-  { value: "prompts", label: "İstemler" },
-  { value: "quality", label: "Kalite kapısı" },
+  { value: "models", label: "Modeller ve görevler" },
   { value: "cleaning", label: "Temizleme" },
   { value: "data", label: "Veri" },
 ];
 
 export function AdminLlm() {
-  const L = useLookup();
-  // Kalite sorulari kayit kararlarini degistirir: yalniz admin (uc da 403 verir).
-  const admin = L.meta.me.is_admin;
   const [stored, setSub] = useStored<string>("admin.llm.tab", "overview");
-  const known = SUBS.some((s) => s.value === stored) && (admin || stored !== "quality");
-  const sub: Sub = known ? (stored as Sub) : "overview";
+  const sub: Sub = SUBS.some((s) => s.value === stored) ? (stored as Sub) : "overview";
   const [filter, setFilter] = useState<LlmFilter>(() => emptyFilter(new Date()));
   const [range, setRange] = useState<Range>("30d");
   const status = useLlmStatus();
@@ -49,8 +43,7 @@ export function AdminLlm() {
   return (
     <>
       <div className={c.top}>
-        <Segmented label="LLM bölümü" value={sub} onChange={setSub}
-          options={SUBS.map((s) => ({ ...s, locked: s.value === "quality" && !admin }))} />
+        <Segmented label="LLM bölümü" value={sub} onChange={setSub} options={SUBS} />
         <div className={c.topRight}>
           <StatusPill s={status.data} />
           <IconButton icon="restore" label="Yenile" onClick={() => void qc.invalidateQueries({ queryKey: ["admin", "llm"] })} />
@@ -66,9 +59,6 @@ export function AdminLlm() {
         : sub === "analysis" ? <Analysis f={filter} />
         : sub === "calls" ? <Calls key={JSON.stringify(filter)} f={filter} />
         : sub === "models" ? <AdminLlmModels />
-        : sub === "limits" ? <AdminLlmLimits />
-        : sub === "prompts" ? <AdminLlmPrompts />
-        : sub === "quality" ? <AdminQuality />
         : sub === "cleaning" ? <AdminLlmCleaning />
         : <AdminLlmData />}
     </>
@@ -253,11 +243,11 @@ function LimitsCard() {
         <h3>En dolu limitler</h3>
         <span className={c.sub}>{l.data?.length ?? 0} limit</span>
       </div>
-      {rows.length === 0 ? <p className={c.sub} style={{ margin: 0 }}>Limit yok: harcama sınırsız. “Limitler” sekmesinden eklenir.</p> : (
+      {rows.length === 0 ? <p className={c.sub} style={{ margin: 0 }}>Limit yok: harcama sınırsız. Profil sayfasından eklenir.</p> : (
         <ul className={c.list}>
           {rows.map((r) => (
             <li key={r.id}>
-              <div className={c.listHead}><span>{r.model} · {windowLabel(r.window_minutes)}</span><b>{usd(r.spent)} / {usd(r.usd)}</b></div>
+              <div className={c.listHead}><span>{r.profile_name} · {windowLabel(r.window_minutes)}</span><b>{usd(r.spent)} / {usd(r.usd)}</b></div>
               <div className={c.progress}>
                 <div className={c.progressFill} data-full={r.spent >= r.usd} style={{ width: `${Math.min(100, (r.spent / r.usd) * 100)}%` }} />
               </div>

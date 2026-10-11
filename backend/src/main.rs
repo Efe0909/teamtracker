@@ -52,6 +52,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cfg = config::Config::from_env()?;
     let pool = db::pool::connect(&cfg.database_url).await?;
     db::migrate(&pool).await?;
+    // LLM: her uc turune bir profil, her goreve bir satir (yoksa; manifestin modeliyle).
+    llm::ensure_defaults(&pool, &cfg).await?;
     if let Some(path) = &cfg.bootstrap_admins_file {
         bootstrap::admins(&pool, path).await;
     }

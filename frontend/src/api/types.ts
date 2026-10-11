@@ -833,16 +833,20 @@ export interface LlmConfigView {
 export type LlmFeature = "material_suggestions" | "quality_gate";
 export type LlmStatus = "ok" | "limit" | "http" | "timeout" | "network" | "parse" | "schema";
 
-/** Satirdaki ham parametreler; yoksa sozlesmenin varsayilani. */
+export type LlmEndpoint = "chat" | "decisions";
+
+/** Profil parametreleri (satirdaki ham hali); yoksa uc turunun varsayilani. */
 export interface LlmParams {
   max_tokens?: number;
   temperature?: number;
   timeout_ms?: number;
   reasoning_off?: boolean;
-  batch?: number;
 }
 
+/** Profil + gorev birlesimi (gecerli ayar). */
 export interface LlmEffective {
+  profile_id: Uuid | null;
+  profile_name: string;
   model: string;
   max_tokens: number;
   temperature: number | null;
@@ -855,28 +859,63 @@ export interface LlmEffective {
   prompt_version: number;
 }
 
-export interface LlmFeatureView {
-  feature: LlmFeature;
-  label: string;
-  endpoint: "chat" | "decisions";
-  has_prompt: boolean;
-  has_batch: boolean;
-  default_model: string;
+/** Profil: model + parametre + dolar limitleri; gorevler buna baglanir. */
+export interface LlmProfileView {
+  id: Uuid;
+  name: string;
+  endpoint: LlmEndpoint;
+  model: string;
   params: LlmParams;
   effective: LlmEffective;
-  customized: boolean;
   tested_at: string | null;
+  created_at: string;
+  updated_at: string;
+  updated_by: Uuid | null;
+  /** Bu profile bagli gorevler (sozlesme anahtarlari). */
+  used_by: LlmFeature[];
+  limits: LlmLimit[];
+  service_on: boolean;
+}
+
+export interface LlmProfileIn {
+  name: string;
+  model: string;
+  params: LlmParams;
+}
+
+/** Gorev: koddaki sozlesme + istem + hangi profil. */
+export interface LlmTaskView {
+  feature: LlmFeature;
+  label: string;
+  endpoint: LlmEndpoint;
+  has_prompt: boolean;
+  has_batch: boolean;
+  profile: { id: Uuid; name: string; model: string } | null;
+  /** Satirdaki parti (null = varsayilan). */
+  batch: number | null;
+  effective: LlmEffective;
   updated_at: string | null;
   updated_by: Uuid | null;
   service_on: boolean;
   sample_input: unknown;
 }
 
-export interface LlmFeatureIn {
-  model: string;
-  params: LlmParams;
+export interface LlmTaskIn {
+  profile_id: Uuid;
+  batch?: number;
   enabled: boolean;
   store_bodies: boolean;
+}
+
+/** Dene: bir gorevi bir profille; model/params/batch/prompt_version taslak olabilir. */
+export interface LlmTryIn {
+  feature: LlmFeature;
+  profile_id: Uuid;
+  model?: string;
+  params?: LlmParams;
+  batch?: number;
+  prompt_version?: number;
+  input: unknown;
 }
 
 export interface LlmTrace {
@@ -920,7 +959,8 @@ export interface LlmPromptsView {
 
 export interface LlmLimit {
   id: Uuid;
-  model: string;
+  profile_id: Uuid;
+  profile_name: string;
   window_minutes: number;
   usd: number;
   spent: number;

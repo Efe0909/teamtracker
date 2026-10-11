@@ -17,6 +17,8 @@ import { Avatar, cx, IconButton, Kbd, Link, Menu, MenuItem, MenuLabel, MenuRadio
 import { ErrorScreen } from "../errors/ErrorScreen";
 import { signOut } from "../Session";
 import { Admin } from "./Admin";
+import { AdminLlmProfile } from "./AdminLlmProfile";
+import { AdminLlmTask } from "./AdminLlmTask";
 import s from "./dashboard.module.css";
 import { DataTree } from "./DataTree";
 import { EventPage } from "./EventPage";
@@ -104,6 +106,10 @@ function Page({ route }: { route: Route }) {
       return <Notifications />;
     case "admin":
       return <Admin />;
+    case "llmProfile":
+      return <AdminLlmProfile id={route.id} />;
+    case "llmTask":
+      return <AdminLlmTask feature={route.feature} />;
     case "notFound":
       return <ErrorScreen code="not_found" />;
     default: {
@@ -139,7 +145,7 @@ const NAV: NavItem[] = [
 ];
 
 /** Yalniz admin, manage_users ya da manage_llm gorur; uc yine kendisi kontrol eder. */
-const ADMIN_NAV: NavItem = { route: { name: "admin" }, icon: "lock", label: "Yönetim", match: ["admin"] };
+const ADMIN_NAV: NavItem = { route: { name: "admin" }, icon: "lock", label: "Yönetim", match: ["admin", "llmProfile", "llmTask"] };
 
 const THEME_OPTS: { value: Theme; label: string; icon: IconName }[] = [
   { value: "light", label: "Açık", icon: "sun" },

@@ -1,11 +1,13 @@
 //! Yonetim > Veri isleme ve LLM: ayar uclari (spec/79 §11).
 //!
-//! Temizleme kurallari (`llm_config`), ozellik ayari (`llm_features`: model, parametre,
-//! acik/kapali, govde saklama), "Dene", istem surumleri (`llm_prompts`) ve dolar
-//! limitleri (`llm_limits`). Okuma uclari (kullanim, cagrilar, OpenRouter) `llm_usage.rs`.
+//! Temizleme kurallari (`llm_config`); PROFILLER (`llm_profiles`: model + parametre, profil
+//! basina dolar limitleri `llm_limits`); GOREVLER (`llm_tasks`: hangi profil, parti,
+//! acik/kapali, govde saklama; istem surumleri `llm_prompts`); "Dene". Okuma uclari
+//! (kullanim, cagrilar, OpenRouter) `llm_usage.rs`.
 //!
-//! Erisim: admin ya da `manage_llm` (sekmenin TAMAMI, temizleme dahil). Kontrol her ucun
-//! ilk satirinda. Her degisiklik `security_events`'e yazilir (govde degil, yalniz olay).
+//! Erisim: admin ya da `manage_llm` (sekmenin TAMAMI, temizleme dahil; kalite sorulari
+//! `quality.rs`'te yalniz admin). Kontrol her ucun ilk satirinda. Her degisiklik
+//! `security_events`'e yazilir (govde degil, yalniz olay).
 
 use axum::{
     extract::{Path, State},
@@ -24,7 +26,7 @@ use crate::{
     auth::CurrentUser,
     decision,
     error::{AppError, Result},
-    llm::{self, Contract, Effective, Endpoint, Params},
+    llm::{self, Contract, Effective, Endpoint, Params, ProfileRow},
     models::user::User,
     redact::LlmConfig,
     state::AppState,
@@ -124,25 +126,277 @@ pub async fn reset(
     view(&st).await
 }
 
-// --- ozellikler ------------------------------------------------------------------
+// --- limitler --------------------------------------------------------------------
+
+#[derive(Serialize, sqlx::FromRow)]
+pub struct LimitRow {
+    id: Uuid,
+    profile_id: Uuid,
+    profile_name: String,
+    window_minutes: i32,
+    usd: f64,
+    /// Su anki pencerede bu profille harcanan.
+    spent: f64,
+    created_at: DateTime<Utc>,
+}
+
+async fn limits_of(pool: &PgPool, profile: Option<Uuid>) -> Result<Vec<LimitRow>> {
+    Ok(sqlx::query_as(
+        "select l.id, l.profile_id, p.name as profile_name, l.window_minutes, l.usd, l.created_at,
+                (select coalesce(sum(c.cost_usd), 0) from llm_calls c
+                  where c.profile_id = l.profile_id
+                    and c.created_at > now() - make_interval(mins => l.window_minutes)) as spent
+           from llm_limits l join llm_profiles p on p.id = l.profile_id
+          where $1::uuid is null or l.profile_id = $1
+          order by p.name, l.window_minutes")
+        .bind(profile).fetch_all(pool).await?)
+}
+
+/// Butun limitler (Genel'deki "en dolu limitler" karti).
+pub async fn list_limits(State(st): State<AppState>, CurrentUser(me): CurrentUser) -> Result<Json<Vec<LimitRow>>> {
+    require(&st, &me).await?;
+    Ok(Json(limits_of(&st.pool, None).await?))
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LimitIn {
+    window_minutes: i32,
+    usd: f64,
+}
+
+/// En kisa 15 dk, en uzun 31 gun (`llm_calls` 180 gun tutulur, pencere hep icinde kalir).
+fn valid_limit(b: &LimitIn) -> bool {
+    (15..=44_640).contains(&b.window_minutes) && b.usd.is_finite() && b.usd > 0.0 && b.usd < 100_000.0
+}
+
+/// Profile limit ekler; ayni pencere varsa tavan guncellenir.
+pub async fn put_limit(
+    State(st): State<AppState>, CurrentUser(me): CurrentUser, headers: HeaderMap,
+    Path(raw): Path<String>, Body(b): Body<LimitIn>,
+) -> Result<Json<ProfileView>> {
+    require(&st, &me).await?;
+    let p = profile_or_404(&st.pool, &raw).await?;
+    if !valid_limit(&b) {
+        return Err(AppError::BadRequest("llm_limit_invalid"));
+    }
+    sqlx::query(
+        "insert into llm_limits (profile_id, window_minutes, usd, created_by) values ($1, $2, $3, $4)
+         on conflict (profile_id, window_minutes) do update set usd = $3, created_by = $4, created_at = now()")
+        .bind(p.id).bind(b.window_minutes).bind(b.usd).bind(me.id).execute(&st.pool).await?;
+    log(&st, &headers, &me, "llm_limit_changed", &format!("{} {}dk ${}", p.name, b.window_minutes, b.usd)).await;
+    Ok(Json(profile_view(&st, p).await?))
+}
+
+pub async fn delete_limit(
+    State(st): State<AppState>, CurrentUser(me): CurrentUser, headers: HeaderMap, Path(raw): Path<String>,
+) -> Result<Json<ProfileView>> {
+    require(&st, &me).await?;
+    let id = common::id(&raw)?;
+    let gone: Option<(Uuid, i32)> = sqlx::query_as(
+        "delete from llm_limits where id = $1 returning profile_id, window_minutes")
+        .bind(id).fetch_optional(&st.pool).await?;
+    let (profile_id, window) = gone.ok_or(AppError::NotFound)?;
+    let p = llm::profile(&st.pool, profile_id).await?.ok_or(AppError::NotFound)?;
+    log(&st, &headers, &me, "llm_limit_changed", &format!("{} {window}dk silindi", p.name)).await;
+    Ok(Json(profile_view(&st, p).await?))
+}
+
+// --- profiller -------------------------------------------------------------------
 
 #[derive(Serialize)]
-pub struct FeatureView {
+pub struct ProfileView {
+    id: Uuid,
+    name: String,
+    endpoint: Endpoint,
+    model: String,
+    /// Satirdaki ham parametreler (bos = hepsi varsayilan).
+    params: Params,
+    /// Varsayilanlarla birlesmis hali.
+    effective: Effective,
+    tested_at: Option<DateTime<Utc>>,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
+    updated_by: Option<Uuid>,
+    /// Bu profile bagli gorevler (sozlesme anahtarlari).
+    used_by: Vec<String>,
+    limits: Vec<LimitRow>,
+    /// Bu turdeki bir gorevin servisi acik mi ("Dene" yalniz aciksa).
+    service_on: bool,
+}
+
+fn endpoint_on(st: &AppState, e: Endpoint) -> bool {
+    llm::CONTRACTS.iter().any(|c| c.endpoint == e && llm::service_on(st, c))
+}
+
+async fn profile_view(st: &AppState, p: ProfileRow) -> Result<ProfileView> {
+    let used_by = sqlx::query_scalar("select feature from llm_tasks where profile_id = $1 order by feature")
+        .bind(p.id).fetch_all(&st.pool).await?;
+    let limits = limits_of(&st.pool, Some(p.id)).await?;
+    let endpoint = p.endpoint();
+    Ok(ProfileView {
+        effective: p.effective(), params: p.params(), service_on: endpoint_on(st, endpoint), endpoint,
+        id: p.id, name: p.name, model: p.model, tested_at: p.tested_at, created_at: p.created_at,
+        updated_at: p.updated_at, updated_by: p.updated_by, used_by, limits,
+    })
+}
+
+async fn profile_or_404(pool: &PgPool, raw: &str) -> Result<ProfileRow> {
+    llm::profile(pool, common::id(raw)?).await?.ok_or(AppError::NotFound)
+}
+
+async fn all_profiles(st: &AppState) -> Result<Vec<ProfileView>> {
+    let rows: Vec<ProfileRow> = sqlx::query_as(
+        "select id, name, endpoint, model, params, tested_at, created_at, updated_at, updated_by
+           from llm_profiles order by endpoint, created_at, name")
+        .fetch_all(&st.pool).await?;
+    let mut out = Vec::with_capacity(rows.len());
+    for p in rows {
+        out.push(profile_view(st, p).await?);
+    }
+    Ok(out)
+}
+
+pub async fn list_profiles(State(st): State<AppState>, CurrentUser(me): CurrentUser) -> Result<Json<Vec<ProfileView>>> {
+    require(&st, &me).await?;
+    Ok(Json(all_profiles(&st).await?))
+}
+
+pub async fn get_profile(
+    State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>,
+) -> Result<Json<ProfileView>> {
+    require(&st, &me).await?;
+    let p = profile_or_404(&st.pool, &raw).await?;
+    Ok(Json(profile_view(&st, p).await?))
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct NewProfileIn {
+    name: String,
+    endpoint: Endpoint,
+    model: String,
+    #[serde(default)]
+    params: Params,
+}
+
+async fn name_taken(pool: &PgPool, name: &str, except: Option<Uuid>) -> Result<bool> {
+    Ok(sqlx::query_scalar(
+        "select exists (select 1 from llm_profiles where lower(name) = lower($1) and ($2::uuid is null or id <> $2))")
+        .bind(name).bind(except).fetch_one(pool).await?)
+}
+
+fn check_fields(name: &str, model: &str, endpoint: Endpoint, params: &Params) -> Result<()> {
+    if !llm::valid_profile_name(name) {
+        return Err(AppError::BadRequest("llm_profile_name_invalid"));
+    }
+    if !llm::valid_model(model) {
+        return Err(AppError::BadRequest("llm_model_invalid"));
+    }
+    params.validate(endpoint).map_err(AppError::BadRequest)
+}
+
+/// Yeni profil. Henuz hicbir gorev kullanmadigi icin "Dene" istemez; bir gorevi bu
+/// profile baglamak ister (`put_task`).
+pub async fn create_profile(
+    State(st): State<AppState>, CurrentUser(me): CurrentUser, headers: HeaderMap, Body(b): Body<NewProfileIn>,
+) -> Result<Json<ProfileView>> {
+    require(&st, &me).await?;
+    let (name, model) = (b.name.trim(), b.model.trim());
+    check_fields(name, model, b.endpoint, &b.params)?;
+    if name_taken(&st.pool, name, None).await? {
+        return Err(AppError::Conflict("llm_profile_name_taken"));
+    }
+    let params = serde_json::to_value(&b.params).map_err(|_| AppError::BadRequest("invalid_body"))?;
+    let id: Uuid = sqlx::query_scalar(
+        "insert into llm_profiles (name, endpoint, model, params, updated_by) values ($1, $2, $3, $4, $5) returning id")
+        .bind(name).bind(b.endpoint.key()).bind(model).bind(params).bind(me.id).fetch_one(&st.pool).await?;
+    log(&st, &headers, &me, "llm_profile_changed", &format!("{name} oluşturuldu: {model}")).await;
+    let p = llm::profile(&st.pool, id).await?.ok_or(AppError::NotFound)?;
+    Ok(Json(profile_view(&st, p).await?))
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ProfileIn {
+    name: String,
+    model: String,
+    #[serde(default)]
+    params: Params,
+}
+
+/// Profili yazar. Model DEGISIYORSA bu profille o model icin son 30 dk'da gecen bir
+/// "Dene" sart (spec/79 §11.4); servis kapaliyken denenemez, uyariyla (`tested_at` NULL)
+/// kabul edilir. Uc turu degismez (bagli gorevlerin sozlesmesi bozulmasin).
+pub async fn put_profile(
+    State(st): State<AppState>, CurrentUser(me): CurrentUser, headers: HeaderMap,
+    Path(raw): Path<String>, Body(b): Body<ProfileIn>,
+) -> Result<Json<ProfileView>> {
+    require(&st, &me).await?;
+    let p = profile_or_404(&st.pool, &raw).await?;
+    let (name, model) = (b.name.trim(), b.model.trim());
+    let endpoint = p.endpoint();
+    check_fields(name, model, endpoint, &b.params)?;
+    if name_taken(&st.pool, name, Some(p.id)).await? {
+        return Err(AppError::Conflict("llm_profile_name_taken"));
+    }
+    let tested_at = if model == p.model {
+        p.tested_at
+    } else if endpoint_on(&st, endpoint) {
+        Some(llm::tested(&st.pool, None, p.id, model, None).await?
+            .ok_or(AppError::BadRequest("llm_model_untested"))?)
+    } else {
+        None
+    };
+    let params = serde_json::to_value(&b.params).map_err(|_| AppError::BadRequest("invalid_body"))?;
+    sqlx::query(
+        "update llm_profiles set name = $2, model = $3, params = $4, tested_at = $5, updated_by = $6, updated_at = now()
+          where id = $1")
+        .bind(p.id).bind(name).bind(model).bind(params).bind(tested_at).bind(me.id).execute(&st.pool).await?;
+    log(&st, &headers, &me, "llm_profile_changed", &format!("{name}: {model}")).await;
+    let p = llm::profile(&st.pool, p.id).await?.ok_or(AppError::NotFound)?;
+    Ok(Json(profile_view(&st, p).await?))
+}
+
+/// Kullanilan profil silinemez (once gorevleri baska profile bagla).
+pub async fn delete_profile(
+    State(st): State<AppState>, CurrentUser(me): CurrentUser, headers: HeaderMap, Path(raw): Path<String>,
+) -> Result<Json<Vec<ProfileView>>> {
+    require(&st, &me).await?;
+    let p = profile_or_404(&st.pool, &raw).await?;
+    let used: bool = sqlx::query_scalar("select exists (select 1 from llm_tasks where profile_id = $1)")
+        .bind(p.id).fetch_one(&st.pool).await?;
+    if used {
+        return Err(AppError::Conflict("llm_profile_in_use"));
+    }
+    sqlx::query("delete from llm_profiles where id = $1").bind(p.id).execute(&st.pool).await?;
+    log(&st, &headers, &me, "llm_profile_changed", &format!("{} silindi", p.name)).await;
+    Ok(Json(all_profiles(&st).await?))
+}
+
+// --- gorevler --------------------------------------------------------------------
+
+#[derive(Serialize)]
+pub struct ProfileBrief {
+    id: Uuid,
+    name: String,
+    model: String,
+}
+
+#[derive(Serialize)]
+pub struct TaskView {
     feature: &'static str,
     label: &'static str,
     endpoint: Endpoint,
     has_prompt: bool,
     has_batch: bool,
-    default_model: String,
-    /// Satirdaki ham parametreler (bos = hepsi varsayilan).
-    params: Params,
-    /// Varsayilanlarla birlesmis hali.
+    /// `None` yalniz satir/profil okunamadiysa (acilis tohumu calismadi).
+    profile: Option<ProfileBrief>,
+    /// Satirdaki parti (NULL = varsayilan).
+    batch: Option<i32>,
     effective: Effective,
-    customized: bool,
-    tested_at: Option<DateTime<Utc>>,
     updated_at: Option<DateTime<Utc>>,
     updated_by: Option<Uuid>,
-    /// Anahtar ve manifest `external_off`'a gore servis acik mi ("Dene" yalniz aciksa).
     service_on: bool,
     /// "Dene" kutusunun ornek girdisi.
     sample_input: Value,
@@ -158,92 +412,109 @@ fn sample(c: &Contract) -> Value {
     }
 }
 
-async fn features(st: &AppState) -> Result<Json<Vec<FeatureView>>> {
-    let mut out = Vec::with_capacity(llm::CONTRACTS.len());
-    for c in &llm::CONTRACTS {
-        let row = llm::row(&st.pool, c.feature).await?;
-        out.push(FeatureView {
-            feature: c.feature, label: c.label, endpoint: c.endpoint,
-            has_prompt: c.prompt.is_some(), has_batch: c.has_batch,
-            default_model: llm::default_model(st, c),
-            params: row.as_ref().map(llm::stored_params).unwrap_or_default(),
-            effective: llm::effective(st, c, row.as_ref()),
-            customized: row.is_some(),
-            tested_at: row.as_ref().and_then(|r| r.tested_at),
-            updated_at: row.as_ref().map(|r| r.updated_at),
-            updated_by: row.as_ref().and_then(|r| r.updated_by),
-            service_on: llm::service_on(st, c),
-            sample_input: sample(c),
-        });
-    }
-    Ok(Json(out))
-}
-
 fn contract_of(raw: &str) -> Result<&'static Contract> {
     llm::contract(raw).ok_or(AppError::NotFound)
 }
 
-pub async fn list_features(State(st): State<AppState>, CurrentUser(me): CurrentUser) -> Result<Json<Vec<FeatureView>>> {
+async fn task_view(st: &AppState, c: &'static Contract) -> Result<TaskView> {
+    let t = llm::task(&st.pool, c.feature).await?;
+    let p = match &t { Some(t) => llm::profile(&st.pool, t.profile_id).await?, None => None };
+    let effective = match (&p, &t) {
+        (Some(p), Some(t)) => llm::combine(p, t),
+        _ => llm::settings(st, c).await,
+    };
+    Ok(TaskView {
+        feature: c.feature, label: c.label, endpoint: c.endpoint,
+        has_prompt: c.prompt.is_some(), has_batch: c.has_batch,
+        profile: p.map(|p| ProfileBrief { id: p.id, name: p.name, model: p.model }),
+        batch: t.as_ref().and_then(|t| t.batch),
+        effective,
+        updated_at: t.as_ref().map(|t| t.updated_at),
+        updated_by: t.as_ref().and_then(|t| t.updated_by),
+        service_on: llm::service_on(st, c),
+        sample_input: sample(c),
+    })
+}
+
+pub async fn list_tasks(State(st): State<AppState>, CurrentUser(me): CurrentUser) -> Result<Json<Vec<TaskView>>> {
     require(&st, &me).await?;
-    features(&st).await
+    let mut out = Vec::with_capacity(llm::CONTRACTS.len());
+    for c in &llm::CONTRACTS {
+        out.push(task_view(&st, c).await?);
+    }
+    Ok(Json(out))
+}
+
+pub async fn get_task(
+    State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>,
+) -> Result<Json<TaskView>> {
+    require(&st, &me).await?;
+    Ok(Json(task_view(&st, contract_of(&raw)?).await?))
 }
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct FeatureIn {
-    model: String,
+pub struct TaskIn {
+    profile_id: Uuid,
     #[serde(default)]
-    params: Params,
+    batch: Option<i32>,
     enabled: bool,
     store_bodies: bool,
 }
 
-/// Ozellik ayarini yazar. Model DEGISIYORSA ayni ozellik + model icin son 30 dk'da gecen
-/// bir "Dene" sart (spec/79 §11.4); servis kapaliyken denenemez, uyariyla (`tested_at` NULL)
-/// kabul edilir.
-pub async fn put_feature(
+/// Gorevi yazar. Profil DEGISIYORSA (yani modeli degisiyorsa) bu gorevle o profil + model
+/// icin son 30 dk'da gecen bir "Dene" sart; servis kapaliyken uyariyla kabul.
+pub async fn put_task(
     State(st): State<AppState>, CurrentUser(me): CurrentUser, headers: HeaderMap,
-    Path(raw): Path<String>, Body(b): Body<FeatureIn>,
-) -> Result<Json<Vec<FeatureView>>> {
+    Path(raw): Path<String>, Body(b): Body<TaskIn>,
+) -> Result<Json<TaskView>> {
     require(&st, &me).await?;
     let c = contract_of(&raw)?;
-    let model = b.model.trim().to_string();
-    if !llm::valid_model(&model) {
-        return Err(AppError::BadRequest("llm_model_invalid"));
+    let p = llm::profile(&st.pool, b.profile_id).await?.ok_or(AppError::BadRequest("llm_profile_mismatch"))?;
+    if p.endpoint() != c.endpoint {
+        return Err(AppError::BadRequest("llm_profile_mismatch"));
     }
-    b.params.validate(c).map_err(AppError::BadRequest)?;
-    let row = llm::row(&st.pool, c.feature).await?;
-    let current = llm::effective(&st, c, row.as_ref());
-    let tested_at = if model == current.model {
-        row.as_ref().and_then(|r| r.tested_at)
-    } else if llm::service_on(&st, c) {
-        Some(llm::tested(&st.pool, c.feature, &model, None).await?
-            .ok_or(AppError::BadRequest("llm_model_untested"))?)
-    } else {
-        None
-    };
-    let params = serde_json::to_value(&b.params).map_err(|_| AppError::BadRequest("invalid_body"))?;
+    if !llm::valid_batch(c, b.batch) {
+        return Err(AppError::BadRequest("llm_params_invalid"));
+    }
+    let current = llm::task(&st.pool, c.feature).await?;
+    let switching = current.as_ref().is_none_or(|t| t.profile_id != p.id);
+    if switching && llm::service_on(&st, c)
+        && llm::tested(&st.pool, Some(c.feature), p.id, &p.model, None).await?.is_none()
+    {
+        return Err(AppError::BadRequest("llm_profile_untested"));
+    }
     sqlx::query(
-        "insert into llm_features (feature, model, params, enabled, store_bodies, tested_at, updated_by)
-         values ($1, $2, $3, $4, $5, $6, $7)
-         on conflict (feature) do update set model = $2, params = $3, enabled = $4, store_bodies = $5,
-           tested_at = $6, updated_by = $7, updated_at = now()")
-        .bind(c.feature).bind(&model).bind(params).bind(b.enabled).bind(b.store_bodies).bind(tested_at).bind(me.id)
+        "insert into llm_tasks (feature, profile_id, batch, enabled, store_bodies, updated_by)
+         values ($1, $2, $3, $4, $5, $6)
+         on conflict (feature) do update set profile_id = $2, batch = $3, enabled = $4, store_bodies = $5,
+           updated_by = $6, updated_at = now()")
+        .bind(c.feature).bind(p.id).bind(b.batch).bind(b.enabled).bind(b.store_bodies).bind(me.id)
         .execute(&st.pool).await?;
-    log(&st, &headers, &me, "llm_feature_changed", &format!("{} {model}", c.feature)).await;
-    if b.store_bodies != current.store_bodies {
+    log(&st, &headers, &me, "llm_task_changed", &format!("{} → {}", c.feature, p.name)).await;
+    if b.store_bodies != current.as_ref().is_some_and(|t| t.store_bodies) {
         let ev = if b.store_bodies { "llm_bodies_on" } else { "llm_bodies_off" };
         log(&st, &headers, &me, ev, c.feature).await;
     }
-    features(&st).await
+    Ok(Json(task_view(&st, c).await?))
 }
+
+// --- Dene ------------------------------------------------------------------------
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TryIn {
-    model: String,
+    feature: String,
+    profile_id: Uuid,
+    /// Kaydedilmemis taslak; yoksa profilin modeli.
     #[serde(default)]
-    params: Params,
+    model: Option<String>,
+    /// Kaydedilmemis taslak; yoksa profilin parametreleri.
+    #[serde(default)]
+    params: Option<Params>,
+    /// Kaydedilmemis taslak; yoksa gorevin partisi.
+    #[serde(default)]
+    batch: Option<i32>,
     /// Denenecek istem surumu (0 = koddaki); yoksa etkin olan.
     #[serde(default)]
     prompt_version: Option<i32>,
@@ -257,20 +528,33 @@ struct GateInput {
     state: String,
 }
 
-/// Taslak model/parametre/istemle tek gercek cagri. Kaydetmez; `is_try` satiri yazilir,
+/// Bir gorevi bir profille (taslak model/parametre/parti/istem olabilir) tek gercek cagri.
+/// Kaydetmez; `is_try` satiri yazilir (profil + model + istem: kayit kurallari buna bakar),
 /// tam iz (istek, ham cevap/hata govdesi) yalniz bu cevapta doner.
-pub async fn try_feature(
-    State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>, Body(b): Body<TryIn>,
+pub async fn try_it(
+    State(st): State<AppState>, CurrentUser(me): CurrentUser, Body(b): Body<TryIn>,
 ) -> Result<Json<Value>> {
     require(&st, &me).await?;
-    let c = contract_of(&raw)?;
-    let model = b.model.trim().to_string();
+    let c = contract_of(&b.feature)?;
+    let p = llm::profile(&st.pool, b.profile_id).await?.ok_or(AppError::NotFound)?;
+    if p.endpoint() != c.endpoint {
+        return Err(AppError::BadRequest("llm_profile_mismatch"));
+    }
+    let model = b.model.as_deref().map(str::trim).unwrap_or(&p.model).to_string();
     if !llm::valid_model(&model) {
         return Err(AppError::BadRequest("llm_model_invalid"));
     }
-    b.params.validate(c).map_err(AppError::BadRequest)?;
+    let params = b.params.unwrap_or_else(|| p.params());
+    params.validate(c.endpoint).map_err(AppError::BadRequest)?;
+    if !llm::valid_batch(c, b.batch) {
+        return Err(AppError::BadRequest("llm_params_invalid"));
+    }
     let current = llm::settings(&st, c).await;
-    let mut e = Effective { enabled: true, store_bodies: false, ..Effective::resolve(c, model, &b.params) };
+    let mut e = Effective {
+        profile_id: Some(p.id), profile_name: p.name.clone(), enabled: true, store_bodies: false,
+        batch: b.batch.and_then(|v| u32::try_from(v).ok()).unwrap_or(current.batch),
+        ..Effective::resolve(c.endpoint, model, &params)
+    };
     (e.prompt_version, e.prompt) = match (c.prompt, b.prompt_version) {
         (None, _) => (0, None),
         (Some(_), None) => (current.prompt_version, current.prompt),
@@ -368,8 +652,8 @@ pub struct ActiveIn {
     version: i32,
 }
 
-/// Surumu etkinlestirir (0 = koddaki). Etkin model ile o surumun son 30 dk'da gecen bir
-/// "Dene"si sart; servis kapaliyken uyariyla kabul.
+/// Surumu etkinlestirir (0 = koddaki). Gorevin profili + modeli ile o surumun son 30 dk'da
+/// gecen bir "Dene"si sart; servis kapaliyken uyariyla kabul.
 pub async fn activate_prompt(
     State(st): State<AppState>, CurrentUser(me): CurrentUser, headers: HeaderMap,
     Path(raw): Path<String>, Body(b): Body<ActiveIn>,
@@ -379,87 +663,17 @@ pub async fn activate_prompt(
     if b.version < 0 || (b.version > 0 && prompt_body(&st.pool, c.feature, b.version).await.is_err()) {
         return Err(AppError::BadRequest("llm_prompt_invalid"));
     }
-    let model = llm::settings(&st, c).await.model;
-    if llm::service_on(&st, c) && llm::tested(&st.pool, c.feature, &model, Some(b.version)).await?.is_none() {
+    let e = llm::settings(&st, c).await;
+    let profile_id = e.profile_id.ok_or(AppError::NotFound)?;
+    if llm::service_on(&st, c)
+        && llm::tested(&st.pool, Some(c.feature), profile_id, &e.model, Some(b.version)).await?.is_none()
+    {
         return Err(AppError::BadRequest("llm_prompt_untested"));
     }
-    sqlx::query(
-        "insert into llm_features (feature, model, prompt_version, updated_by) values ($1, $2, nullif($3, 0), $4)
-         on conflict (feature) do update set prompt_version = nullif($3, 0), updated_by = $4, updated_at = now()")
-        .bind(c.feature).bind(&model).bind(b.version).bind(me.id).execute(&st.pool).await?;
+    sqlx::query("update llm_tasks set prompt_version = nullif($2, 0), updated_by = $3, updated_at = now() where feature = $1")
+        .bind(c.feature).bind(b.version).bind(me.id).execute(&st.pool).await?;
     log(&st, &headers, &me, "llm_prompt_changed", &format!("{} v{}", c.feature, b.version)).await;
     prompts(&st, c, code).await
-}
-
-// --- limitler --------------------------------------------------------------------
-
-#[derive(Serialize, sqlx::FromRow)]
-pub struct LimitRow {
-    id: Uuid,
-    model: String,
-    window_minutes: i32,
-    usd: f64,
-    /// Su anki pencerede harcanan.
-    spent: f64,
-    created_at: DateTime<Utc>,
-}
-
-async fn limits(st: &AppState) -> Result<Json<Vec<LimitRow>>> {
-    Ok(Json(sqlx::query_as(
-        "select l.id, l.model, l.window_minutes, l.usd, l.created_at,
-                (select coalesce(sum(c.cost_usd), 0) from llm_calls c
-                  where c.model = l.model and c.created_at > now() - make_interval(mins => l.window_minutes)) as spent
-           from llm_limits l order by l.model, l.window_minutes")
-        .fetch_all(&st.pool).await?))
-}
-
-pub async fn list_limits(State(st): State<AppState>, CurrentUser(me): CurrentUser) -> Result<Json<Vec<LimitRow>>> {
-    require(&st, &me).await?;
-    limits(&st).await
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct LimitIn {
-    model: String,
-    window_minutes: i32,
-    usd: f64,
-}
-
-/// En kisa 15 dk, en uzun 31 gun (`llm_calls` 180 gun tutulur, pencere hep icinde kalir).
-fn valid_limit(b: &LimitIn) -> bool {
-    llm::valid_model(b.model.trim()) && (15..=44_640).contains(&b.window_minutes)
-        && b.usd.is_finite() && b.usd > 0.0 && b.usd < 100_000.0
-}
-
-/// Ayni model + pencere varsa tavan guncellenir.
-pub async fn put_limit(
-    State(st): State<AppState>, CurrentUser(me): CurrentUser, headers: HeaderMap, Body(b): Body<LimitIn>,
-) -> Result<Json<Vec<LimitRow>>> {
-    require(&st, &me).await?;
-    if !valid_limit(&b) {
-        return Err(AppError::BadRequest("llm_limit_invalid"));
-    }
-    let model = b.model.trim();
-    sqlx::query(
-        "insert into llm_limits (model, window_minutes, usd, created_by) values ($1, $2, $3, $4)
-         on conflict (model, window_minutes) do update set usd = $3, created_by = $4, created_at = now()")
-        .bind(model).bind(b.window_minutes).bind(b.usd).bind(me.id).execute(&st.pool).await?;
-    log(&st, &headers, &me, "llm_limit_changed", &format!("{model} {}dk ${}", b.window_minutes, b.usd)).await;
-    limits(&st).await
-}
-
-pub async fn delete_limit(
-    State(st): State<AppState>, CurrentUser(me): CurrentUser, headers: HeaderMap, Path(raw): Path<String>,
-) -> Result<Json<Vec<LimitRow>>> {
-    require(&st, &me).await?;
-    let id = common::id(&raw)?;
-    let gone: Option<(String, i32)> = sqlx::query_as(
-        "delete from llm_limits where id = $1 returning model, window_minutes")
-        .bind(id).fetch_optional(&st.pool).await?;
-    let (model, window) = gone.ok_or(AppError::NotFound)?;
-    log(&st, &headers, &me, "llm_limit_changed", &format!("{model} {window}dk silindi")).await;
-    limits(&st).await
 }
 
 #[cfg(test)]
@@ -468,20 +682,30 @@ mod tests {
 
     #[test]
     fn limit_siniri() {
-        let l = |model: &str, w: i32, usd: f64| LimitIn { model: model.into(), window_minutes: w, usd };
-        assert!(valid_limit(&l("deepseek/deepseek-v4.1-flash", 15, 0.5)));
-        assert!(valid_limit(&l("a/b", 44_640, 99.0)), "1 ay (31 gun) ust sinir");
-        for bad in [l("a/b", 14, 1.0), l("a/b", 44_641, 1.0), l("a/b", 60, 0.0), l("a/b", 60, f64::INFINITY),
-                    l("a/b", 60, -1.0), l("bogus", 60, 1.0), l("a/b", 60, 1e6)] {
+        let l = |w: i32, usd: f64| LimitIn { window_minutes: w, usd };
+        assert!(valid_limit(&l(15, 0.5)));
+        assert!(valid_limit(&l(44_640, 99.0)), "1 ay (31 gun) ust sinir");
+        for bad in [l(14, 1.0), l(44_641, 1.0), l(60, 0.0), l(60, f64::INFINITY), l(60, -1.0), l(60, 1e6)] {
             assert!(!valid_limit(&bad));
         }
     }
 
     #[test]
+    fn alanlar_dogrulanir() {
+        assert!(check_fields("Genel amaçlı", "a/b", Endpoint::Chat, &Params::default()).is_ok());
+        assert!(check_fields(" ", "a/b", Endpoint::Chat, &Params::default()).is_err());
+        assert!(check_fields("X", "bozuk", Endpoint::Chat, &Params::default()).is_err());
+        let chat_only = Params { max_tokens: Some(100), ..Params::default() };
+        assert!(check_fields("X", "a/b", Endpoint::Decisions, &chat_only).is_err(), "karar profili jeton almaz");
+    }
+
+    #[test]
     fn bilinmeyen_alan_reddedilir() {
-        assert!(serde_json::from_value::<FeatureIn>(serde_json::json!(
-            { "model": "a/b", "enabled": true, "store_bodies": false, "extra": 1 })).is_err());
+        assert!(serde_json::from_value::<TaskIn>(serde_json::json!(
+            { "profile_id": Uuid::nil(), "enabled": true, "store_bodies": false, "model": "a/b" })).is_err());
         assert!(serde_json::from_value::<LimitIn>(serde_json::json!(
-            { "model": "a/b", "window_minutes": 60, "usd": 1, "per_user": true })).is_err());
+            { "window_minutes": 60, "usd": 1, "per_user": true })).is_err());
+        assert!(serde_json::from_value::<NewProfileIn>(serde_json::json!(
+            { "name": "G", "endpoint": "image", "model": "a/b" })).is_err(), "kodda olmayan uc turu");
     }
 }

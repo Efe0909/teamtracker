@@ -34,10 +34,12 @@ derlenir, GitHub release'e yüklenir, makine hazır tarball'i indirir.
 | `suggest_model` | OpenRouter model adı (malzeme önerisi); isteğe bağlı, yoksa `deepseek/deepseek-v4.1-flash` — **yalnız varsayılan** |
 
 Model adı, parametreler, dolar limitleri ve istem artık **yönetim sayfasından** değişir
-(Yönetim › Veri işleme ve LLM, spec/79 §11; `llm_features` vb. tablolar). Manifestteki iki
-model adı yalnız o özellik için DB'de satır yokken geçerlidir; model değiştirmek için dağıtım
-gerekmez. `external_off` kill switch olarak kalır: DB'de açık olan özellik manifestte
-kapalıysa kapalıdır.
+(Yönetim › Veri işleme ve LLM › Modeller ve görevler, spec/79 §11): görevler (malzeme önerisi,
+kalite kapısı) bir **profile** bağlıdır, profil = model + parametre + limit. Manifestteki iki
+model adı yalnız **ilk açılışta** oluşan "Genel amaçlı" ve "Karar" profillerinin modelidir;
+sonra manifesti değiştirmek var olan profili değiştirmez. Model değiştirmek için dağıtım
+gerekmez. `external_off` kill switch olarak kalır: DB'de açık olan görev manifestte kapalıysa
+kapalıdır.
 
 Sürümü yükseltmek: üç yeri (`manifest.json`, `Cargo.toml`, `package.json`) aynı değere
 çek; `cargo update -p ekiptakip --offline` ve `npm install --package-lock-only` kilit
@@ -140,7 +142,7 @@ yeni sütunları yok sayar, veri kaybı olmaz.
 | Pi eski sürümde kaldı | `release.nix` main'e push'lanmadı ya da `nix flake update` unutuldu |
 | Release yüklendi ama `release.nix` değişmedi | yükleme sırasında patladı; aynı komutu tekrar çalıştır (aynı sha'ya yeni etiket gerekirse eskisini `gh release delete`) |
 | Açılışta `manifest.json external_off: bilinmeyen servis` | yazım hatası (`decision`, `resend`, `push`, `suggest`, `all`) |
-| Malzeme önerisi 429 `suggest_limit` | modelin bir dolar limiti doldu (Yönetim › Veri işleme ve LLM › Limitler) |
+| Malzeme önerisi 429 `suggest_limit` | görevin profilinin bir dolar limiti doldu (Yönetim › Veri işleme ve LLM › Modeller ve görevler › profil sayfası) |
 | `cargo test`: "surumu ayristi" | manifest / Cargo.toml / package.json sürümleri farklı |
 | Açılışta `EKIPTAKIP_SECRET_KEY yayinda zorunlu` | env dosyasında eksik/kısa anahtar; yayında sahte kimlik de reddedilir |
 

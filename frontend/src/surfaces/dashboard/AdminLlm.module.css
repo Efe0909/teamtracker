@@ -344,6 +344,37 @@
   font-size: var(--fs-sm);
 }
 
+/* Modeller ve gorevler: profil/gorev kartlari tam sayfa ayrintiya gider. */
+.linkCard {
+  display: block;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  padding: var(--s-3) var(--s-4);
+  margin-bottom: var(--s-2);
+  color: var(--txt);
+  text-decoration: none;
+  font: inherit;
+}
+a.linkCard:hover {
+  border-color: var(--line-strong);
+  background: var(--panel2);
+}
+.chipLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  font-size: var(--fs-sm);
+  color: var(--txt);
+  text-decoration: none;
+}
+.chipLink:hover {
+  background: var(--panel2);
+}
+
 /* Ayar ekranlari. */
 .feature {
   border: 1px solid var(--line);

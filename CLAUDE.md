@@ -35,7 +35,8 @@ docker compose up -d && docker exec ekiptakip-db createdb -U ekiptakip ekiptakip
   `backend/tools/local_test.sh` (JSON sözleşmesi yerelde: atılıp yıkılan DB + üç süreç;
   üçüncüsü `tools/openrouter_stub.py`'ye bağlı: LLM çağrı yolu gerçek anahtarsız sınanır).
 - LLM: model adı, parametre, limit, istem **DB'de** (Yönetim › Veri işleme ve LLM,
-  spec/79 §11); manifestteki `suggest_model`/`decision_model` yalnız varsayılan. Her
+  spec/79 §11). Görev (koddaki sözleşme + istem) bir **profile** (model + parametre +
+  limit) bağlı; manifestteki `suggest_model`/`decision_model` yalnız ilk açılıştaki profil. Her
   üretken çağrı `llm::run`'dan geçer (limit + `llm_calls` kaydı); doğrudan `st.http` ile
   OpenRouter'a gitme. `EKIPTAKIP_OPENROUTER_URL` yalnız geliştirmede okunur.
 - Ön yüz yapısı `spec/16-on-yuz.md` §3: `api/` (istemci, tipler, kancalar), `ui/`

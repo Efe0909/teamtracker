@@ -50,7 +50,7 @@ pub struct Config {
     pub decision_key: String,
     pub decision_model: String,
     /// Malzeme onerisi modeli (spec/79 §9); ayni `OPENROUTER_API_KEY`.
-    /// Yalniz varsayilan: `llm_features` satiri varsa o gecerli (spec/79 §11).
+    /// Yalniz ilk acilistaki "Genel amacli" profilin modeli (`llm::ensure_defaults`, spec/79 §11).
     pub suggest_model: String,
     /// OpenRouter kok adresi. YALNIZ gelistirmede `EKIPTAKIP_OPENROUTER_URL` ile
     /// degisir (yerel sozlesme testinin sahte sunucusu, `tools/openrouter_stub.py`);

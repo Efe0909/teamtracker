@@ -34,7 +34,9 @@ export function Admin() {
   const L = useLookup();
   const people = L.can("manage_users");
   const llm = L.can("manage_llm");
-  const [tab, setTab] = useState<Tab>(people ? "people" : "llm");
+  // Profil/gorev sayfasindan geri donunce ayni sekme acilsin: cihaza yazilir.
+  const [stored, setTab] = useStored<string>("admin.tab", "people");
+  const tab: Tab = stored === "llm" && llm ? "llm" : stored === "activity" && people ? "activity" : people ? "people" : "llm";
   useEffect(() => {
     document.title = "Yönetim — EkipTakip";
   }, []);

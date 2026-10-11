@@ -10,7 +10,7 @@
 //! `quality_config` tablosunda, Yonetim > Veri isleme ve LLM > Kalite kapisi'ndan degisir. Satir
 //! yoksa asagidaki varsayilanlar gecerli.
 //!
-//! Model adi ve zaman asimi `llm_features` (`quality_gate`), cagri `llm::run`'dan
+//! Model adi ve zaman asimi `quality_gate` gorevinin profilinden (`llm_tasks` -> `llm_profiles`), cagri `llm::run`'dan
 //! gecer: kayit, limit (asilinca kapi GECER, kullanici engellenmez) spec/79 §11.
 
 use std::collections::BTreeMap;

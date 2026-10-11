@@ -128,6 +128,11 @@ export type ApiErrorCode =
   | "llm_limit_invalid"
   | "llm_prompt_invalid"
   | "llm_prompt_untested"
+  | "llm_profile_name_invalid"
+  | "llm_profile_name_taken"
+  | "llm_profile_in_use"
+  | "llm_profile_mismatch"
+  | "llm_profile_untested"
   | "invalid_date"
   | "invalid_filter"
   | "low_quality";
@@ -256,6 +261,11 @@ export const ERRORS = {
   llm_limit_invalid: "Limit geçersiz: pencere 15 dakika ile 31 gün, tutar 0'dan büyük olmalı.",
   llm_prompt_invalid: "İstem boş, çok uzun ya da böyle bir sürüm yok.",
   llm_prompt_untested: "Bu istemi etkinleştirmeden önce son 30 dakika içinde onunla başarılı bir “Dene” yapılmalı.",
+  llm_profile_name_invalid: "Profil adı boş olamaz, en çok 60 karakter.",
+  llm_profile_name_taken: "Bu adda bir profil zaten var.",
+  llm_profile_in_use: "Bu profili kullanan görevler var. Önce onları başka profile bağla.",
+  llm_profile_mismatch: "Görev bu profili kullanamaz: türleri farklı (sohbet / karar).",
+  llm_profile_untested: "Görevi bu profile bağlamadan önce son 30 dakika içinde bu görevle başarılı bir “Dene” yapılmalı.",
   invalid_date: "Tarih aralığı geçersiz.",
   invalid_filter: "Süzgeç geçersiz.",
   low_quality: "Metin yeterli bilgi içermiyor.",

@@ -14,7 +14,7 @@
 //! Kaynak her zaman zaten temizlenmis `Context`: bu katman yeni bir veri yolu acmaz,
 //! yalniz daraltir. Gecmis fiyat vektor indeksi gelince oradan beslenir (spec/79 §9).
 //!
-//! Istem, model, parti buyuklugu ve zaman asimi VERI (`llm_features`, `llm_prompts`;
+//! Istem, model, parti buyuklugu ve zaman asimi VERI (`llm_tasks`, `llm_profiles`, `llm_prompts`;
 //! koddaki istem `llm::SUGGEST_PROMPT`). Burada sozlesme var: ozet, cevap semasi, suzgec.
 //!
 //! Uc: `material_suggestions` (kapsam + `manage_purchases`), `llm::run` ile modeli cagirir
