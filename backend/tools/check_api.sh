@@ -502,6 +502,7 @@ ok "$(g e /api/admin/quality | jq -r .error)" forbidden "manage_users kalite aya
 ok "$(g w /api/admin/quality | jq -r .customized)" false "kalite: varsayilan calisiyor"
 QC=$(g w /api/admin/quality | jq -c '.config | .questions.specific.min = 0.3')
 ok "$(w w PUT "$WT" /api/admin/quality "$QC" | jq -r '[.config.questions.specific.min, .customized] | @csv')" "0.3,true" "kalite esigi kaydedildi"
+ok "$(DB "select count(*) from security_events where event_type='quality_config_changed'")" 1 "kalite degisikligi denetim izine yazildi (024 oncesi kisitta dusuyordu)"
 ok "$(w w PUT "$WT" /api/admin/quality '{"questions":{}}' | jq -r .error)" quality_questions_mismatch "eksik soru reddedilir"
 ok "$(w w PUT "$WT" /api/admin/quality "$(jq -c '.questions.context.min = 2' <<<"$QC")" | jq -r .error)" quality_min_invalid "gecersiz esik reddedilir"
 ok "$(wc_ e PUT "$ET" /api/admin/quality "$QC")" 403 "manage_users kalite ayarini yazamaz"
@@ -972,6 +973,75 @@ ok "$(w w POST "$WT" "/api/events/$EVID/material-suggestions" '{}' | jq -r .erro
 DB "delete from materials where id='$LM'" >/dev/null
 DB "update events set description=nullif('$DESC0','') where id='$EVID'" >/dev/null
 
+t llm_admin
+# Yonetim > Veri isleme ve LLM (spec/79 §11): admin ya da manage_llm. Bu surecte anahtar yok.
+ok "$(code -b "$J/n" "$B/api/admin/llm/status")" 403 "yetkisiz durum okuyamaz"
+ok "$(code -b "$J/e" "$B/api/admin/llm/features")" 403 "manage_users LLM sekmesini acamaz"
+DB "insert into user_scopes (user_id, scope) values ('$DENIZ','manage_llm')" >/dev/null
+ok "$(code -b "$J/n" "$B/api/admin/llm/status")" 200 "manage_llm okur"
+ok "$(wc_ n PUT "$NT" /api/admin/llm '{"free_text_allowed":true,"rules":{"patterns":true,"known_names":true,"capitalized":false}}')" 200 "manage_llm temizleme kuralini da yazar"
+w w DELETE "$WT" /api/admin/llm '' >/dev/null
+ok "$(w n POST "$NT" /api/admin/llm/redact-try '{"text":"Selin ile gorus, ahmet@firma.com"}' | jq -r .text)" "{{KISI}} ile gorus, {{EPOSTA}}" "temizleyici Dene: gecerli kurallar"
+ok "$(w n POST "$NT" /api/admin/llm/redact-try '{"text":"Selin ile gorus","config":{"free_text_allowed":true,"rules":{"patterns":true,"known_names":false,"capitalized":false}}}' | jq -r .text)" "Selin ile gorus" "temizleyici Dene: taslak kurallar"
+ok "$(code -b "$J/n" "$B/api/admin")" 403 "manage_llm kisi paneline giremez"
+DB "delete from user_scopes where user_id='$DENIZ' and scope='manage_llm'" >/dev/null
+R=$(g w /api/admin/llm/status)
+ok "$(jq -r '[.key_configured, (.services|length), (.services|map(.on)|any), .retention_days, .body_ttl_days]|@csv' <<<"$R")" 'false,2,false,180,7' "anahtarsiz: servisler kapali"
+FEAT=$(g w /api/admin/llm/features)
+ok "$(jq -r '.[]|select(.feature=="material_suggestions")|[.effective.model,.effective.batch,.customized,.has_prompt]|@csv' <<<"$FEAT")" '"deepseek/deepseek-v4.1-flash",9,false,true' "oneri: manifest varsayilani"
+ok "$(jq -r '.[]|select(.feature=="quality_gate")|[.endpoint,.effective.timeout_ms,.has_prompt]|@csv' <<<"$FEAT")" '"decisions",3000,false' "kapi: karar ucu, 3 sn"
+SAMPLE=$(jq -c '.[]|select(.feature=="material_suggestions")|.sample_input' <<<"$FEAT")
+FS=/api/admin/llm/features/material_suggestions
+ok "$(w w PUT "$WT" $FS '{"model":"stub/other","params":{"batch":6},"enabled":true,"store_bodies":false}' | jq -r '.[]|select(.feature=="material_suggestions")|[.effective.model,.effective.batch,(.tested_at==null)]|@csv')" '"stub/other",6,true' "servis kapali: model denenmeden kaydedilir"
+ok "$(DB "select detail from security_events where event_type='llm_feature_changed' order by created_at desc limit 1")" "material_suggestions stub/other" "denetim izi"
+ok "$(w w PUT "$WT" $FS '{"model":"stub/other","params":{"batch":40},"enabled":true,"store_bodies":false}' | jq -r .error)" llm_params_invalid "parti siniri"
+ok "$(w w PUT "$WT" /api/admin/llm/features/quality_gate '{"model":"a/b","params":{"max_tokens":10},"enabled":true,"store_bodies":false}' | jq -r .error)" llm_params_invalid "kapi yalniz zaman asimi alir"
+ok "$(w w PUT "$WT" $FS '{"model":"bozuk ad","enabled":true,"store_bodies":false}' | jq -r .error)" llm_model_invalid "model adi bicimi"
+ok "$(w w PUT "$WT" $FS '{"model":"a/b","enabled":true,"store_bodies":false,"x":1}' | jq -r .error)" invalid_body "bilinmeyen alan"
+ok "$(wc_ w PUT "$WT" /api/admin/llm/features/bogus '{"model":"a/b","enabled":true,"store_bodies":false}')" 404 "bilinmeyen ozellik"
+ok "$(w w POST "$WT" $FS/try "{\"model\":\"a/b\",\"input\":$SAMPLE}" | jq -r .error)" llm_service_off "anahtarsiz Dene 503"
+# Istem surumleri: yeni surum etkin degil; servis kapaliyken etkinlestirme denemesiz kabul.
+PS=/api/admin/llm/prompts/material_suggestions
+ok "$(g w $PS | jq -r '[.active, (.versions|length), (.code_default|length > 100)]|@csv')" '0,0,true' "koddaki istem"
+ok "$(w w POST "$WT" $PS '{"body":"Suggest materials. At most `max_items` items."}' | jq -r '[.active, .versions[0].version]|@csv')" '0,1' "yeni surum etkin degil"
+ok "$(w w POST "$WT" $PS '{"body":"   "}' | jq -r .error)" llm_prompt_invalid "bos istem"
+ok "$(w w PUT "$WT" $PS/active '{"version":9}' | jq -r .error)" llm_prompt_invalid "olmayan surum"
+ok "$(w w PUT "$WT" $PS/active '{"version":1}' | jq -r .active)" 1 "etkinlestirildi"
+ok "$(DB "select detail from security_events where event_type='llm_prompt_changed' order by created_at desc limit 1")" "material_suggestions v1" "denetim izi"
+ok "$(code -b "$J/w" "$B/api/admin/llm/prompts/quality_gate")" 404 "kapinin istemi yok (kalite sorulari)"
+# Limitler: model basina dolar, pencere 15 dk - 31 gun.
+ok "$(w w POST "$WT" /api/admin/llm/limits '{"model":"a/b","window_minutes":60,"usd":1.5}' | jq -r '.[0]|[.model,.window_minutes,.usd,.spent]|@csv')" '"a/b",60,1.5,0.0' "limit eklendi"
+ok "$(w w POST "$WT" /api/admin/llm/limits '{"model":"a/b","window_minutes":60,"usd":2}' | jq -r '[length, .[0].usd]|@csv')" '1,2.0' "ayni pencere guncellenir"
+ok "$(w w POST "$WT" /api/admin/llm/limits '{"model":"a/b","window_minutes":10,"usd":1}' | jq -r .error)" llm_limit_invalid "15 dk alti"
+LID=$(g w /api/admin/llm/limits | jq -r '.[0].id')
+ok "$(w w DELETE "$WT" "/api/admin/llm/limits/$LID" '' | jq -r length)" 0 "limit silindi"
+ok "$(wc_ w DELETE "$WT" "/api/admin/llm/limits/$LID" '')" 404 "olmayan limit"
+# Kullanim ve cagri gecmisi: satirlar elle. Eski gun ozette; kisi/sonuc suzgeci yalniz llm_calls.
+DB "insert into llm_calls (feature, model, user_id, status, ms, prompt_tokens, completion_tokens, cost_usd)
+    values ('material_suggestions','a/b','$SELIN','ok',3000,100,40,0.01),
+           ('material_suggestions','a/b','$DENIZ','http',200,null,null,null),
+           ('material_suggestions','a/b','$SELIN','limit',0,null,null,null);
+    insert into llm_calls (feature, model, user_id, status, ms, cost_usd, created_at)
+    select 'quality_gate','respan/span-01-lite','$DENIZ','ok',100,null, now() - make_interval(secs => g)
+      from generate_series(1, 55) g;
+    insert into llm_usage_daily values (current_date - 400, 'material_suggestions', 'a/b', 10, 1, 1000, 400, 0.5, 0, 9000)" >/dev/null
+FROM=$(DB "select current_date - 500")
+R=$(g w "/api/admin/llm/usage?from=$FROM")
+ok "$(jq -r '.rows|map(select(.model=="a/b"))|[(map(.calls)|add), (map(.errors)|add), (map(.limited)|add), (map(.cost_usd)|add*100|round)]|@csv' <<<"$R")" '12,2,1,51' "ozet + canli satirlar"
+ok "$(jq -r ".by_user|map(select(.user_id==\"$SELIN\"))|.[0]|[.calls,.cost_usd]|@csv" <<<"$R")" '1,0.01' "kisi kirilimi (limit cagri sayilmaz)"
+ok "$(g w "/api/admin/llm/usage?from=$FROM&user=$DENIZ" | jq -r '.rows|map(.calls)|add')" 56 "kisi suzgeci ozeti kullanmaz"
+ok "$(g w "/api/admin/llm/usage?from=2026-13-01" | jq -r .error)" invalid_date "bozuk tarih"
+ok "$(g w "/api/admin/llm/calls?status=error" | jq -r '[.total, .rows[0].status, .rows[0].user_id]|@csv')" "1,\"http\",\"$DENIZ\"" "sonuc suzgeci"
+R=$(g w "/api/admin/llm/calls?feature=quality_gate")
+ok "$(jq -r '[.total, (.rows|length), (.next!=null)]|@csv' <<<"$R")" '55,50,true' "ilk sayfa 50"
+NEXT=$(jq -r '.next|@uri' <<<"$R")
+ok "$(g w "/api/admin/llm/calls?feature=quality_gate&cursor=$NEXT" | jq -r '[(.rows|length), (.next==null)]|@csv')" '5,true' "imlecle son sayfa"
+CID=$(DB "select id from llm_calls where status='http' limit 1")
+DB "insert into llm_call_bodies (call_id, request, response) values ('$CID', '{\"model\":\"a/b\"}', 'yanit')" >/dev/null
+ok "$(g w "/api/admin/llm/calls/$CID" | jq -r '[.has_body, .request.model, .response]|@csv')" 'true,"a/b","yanit"' "govde ayrintida"
+ok "$(g w /api/admin/llm/status | jq -r '[.calls, .bodies, .daily_rows]|@csv')" '58,1,1' "veri sayilari"
+DB "delete from llm_calls; delete from llm_usage_daily; delete from llm_features; delete from llm_prompts" >/dev/null
+
 t private_event_and_attachments
 # A4: ikizi gizli etkinlik, ikizin sohbeti gibi uye olmayana 403.
 # A5: gizli kayda bagli ek de; profil fotografi yine herkese.
@@ -1031,6 +1101,57 @@ t login_rate_limit
 for _ in $(seq 10); do curl -s -o /dev/null -H "X-Real-IP: 10.9.9.9" "$BG/api/auth/google?next=app"; done
 ok "$(loc -H "X-Real-IP: 10.9.9.9" "$BG/api/auth/google?next=app")" "$BG/welcome?error=rate_limited" "11. istek"
 ok "$(loc -H "X-Real-IP: 10.9.9.8" "$BG/api/auth/google?next=app" | cut -c1-35)" "https://accounts.google.com/o/oauth" "baska IP etkilenmez"
+
+if [ -n "${BL:-}" ]; then
+t llm_live
+# Anahtarli surec + sahte OpenRouter (tools/openrouter_stub.py): kayit, maliyet, limit,
+# Dene, hata izi, istem, govde uc uca. BL yoksa (vm_test) atlanir.
+gl(){ curl -s -b "$J/$1" "$BL$2"; }
+wl(){ curl -s -b "$J/$1" -X "$2" -H "X-CSRF-Token: $3" -H 'Content-Type: application/json' -d "$5" "$BL$4"; }
+FS=/api/admin/llm/features/material_suggestions
+PS=/api/admin/llm/prompts/material_suggestions
+R=$(wl w POST "$WT" "/api/events/$EVID/material-suggestions" '{}')
+ok "$(jq -r '[.items[0].name, (.items|length), (.batch_id|length)]|@csv' <<<"$R")" '"Servo motor",2,36' "oneri geldi"
+ok "$(DB "select concat_ws(',', status, cost_usd, asked, kept, prompt_tokens, user_id = '$SELIN', event_id = '$EVID', is_try, batch_id is not null) from llm_calls where feature='material_suggestions'")" "ok,0.004,2,2,120,t,t,f,t" "cagri kaydi"
+ok "$(gl w /api/admin/llm/status | jq -r '.services|map(.on)|all')" true "anahtarli: servisler acik"
+# Dolar tavani: modelin son saatteki harcamasi (0.004) tavana ulasti -> 429, limit satiri.
+wl w POST "$WT" /api/admin/llm/limits '{"model":"deepseek/deepseek-v4.1-flash","window_minutes":60,"usd":0.004}' >/dev/null
+ok "$(wl w POST "$WT" "/api/events/$EVID/material-suggestions" '{}' | jq -r .error)" suggest_limit "tavan doldu"
+ok "$(DB "select count(*) from llm_calls where status='limit'")" 1 "limit satiri"
+ok "$(gl w /api/admin/llm/limits | jq -r '.[0].spent')" 0.004 "harcanan gorunur"
+DB "delete from llm_limits" >/dev/null
+# Kalite kapisi ayni yoldan: kim, karar, maliyet bilinmiyor (sahte model hep gecer).
+wl n POST "$NT" /api/records "{\"kind\":\"task\",\"title\":\"Kapi denemesi\",\"description\":\"Sponsor gorusmesi icin sunum hazirlanacak ve cuma gunu paylasilacak.\",\"unit_id\":\"$UNIT\"}" >/dev/null
+ok "$(DB "select concat_ws(',', status, outcome, user_id = '$DENIZ', cost_usd is null, model) from llm_calls where feature='quality_gate'")" "ok,pass,t,t,respan/span-01-lite" "kapi cagrisi kaydi"
+R=$(wl w POST "$WT" /api/admin/llm/features/quality_gate/try '{"model":"typesafe/jev-router","input":{"kind":"entry","state":"Başlık: x\nAçıklama: y"}}')
+ok "$(jq -r '[.ok, .output.outcome, .trace.outcome]|@csv' <<<"$R")" 'true,"pass","pass"' "kapi Dene"
+# Dene: tam iz cevapta, kisa iz kayitta; gecen Dene model degisikligini acar.
+R=$(wl w POST "$WT" $FS/try "{\"model\":\"stub/bad\",\"input\":$SAMPLE}")
+ok "$(jq -r '[.ok, .trace.status, .trace.http_status, (.raw|contains("No endpoints"))]|@csv' <<<"$R")" 'false,"http",400,true' "hata izi"
+ok "$(DB "select concat_ws('|', is_try, status, error) from llm_calls where model='stub/bad'")" "t|http|400: No endpoints found that support response_format (Stub)" "kisa iz kayitta"
+ok "$(wl w POST "$WT" $FS/try "{\"model\":\"stub/garbled\",\"input\":$SAMPLE}" | jq -r .trace.status)" parse "JSON olmayan cevap"
+ok "$(wl w PUT "$WT" $FS '{"model":"stub/good","enabled":true,"store_bodies":false}' | jq -r .error)" llm_model_untested "denenmemis model"
+R=$(wl w POST "$WT" $FS/try "{\"model\":\"stub/good\",\"params\":{\"batch\":3},\"input\":$SAMPLE}")
+ok "$(jq -r '[.ok, (.output.items|length), .trace.cost_usd, (.request.messages|length), (tostring|contains("stub-key"))]|@csv' <<<"$R")" 'true,2,0.004,2,false' "Dene: cikti, maliyet, istek; anahtar yok"
+ok "$(wl w PUT "$WT" $FS '{"model":"stub/good","enabled":true,"store_bodies":true}' | jq -r '.[]|select(.feature=="material_suggestions")|[.effective.model, (.tested_at!=null), .effective.store_bodies]|@csv')" '"stub/good",true,true' "denenmis model kaydedildi"
+ok "$(DB "select count(*) from security_events where event_type='llm_bodies_on'")" 1 "govde saklama denetim izi"
+wl w POST "$WT" "/api/events/$EVID/material-suggestions" '{}' >/dev/null
+CID=$(DB "select id from llm_calls where model='stub/good' and not is_try")
+ok "$(gl w "/api/admin/llm/calls/$CID" | jq -r '[.has_body, .request.model, (.response|contains("Servo")), (tostring|contains("stub-key"))]|@csv')" 'true,"stub/good",true,false' "govde saklandi, anahtar yok"
+# Istem: denenmeden etkinlesmez; Dene secilen surumle gider.
+wl w POST "$WT" $PS '{"body":"Suggest at most `max_items` materials as JSON."}' >/dev/null
+ok "$(wl w PUT "$WT" $PS/active '{"version":1}' | jq -r .error)" llm_prompt_untested "denenmemis istem"
+R=$(wl w POST "$WT" $FS/try "{\"model\":\"stub/good\",\"prompt_version\":1,\"input\":$SAMPLE}")
+ok "$(jq -r '.request.messages[0].content' <<<"$R")" 'Suggest at most `max_items` materials as JSON.' "Dene secilen istemle"
+ok "$(wl w PUT "$WT" $PS/active '{"version":1}' | jq -r .active)" 1 "denenmis istem etkin"
+# Yonetimden kapatilan ozellik: /api/meta kapali der, uc 503.
+wl w PUT "$WT" $FS '{"model":"stub/good","enabled":false,"store_bodies":false}' >/dev/null
+ok "$(gl w /api/meta | jq -r '.external_off|index("suggest")!=null')" true "meta: kapali"
+ok "$(wl w POST "$WT" "/api/events/$EVID/material-suggestions" '{}' | jq -r .error)" suggest_unavailable "kapali ozellik"
+ok "$(gl w /api/admin/llm/key | jq -r '[.off, .data.limit_remaining]|@csv')" 'false,9.5' "anahtar kullanimi"
+ok "$(gl w /api/admin/llm/models | jq -r '[(.models|length), (.models[]|select(.id=="typesafe/jev-router")|.prompt_per_m)]|@csv')" '2,' "model listesi, degisken fiyat bos"
+DB "delete from llm_calls; delete from llm_features; delete from llm_prompts" >/dev/null
+fi
 
 printf '\n  \033[32mgecen=%s\033[0m  kalan=%s\n' "$P" "$F"
 [ "$F" = 0 ]

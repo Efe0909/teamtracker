@@ -1,0 +1,458 @@
+/* Yonetim > Veri isleme ve LLM. Renk yalniz token (src/tokens.css). */
+
+.top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  margin: var(--s-4) 0 var(--s-3);
+}
+.topRight {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  font-size: var(--fs-sm);
+  color: var(--dim);
+  white-space: nowrap;
+}
+.pill b {
+  color: var(--txt);
+  font-weight: 600;
+}
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--dim);
+}
+.dot[data-on="true"] {
+  background: var(--ok);
+}
+.dot[data-on="false"] {
+  background: var(--err);
+}
+
+.filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--s-2);
+  margin-bottom: var(--s-3);
+}
+.filters select {
+  width: 100%;
+}
+.note {
+  font-size: var(--fs-sm);
+  color: var(--dim);
+  margin: 0 0 var(--s-3);
+}
+
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  overflow: hidden;
+  margin-bottom: var(--s-4);
+}
+.kpi {
+  padding: var(--s-3) var(--s-4);
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  margin: 0 -1px -1px 0;
+}
+.kpiLabel {
+  font-size: var(--fs-sm);
+  color: var(--dim);
+  font-weight: 500;
+}
+.kpiValue {
+  font-size: var(--fs-2xl);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  margin-top: 2px;
+}
+.kpiValue[data-tone="ok"] {
+  color: var(--ok-text);
+}
+.kpiValue[data-tone="acc"] {
+  color: var(--acc-strong);
+}
+.kpiValue[data-tone="err"] {
+  color: var(--err-text);
+}
+.kpiSub {
+  font-size: var(--fs-xs);
+  color: var(--dim);
+}
+
+.grid2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: var(--s-4);
+  margin-bottom: var(--s-4);
+}
+.card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  padding: var(--s-4);
+  min-width: 0;
+}
+.card h3 {
+  margin: 0 0 2px;
+  font-size: var(--fs-lg);
+}
+.cardHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--s-2);
+  margin-bottom: var(--s-3);
+}
+.sub {
+  font-size: var(--fs-sm);
+  color: var(--dim);
+}
+
+/* Yigilmis cubuk grafik: sutun basina model parcalari. */
+.chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 170px;
+  padding-top: var(--s-2);
+  border-bottom: 1px solid var(--line-strong);
+  overflow-x: auto;
+}
+.col {
+  flex: 1 0 8px;
+  display: flex;
+  flex-direction: column-reverse;
+  height: 100%;
+  justify-content: flex-start;
+  min-width: 8px;
+}
+.part {
+  width: 100%;
+  min-height: 1px;
+}
+.col:hover .part {
+  opacity: 0.8;
+}
+.axis {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--fs-xs);
+  color: var(--dim);
+  margin-top: 4px;
+}
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2) var(--s-3);
+  font-size: var(--fs-sm);
+  margin-bottom: var(--s-2);
+}
+.swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  margin-right: 6px;
+  vertical-align: -1px;
+}
+
+/* Cubuk liste (model tuketimi, kisi kirilimi). */
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--s-3);
+}
+.listHead {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s-2);
+  font-size: var(--fs-md);
+}
+.listHead b {
+  font-variant-numeric: tabular-nums;
+}
+.listSub {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s-2);
+  font-size: var(--fs-xs);
+  color: var(--dim);
+}
+.track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--tint);
+  overflow: hidden;
+  margin: 4px 0 2px;
+}
+.fill {
+  height: 100%;
+  border-radius: 3px;
+}
+
+/* Sonuc dagilimi: tek yatay serit. */
+.split {
+  display: flex;
+  height: 12px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--tint);
+  margin: var(--s-2) 0 var(--s-3);
+}
+.okFill {
+  background: var(--ok);
+}
+.errFill {
+  background: var(--err);
+}
+.limFill {
+  background: var(--warn);
+}
+.big {
+  font-size: var(--fs-2xl);
+  font-weight: 650;
+}
+.failLine {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--fs-md);
+  padding: 4px 0;
+  border-top: 1px solid var(--line);
+}
+.errText {
+  color: var(--err-text);
+  font-weight: 600;
+}
+
+.tableWrap {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-md);
+}
+.table th,
+.table td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+.table th {
+  font-size: var(--fs-sm);
+  color: var(--dim);
+  font-weight: 500;
+}
+.table td.num,
+.table th.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.table tbody tr {
+  cursor: pointer;
+}
+.table tbody tr:hover,
+.table tbody tr[aria-selected="true"] {
+  background: var(--panel2);
+}
+.cell2 {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.3;
+}
+.cell2 small {
+  color: var(--dim);
+  font-size: var(--fs-xs);
+}
+.statusOk {
+  color: var(--ok-text);
+}
+.statusBad {
+  color: var(--err-text);
+}
+.statusLim {
+  color: var(--warn-text);
+}
+.pager {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-2) var(--s-3);
+  font-size: var(--fs-sm);
+  color: var(--dim);
+}
+
+.detail {
+  margin-top: var(--s-3);
+}
+.kv {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px var(--s-4);
+  font-size: var(--fs-md);
+  margin: 0 0 var(--s-3);
+}
+.kv dt {
+  color: var(--dim);
+}
+.kv dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.pre {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: var(--s-3);
+  max-height: 320px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 0 0 var(--s-3);
+}
+.mono {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+}
+
+/* Ayar ekranlari. */
+.feature {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  padding: var(--s-4);
+  margin-bottom: var(--s-4);
+}
+.featureHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+  margin-bottom: var(--s-3);
+}
+.featureHead h3 {
+  margin: 0;
+  font-size: var(--fs-lg);
+}
+.fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--s-3);
+  margin-bottom: var(--s-3);
+}
+.wide {
+  grid-column: 1 / -1;
+}
+.check {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-size: var(--fs-md);
+}
+.compat {
+  margin: 0 0 var(--s-3);
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-md);
+  font-size: var(--fs-sm);
+}
+.compat[data-level="ok"] {
+  background: var(--ok-bg);
+  color: var(--ok-text);
+}
+.compat[data-level="warn"],
+.compat[data-level="unknown"] {
+  background: var(--warn-bg);
+  color: var(--warn-text);
+}
+.compat[data-level="bad"] {
+  background: var(--err-bg);
+  color: var(--err-text);
+}
+.compat ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+.tryBox {
+  border-top: 1px dashed var(--line-strong);
+  margin-top: var(--s-3);
+  padding-top: var(--s-3);
+}
+.inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--s-2);
+}
+.inline > label {
+  display: grid;
+  gap: 4px;
+  font-size: var(--fs-sm);
+  color: var(--dim);
+}
+.versions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--s-2);
+}
+.version {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: var(--s-2) var(--s-3);
+  background: var(--panel);
+}
+.version[data-active="true"] {
+  border-color: var(--acc);
+  background: var(--acc-bg);
+}
+.versionHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--s-2);
+  font-size: var(--fs-md);
+}
+.progress {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--tint);
+  overflow: hidden;
+  margin-top: 4px;
+}
+.progressFill {
+  height: 100%;
+  background: var(--acc);
+}
+.progressFill[data-full="true"] {
+  background: var(--err);
+}

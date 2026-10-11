@@ -14,13 +14,14 @@
 //! Kaynak her zaman zaten temizlenmis `Context`: bu katman yeni bir veri yolu acmaz,
 //! yalniz daraltir. Gecmis fiyat vektor indeksi gelince oradan beslenir (spec/79 §9).
 //!
-//! SISTEM ISTEMI YOK (simdilik): model secilince ayrica yazilir. Burada yalniz ozet ve
-//! cevap semasi var.
+//! Istem, model, parti buyuklugu ve zaman asimi VERI (`llm_features`, `llm_prompts`;
+//! koddaki istem `llm::SUGGEST_PROMPT`). Burada sozlesme var: ozet, cevap semasi, suzgec.
 //!
-//! Uc: `material_suggestions` (kapsam + `manage_purchases`), `openrouter::structured` ile
-//! modeli cagirir, cevabi `sanitize` ile suzer.
+//! Uc: `material_suggestions` (kapsam + `manage_purchases`), `llm::run` ile modeli cagirir
+//! (limit, kayit), cevabi `sanitize` ile suzer. `try_suggest` yonetimdeki "Dene"dir.
 
 use super::*;
+use crate::llm::{self, Effective, Fail, Parsed, Status, Who};
 
 /// Cevabin uymasi gereken sema (spec/79 §9): yalniz `{items: [{name, description}]}`.
 /// `name` -> `materials.name`, `description` -> `materials.notes`. Adet, tur, oncelik ve
@@ -70,6 +71,8 @@ pub struct MaterialBrief {
     /// Kullanicinin onceki istekte reddettigi oneri adlari (temizlenmis); bos ise anahtar yok.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     rejected: Vec<String>,
+    /// Parti buyuklugu (yonetimden): istem "en cok `max_items`" der, sunucu da keser.
+    max_items: u32,
 }
 
 #[derive(Serialize)]
@@ -169,11 +172,17 @@ impl MaterialBrief {
                 .map(|m| ExistingBrief { name: m.name.clone(), kind: m.kind })
                 .collect(),
             rejected: Vec::new(),
+            max_items: DEFAULT_BATCH,
         }
     }
 
     pub fn with_rejected(mut self, rejected: Vec<String>) -> Self {
         self.rejected = rejected;
+        self
+    }
+
+    pub fn with_max_items(mut self, n: u32) -> Self {
+        self.max_items = n;
         self
     }
 
@@ -188,28 +197,12 @@ impl MaterialBrief {
 
 // --- uc ------------------------------------------------------------------------
 
-/// Bir istekte uretilen oneri sayisi; arayuz 3'erli gosterir (spec/79 §9 madde 6).
-const BATCH: usize = 9;
+/// Varsayilan parti; arayuz 3'erli gosterir (spec/79 §9 madde 6). Yonetimden 3-15.
+const DEFAULT_BATCH: u32 = 9;
 /// Istemciden gelen `rejected`: en yeni bu kadar, her biri en cok bu uzunlukta.
 const REJECTED_MAX: usize = 50;
 const REJECTED_LEN: usize = 80;
 const NAME_MAX: usize = 200;
-
-/// DENEYSEL istem (spec/79 §9: gercek istem model denenerek yazilacak). Kalibi sartlar
-/// spec'ten: sayi yok, tekrar yok, universitenin sagladigi onerilmez, maske kopyalanmaz.
-const SYSTEM: &str = "You help a student club plan events. The user message is a JSON brief of one event. \
-Suggest materials (things to buy, make or rent) the club may still need for it.\n\
-- Be selective: suggest only items this event clearly needs, given its kind, purpose and what \
-participants will do. Skip generic filler (notebooks, tablecloths, trays, display stands) unless the \
-brief points to it. A thin brief gets a short list, possibly empty. At most 9 items.\n\
-- Never repeat anything in `existing` or `rejected`. Do not suggest parts that normally come inside an \
-`existing` item (for example a kit's own boards or cables).\n\
-- Do not suggest what the university already covers: whatever `otf.items` lists (a seating layout \
-covers tables and chairs, for example) and whatever the `otf` notes ask the university to arrange.\n\
-- No quantities, prices, brands, or names of people or companies.\n\
-- Text like {{KISI}} or {{NO}} masks private details: never guess what it hides, never copy it.\n\
-- name: short generic noun phrase in plain, common Turkish. description: one short sentence (at most \
-12 words) saying what it is used for in this event.";
 
 #[derive(Deserialize)]
 pub struct SuggestIn {
@@ -251,8 +244,8 @@ fn key(s: &str) -> String {
 }
 
 /// Model cevabini suzer (spec/79 §9 madde 5, 9): bos/uzun olan, `{{..}}` maskesi tasiyan,
-/// mevcut kalem ya da reddedilenle (ya da kendi icinde) ayni adli olan atilir; en cok `BATCH`.
-fn sanitize(raw: Vec<RawItem>, existing: &[String], rejected: &[String]) -> Vec<Suggestion> {
+/// mevcut kalem ya da reddedilenle (ya da kendi icinde) ayni adli olan atilir; en cok `max`.
+fn sanitize(raw: Vec<RawItem>, existing: &[String], rejected: &[String], max: usize) -> Vec<Suggestion> {
     let mut seen: std::collections::HashSet<String> =
         existing.iter().chain(rejected).map(|s| key(s)).collect();
     let mut out = Vec::new();
@@ -266,11 +259,39 @@ fn sanitize(raw: Vec<RawItem>, existing: &[String], rejected: &[String]) -> Vec<
             continue;
         }
         out.push(Suggestion { name: name.to_string(), description: description.to_string() });
-        if out.len() == BATCH {
+        if out.len() >= max {
             break;
         }
     }
     out
+}
+
+fn suggest_contract() -> &'static llm::Contract {
+    llm::contract(llm::SUGGEST).unwrap_or(&llm::CONTRACTS[0])
+}
+
+/// Saglayici cevabi -> suzulmus oneriler. Icerik JSON degilse `Parse`, semaya uymuyorsa `Schema`.
+fn parse_reply(
+    resp: &serde_json::Value, existing: &[String], rejected: &[String], max: usize,
+) -> std::result::Result<Parsed<Vec<Suggestion>>, Status> {
+    let content = crate::openrouter::reply(resp).ok_or(Status::Parse)?;
+    let raw: Raw = serde_json::from_value(content).map_err(|_| Status::Schema)?;
+    let asked = i32::try_from(raw.items.len()).unwrap_or(i32::MAX);
+    let items = sanitize(raw.items, existing, rejected, max);
+    let kept = i32::try_from(items.len()).unwrap_or(i32::MAX);
+    Ok(Parsed { value: items, asked: Some(asked), kept: Some(kept), outcome: None })
+}
+
+fn chat_body(e: &Effective, brief: &MaterialBrief) -> serde_json::Value {
+    let req = brief.request();
+    crate::openrouter::chat_body(e, e.system(suggest_contract()).as_deref(), &req.user, "material_suggestions", &req.response_schema)
+}
+
+/// Etkinligin mevcut kalemleri HAM adlariyla (ozet temizlenmis adi tasir; eslesme gercek adla olmali).
+async fn existing_names(st: &AppState, event: Uuid) -> Result<Vec<String>> {
+    Ok(sqlx::query_scalar(
+        "select m.name from materials m join event_materials em on em.material_id = m.id where em.event_id = $1")
+        .bind(event).fetch_all(&st.pool).await?)
 }
 
 /// `POST /api/events/{id}/material-suggestions`: tek model cagrisiyla bir parti oneri.
@@ -290,27 +311,87 @@ pub(crate) async fn material_suggestions(
         .filter(|r| !r.is_empty() && r.chars().count() <= REJECTED_LEN).collect();
     let cleaned = rejected.iter().map(|r| redact::redact(r, &cfg.rules, &known)).collect();
 
-    let req = MaterialBrief::from_context(&ctx).with_rejected(cleaned).request();
-    let started = std::time::Instant::now();
-    let reply = crate::openrouter::structured(
-        &st, &st.cfg.suggest_model, Some(SYSTEM), &req.user, "material_suggestions", &req.response_schema,
-    ).await.map_err(|_| AppError::Unavailable("suggest_unavailable"))?;
-    let parsed: Raw = serde_json::from_value(reply).map_err(|_| {
-        tracing::warn!("oneri modeli: yanit beklenen semada degil");
-        AppError::Unavailable("suggest_unavailable")
-    })?;
-
-    // Mevcut kalemler HAM adlariyla (ozet temizlenmis adi tasir; eslesme gercek adla olmali).
-    let existing: Vec<String> = sqlx::query_scalar(
-        "select m.name from materials m join event_materials em on em.material_id = m.id where em.event_id = $1")
-        .bind(id).fetch_all(&st.pool).await?;
-    let asked = parsed.items.len();
-    let items = sanitize(parsed.items, &existing, &rejected);
+    let c = suggest_contract();
+    let e = llm::settings(&st, c).await;
+    let brief = MaterialBrief::from_context(&ctx).with_rejected(cleaned).with_max_items(e.batch);
+    let existing = existing_names(&st, id).await?;
     let batch_id = Uuid::new_v4();
-    // Icerik loglanmaz: yalniz sayilar ve sure.
-    tracing::info!(event = %id, %batch_id, model = %st.cfg.suggest_model, ms = started.elapsed().as_millis() as u64,
-        asked, kept = items.len(), rejected = rejected.len(), "malzeme onerisi");
-    Ok(Json(SuggestOut { items, batch_id }))
+    let who = Who { user_id: Some(me.id), event_id: Some(id), is_try: false };
+    let max = e.batch as usize;
+    let done = llm::run(&st, c, &e, who, Some(batch_id), chat_body(&e, &brief),
+        |resp| parse_reply(resp, &existing, &rejected, max)).await;
+    match done.result {
+        Ok(items) => Ok(Json(SuggestOut { items, batch_id })),
+        Err(Fail::Limit) => Err(AppError::Limited("suggest_limit")),
+        Err(Fail::Off | Fail::Disabled | Fail::Failed) => Err(AppError::Unavailable("suggest_unavailable")),
+    }
+}
+
+/// "Dene" ornegi: spec/79 §9'daki ilk denemenin ozeti (robotik atolyesi). Yonetimde
+/// duzenlenebilir JSON olarak gosterilir; gercek kisi/firma yok.
+pub(crate) fn sample_input() -> serde_json::Value {
+    serde_json::json!({
+        "brief": {
+            "event": { "kind": "Atölye", "date": "2026-10-25", "start_time": "14:00", "end_time": "17:00",
+                       "title": "Robotik atölyesi", "description": "Arduino ile robot kolu yapımı" },
+            "outcomes": [{ "name": "Devre okuma", "description": "Basit şema çözümleme" }],
+            "otf": { "items": [{ "label": "Projeksiyon" }, { "label": "Mikrofon" }, { "label": "Sınıf düzeni" }],
+                     "purpose": "Katılımcılar servo motorlu bir robot kolu yapar" },
+            "existing": [{ "name": "Arduino seti", "type": "equipment" }, { "name": "Lehim teli", "type": "consumable" }],
+            "max_items": DEFAULT_BATCH
+        }
+    })
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TryInput {
+    /// Elle yazilmis ozet (ornek); `existing`/`rejected` icinden suzgec de calisir.
+    #[serde(default)]
+    brief: Option<serde_json::Value>,
+    /// Gercek etkinlik: temizlenmis `llm_context` yolu, `llm_config`'in serbest metin kuraliyla.
+    #[serde(default)]
+    event_id: Option<Uuid>,
+    #[serde(default)]
+    free_text: bool,
+}
+
+fn names_in(brief: &serde_json::Value, key: &str) -> Vec<String> {
+    brief.get(key).and_then(|v| v.as_array()).map(|a| a.iter().filter_map(|x| {
+        x.as_str().or_else(|| x.get("name").and_then(|n| n.as_str())).map(String::from)
+    }).collect()).unwrap_or_default()
+}
+
+/// Yonetim > LLM > Dene (malzeme onerisi). Kaydetmez; `is_try` satiri yazilir.
+pub(crate) async fn try_suggest(
+    st: &AppState, me: &User, e: &Effective, input: serde_json::Value,
+) -> Result<serde_json::Value> {
+    let input: TryInput = serde_json::from_value(input).map_err(|_| AppError::BadRequest("invalid_body"))?;
+    let (user, existing, rejected, event_id) = match (input.brief, input.event_id) {
+        (Some(mut b), None) if b.is_object() => {
+            b["max_items"] = serde_json::json!(e.batch);
+            let text = serde_json::to_string(&b).map_err(|_| AppError::BadRequest("invalid_body"))?;
+            if text.chars().count() > 20_000 {
+                return Err(AppError::BadRequest("invalid_body"));
+            }
+            (text, names_in(&b, "existing"), names_in(&b, "rejected"), None)
+        }
+        (None, Some(id)) => {
+            let ctx = build_context(st, me, id, input.free_text).await?;
+            let brief = MaterialBrief::from_context(&ctx).with_max_items(e.batch);
+            (brief.request().user, existing_names(st, id).await?, vec![], Some(id))
+        }
+        _ => return Err(AppError::BadRequest("invalid_body")),
+    };
+    let c = suggest_contract();
+    let body = crate::openrouter::chat_body(e, e.system(c).as_deref(), &user, "material_suggestions", &response_schema());
+    let who = Who { user_id: Some(me.id), event_id, is_try: true };
+    let max = e.batch as usize;
+    let done = llm::run(st, c, e, who, None, body, |resp| {
+        let p = parse_reply(resp, &existing, &rejected, max)?;
+        Ok(Parsed { value: serde_json::json!({ "items": p.value }), asked: p.asked, kept: p.kept, outcome: None })
+    }).await;
+    serde_json::to_value(llm::TryOut::of(&e.model, done)?).map_err(|_| AppError::BadRequest("invalid_body"))
 }
 
 #[cfg(test)]
@@ -371,7 +452,8 @@ mod tests {
                 "age_group": "18-25", "purpose": "Tanıtım", "free_outcomes": "Lehim temeli",
                 "notes": [{ "section": "Teknik hizmetler", "text": "Uzatma kablosu" }]
             },
-            "existing": [{ "name": "Lehim teli", "type": "consumable" }]
+            "existing": [{ "name": "Lehim teli", "type": "consumable" }],
+            "max_items": 9
         }));
     }
 
@@ -441,7 +523,7 @@ mod tests {
             item(&"x".repeat(NAME_MAX + 1), "uzun ad"),
             item("Makas", "kesmek için"),
         ];
-        let got = sanitize(raw, &["Lehim Teli".into()], &["projeksiyon".into()]);
+        let got = sanitize(raw, &["Lehim Teli".into()], &["projeksiyon".into()], 9);
         assert_eq!(got, vec![
             Suggestion { name: "Kablo".into(), description: "uzatma için".into() },
             Suggestion { name: "Makas".into(), description: "kesmek için".into() },
@@ -450,8 +532,33 @@ mod tests {
 
     #[test]
     fn sanitize_caps_the_batch() {
+        let raw: Vec<RawItem> = (0..20).map(|i| item(&format!("Kalem {i}"), "d")).collect();
+        assert_eq!(sanitize(raw, &[], &[], 9).len(), 9);
         let raw = (0..20).map(|i| item(&format!("Kalem {i}"), "d")).collect();
-        assert_eq!(sanitize(raw, &[], &[]).len(), BATCH);
+        assert_eq!(sanitize(raw, &[], &[], 4).len(), 4, "parti yonetimden");
+    }
+
+    #[test]
+    fn reply_parse_error_kinds() {
+        let ok = json!({ "choices": [{ "message": { "content":
+            r#"{"items":[{"name":"Servo motor","description":"Kol eklemi"},{"name":"Lehim teli","description":"x"}]}"# } }] });
+        let p = parse_reply(&ok, &["Lehim teli".into()], &[], 9).unwrap();
+        assert_eq!((p.asked, p.kept, p.value.len()), (Some(2), Some(1), 1), "asked modelden, kept suzgecten");
+        let not_json = json!({ "choices": [{ "message": { "content": "Sure! Here you go" } }] });
+        assert_eq!(parse_reply(&not_json, &[], &[], 9).err(), Some(Status::Parse));
+        let wrong = json!({ "choices": [{ "message": { "content": r#"{"suggestions":[]}"# } }] });
+        assert_eq!(parse_reply(&wrong, &[], &[], 9).err(), Some(Status::Schema));
+    }
+
+    #[test]
+    fn sample_input_is_a_brief_without_people() {
+        let s = sample_input();
+        assert!(s["brief"]["event"].is_object() && s["brief"]["existing"].is_array());
+        assert_eq!(names_in(&s["brief"], "existing"), ["Arduino seti", "Lehim teli"]);
+        let text = s.to_string();
+        for key in ["attendees", "participant", "owner", "@"] {
+            assert!(!text.contains(key), "{key}");
+        }
     }
 
     #[test]

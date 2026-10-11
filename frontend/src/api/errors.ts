@@ -120,6 +120,16 @@ export type ApiErrorCode =
   | "quality_min_invalid"
   | "free_text_disabled"
   | "suggest_unavailable"
+  | "suggest_limit"
+  | "llm_service_off"
+  | "llm_model_invalid"
+  | "llm_model_untested"
+  | "llm_params_invalid"
+  | "llm_limit_invalid"
+  | "llm_prompt_invalid"
+  | "llm_prompt_untested"
+  | "invalid_date"
+  | "invalid_filter"
   | "low_quality";
 
 export const ERRORS = {
@@ -238,6 +248,16 @@ export const ERRORS = {
   quality_min_invalid: "Eşik 0,05 ile 0,95 arasında olmalı.",
   free_text_disabled: "Serbest metni yapay zekâya göndermek yönetimden kapatılmış.",
   suggest_unavailable: "Öneri servisi şu an kullanılamıyor.",
+  suggest_limit: "Yapay zekâ harcama limiti doldu. Biraz sonra tekrar dene ya da yöneticiye haber ver.",
+  llm_service_off: "Yapay zekâ servisi kapalı (anahtar yok ya da manifestte kapatılmış): deneme yapılamaz.",
+  llm_model_invalid: "Model adı geçersiz. OpenRouter biçiminde yaz: sağlayıcı/model.",
+  llm_model_untested: "Bu modeli kaydetmeden önce son 30 dakika içinde başarılı bir “Dene” yapılmalı.",
+  llm_params_invalid: "Parametrelerden biri sınır dışında.",
+  llm_limit_invalid: "Limit geçersiz: pencere 15 dakika ile 31 gün, tutar 0'dan büyük olmalı.",
+  llm_prompt_invalid: "İstem boş, çok uzun ya da böyle bir sürüm yok.",
+  llm_prompt_untested: "Bu istemi etkinleştirmeden önce son 30 dakika içinde onunla başarılı bir “Dene” yapılmalı.",
+  invalid_date: "Tarih aralığı geçersiz.",
+  invalid_filter: "Süzgeç geçersiz.",
   low_quality: "Metin yeterli bilgi içermiyor.",
 } satisfies Record<ApiErrorCode, string>;
 

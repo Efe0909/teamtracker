@@ -50,7 +50,12 @@ pub struct Config {
     pub decision_key: String,
     pub decision_model: String,
     /// Malzeme onerisi modeli (spec/79 §9); ayni `OPENROUTER_API_KEY`.
+    /// Yalniz varsayilan: `llm_features` satiri varsa o gecerli (spec/79 §11).
     pub suggest_model: String,
+    /// OpenRouter kok adresi. YALNIZ gelistirmede `EKIPTAKIP_OPENROUTER_URL` ile
+    /// degisir (yerel sozlesme testinin sahte sunucusu, `tools/openrouter_stub.py`);
+    /// yayinda her zaman gercek adres: anahtar baska bir yere gonderilemez.
+    pub openrouter_url: String,
     /// Manifest `external_off`: elle kapatilan dis servisler (KNOW-358).
     pub external_off: Vec<String>,
 
@@ -103,6 +108,7 @@ fn default_suggest_model() -> String {
 }
 
 const EMBEDDED_MANIFEST: &str = include_str!("../manifest.json");
+const OPENROUTER_URL: &str = "https://openrouter.ai";
 
 impl Manifest {
     pub fn load() -> Result<Self, String> {
@@ -209,6 +215,10 @@ impl Config {
             decision_key: var("OPENROUTER_API_KEY"),
             decision_model: manifest.decision_model,
             suggest_model: manifest.suggest_model,
+            openrouter_url: match var("EKIPTAKIP_OPENROUTER_URL").trim_end_matches('/') {
+                url if !url.is_empty() && env == Env::Development => url.to_string(),
+                _ => OPENROUTER_URL.into(),
+            },
             external_off: manifest.external_off,
             version: manifest.version,
             contact_email: manifest.contact_email,

@@ -30,8 +30,14 @@ derlenir, GitHub release'e yüklenir, makine hazır tarball'i indirir.
 | `version` | `/api/meta.version`, profil penceresinin altında görünür. `backend/Cargo.toml` ve `frontend/package.json` ile **aynı olmak zorunda** — `cargo test` denetler |
 | `contact_email` | geliştirici e-postası (`/api/meta.contact_email`; `VAPID_SUB` yoksa web push `sub` varsayılanı) |
 | `external_off` | kapatılan dış servisler: `"decision"`, `"resend"`, `"push"`, `"suggest"` ya da `["all"]`. Bilinmeyen ad **açılışı durdurur** |
-| `decision_model` | OpenRouter model adı (kalite denetimi) |
-| `suggest_model` | OpenRouter model adı (malzeme önerisi); isteğe bağlı, yoksa `deepseek/deepseek-v4.1-flash` |
+| `decision_model` | OpenRouter model adı (kalite denetimi) — **yalnız varsayılan** |
+| `suggest_model` | OpenRouter model adı (malzeme önerisi); isteğe bağlı, yoksa `deepseek/deepseek-v4.1-flash` — **yalnız varsayılan** |
+
+Model adı, parametreler, dolar limitleri ve istem artık **yönetim sayfasından** değişir
+(Yönetim › Veri işleme ve LLM, spec/79 §11; `llm_features` vb. tablolar). Manifestteki iki
+model adı yalnız o özellik için DB'de satır yokken geçerlidir; model değiştirmek için dağıtım
+gerekmez. `external_off` kill switch olarak kalır: DB'de açık olan özellik manifestte
+kapalıysa kapalıdır.
 
 Sürümü yükseltmek: üç yeri (`manifest.json`, `Cargo.toml`, `package.json`) aynı değere
 çek; `cargo update -p ekiptakip --offline` ve `npm install --package-lock-only` kilit
@@ -133,7 +139,8 @@ yeni sütunları yok sayar, veri kaybı olmaz.
 | `calisma agaci temiz degil` | `release.sh` HEAD'in sha'sını etiketler; önce commit'le |
 | Pi eski sürümde kaldı | `release.nix` main'e push'lanmadı ya da `nix flake update` unutuldu |
 | Release yüklendi ama `release.nix` değişmedi | yükleme sırasında patladı; aynı komutu tekrar çalıştır (aynı sha'ya yeni etiket gerekirse eskisini `gh release delete`) |
-| Açılışta `manifest.json external_off: bilinmeyen servis` | yazım hatası (`decision`, `resend`, `push`, `all`) |
+| Açılışta `manifest.json external_off: bilinmeyen servis` | yazım hatası (`decision`, `resend`, `push`, `suggest`, `all`) |
+| Malzeme önerisi 429 `suggest_limit` | modelin bir dolar limiti doldu (Yönetim › Veri işleme ve LLM › Limitler) |
 | `cargo test`: "surumu ayristi" | manifest / Cargo.toml / package.json sürümleri farklı |
 | Açılışta `EKIPTAKIP_SECRET_KEY yayinda zorunlu` | env dosyasında eksik/kısa anahtar; yayında sahte kimlik de reddedilir |
 

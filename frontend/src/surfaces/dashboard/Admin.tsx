@@ -15,46 +15,67 @@ import { NodeTreePicker } from "../../features/nodes/NodePicker";
 import { AdminAvatar, EditableAvatar } from "../../features/profile/EditableAvatar";
 import { useStored } from "../../lib/stored";
 import { AdminActivity } from "./AdminActivity";
+import { AdminLlm } from "./AdminLlm";
 import { AdminQuality } from "./AdminQuality";
 import { ErrorScreen } from "../errors/ErrorScreen";
 import s from "./dashboard.module.css";
 
+type Tab = "people" | "activity" | "quality" | "llm";
+
+const SUBTITLE: Record<Tab, string> = {
+  people: "Kim girebilir, neyi değiştirebilir.",
+  activity: "Kim ne zaman uğruyor, ne kadar iş çıkarıyor.",
+  quality: "Kayıt ve kapanış notlarını tartan modelin soruları ve eşikleri.",
+  llm: "Yapay zekâ çağrıları: model, limit, istem, maliyet, geçmiş ve modele giden verinin temizlenmesi.",
+};
+
+/** Modulu iki kapsam acar, kapsamlari ayri (spec/79 §11.7): `manage_users` kisiler ve
+ *  aktivite, `manage_llm` LLM sekmesi; Kalite kapisi yalniz admin. Yetkin olmayan sekme
+ *  KILITLI gorunur. Uclar yine kendisi kontrol eder. */
 export function Admin() {
-  const q = useAdmin();
+  const L = useLookup();
+  const people = L.can("manage_users");
+  const llm = L.can("manage_llm");
+  const [tab, setTab] = useState<Tab>(people ? "people" : "llm");
   useEffect(() => {
     document.title = "Yönetim — EkipTakip";
   }, []);
-  if (q.error !== null)
-    return <ErrorScreen code={q.error instanceof ApiError && q.error.code === "forbidden" ? "forbidden" : "network"} />;
-  if (q.data === undefined) return <Loading />;
-  return <AdminScreen v={q.data} />;
-}
-
-function AdminScreen({ v }: { v: AdminView }) {
-  const roleById = new Map(v.roles.map((r) => [r.id, r]));
-  const [tab, setTab] = useState<"people" | "activity" | "quality">("people");
-  const [peopleOpen, setPeopleOpen] = useStored("admin.people.open", true);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
   return (
-    <div className={s.page} style={{ maxWidth: 960 }}>
+    <div className={s.page} style={{ maxWidth: tab === "llm" ? 1180 : 960 }}>
       <div className={s.pageHead}>
         <div className={s.pageTitle}>
           <h1>Yönetim</h1>
-          <p className={s.pageSub}>
-            {tab === "activity" ? "Kim ne zaman uğruyor, ne kadar iş çıkarıyor."
-              : tab === "quality" ? "Kayıt ve kapanış notlarını tartan modelin soruları ve eşikleri."
-              : "Kim girebilir, neyi değiştirebilir."}
-          </p>
+          <p className={s.pageSub}>{SUBTITLE[tab]}</p>
         </div>
       </div>
       <Segmented label="Yönetim bölümü" value={tab} onChange={setTab}
         options={[
-          { value: "people", label: "Kişiler ve roller" },
-          { value: "activity", label: "Aktivite" },
-          // Soru metni kayıt kararlarını değiştirir: yalnız admin görür (uç da 403 verir).
-          ...(v.is_admin ? [{ value: "quality" as const, label: "Kalite kapısı" }] : []),
+          { value: "people", label: "Kişiler ve roller", locked: !people },
+          { value: "activity", label: "Aktivite", locked: !people },
+          // Soru metni kayıt kararlarını değiştirir: yalnız admin (uç da 403 verir).
+          { value: "quality", label: "Kalite kapısı", locked: !L.meta.me.is_admin },
+          { value: "llm", label: "Veri işleme ve LLM", locked: !llm },
         ]} />
-      {tab === "quality" ? <AdminQuality /> : tab === "activity" ? <AdminActivity /> : <>
+      {tab === "quality" ? <AdminQuality /> : tab === "activity" ? <AdminActivity />
+        : tab === "llm" ? <AdminLlm /> : <People />}
+    </div>
+  );
+}
+
+function People() {
+  const q = useAdmin();
+  if (q.error !== null)
+    return <ErrorScreen code={q.error instanceof ApiError && q.error.code === "forbidden" ? "forbidden" : "network"} />;
+  if (q.data === undefined) return <Loading />;
+  return <PeopleScreen v={q.data} />;
+}
+
+function PeopleScreen({ v }: { v: AdminView }) {
+  const roleById = new Map(v.roles.map((r) => [r.id, r]));
+  const [peopleOpen, setPeopleOpen] = useStored("admin.people.open", true);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  return (
+    <>
       <h2 className={s.sectionTitle}>Kişi ekle</h2>
       <AddUser />
       <h2 className={s.sectionTitle}>
@@ -88,8 +109,7 @@ function AdminScreen({ v }: { v: AdminView }) {
         yöneticide.
       </p>
       <Roles v={v} />
-      </>}
-    </div>
+    </>
   );
 }
 

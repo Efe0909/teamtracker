@@ -10,6 +10,22 @@ import { useRealtimeUp, useTopic, type RealtimeEvent } from "./realtime";
 import type {
   ActionPatch,
   AdminView,
+  LlmCallDetail,
+  LlmCallsView,
+  LlmConfig,
+  LlmConfigView,
+  LlmFeature,
+  LlmFeatureIn,
+  LlmFeatureView,
+  LlmFilter,
+  LlmKeyView,
+  LlmLimit,
+  LlmModelsView,
+  LlmParams,
+  LlmPromptsView,
+  LlmStatusView,
+  LlmTryOut,
+  LlmUsageView,
   Quality,
   QualityConfig,
   QualityView,
@@ -72,6 +88,7 @@ export const keys = {
   nodes: ["nodes"] as const,
   admin: ["admin"] as const,
   quality: ["admin", "quality"] as const,
+  llm: ["admin", "llm"] as const,
   tags: ["tags"] as const,
   events: ["events"] as const,
   event: (id: Uuid) => ["event", id] as const,
@@ -731,5 +748,136 @@ export function useQualityTry() {
   return useMutation({
     mutationFn: (b: { kind: "entry" | "closing"; state: string; config: QualityConfig }) =>
       request<Quality>("POST", "/api/admin/quality/try", b),
+  });
+}
+
+// --- Yonetim > Veri isleme ve LLM (admin ya da manage_llm, spec/79 §11) --------------
+
+const filterQs = (f: LlmFilter, cursor?: string) =>
+  qs({ from: f.from, to: f.to, feature: f.feature, model: f.model, user: f.user, status: f.status, cursor });
+
+export function useLlmStatus() {
+  return useQuery({ queryKey: [...keys.llm, "status"], queryFn: () => request<LlmStatusView>("GET", "/api/admin/llm/status") });
+}
+
+export function useLlmUsage(f: LlmFilter) {
+  return useQuery({
+    queryKey: [...keys.llm, "usage", f],
+    queryFn: () => request<LlmUsageView>("GET", `/api/admin/llm/usage${filterQs(f)}`),
+  });
+}
+
+export function useLlmCalls(f: LlmFilter, cursor: string | undefined) {
+  return useQuery({
+    queryKey: [...keys.llm, "calls", f, cursor ?? ""],
+    queryFn: () => request<LlmCallsView>("GET", `/api/admin/llm/calls${filterQs(f, cursor)}`),
+  });
+}
+
+export function useLlmCall(id: Uuid | null) {
+  return useQuery({
+    queryKey: [...keys.llm, "call", id],
+    queryFn: () => request<LlmCallDetail>("GET", `/api/admin/llm/calls/${id ?? ""}`),
+    enabled: id !== null,
+  });
+}
+
+/** OpenRouter anahtar kullanimi; sunucu 5 dk onbellekler. `refresh` onbellegi atar. */
+export function useLlmKey(refresh: number) {
+  return useQuery({
+    queryKey: [...keys.llm, "key", refresh],
+    queryFn: () => request<LlmKeyView>("GET", `/api/admin/llm/key${refresh > 0 ? "?refresh=1" : ""}`),
+  });
+}
+
+/** OpenRouter model listesi; sunucu 1 saat onbellekler. */
+export function useLlmModels(refresh: number) {
+  return useQuery({
+    queryKey: [...keys.llm, "models", refresh],
+    queryFn: () => request<LlmModelsView>("GET", `/api/admin/llm/models${refresh > 0 ? "?refresh=1" : ""}`),
+    staleTime: 3_600_000,
+  });
+}
+
+export function useLlmFeatures() {
+  return useQuery({ queryKey: [...keys.llm, "features"], queryFn: () => request<LlmFeatureView[]>("GET", "/api/admin/llm/features") });
+}
+
+export function useLlmFeatureWrite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ feature, body }: { feature: LlmFeature; body: LlmFeatureIn }) =>
+      request<LlmFeatureView[]>("PUT", `/api/admin/llm/features/${feature}`, body),
+    onSuccess: (v) => {
+      qc.setQueryData([...keys.llm, "features"], v);
+      void qc.invalidateQueries({ queryKey: [...keys.llm, "status"] });
+    },
+  });
+}
+
+export function useLlmTry() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ feature, ...b }: { feature: LlmFeature; model: string; params: LlmParams; prompt_version?: number; input: unknown }) =>
+      request<LlmTryOut>("POST", `/api/admin/llm/features/${feature}/try`, b),
+    // Dene de bir cagri: gecmis ve maliyet tazelensin.
+    onSettled: () => void qc.invalidateQueries({ queryKey: keys.llm, predicate: (q) => q.queryKey[2] !== "features" }),
+  });
+}
+
+export function useLlmPrompts(feature: LlmFeature) {
+  return useQuery({
+    queryKey: [...keys.llm, "prompts", feature],
+    queryFn: () => request<LlmPromptsView>("GET", `/api/admin/llm/prompts/${feature}`),
+  });
+}
+
+export function useLlmPromptWrite(feature: LlmFeature) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (op: { add: string } | { activate: number }) =>
+      "add" in op
+        ? request<LlmPromptsView>("POST", `/api/admin/llm/prompts/${feature}`, { body: op.add })
+        : request<LlmPromptsView>("PUT", `/api/admin/llm/prompts/${feature}/active`, { version: op.activate }),
+    onSuccess: (v) => {
+      qc.setQueryData([...keys.llm, "prompts", feature], v);
+      void qc.invalidateQueries({ queryKey: [...keys.llm, "features"] });
+    },
+  });
+}
+
+export function useLlmLimits() {
+  return useQuery({ queryKey: [...keys.llm, "limits"], queryFn: () => request<LlmLimit[]>("GET", "/api/admin/llm/limits") });
+}
+
+export function useLlmLimitWrite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (op: { put: { model: string; window_minutes: number; usd: number } } | { remove: Uuid }) =>
+      "put" in op
+        ? request<LlmLimit[]>("POST", "/api/admin/llm/limits", op.put)
+        : request<LlmLimit[]>("DELETE", `/api/admin/llm/limits/${op.remove}`),
+    onSuccess: (v) => qc.setQueryData([...keys.llm, "limits"], v),
+  });
+}
+
+/** Temizleyici denemesi: metin modele gitmez, yalniz temizlenmis hali doner. */
+export function useLlmRedactTry() {
+  return useMutation({
+    mutationFn: (b: { text: string; config: LlmConfig }) => request<{ text: string }>("POST", "/api/admin/llm/redact-try", b),
+  });
+}
+
+/** Temizleme kurallari (`/api/admin/llm`); null = varsayilana don. */
+export function useLlmConfig() {
+  return useQuery({ queryKey: [...keys.llm, "config"], queryFn: () => request<LlmConfigView>("GET", "/api/admin/llm") });
+}
+
+export function useLlmConfigWrite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (cfg: LlmConfig | null) =>
+      cfg === null ? request<LlmConfigView>("DELETE", "/api/admin/llm") : request<LlmConfigView>("PUT", "/api/admin/llm", cfg),
+    onSuccess: (v) => qc.setQueryData([...keys.llm, "config"], v),
   });
 }

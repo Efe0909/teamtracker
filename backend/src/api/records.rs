@@ -343,7 +343,7 @@ pub(crate) async fn log_override(
 
 /// `closed`'a gecis: not zorunlu, >= 30, model tartar. Donen: (not, override nedenleri, karar).
 async fn closing(
-    st: &AppState, note: Option<String>, context: &str, override_: bool, bypass_quality: bool,
+    st: &AppState, actor: Uuid, note: Option<String>, context: &str, override_: bool, bypass_quality: bool,
 ) -> Result<(String, Option<Vec<&'static str>>, Option<decision::Quality>)> {
     let note = common::text(note, TEXT_MAX, "invalid_closing_note")?
         .ok_or(AppError::BadRequest("closing_note_required"))?;
@@ -352,7 +352,7 @@ async fn closing(
     } else {
         common::min_chars(Some(&note), common::DESC_MIN, "closing_note_too_short")?;
         let state = format!("{context}\nKapanış notu: {note}");
-        let (reasons, quality) = decision::gate_with(st, decision::Kind::Closing, &state, override_).await?;
+        let (reasons, quality) = decision::gate_with(st, actor, decision::Kind::Closing, &state, override_).await?;
         return Ok((note, reasons, Some(quality)));
     };
     Ok((note, None, quality))
@@ -423,7 +423,7 @@ pub async fn create(
     let reasons = if bypass_quality {
         None
     } else {
-        decision::gate(&st, decision::Kind::Entry,
+        decision::gate(&st, me.id, decision::Kind::Entry,
             &decision::entry_state(&title, description.as_deref()), b.quality_override).await?
     };
 
@@ -517,7 +517,7 @@ pub async fn patch(
                     return Err(AppError::Conflict("open_actions"));
                 }
                 if rec.status != "closed" {
-                    let (n, r, q) = closing(&st, closing_note, &format!("Kayıt: {}", rec.title),
+                    let (n, r, q) = closing(&st, me.id, closing_note, &format!("Kayıt: {}", rec.title),
                         quality_override, bypass_quality).await?;
                     (note, reasons, quality) = (Some(n), r, q);
                 }
@@ -573,7 +573,7 @@ pub async fn patch(
             // Yalniz DEGISEN alan sinanir: eski kisa veri duzenlenene dek kalir.
             if v != rec.title && !bypass_quality {
                 check_title(&v)?;
-                let (r, q) = decision::gate_with(&st, decision::Kind::Entry,
+                let (r, q) = decision::gate_with(&st, me.id, decision::Kind::Entry,
                     &decision::entry_state(&v, rec.description.as_deref()), quality_override).await?;
                 (reasons, quality) = (r, Some(q));
             }
@@ -586,7 +586,7 @@ pub async fn patch(
             }
             if v != rec.description && !bypass_quality {
                 check_description(v.as_deref())?;
-                let (r, q) = decision::gate_with(&st, decision::Kind::Entry,
+                let (r, q) = decision::gate_with(&st, me.id, decision::Kind::Entry,
                     &decision::entry_state(&rec.title, v.as_deref()), quality_override).await?;
                 (reasons, quality) = (r, Some(q));
             }
@@ -752,7 +752,7 @@ pub async fn patch_action(
     // Model cagrisi islemden once (agda beklerken baglanti tutulmaz).
     let (note, reasons) = match p {
         ActionPatch::Status(ActionStatus::Closed) if !matches!(a.status, ActionStatus::Closed) => {
-            let (n, r, _) = closing(&st, closing_note,
+            let (n, r, _) = closing(&st, me.id, closing_note,
                 &format!("Eylem: {}\nKayıt: {}", a.title, rec.title), quality_override, bypass_quality).await?;
             (Some(n), r)
         }

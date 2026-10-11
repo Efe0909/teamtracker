@@ -9,19 +9,22 @@
 //! Soru ADLARI sabit (kod bunlara baglanir); soru METINLERI ve esikler
 //! `quality_config` tablosunda, Yonetim > Kalite kapisi'ndan degisir. Satir
 //! yoksa asagidaki varsayilanlar gecerli.
+//!
+//! Model adi ve zaman asimi `llm_features` (`quality_gate`), cagri `llm::run`'dan
+//! gecer: kayit, limit (asilinca kapi GECER, kullanici engellenmez) spec/79 §11.
 
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sqlx::PgPool;
+use uuid::Uuid;
 
-use crate::{config::Service, error::AppError, state::AppState};
-
-const URL: &str = "https://openrouter.ai/api/alpha/decisions";
-const TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
-/// Yonetimden denerken bekleme daha uzun: amac olcmek, kullaniciyi bekletmemek degil.
-const TRY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
+use crate::{
+    error::AppError,
+    llm::{self, Effective, Fail, Parsed, Status, Who},
+    state::AppState,
+};
 
 #[derive(Clone, Copy, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -193,38 +196,51 @@ fn current(st: &AppState) -> QualityConfig {
     st.quality.read().unwrap_or_else(|e| e.into_inner()).clone()
 }
 
-pub async fn assess(st: &AppState, kind: Kind, state: &str) -> (Verdict, Quality) {
-    assess_with(st, &current(st), kind, state, TIMEOUT).await
+fn gate_contract() -> &'static llm::Contract {
+    // Sozlesme listesi sabit; bulunamamasi derleme sonrasi imkansiz, yine de panik yok.
+    llm::contract(llm::GATE).unwrap_or(&llm::CONTRACTS[1])
 }
 
-/// Yonetimde taslak yapilandirmayla deneme: ayni yol, kendi sorulari ve zaman asimi.
-pub async fn try_with(st: &AppState, cfg: &QualityConfig, kind: Kind, state: &str) -> Quality {
-    assess_with(st, cfg, kind, state, TRY_TIMEOUT).await.1
+pub async fn assess(st: &AppState, user: Uuid, kind: Kind, state: &str) -> (Verdict, Quality) {
+    let c = gate_contract();
+    let e = llm::settings(st, c).await;
+    let who = Who { user_id: Some(user), event_id: None, is_try: false };
+    let (v, q, _) = assess_with(st, &current(st), &e, who, kind, state).await;
+    (v, q)
+}
+
+/// Yonetimde taslak yapilandirmayla deneme: ayni yol, kendi sorulari; zaman asimi en az 20 sn.
+pub async fn try_with(st: &AppState, user: Uuid, cfg: &QualityConfig, kind: Kind, state: &str) -> Quality {
+    let e = llm::settings(st, gate_contract()).await;
+    let who = Who { user_id: Some(user), event_id: None, is_try: true };
+    assess_with(st, cfg, &e, who, kind, state).await.1
+}
+
+/// Yonetim > LLM > Dene: taslak model/zaman asimi, gecerli sorular. Tam iz doner.
+pub async fn try_model(st: &AppState, user: Uuid, e: &Effective, kind: Kind, state: &str) -> llm::Done<Value> {
+    let cfg = current(st);
+    let who = Who { user_id: Some(user), event_id: None, is_try: true };
+    llm::run(st, gate_contract(), e, who, None, body(&e.model, kind, &cfg, state), |resp| {
+        let v = verdict(kind, &cfg, resp).ok_or(Status::Schema)?;
+        let q = Quality::of(&v, resp);
+        Ok(Parsed { outcome: Some(q.outcome), ..Parsed::plain(serde_json::to_value(&q).unwrap_or_default()) })
+    }).await
 }
 
 async fn assess_with(
-    st: &AppState, cfg: &QualityConfig, kind: Kind, state: &str, timeout: std::time::Duration,
-) -> (Verdict, Quality) {
-    if !st.cfg.external_on(Service::Decision) {
-        return (Verdict::Skipped, Quality::skipped(None));
-    }
-    // Model istenip cevap alinamadi: sahte guven uretme, yalniz istenen modeli soyle.
-    let skipped = || (Verdict::Skipped, Quality::skipped(Some(st.cfg.decision_model.clone())));
-    let sent = st.http.post(URL).bearer_auth(&st.cfg.decision_key).timeout(timeout)
-        .json(&body(&st.cfg.decision_model, kind, cfg, state)).send().await;
-    let resp: Value = match sent {
-        Ok(r) if r.status().is_success() => match r.json().await {
-            Ok(v) => v,
-            Err(e) => { tracing::warn!("karar modeli: bozuk yanit: {e}"); return skipped(); }
-        },
-        Ok(r) => { tracing::warn!("karar modeli: HTTP {}", r.status()); return skipped(); }
-        Err(e) => { tracing::warn!("karar modeli: erisilemedi: {e}"); return skipped(); }
-    };
-    let answers = resp.get("answers").map(Value::to_string).unwrap_or_default();
-    tracing::debug!("karar modeli: {answers}");
-    match verdict(kind, cfg, &resp) {
-        Some(v) => { let q = Quality::of(&v, &resp); (v, q) }
-        None => { tracing::warn!("karar modeli: beklenmeyen yanit bicimi"); skipped() }
+    st: &AppState, cfg: &QualityConfig, e: &Effective, who: Who, kind: Kind, state: &str,
+) -> (Verdict, Quality, Option<llm::Trace>) {
+    let done = llm::run(st, gate_contract(), e, who, None, body(&e.model, kind, cfg, state), |resp| {
+        let v = verdict(kind, cfg, resp).ok_or(Status::Schema)?;
+        let q = Quality::of(&v, resp);
+        Ok(Parsed { outcome: Some(q.outcome), ..Parsed::plain((v, q)) })
+    }).await;
+    match done.result {
+        Ok((v, q)) => (v, q, done.trace),
+        // Kapali/devre disi: model istenmedi, ad da soylenmez.
+        Err(Fail::Off | Fail::Disabled) => (Verdict::Skipped, Quality::skipped(None), done.trace),
+        // Model istenip cevap alinamadi ya da tavan doldu: sahte guven uretme, yalniz modeli soyle.
+        Err(Fail::Limit | Fail::Failed) => (Verdict::Skipped, Quality::skipped(Some(e.model.clone())), done.trace),
     }
 }
 
@@ -232,15 +248,15 @@ async fn assess_with(
 /// cagiran `quality_override` olgusunu kaydin akisina yazar. Gerisi `None`.
 /// Karari yanita da koyacak cagiranlar `gate_with`'i kullanir.
 pub async fn gate(
-    st: &AppState, kind: Kind, state: &str, override_: bool,
+    st: &AppState, user: Uuid, kind: Kind, state: &str, override_: bool,
 ) -> Result<Option<Vec<&'static str>>, AppError> {
-    gate_with(st, kind, state, override_).await.map(|(r, _)| r)
+    gate_with(st, user, kind, state, override_).await.map(|(r, _)| r)
 }
 
 pub async fn gate_with(
-    st: &AppState, kind: Kind, state: &str, override_: bool,
+    st: &AppState, user: Uuid, kind: Kind, state: &str, override_: bool,
 ) -> Result<(Option<Vec<&'static str>>, Quality), AppError> {
-    match assess(st, kind, state).await {
+    match assess(st, user, kind, state).await {
         (Verdict::Low { reasons }, q) if override_ => Ok((Some(reasons), q)),
         (Verdict::Low { reasons }, _) => Err(AppError::LowQuality(reasons)),
         (Verdict::Pass | Verdict::Skipped, q) => Ok((None, q)),

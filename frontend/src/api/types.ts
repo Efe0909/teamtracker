@@ -807,3 +807,238 @@ export interface QualityView {
   /** false: anahtar yok ya da manifest'te kapali; "Dene" bos doner. */
   service_on: boolean;
 }
+
+// --- Yonetim > Veri isleme ve LLM (Rust api/llm.rs + llm_usage.rs, spec/79 §11) ----
+
+/** Temizleme kurallari (`llm_config`, spec/79 §4). */
+export interface LlmRules {
+  patterns: boolean;
+  known_names: boolean;
+  capitalized: boolean;
+}
+
+export interface LlmConfig {
+  free_text_allowed: boolean;
+  rules: LlmRules;
+}
+
+export interface LlmConfigView {
+  config: LlmConfig;
+  defaults: LlmConfig;
+  customized: boolean;
+  updated_at: string | null;
+  updated_by: Uuid | null;
+}
+
+export type LlmFeature = "material_suggestions" | "quality_gate";
+export type LlmStatus = "ok" | "limit" | "http" | "timeout" | "network" | "parse" | "schema";
+
+/** Satirdaki ham parametreler; yoksa sozlesmenin varsayilani. */
+export interface LlmParams {
+  max_tokens?: number;
+  temperature?: number;
+  timeout_ms?: number;
+  reasoning_off?: boolean;
+  batch?: number;
+}
+
+export interface LlmEffective {
+  model: string;
+  max_tokens: number;
+  temperature: number | null;
+  timeout_ms: number;
+  reasoning_off: boolean;
+  batch: number;
+  enabled: boolean;
+  store_bodies: boolean;
+  /** 0 = koddaki istem. */
+  prompt_version: number;
+}
+
+export interface LlmFeatureView {
+  feature: LlmFeature;
+  label: string;
+  endpoint: "chat" | "decisions";
+  has_prompt: boolean;
+  has_batch: boolean;
+  default_model: string;
+  params: LlmParams;
+  effective: LlmEffective;
+  customized: boolean;
+  tested_at: string | null;
+  updated_at: string | null;
+  updated_by: Uuid | null;
+  service_on: boolean;
+  sample_input: unknown;
+}
+
+export interface LlmFeatureIn {
+  model: string;
+  params: LlmParams;
+  enabled: boolean;
+  store_bodies: boolean;
+}
+
+export interface LlmTrace {
+  call_id: Uuid | null;
+  status: LlmStatus;
+  http_status: number | null;
+  error: string | null;
+  ms: number;
+  prompt_tokens: number | null;
+  completion_tokens: number | null;
+  cost_usd: number | null;
+  or_gen_id: string | null;
+  asked: number | null;
+  kept: number | null;
+  outcome: string | null;
+}
+
+/** "Dene" cevabi: tam iz yalniz burada, saklanmaz. */
+export interface LlmTryOut {
+  ok: boolean;
+  model: string;
+  trace: LlmTrace | null;
+  output: unknown;
+  request: unknown;
+  raw: string | null;
+}
+
+export interface LlmPromptVersion {
+  version: number;
+  body: string;
+  created_by: Uuid | null;
+  created_at: string;
+}
+
+export interface LlmPromptsView {
+  feature: LlmFeature;
+  active: number;
+  code_default: string;
+  versions: LlmPromptVersion[];
+}
+
+export interface LlmLimit {
+  id: Uuid;
+  model: string;
+  window_minutes: number;
+  usd: number;
+  spent: number;
+  created_at: string;
+}
+
+export interface LlmDayRow {
+  day: IsoDate;
+  feature: string;
+  model: string;
+  calls: number;
+  errors: number;
+  limited: number;
+  prompt_tokens: number;
+  completion_tokens: number;
+  cost_usd: number;
+  unpriced: number;
+  ms_total: number;
+}
+
+export interface LlmUsageView {
+  from: IsoDate;
+  to: IsoDate;
+  /** Bu gunden onceki satirlar ozetten: kisi kirilimi yok. */
+  boundary: IsoDate;
+  rows: LlmDayRow[];
+  by_user: { user_id: Uuid | null; calls: number; errors: number; cost_usd: number }[];
+}
+
+export interface LlmCall {
+  id: Uuid;
+  created_at: string;
+  feature: string;
+  model: string;
+  user_id: Uuid | null;
+  event_id: Uuid | null;
+  is_try: boolean;
+  prompt_version: number | null;
+  status: LlmStatus;
+  http_status: number | null;
+  error: string | null;
+  ms: number;
+  prompt_tokens: number | null;
+  completion_tokens: number | null;
+  cost_usd: number | null;
+  or_gen_id: string | null;
+  batch_id: Uuid | null;
+  asked: number | null;
+  kept: number | null;
+  outcome: string | null;
+  has_body: boolean;
+}
+
+export interface LlmCallsView {
+  rows: LlmCall[];
+  total: number;
+  next: string | null;
+}
+
+export interface LlmCallDetail extends LlmCall {
+  request: unknown;
+  response: string | null;
+}
+
+export interface LlmStatusView {
+  key_configured: boolean;
+  external_off: string[];
+  services: { feature: LlmFeature; label: string; service: string; on: boolean; enabled: boolean }[];
+  calls: number;
+  bodies: number;
+  daily_rows: number;
+  oldest_call: string | null;
+  size_bytes: number;
+  retention_days: number;
+  body_ttl_days: number;
+  boundary: IsoDate;
+}
+
+export interface LlmKeyView {
+  off: boolean;
+  error: boolean;
+  fetched_at: string | null;
+  data: {
+    limit: number | null;
+    limit_remaining: number | null;
+    limit_reset: string | null;
+    usage: number | null;
+    usage_daily: number | null;
+    usage_weekly: number | null;
+    usage_monthly: number | null;
+    is_free_tier: boolean | null;
+  } | null;
+}
+
+export interface LlmModelInfo {
+  id: string;
+  name: string;
+  context_length: number | null;
+  /** USD / 1M jeton; null = onceden bilinmiyor. */
+  prompt_per_m: number | null;
+  completion_per_m: number | null;
+  structured_outputs: boolean;
+  response_format: boolean;
+  reasoning: boolean;
+}
+
+export interface LlmModelsView {
+  error: boolean;
+  fetched_at: string | null;
+  models: LlmModelInfo[];
+}
+
+/** Ortak suzgec (Genel, Analiz, Cagrilar). Bos = hepsi. */
+export interface LlmFilter {
+  from: IsoDate;
+  to: IsoDate;
+  feature: string;
+  model: string;
+  user: string;
+  status: "" | "ok" | "error" | "limit";
+}

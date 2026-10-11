@@ -24,6 +24,8 @@ pub enum AppError {
     LowQuality(Vec<&'static str>),
     /// Dis servis kapali ya da cevap vermedi (ornegin "suggest_unavailable"): 503.
     Unavailable(&'static str),
+    /// Harcama tavani doldu (ornegin "suggest_limit", spec/79 §11.3): 429.
+    Limited(&'static str),
     Db(sqlx::Error),
 }
 
@@ -47,6 +49,7 @@ impl IntoResponse for AppError {
             AppError::BadRequest(c) => (StatusCode::BAD_REQUEST, *c),
             AppError::Conflict(c) => (StatusCode::CONFLICT, *c),
             AppError::Unavailable(c) => (StatusCode::SERVICE_UNAVAILABLE, *c),
+            AppError::Limited(c) => (StatusCode::TOO_MANY_REQUESTS, *c),
             AppError::LowQuality(reasons) => {
                 return (StatusCode::UNPROCESSABLE_ENTITY,
                     Json(serde_json::json!({ "error": "low_quality", "reasons": reasons }))).into_response();

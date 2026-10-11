@@ -18,7 +18,7 @@ use chrono::Datelike;
 
 // Malzeme onerisi: daraltilmis istek + model cagrisi + sunucu suzgeci (spec/79 §9).
 mod materials;
-pub(crate) use materials::material_suggestions;
+pub(crate) use materials::{material_suggestions, sample_input as material_sample, try_suggest};
 
 use super::*;
 use crate::{
@@ -247,7 +247,7 @@ struct CheckpointRow {
 }
 
 /// Metinde aranacak adlar: kisiler ve kurumlar (takim, tedarikci, kulup).
-async fn known_names(st: &AppState) -> Result<Known> {
+pub(crate) async fn known_names(st: &AppState) -> Result<Known> {
     let people: Vec<String> = sqlx::query_scalar("select name from users").fetch_all(&st.pool).await?;
     let mut orgs: Vec<String> = sqlx::query_scalar(
         "select name from teams union select name from material_providers where name is not null")

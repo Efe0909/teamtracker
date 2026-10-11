@@ -77,6 +77,7 @@ export const SCOPE: Readonly<Partial<Record<string, string>>> = {
   manage_purchases: "Satın alımları yönet — adım ilerlet, tedarikçi ve fiyat yaz",
   manage_budgets: "Bütçe yaz — kalem bütçesini gir ya da sil (satın alım yetkisine ek)",
   use_generative_ai: "Yapay zekâ özelliklerini kullan — malzeme önerisi gibi üretken özellikler (metin dış servise gider)",
+  manage_llm: "Veri işleme ve LLM'i yönet — model, limit, istem, maliyet, çağrı geçmişi, temizleme kuralları",
   review_purchases: "Satın alımları incele — kalemi “satın alındı” olarak işaretle (maliye)",
 };
 

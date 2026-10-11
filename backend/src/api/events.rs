@@ -221,7 +221,7 @@ struct Provider {
 
 // LLM yuku (kisisel/kurumsal veriden arindirilmis); `material_cols!` yukarida tanimli.
 mod context;
-pub(crate) use context::{llm_context, llm_restore, material_suggestions};
+pub(crate) use context::{known_names, llm_context, llm_restore, material_sample, material_suggestions, try_suggest};
 
 async fn detail_of(st: &AppState, me: &User, event: EventRow) -> Result<Detail> {
     let twin = records::load(&st.pool, event.record_id).await?;
@@ -377,7 +377,7 @@ pub async fn create(
     records::check_unit(&st, b.unit_id)?;
     check_kind(&st, b.kind_id)?;
     let reasons = if bypass_quality { None } else {
-        decision::gate(&st, decision::Kind::Entry,
+        decision::gate(&st, me.id, decision::Kind::Entry,
             &decision::entry_state(&title, description.as_deref()), b.quality_override).await?
     };
     // Sablon kilit altinda okunur, kilit await'ten once birakilir (state.rs).
@@ -485,7 +485,7 @@ pub async fn patch(
         _ => None,
     };
     let overridden = match entry {
-        Some((field, state)) => decision::gate(&st, decision::Kind::Entry, &state, quality_override)
+        Some((field, state)) => decision::gate(&st, me.id, decision::Kind::Entry, &state, quality_override)
             .await?.map(|r| (field, r)),
         None => None,
     };

@@ -13,6 +13,7 @@ mod common;
 mod events;
 mod home;
 mod llm;
+mod llm_usage;
 mod meta;
 mod nodes;
 mod notify;
@@ -123,6 +124,21 @@ pub fn router() -> Router<AppState> {
         .route("/api/admin/quality", get(quality::get).put(quality::put).delete(quality::reset))
         .route("/api/admin/quality/try", post(quality::try_it))
         .route("/api/admin/llm", get(llm::get).put(llm::put).delete(llm::reset))
+        // Yonetim > Veri isleme ve LLM (spec/79 §11): admin ya da manage_llm.
+        .route("/api/admin/llm/redact-try", post(llm::redact_try))
+        .route("/api/admin/llm/status", get(llm_usage::status))
+        .route("/api/admin/llm/usage", get(llm_usage::usage))
+        .route("/api/admin/llm/calls", get(llm_usage::calls))
+        .route("/api/admin/llm/calls/{id}", get(llm_usage::call))
+        .route("/api/admin/llm/key", get(llm_usage::key))
+        .route("/api/admin/llm/models", get(llm_usage::models))
+        .route("/api/admin/llm/features", get(llm::list_features))
+        .route("/api/admin/llm/features/{feature}", put(llm::put_feature))
+        .route("/api/admin/llm/features/{feature}/try", post(llm::try_feature))
+        .route("/api/admin/llm/prompts/{feature}", get(llm::get_prompts).post(llm::add_prompt))
+        .route("/api/admin/llm/prompts/{feature}/active", put(llm::activate_prompt))
+        .route("/api/admin/llm/limits", get(llm::list_limits).post(llm::put_limit))
+        .route("/api/admin/llm/limits/{id}", delete(llm::delete_limit))
         .route("/api/admin/users", post(admin::add_user))
         .route("/api/admin/users/{id}", patch(admin::patch_user))
         .route("/api/admin/roles", post(admin::create_role))

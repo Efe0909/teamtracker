@@ -16,6 +16,7 @@ mod csrf;
 mod db;
 mod decision;
 mod error;
+mod llm;
 mod media;
 mod mentions;
 #[allow(dead_code)]
@@ -65,6 +66,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Ok((0, 0)) => {}
                 Ok((chats, files)) => tracing::info!("supurme: {chats} sohbet, {files} ek"),
                 Err(e) => tracing::error!("supurme: {e}"),
+            }
+            // LLM cagri kaydi: gunluk ozet + 180 gun / 7 gun saklama (spec/79 §11.2).
+            match llm::sweep(&sweep_pool).await {
+                Ok((0, 0)) => {}
+                Ok((calls, bodies)) => tracing::info!("llm supurme: {calls} cagri, {bodies} govde"),
+                Err(e) => tracing::error!("llm supurme: {e}"),
             }
         }
     });

@@ -1,5 +1,10 @@
 # Opus için görev istemi — Yönetim › "Veri işleme ve LLM" sayfası
 
+> **Durum: uygulandı (2026-10-10).** Görüşmede alınan kararlar ve gerçekleşen tasarım
+> `spec/79-llm-yuku.md` §11'de; bu belge yalnız tarihçe. Aşağıdaki "yalnız admin" ve "sormadan
+> karar verme" maddeleri görüşmede kapandı (`manage_llm` kapsamı, gövde 7 gün, istem DB'de,
+> kapı kayıtta ve modeli DB'de, model başına dolar limiti).
+
 > Aşağıdaki bloğu olduğu gibi yeni bir Opus oturumuna ver. Depo: `teamtracker`
 > (EkipTakip). Önce `CLAUDE.md`'yi ve `spec/79-llm-yuku.md`'yi okumasını söylüyor.
 

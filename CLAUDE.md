@@ -32,7 +32,12 @@ docker compose up -d && docker exec ekiptakip-db createdb -U ekiptakip ekiptakip
 - Denetim: `cargo clippy --all-targets` (panik/`todo!` derlemeyi düşürür),
   `npm run build` (CSS Modules tipleri + ham renk denetimi + tsc strict),
   `npm test` (vitest + testing-library, `frontend/src/**/*.test.tsx`),
-  `backend/tools/local_test.sh` (JSON sözleşmesi yerelde: atılıp yıkılan DB + iki süreç).
+  `backend/tools/local_test.sh` (JSON sözleşmesi yerelde: atılıp yıkılan DB + üç süreç;
+  üçüncüsü `tools/openrouter_stub.py`'ye bağlı: LLM çağrı yolu gerçek anahtarsız sınanır).
+- LLM: model adı, parametre, limit, istem **DB'de** (Yönetim › Veri işleme ve LLM,
+  spec/79 §11); manifestteki `suggest_model`/`decision_model` yalnız varsayılan. Her
+  üretken çağrı `llm::run`'dan geçer (limit + `llm_calls` kaydı); doğrudan `st.http` ile
+  OpenRouter'a gitme. `EKIPTAKIP_OPENROUTER_URL` yalnız geliştirmede okunur.
 - Ön yüz yapısı `spec/16-on-yuz.md` §3: `api/` (istemci, tipler, kancalar), `ui/`
   (alan bilmez), `features/` (kayıt, sohbet — iki yüz ortak), `surfaces/` (yerleşim +
   rota). Renk yalnız `src/tokens.css`'te.

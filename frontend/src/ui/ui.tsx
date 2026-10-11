@@ -474,8 +474,9 @@ export function MenuRadio<V extends string>(props: { value: V; onChange: (v: V) 
 
 // --- segment ---------------------------------------------------------------
 
+/** `locked`: sekme gorunur ama kilitli (yetki yok); tiklanmaz, kilit simgesi tasir. */
 export function Segmented<V extends string>(props: {
-  options: { value: V; label: string; count?: number }[];
+  options: { value: V; label: string; count?: number; locked?: boolean }[];
   value: V;
   onChange: (v: V) => void;
   label: string;
@@ -489,8 +490,11 @@ export function Segmented<V extends string>(props: {
           role="tab"
           aria-selected={o.value === props.value}
           className={s.segBtn}
+          disabled={o.locked === true}
+          title={o.locked === true ? "Bu bölüm için yetkin yok" : undefined}
           onClick={() => props.onChange(o.value)}
         >
+          {o.locked === true && <Icon name="lock" size={12} />}
           {o.label}
           {o.count !== undefined && <span className={s.segCount}>{o.count}</span>}
         </button>

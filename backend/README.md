@@ -8,7 +8,7 @@ davranışın kaynağı, çalışan yığın değil.
 ## Yapı
 
 ```
-manifest.json  gizli olmayan ayarlar: sürüm, iletişim e-postası, external_off, decision_model
+manifest.json  gizli olmayan ayarlar: sürüm, iletişim e-postası, external_off, varsayılan model adları
 migrations/    NNN_*.sql — dosya adları DONUK (schema_migrations adla tutar); ikiliye gömülü
 src/
   main.rs      açılış: config, göç, ağaç, ara katman sırası
@@ -66,13 +66,28 @@ DATABASE_URL=postgresql://ekiptakip:ekiptakip@127.0.0.1:5432/ekiptakip_alpha02 \
 docker exec -i ekiptakip-db psql -U ekiptakip -d ekiptakip_alpha02 < seed.sql   # VERİYİ SİLER
 ```
 
-Yerelde `OPENROUTER_API_KEY` yoksa kalite denetimi kapalıdır (yalnız uzunluk kuralı);
-denemek için anahtarı ortama ver.
+Yerelde `OPENROUTER_API_KEY` yoksa kalite denetimi ve malzeme önerisi kapalıdır (yalnız
+uzunluk kuralı); denemek için anahtarı ortama ver. Gerçek anahtar olmadan LLM yolunu
+(kayıt, maliyet, limit, Yönetim › Veri işleme ve LLM ekranı) görmek için sahte OpenRouter:
+
+```bash
+python3 tools/openrouter_stub.py 18101 &
+OPENROUTER_API_KEY=stub-key EKIPTAKIP_OPENROUTER_URL=http://127.0.0.1:18101 \
+  DATABASE_URL=… EKIPTAKIP_AUTH=sahte cargo run
+```
+
+`EKIPTAKIP_OPENROUTER_URL` yalnız geliştirmede okunur; yayında adres sabittir (anahtar
+başka bir yere gönderilemez).
+
+LLM çağrıları tek yoldan (`src/llm.rs` `run`): servis kapısı → model başına dolar limiti →
+OpenRouter (`src/openrouter.rs`) → `llm_calls` satırı (+ açıksa 7 günlük gövde). Ayar,
+model ve istem `llm_features`/`llm_prompts`'ta; gece süpürmesi günlük özeti yazar ve
+180/7 gün saklamayı uygular (spec/79 §11).
 
 ## Sınama
 
 - `cargo test` — birim (ağaç, filtre, hız sınırı, karar modeli yanıtı, manifest).
-- `tools/local_test.sh` — atılıp-yıkılan yerel DB + iki süreç (sahte kimlik + Google kipi), `check_api.sh` JSON sözleşmesi.
+- `tools/local_test.sh` — atılıp-yıkılan yerel DB + üç süreç (sahte kimlik, Google kipi, sahte OpenRouter'a bağlı LLM süreci `BL`), `check_api.sh` JSON sözleşmesi. `BL` verilmezse (`vm_test.sh`) `llm_live` bölümü atlanır.
 - `tools/import_v1.sh` — TEK SEFERLİK: 0.1'in kullanıcı/ağaç/takım/rol verisini 0.2'ye
   (iş kayıtları, sohbet, ekler TAŞINMAZ). VM'de 2026-09-22'de yapıldı; Pi'de bir kez daha.
 - `tools/release.sh` — yayın tarball'ı (ikili + ön yüz), GitHub release, `deploy/release.nix`. Adımlar: `deploy/README.md` §2.
