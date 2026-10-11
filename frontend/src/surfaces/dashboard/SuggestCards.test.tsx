@@ -1,5 +1,5 @@
 // Hayalet öneri kartları: istek reddedilenlerle gider, üçlü kabul/retle bitmeden sıradaki gelmez,
-// kabul açıklamayı not olarak taşır.
+// kabul açıklamayı not ve öneri kimliğini taşır, ret sunucuya yazılır (spec/79 §9.1).
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -13,11 +13,16 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const items = ["Havya", "Servo motor", "USB kablosu", "Makas"].map((name) => ({ name, description: `${name} neden` }));
+const items = ["Havya", "Servo motor", "USB kablosu", "Makas"].map((name, i) => ({ id: `s${i}`, name, description: `${name} neden` }));
 
 function setup(existing: string[] = []) {
   const bodies: unknown[] = [];
-  vi.stubGlobal("fetch", vi.fn(async (_url: string, init?: { body?: string }) => {
+  const rejects: string[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (url: string, init?: { body?: string }) => {
+    if (url.endsWith("/reject")) {
+      rejects.push(url);
+      return { ok: true, status: 204, json: async () => undefined };
+    }
     bodies.push(JSON.parse(init?.body ?? "{}"));
     return { ok: true, status: 200, json: async () => ({ items, batch_id: "b1" }) };
   }));
@@ -27,7 +32,7 @@ function setup(existing: string[] = []) {
       <SuggestCards eventId="e1" existing={existing} run={run} busy={false} />
     </QueryClientProvider>,
   );
-  return { bodies, run };
+  return { bodies, rejects, run };
 }
 
 const ask = () => fireEvent.click(screen.getByRole("button", { name: /öneri al/ }));
@@ -41,15 +46,17 @@ it("öneri düğmesi bir parti çeker, üçlü gösterilir", async () => {
   expect(bodies).toEqual([{ rejected: [] }]);
 });
 
-it("ret sıradaki öneriyi getirir; kabul açıklamayı not olarak taşıyan kalem ekler", async () => {
-  const { run } = setup();
+it("ret sıradaki öneriyi getirir ve sunucuya yazılır; kabul öneriye bağlı kalem ekler", async () => {
+  const { run, rejects } = setup();
   ask();
   await screen.findByRole("group", { name: "Öneri: Havya" });
   fireEvent.click(screen.getByRole("button", { name: "Reddet: Havya" }));
   expect(names()).toEqual(["Öneri: Servo motor", "Öneri: USB kablosu", "Öneri: Makas"]);
+  await waitFor(() => expect(rejects).toEqual(["/api/events/e1/material-suggestions/s0/reject"]));
   fireEvent.click(screen.getByRole("button", { name: "Kabul et: Servo motor" }));
   const op = run.mock.calls[0]![0];
-  expect(op).toMatchObject({ method: "POST", path: "/api/events/e1/materials", body: { name: "Servo motor", notes: "Servo motor neden" } });
+  expect(op).toMatchObject({ method: "POST", path: "/api/events/e1/materials",
+    body: { name: "Servo motor", notes: "Servo motor neden", suggestion_id: "s1" } });
   expect(names()).toEqual(["Öneri: USB kablosu", "Öneri: Makas"]);
 });
 

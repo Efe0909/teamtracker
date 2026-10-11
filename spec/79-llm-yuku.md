@@ -106,6 +106,7 @@ güvence 2. ve 4. maddelerdir: kişi alanları yapısal olarak yok, serbest meti
 | Uç | Kim | Ne |
 |---|---|---|
 | `GET /api/events/{id}/llm-context[?free_text=true]` | etkinliği görebilen | tam yük (§3) |
+| `POST /api/events/{id}/material-suggestions/{sid}/reject` | etkinliği görebilen + `manage_purchases` | öneriyi reddeder (§9.1), 204; karara bağlanmışsa 409 `suggestion_decided` |
 | `GET /api/events/{id}/material-brief[?free_text=true\|false]` | etkinliği görebilen | malzeme önerisinin modele giden daraltılmış özeti (§9), model çağrılmaz; bayraksız yönetim ayarına uyar |
 | `POST /api/events/{id}/llm-restore` `{text}` | etkinliği görebilen | yer tutucuları doldurur, ≤ 20 000 karakter |
 | `GET/PUT/DELETE /api/admin/llm` | admin ya da `manage_llm` | `{free_text_allowed, rules{patterns, known_names, capitalized}}`; bilinmeyen alan reddedilir |
@@ -180,13 +181,12 @@ silik "öneri kartları". Üretken yapay zekâ ilk kez kullanıcıya görünür.
    arayüz **3'erli** gösterir. Üçlünün hepsi kabul ya da retle bitmeden sonraki üçlü
    gelmez. Saklanan parti tükenince yeni istek atılır. Aynı çağrıda üretmek, öneriler
    arasındaki tekrarı da azaltır.
-7. **Durum istemcide.** Bekleyen parti ve reddedilenler `sessionStorage`'da (etkinlik
-   başına anahtar); sekme kapanınca gider. Sunucu **durumsuz**: JWT ya da çerez yok.
-   Gerekçe: öneri güvenilmeyen gösterim verisidir, kabul normal malzeme ekleme ucundan
-   (yetki ve doğrulama orada) geçer; imzalamak bir şey korumaz. Başka gün reddedilen bir
-   öneri geri gelebilir, bu kabul edilen davranıştır.
-8. **Uç.** `POST /api/events/{id}/material-suggestions` `{rejected: string[], free_text?: bool}` →
-   `{items: [{name, description}], batch_id}`. Görünürlük + `use_generative_ai` +
+7. **Durum.** Bekleyen parti `sessionStorage`'da (etkinlik başına anahtar); sekme kapanınca
+   gider. Her öneri ve kararı ayrıca sunucuda kayıtlı (§9.1, 2026-10-11); reddedilenler
+   sonraki partilere oradan gider, başka gün de geri gelmez. İmza yok: öneri güvenilmeyen
+   gösterim verisidir, kabul normal malzeme ekleme ucundan (yetki ve doğrulama orada) geçer.
+8. **Uç.** `POST /api/events/{id}/material-suggestions` `{rejected?: string[], free_text?: bool}` →
+   `{items: [{id, name, description}], batch_id}`. Görünürlük + `use_generative_ai` +
    `manage_purchases`. İstemciden gelen `rejected` güvenilmez metindir: en çok 50 öğe, öğe
    başına ≤ 80 karakter, modele gitmeden `redact`'tan geçer (§2 madde 5).
 9. **Çıktı doğrulaması (sunucu).** Boş ad, ≤ 200 sınırını aşan ad, `TEXT_MAX`'ı aşan açıklama
@@ -194,8 +194,10 @@ silik "öneri kartları". Üretken yapay zekâ ilk kez kullanıcıya görünür.
    liste en çok N öğe. Serbest metin açıkken kullanıcı metni modele gidebildiğinden
    (prompt injection) çıktı yalnız **öneri** sayılır: kabul eden insandır, model hiçbir şeyi
    kendisi yazmaz.
-10. **Kabul / ret.** Kabul = mevcut `POST …/materials` (kart silikten gerçeğe döner).
-    Ret = istemci listesine eklenir, sunucuya yazılmaz.
+10. **Kabul / ret.** Kabul = mevcut `POST …/materials` `{name, notes?, suggestion_id}`
+    (kart silikten gerçeğe döner; kalem `origin = 'ai'`). Ret =
+    `POST …/material-suggestions/{sid}/reject` (204). Karara bağlanmış öneri 409
+    `suggestion_decided`; kabul hatası kalem bırakmaz (tek işlem).
 11. **Kötüye kullanım.** "3'ü bitmeden yenisi yok" **yalnız arayüz kuralı**; sunucu
     zorlamaz (durumsuz). Maliyeti sınırlayan profil başına dolar limiti (§11.3; kullanıcı
     başına sayı limiti bilinçli yok), yönetimden kapatma ve kill switch.
@@ -235,6 +237,52 @@ denenmedi** (`deploy/suggest_try.sh` ile denenir). Ön yüz yapıldı (`SuggestC
 da) hiçbir şey çizilmez. Limit dolunca 429 `suggest_limit`. Yapılacak: istemin gerçek
 anahtarla denenmesi (artık yönetimden sürümlü, §11.5). Çağrı geçmişi, maliyet, model ayarı
 ve limit §11'de yapıldı.
+
+### 9.1 Öneri kaydı ve ölçüm (göç 025, 2026-10-11)
+
+Amaç: ucun zamanla işe yarayıp yaramadığını veriyle görmek. Üç soru:
+**ilgililik** (hangi öneri kabul ediliyor), **gereklilik** (model önermese de elle ne
+ekleniyor), **tedarik kalıbı** (benzer etkinlikte ne tekrar tekrar alınıyor).
+
+| Tablo / sütun | Ne |
+|---|---|
+| `material_suggestions` | `id`, `event_id` → events (1:N, etkinlikle silinir), `batch_id` (= `llm_calls.batch_id`: model, maliyet, süre oradan), `name`, `description`, `status` `pending`/`accepted`/`rejected`, `material_id` → materials (kabulde doğan kalem, unique; kalem silinirse NULL, kabul kalır), `decided_by`, `decided_at`, `created_at` |
+| `materials.origin` | `manual` (varsayılan) / `ai` (öneri kabulü); göç öncesi satırlar NULL (bilinmiyor) |
+
+- **Satın alındı durumu kopyalanmaz:** `material_id` üzerinden `materials.purchased`,
+  `state`, `delivered` okunur; tek kaynak.
+- `pending` kalan = parti çekildi ama karar verilmedi (kart görülmemiş olabilir: arayüz 3'erli
+  gösterir). Ölçümde payda kabul + ret alınmalı.
+- `llm_calls` 180 günde silinir; bu tablo silinmez (kişi yalnız `decided_by`, kalem adları
+  modelin temizlenmiş girdiden ürettiği metin).
+
+Örnek sorgular:
+
+```sql
+-- İlgililik: kabul oranı (model, hafta)
+select c.model, date_trunc('week', s.created_at) as week,
+       count(*) filter (where s.status = 'accepted') as accepted,
+       count(*) filter (where s.status = 'rejected') as rejected
+  from material_suggestions s left join llm_calls c on c.batch_id = s.batch_id
+ group by 1, 2 order by 2 desc;
+
+-- Gereklilik: öneri alınmış etkinliklerde elle eklenen kalemler
+select m.name, count(*) from materials m
+  join event_materials em on em.material_id = m.id
+ where m.origin = 'manual'
+   and exists (select 1 from material_suggestions s where s.event_id = em.event_id)
+ group by 1 order by 2 desc;
+
+-- Tedarik kalıbı: etkinlik türüne göre satın alınan kalemler ve kaynakları
+select k.name as kind, m.name, m.origin, count(*) as times
+  from materials m join event_materials em on em.material_id = m.id
+  join events e on e.id = em.event_id join nodes k on k.id = e.kind_id
+ where m.purchased
+ group by 1, 2, 3 order by 1, 4 desc;
+```
+
+Arayüzde gösterilmiyor (yönetim Analiz'e eklenebilir); kalem adları serbest metin olduğu
+için tedarik kalıbı sorgusu adı `redact::fold` benzeri bir katlamayla gruplamak isteyebilir.
 
 ## 10. Sınama
 

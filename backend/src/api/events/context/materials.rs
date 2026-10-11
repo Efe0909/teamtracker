@@ -231,9 +231,17 @@ pub struct Suggestion {
     description: String,
 }
 
+/// Kaydedilmis oneri (`material_suggestions` satiri): kabul/ret bu kimlikle gelir.
+#[derive(Serialize)]
+pub struct Saved {
+    id: Uuid,
+    #[serde(flatten)]
+    item: Suggestion,
+}
+
 #[derive(Serialize)]
 pub struct SuggestOut {
-    items: Vec<Suggestion>,
+    items: Vec<Saved>,
     /// Sunucu tarafi uretim kimligi (log/olcum icin).
     batch_id: Uuid,
 }
@@ -296,7 +304,8 @@ async fn existing_names(st: &AppState, event: Uuid) -> Result<Vec<String>> {
 
 /// `POST /api/events/{id}/material-suggestions`: tek model cagrisiyla bir parti oneri.
 /// `use_generative_ai` (build_context icinde) + `manage_purchases` ister; kabul edemeyen
-/// kisiye oneri cikmaz. Durumsuz: reddedilenleri ve bekleyen partiyi istemci tutar.
+/// kisiye oneri cikmaz. Her oneri `material_suggestions`'a `pending` yazilir (spec/79 §9.1);
+/// reddedilenler oradan okunur (istemcinin listesi de eklenir: kayit oncesi oturumlar).
 pub(crate) async fn material_suggestions(
     State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>, Body(b): Body<SuggestIn>,
 ) -> Result<Json<SuggestOut>> {
@@ -306,8 +315,14 @@ pub(crate) async fn material_suggestions(
     let ctx = build_context(&st, &me, id, b.free_text.unwrap_or(cfg.free_text_allowed)).await?;
 
     let known = known_names(&st).await?;
-    let skip = b.rejected.len().saturating_sub(REJECTED_MAX);
-    let rejected: Vec<String> = b.rejected.iter().skip(skip).map(|r| r.trim().to_string())
+    let mut rejected: Vec<String> = sqlx::query_scalar(
+        "select name from material_suggestions where event_id = $1 and status = 'rejected'
+          order by decided_at desc limit 50")
+        .bind(id).fetch_all(&st.pool).await?;
+    rejected.reverse(); // eskiden yeniye: asagidaki kesme en eskileri atar
+    rejected.extend(b.rejected.iter().map(|r| r.trim().to_string()));
+    let skip = rejected.len().saturating_sub(REJECTED_MAX);
+    let rejected: Vec<String> = rejected.into_iter().skip(skip)
         .filter(|r| !r.is_empty() && r.chars().count() <= REJECTED_LEN).collect();
     let cleaned = rejected.iter().map(|r| redact::redact(r, &cfg.rules, &known)).collect();
 
@@ -321,10 +336,52 @@ pub(crate) async fn material_suggestions(
     let done = llm::run(&st, c, &e, who, Some(batch_id), chat_body(&e, &brief),
         |resp| parse_reply(resp, &existing, &rejected, max)).await;
     match done.result {
-        Ok(items) => Ok(Json(SuggestOut { items, batch_id })),
+        Ok(items) => {
+            let names: Vec<&str> = items.iter().map(|s| s.name.as_str()).collect();
+            let descs: Vec<&str> = items.iter().map(|s| s.description.as_str()).collect();
+            let ids: Vec<Uuid> = sqlx::query_scalar(
+                "insert into material_suggestions (event_id, batch_id, name, description)
+                 select $1, $2, n, d from unnest($3::text[], $4::text[]) with ordinality as t(n, d, i)
+                 order by i returning id")
+                .bind(id).bind(batch_id).bind(&names).bind(&descs).fetch_all(&st.pool).await?;
+            let items = ids.into_iter().zip(items).map(|(id, item)| Saved { id, item }).collect();
+            Ok(Json(SuggestOut { items, batch_id }))
+        }
         Err(Fail::Limit) => Err(AppError::Limited("suggest_limit")),
         Err(Fail::Off | Fail::Disabled | Fail::Failed) => Err(AppError::Unavailable("suggest_unavailable")),
     }
+}
+
+/// `POST /api/events/{id}/material-suggestions/{sid}/reject`: bekleyen oneriyi reddeder;
+/// sonraki partilerde modele "bunu onerme" diye gider. Karara baglanmis oneri 409.
+pub(crate) async fn reject_suggestion(
+    State(st): State<AppState>, CurrentUser(me): CurrentUser, Path((raw, sraw)): Path<(String, String)>,
+) -> Result<axum::http::StatusCode> {
+    let (id, sid) = (common::id(&raw)?, common::id(&sraw)?);
+    require_scope(&st, &me, "manage_purchases").await?;
+    require_visible(&st, &me, id).await?;
+    decide(&mut *st.pool.acquire().await?, id, sid, me.id, "rejected", None).await?;
+    Ok(axum::http::StatusCode::NO_CONTENT)
+}
+
+/// Bekleyen oneriyi karara baglar (ret ya da kabul + dogan kalem). Yoksa 404, karara
+/// baglanmissa 409 `suggestion_decided`.
+pub(crate) async fn decide(
+    conn: &mut sqlx::PgConnection, event: Uuid, sid: Uuid, by: Uuid, status: &str, material: Option<Uuid>,
+) -> Result<()> {
+    let pending: Option<bool> = sqlx::query_scalar(
+        "select status = 'pending' from material_suggestions where id = $1 and event_id = $2 for update")
+        .bind(sid).bind(event).fetch_optional(&mut *conn).await?;
+    match pending {
+        None => return Err(AppError::NotFound),
+        Some(false) => return Err(AppError::Conflict("suggestion_decided")),
+        Some(true) => {}
+    }
+    sqlx::query(
+        "update material_suggestions set status = $2, material_id = $3, decided_by = $4, decided_at = now()
+          where id = $1")
+        .bind(sid).bind(status).bind(material).bind(by).execute(&mut *conn).await?;
+    Ok(())
 }
 
 /// `GET /api/events/{id}/material-brief[?free_text=true]`: oneri ucunun modele kullanici

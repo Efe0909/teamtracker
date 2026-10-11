@@ -1,10 +1,10 @@
 // Malzeme önerisi: kalem eklemenin yanında silik "hayalet" kartlar (spec/79 §9). Üzerine
 // gelince ✓ kabul (kalem olur) / ✕ ret. Üçü de karara bağlanmadan sıradaki üçlü gelmez; yeni
-// parti yalnız kullanıcı isteyince çekilir (her parti para harcar). Parti ve reddedilenler
-// oturumda (sessionStorage) durur; sunucu durumsuzdur.
+// parti yalnız kullanıcı isteyince çekilir (her parti para harcar). Bekleyen parti oturumda
+// (sessionStorage) durur; her öneri ve kararı sunucuda da kaydedilir (spec/79 §9.1).
 
 import { errorText } from "../../api/client";
-import { eventOps, useMaterialSuggestions } from "../../api/hooks";
+import { eventOps, rejectSuggestion, useMaterialSuggestions } from "../../api/hooks";
 import type { MaterialSuggestion, Uuid } from "../../api/types";
 import { PAGE, resolve, useSuggestStore, visible, withBatch } from "../../lib/suggestions";
 import { Icon } from "../../ui/icons";
@@ -36,9 +36,13 @@ export function SuggestCards({ eventId, existing, run, busy }: {
     });
 
   const accept = (g: MaterialSuggestion) =>
-    run(eventOps.addMaterial(eventId, g.name, g.description === "" ? undefined : g.description),
+    run(eventOps.addMaterial(eventId, g.name, g.description === "" ? undefined : g.description, g.id),
       () => update((st) => resolve(st, g.name, false)));
-  const reject = (g: MaterialSuggestion) => update((st) => resolve(st, g.name, true));
+  // Ret anında yerelde; sunucu kaydı arkadan (düşerse ölçüm kaçar, kullanıcı beklemez).
+  const reject = (g: MaterialSuggestion) => {
+    update((st) => resolve(st, g.name, true));
+    if (g.id !== undefined) rejectSuggestion(eventId, g.id).catch(() => undefined);
+  };
 
   if (ask.isPending) {
     return (

@@ -221,7 +221,11 @@ struct Provider {
 
 // LLM yuku (kisisel/kurumsal veriden arindirilmis); `material_cols!` yukarida tanimli.
 mod context;
-pub(crate) use context::{known_names, llm_context, llm_restore, material_brief, material_sample, material_suggestions, try_suggest};
+pub(crate) use context::{
+    known_names, llm_context, llm_restore, material_brief, material_sample, material_suggestions, reject_suggestion,
+    try_suggest,
+};
+use context::decide_suggestion;
 
 async fn detail_of(st: &AppState, me: &User, event: EventRow) -> Result<Detail> {
     let twin = records::load(&st.pool, event.record_id).await?;
@@ -937,6 +941,10 @@ pub struct NewMaterial {
     /// Isteğe bağlı: kabul edilen öneri açıklamasıyla gelir (spec/79 §9 madde 10).
     #[serde(default)]
     notes: Option<String>,
+    /// Kabul edilen oneri (`material_suggestions.id`): kalem `origin = 'ai'` dogar, oneri
+    /// `accepted` olur ve kaleme baglanir. Yoksa kalem elle eklenmistir (`manual`).
+    #[serde(default)]
+    suggestion_id: Option<Uuid>,
 }
 
 pub async fn add_material(
@@ -951,11 +959,15 @@ pub async fn add_material(
     let notes = common::text(b.notes, TEXT_MAX, "invalid_notes")?;
     // Kalem bagimsiz dogar, etkinlige `event_materials` ile baglanir.
     let mut tx = st.pool.begin().await?;
+    let origin = if b.suggestion_id.is_some() { "ai" } else { "manual" };
     let material: Uuid = sqlx::query_scalar(
-        "insert into materials (name, notes, created_by) values ($1, $2, $3) returning id")
-        .bind(name).bind(notes).bind(me.id).fetch_one(&mut *tx).await?;
+        "insert into materials (name, notes, created_by, origin) values ($1, $2, $3, $4) returning id")
+        .bind(name).bind(notes).bind(me.id).bind(origin).fetch_one(&mut *tx).await?;
     sqlx::query("insert into event_materials (material_id, event_id) values ($1, $2)")
         .bind(material).bind(id).execute(&mut *tx).await?;
+    if let Some(sid) = b.suggestion_id {
+        decide_suggestion(&mut tx, id, sid, me.id, "accepted", Some(material)).await?;
+    }
     tx.commit().await?;
     reply(&st, &me, id).await
 }

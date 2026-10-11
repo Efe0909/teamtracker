@@ -1146,11 +1146,27 @@ R=$(wl w POST "$WT" "/api/events/$EVID/material-suggestions" '{}')
 ok "$(jq -r '[.items[0].name, (.items|length), (.batch_id|length)]|@csv' <<<"$R")" '"Servo motor",2,36' "oneri geldi"
 ok "$(DB "select concat_ws(',', status, cost_usd, asked, kept, prompt_tokens, user_id = '$SELIN', event_id = '$EVID', is_try, batch_id is not null, profile_id = '$GEN') from llm_calls where feature='material_suggestions'")" "ok,0.004,2,2,120,t,t,f,t,t" "cagri kaydi (profilli)"
 ok "$(gl w /api/admin/llm/status | jq -r '.services|map(.on)|all')" true "anahtarli: servisler acik"
+# Oneri kaydi (spec/79 §9.1): her oneri satir; kabul kalemi ai dogurur, ret sonraki partiden duser.
+SID1=$(jq -r '.items[0].id' <<<"$R"); SID2=$(jq -r '.items[1].id' <<<"$R")
+ok "$(DB "select count(*) || ',' || bool_and(status = 'pending') from material_suggestions where batch_id = (select batch_id from llm_calls where feature='material_suggestions')")" "2,true" "oneriler bekliyor olarak kaydedildi"
+wl w POST "$WT" "/api/events/$EVID/materials" "{\"name\":\"Servo motor\",\"suggestion_id\":\"$SID1\"}" >/dev/null
+ok "$(DB "select concat_ws(',', s.status, m.origin, s.decided_by = '$SELIN') from material_suggestions s join materials m on m.id = s.material_id where s.id = '$SID1'")" "accepted,ai,t" "kabul: kalem ai, oneriye bagli"
+ok "$(wl w POST "$WT" "/api/events/$EVID/material-suggestions/$SID2/reject" '{}')" "" "ret 204"
+ok "$(DB "select status from material_suggestions where id = '$SID2'")" rejected "ret kaydedildi"
+ok "$(wl w POST "$WT" "/api/events/$EVID/material-suggestions/$SID2/reject" '{}' | jq -r .error)" suggestion_decided "karara baglanmis oneri 409"
+ok "$(wl w POST "$WT" "/api/events/$EVID/materials" "{\"name\":\"Havya istasyonu\",\"suggestion_id\":\"$SID2\"}" | jq -r .error)" suggestion_decided "reddedilen kabul edilemez"
+ok "$(DB "select count(*) from materials where name = 'Havya istasyonu'")" 0 "basarisiz kabul kalem birakmaz"
+ok "$(wl w POST "$WT" "/api/events/$EVID/material-suggestions/$(uuidgen | tr A-Z a-z)/reject" '{}' | jq -r .error)" not_found "bilinmeyen oneri"
+ok "$(wl w POST "$WT" "/api/events/$EVID/material-suggestions" '{}' | jq -r '.items|length')" 0 "kabul edilen ve DB'de reddedilen tekrar onerilmez"
+wl w POST "$WT" "/api/events/$EVID/materials" '{"name":"Elle kalem"}' >/dev/null
+ok "$(DB "select origin from materials where name = 'Elle kalem'")" manual "elle eklenen manual"
+DB "delete from materials where name in ('Servo motor', 'Elle kalem')" >/dev/null
+ok "$(DB "select material_id is null and status = 'accepted' from material_suggestions where id = '$SID1'")" t "kalem silinse de kabul kalir"
 # Dolar tavani: profilin son saatteki harcamasi (0.004) tavana ulasti -> 429, limit satiri.
 wl w POST "$WT" $PG/limits '{"window_minutes":60,"usd":0.004}' >/dev/null
 ok "$(wl w POST "$WT" "/api/events/$EVID/material-suggestions" '{}' | jq -r .error)" suggest_limit "tavan doldu"
 ok "$(DB "select count(*) from llm_calls where status='limit'")" 1 "limit satiri"
-ok "$(gl w /api/admin/llm/limits | jq -r '.[0].spent')" 0.004 "harcanan gorunur"
+ok "$(gl w /api/admin/llm/limits | jq -r '.[0].spent')" 0.008 "harcanan gorunur (iki oneri partisi)"
 DB "delete from llm_limits" >/dev/null
 # Kalite kapisi ayni yoldan: kim, karar, maliyet bilinmiyor (sahte model hep gecer).
 wl n POST "$NT" /api/records "{\"kind\":\"task\",\"title\":\"Kapi denemesi\",\"description\":\"Sponsor gorusmesi icin sunum hazirlanacak ve cuma gunu paylasilacak.\",\"unit_id\":\"$UNIT\"}" >/dev/null

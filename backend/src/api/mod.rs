@@ -76,6 +76,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/events/{id}/llm-restore", post(events::llm_restore))
         .route("/api/events/{id}/material-brief", get(events::material_brief))
         .route("/api/events/{id}/material-suggestions", post(events::material_suggestions))
+        .route("/api/events/{id}/material-suggestions/{sid}/reject", post(events::reject_suggestion))
         .route("/api/events/{id}/otf", get(otf::get).put(otf::put))
         .route("/api/events/{id}/otf/autofill", post(otf::autofill))
         .route("/api/events/{id}/otf.docx", get(otf::docx))

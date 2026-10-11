@@ -394,6 +394,8 @@ export interface OtfView extends OtfInput {
 
 /** Yapay zekâ önerisi (spec/79 §9): ad + açıklama; sayı yok. Kabulde kalem olur (açıklama = not). */
 export interface MaterialSuggestion {
+  /** `material_suggestions.id`; kayıt öncesi oturumdan kalan önerilerde yok. */
+  id?: Uuid;
   name: string;
   description: string;
 }

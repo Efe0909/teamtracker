@@ -387,8 +387,11 @@ export const eventOps = {
     ({ method: "POST", path: `/api/events/${id}/widgets`, body: { type, record_id } }),
   dropWidget: (wid: Uuid): EventOp => ({ method: "DELETE", path: `/api/event-widgets/${wid}` }),
   /** `notes`: kabul edilen önerinin açıklaması (isteğe bağlı). */
-  addMaterial: (id: Uuid, name: string, notes?: string): EventOp =>
-    ({ method: "POST", path: `/api/events/${id}/materials`, body: notes === undefined ? { name } : { name, notes } }),
+  /** `suggestionId`: kabul edilen öneri; kalem "yapay zekâ" kaynaklı doğar (spec/79 §9.1). */
+  addMaterial: (id: Uuid, name: string, notes?: string, suggestionId?: Uuid): EventOp =>
+    ({ method: "POST", path: `/api/events/${id}/materials`, body: {
+      name, ...(notes === undefined ? {} : { notes }), ...(suggestionId === undefined ? {} : { suggestion_id: suggestionId }),
+    } }),
   material: (mid: Uuid, p: MaterialPatch): EventOp => ({ method: "PATCH", path: `/api/materials/${mid}`, body: p }),
   dropMaterial: (mid: Uuid): EventOp => ({ method: "DELETE", path: `/api/materials/${mid}` }),
   addProvider: (mid: Uuid, p: Omit<MaterialProvider, "id" | "overage_level">): EventOp =>
@@ -411,8 +414,13 @@ export function useEventWrite() {
   });
 }
 
-/** Bir parti malzeme önerisi (tek model çağrısı, ~9 öneri). Sunucu durumsuz: reddedilenler
- *  istekle gider. Cache'e yazılmaz; parti `lib/suggestions.ts`'te oturum boyunca tutulur. */
+/** Öneriyi reddet (sunucu kaydı; sonraki partilerde modele "önerme" diye gider). */
+export function rejectSuggestion(eventId: Uuid, suggestionId: Uuid) {
+  return request<void>("POST", `/api/events/${eventId}/material-suggestions/${suggestionId}/reject`, {});
+}
+
+/** Bir parti malzeme önerisi (tek model çağrısı, ~9 öneri). Her öneri sunucuda kaydedilir
+ *  (kabul/ret ölçümü); bekleyen parti yine `lib/suggestions.ts`'te oturum boyunca tutulur. */
 export function useMaterialSuggestions(eventId: Uuid) {
   return useMutation({
     mutationFn: (rejected: string[]) =>

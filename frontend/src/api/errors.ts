@@ -121,6 +121,7 @@ export type ApiErrorCode =
   | "free_text_disabled"
   | "suggest_unavailable"
   | "suggest_limit"
+  | "suggestion_decided"
   | "llm_service_off"
   | "llm_model_invalid"
   | "llm_model_untested"
@@ -254,6 +255,7 @@ export const ERRORS = {
   free_text_disabled: "Serbest metni yapay zekâya göndermek yönetimden kapatılmış.",
   suggest_unavailable: "Öneri servisi şu an kullanılamıyor.",
   suggest_limit: "Yapay zekâ harcama limiti doldu. Biraz sonra tekrar dene ya da yöneticiye haber ver.",
+  suggestion_decided: "Bu öneri zaten kabul ya da reddedilmiş.",
   llm_service_off: "Yapay zekâ servisi kapalı (anahtar yok ya da manifestte kapatılmış): deneme yapılamaz.",
   llm_model_invalid: "Model adı geçersiz. OpenRouter biçiminde yaz: sağlayıcı/model.",
   llm_model_untested: "Bu modeli kaydetmeden önce son 30 dakika içinde başarılı bir “Dene” yapılmalı.",
