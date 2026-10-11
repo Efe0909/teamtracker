@@ -327,6 +327,18 @@ pub(crate) async fn material_suggestions(
     }
 }
 
+/// `GET /api/events/{id}/material-brief[?free_text=true]`: oneri ucunun modele kullanici
+/// mesaji olarak gonderdigi ozetin aynisi (`max_items` yonetimdeki partiden; `rejected`
+/// istekle gelir, burada bos). Model cagrilmaz. Kapi `llm_context` ile ayni.
+pub(crate) async fn material_brief(
+    State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>, Query(q): Query<Params>,
+) -> Result<Json<MaterialBrief>> {
+    let id = common::id(&raw)?;
+    let ctx = build_context(&st, &me, id, q.free_text).await?;
+    let e = llm::settings(&st, suggest_contract()).await;
+    Ok(Json(MaterialBrief::from_context(&ctx).with_max_items(e.batch)))
+}
+
 /// "Dene" ornegi: spec/79 §9'daki ilk denemenin ozeti (robotik atolyesi). Yonetimde
 /// duzenlenebilir JSON olarak gosterilir; gercek kisi/firma yok.
 pub(crate) fn sample_input() -> serde_json::Value {

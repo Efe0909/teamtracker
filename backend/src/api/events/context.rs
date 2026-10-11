@@ -18,7 +18,7 @@ use chrono::Datelike;
 
 // Malzeme onerisi: daraltilmis istek + model cagrisi + sunucu suzgeci (spec/79 §9).
 mod materials;
-pub(crate) use materials::{material_suggestions, sample_input as material_sample, try_suggest};
+pub(crate) use materials::{material_brief, material_suggestions, sample_input as material_sample, try_suggest};
 
 use super::*;
 use crate::{

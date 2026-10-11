@@ -949,6 +949,13 @@ ok "$(grep -ciE 'kesimhane|0212|owner_id|created_by|user_id|record_id' <<<"$R")"
 R=$(g w "/api/events/$EVID/llm-context?free_text=true")
 ok "$(jq -r .event.description <<<"$R")" "{{KISI}} ile gorus, {{EPOSTA}}, {{NO}}" "serbest metin temizlenir"
 ok "$(grep -c '@' <<<"$R")" 0 "e-posta sizmadi"
+# Malzeme ozeti: oneri ucunun modele gonderdigi daraltilmis yuk.
+R=$(g w "/api/events/$EVID/material-brief")
+ok "$(jq -r '[.existing[]|select(.name=="Lazer kesim")|.type]|length' <<<"$R")" 1 "ozet: mevcut kalem ad + tur"
+ok "$(jq -r '.max_items|type' <<<"$R")" number "ozet: parti boyu"
+ok "$(jq -r '.event|has("description")' <<<"$R")" false "ozet: serbest metin varsayilan kapali"
+ok "$(grep -ciE 'kesimhane|0212|2480|offers|participant_count' <<<"$R")" 0 "ozet: teklif/fiyat/sayi yok"
+ok "$(g w "/api/events/$EVID/material-brief?free_text=true" | jq -r .event.description)" "{{KISI}} ile gorus, {{EPOSTA}}, {{NO}}" "ozet: serbest metin temizlenir"
 ok "$(w w PUT "$WT" /api/admin/llm '{"free_text_allowed":false,"rules":{"patterns":true,"known_names":true,"capitalized":false}}' | jq -r .customized)" true "admin ayari kaydeder"
 ok "$(g w "/api/events/$EVID/llm-context?free_text=true" | jq -r .error)" free_text_disabled "serbest metin ana anahtardan kapatilabilir"
 ok "$(wc_ n PUT "$NT" /api/admin/llm '{"free_text_allowed":true,"rules":{"patterns":false,"known_names":false,"capitalized":false}}')" 403 "admin degil ayar yazamaz"
@@ -957,6 +964,7 @@ ok "$(w w DELETE "$WT" /api/admin/llm '' | jq -r .customized)" false "varsayilan
 ok "$(w w POST "$WT" "/api/events/$EVID/llm-restore" '{"text":"{{KULUP}} / {{YER}}"}' | jq -r .text | grep -c '{{')" 0 "yer tutucular dolar"
 # Kapsam: use_generative_ai yoksa yuk ucu ve oneri 403; oneri ayrica manage_purchases ister.
 ok "$(code -b "$J/n" "$B/api/events/$EVID/llm-context")" 403 "kapsamsiz kullanici yuku alamaz"
+ok "$(code -b "$J/n" "$B/api/events/$EVID/material-brief")" 403 "kapsamsiz kullanici ozeti alamaz"
 ok "$(wc_ n POST "$NT" "/api/events/$EVID/llm-restore" '{"text":"x"}')" 403 "geri doldurma da kapsam ister"
 ok "$(wc_ n POST "$NT" "/api/events/$EVID/material-suggestions" '{}')" 403 "kapsamsiz oneri"
 DB "insert into user_scopes (user_id, scope) values ('$DENIZ','use_generative_ai') on conflict do nothing" >/dev/null

@@ -221,7 +221,7 @@ struct Provider {
 
 // LLM yuku (kisisel/kurumsal veriden arindirilmis); `material_cols!` yukarida tanimli.
 mod context;
-pub(crate) use context::{known_names, llm_context, llm_restore, material_sample, material_suggestions, try_suggest};
+pub(crate) use context::{known_names, llm_context, llm_restore, material_brief, material_sample, material_suggestions, try_suggest};
 
 async fn detail_of(st: &AppState, me: &User, event: EventRow) -> Result<Detail> {
     let twin = records::load(&st.pool, event.record_id).await?;

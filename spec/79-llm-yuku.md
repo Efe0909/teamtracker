@@ -103,6 +103,7 @@ güvence 2. ve 4. maddelerdir: kişi alanları yapısal olarak yok, serbest meti
 | Uç | Kim | Ne |
 |---|---|---|
 | `GET /api/events/{id}/llm-context[?free_text=true]` | etkinliği görebilen | tam yük (§3) |
+| `GET /api/events/{id}/material-brief[?free_text=true]` | etkinliği görebilen | malzeme önerisinin modele giden daraltılmış özeti (§9), model çağrılmaz |
 | `POST /api/events/{id}/llm-restore` `{text}` | etkinliği görebilen | yer tutucuları doldurur, ≤ 20 000 karakter |
 | `GET/PUT/DELETE /api/admin/llm` | admin ya da `manage_llm` | `{free_text_allowed, rules{patterns, known_names, capitalized}}`; bilinmeyen alan reddedilir |
 | `POST /api/admin/llm/redact-try` `{text, config?}` | admin ya da `manage_llm` | temizleyici denemesi; metin modele gitmez, ≤ 4000 karakter |
