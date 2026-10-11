@@ -841,6 +841,25 @@ export interface LlmParams {
   temperature?: number;
   timeout_ms?: number;
   reasoning_off?: boolean;
+  top_p?: number;
+  frequency_penalty?: number;
+  presence_penalty?: number;
+  seed?: number;
+  provider?: LlmProvider;
+}
+
+/** OpenRouter saglayici yonlendirme (`provider` nesnesi); yalniz sohbet profili. */
+export interface LlmProvider {
+  order?: string[];
+  only?: string[];
+  ignore?: string[];
+  quantizations?: string[];
+  allow_fallbacks?: boolean;
+  /** Verilmezse sunucu `true` gonderir. */
+  require_parameters?: boolean;
+  sort?: "price" | "throughput" | "latency";
+  data_collection?: "allow" | "deny";
+  zdr?: boolean;
 }
 
 /** Profil + gorev birlesimi (gecerli ayar). */
@@ -852,6 +871,11 @@ export interface LlmEffective {
   temperature: number | null;
   timeout_ms: number;
   reasoning_off: boolean;
+  top_p: number | null;
+  frequency_penalty: number | null;
+  presence_penalty: number | null;
+  seed: number | null;
+  provider: LlmProvider | null;
   batch: number;
   enabled: boolean;
   store_bodies: boolean;

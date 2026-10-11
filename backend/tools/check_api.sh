@@ -1166,6 +1166,10 @@ ok "$(wl w POST "$WT" $TRY "$(tryb "$GEN" ',"model":"stub/garbled"')" | jq -r .t
 ok "$(wl w PUT "$WT" $PG '{"name":"Genel amaçlı","model":"stub/good"}' | jq -r .error)" llm_model_untested "denenmemis model"
 R=$(wl w POST "$WT" $TRY "$(tryb "$GEN" ',"model":"stub/good","batch":3')")
 ok "$(jq -r '[.ok, (.output.items|length), .trace.cost_usd, (.request.messages|length), (tostring|contains("stub-key"))]|@csv' <<<"$R")" 'true,2,0.004,2,false' "Dene: cikti, maliyet, istek; anahtar yok"
+# Gelismis: saglayici secimi ve ornekleme parametresi istege gider; gecersiz saglayici adi 400.
+ADV='"params":{"top_p":0.9,"provider":{"only":["relace"],"allow_fallbacks":false}}'
+ok "$(wl w POST "$WT" $TRY "$(tryb "$GEN" ",\"model\":\"stub/good\",$ADV")" | jq -c '[.request.top_p, .request.provider]')" '[0.9,{"allow_fallbacks":false,"only":["relace"],"require_parameters":true}]' "Dene: saglayici ve parametre istekte"
+ok "$(wl w POST "$WT" $TRY "$(tryb "$GEN" ',"params":{"provider":{"sort":"fastest"}}')" | jq -r .error)" llm_params_invalid "gecersiz saglayici siralamasi"
 ok "$(wl w PUT "$WT" $PG '{"name":"Genel amaçlı","model":"stub/good"}' | jq -r '[.model, (.tested_at!=null)]|@csv')" '"stub/good",true' "denenmis model profile kaydedildi"
 ok "$(wl w PUT "$WT" $TS "{\"profile_id\":\"$GEN\",\"enabled\":true,\"store_bodies\":true}" | jq -r '[.effective.model, .effective.store_bodies]|@csv')" '"stub/good",true' "gorev profilin modelini alir; govde acik"
 ok "$(DB "select count(*) from security_events where event_type='llm_bodies_on'")" 1 "govde saklama denetim izi"

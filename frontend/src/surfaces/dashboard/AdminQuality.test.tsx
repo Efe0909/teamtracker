@@ -19,7 +19,7 @@ const cfg: QualityConfig = { questions: { specific: q(0.5), context: q(0.5), clo
 const quality: QualityView = { config: cfg, defaults: cfg, customized: false, updated_at: null, updated_by: null, service_on: true };
 const effective = {
   profile_id: "p2", profile_name: "Karar", model: "respan/span-01-lite", max_tokens: 0, temperature: null, timeout_ms: 3000,
-  reasoning_off: true, batch: 9, enabled: true, store_bodies: false, prompt_version: 0,
+  reasoning_off: true, top_p: null, frequency_penalty: null, presence_penalty: null, seed: null, provider: null, batch: 9, enabled: true, store_bodies: false, prompt_version: 0,
 };
 const gate: LlmTaskView = {
   feature: "quality_gate", label: "Kalite kapısı", endpoint: "decisions", has_prompt: false, has_batch: false,

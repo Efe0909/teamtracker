@@ -46,6 +46,20 @@ pub fn chat_body(e: &Effective, system: Option<&str>, user: &str, schema_name: &
     if let Some(t) = e.temperature {
         b["temperature"] = json!(t);
     }
+    for (k, v) in [("top_p", e.top_p), ("frequency_penalty", e.frequency_penalty), ("presence_penalty", e.presence_penalty)] {
+        if let Some(v) = v {
+            b[k] = json!(v);
+        }
+    }
+    if let Some(s) = e.seed {
+        b["seed"] = json!(s);
+    }
+    // Profilin saglayici secimi varsayilanin ustune yazilir (require_parameters dahil).
+    if let Some(Value::Object(p)) = e.provider.as_ref().map(|p| json!(p)) {
+        for (k, v) in p {
+            b["provider"][k] = v;
+        }
+    }
     b
 }
 
@@ -155,7 +169,8 @@ mod tests {
     fn eff(model: &str) -> Effective {
         Effective {
             profile_id: None, profile_name: String::new(), model: model.into(), max_tokens: 1500, temperature: None, timeout_ms: 30_000,
-            reasoning_off: true, batch: 9, enabled: true, store_bodies: false, prompt_version: 0, prompt: None,
+            reasoning_off: true, top_p: None, frequency_penalty: None, presence_penalty: None, seed: None, provider: None,
+            batch: 9, enabled: true, store_bodies: false, prompt_version: 0, prompt: None,
         }
     }
 
@@ -184,6 +199,23 @@ mod tests {
         assert_eq!(b["temperature"], 0.2);
         assert_eq!(b["messages"][0], json!({ "role": "system", "content": "talimat" }));
         assert_eq!(b["messages"][1]["role"], "user");
+    }
+
+    #[test]
+    fn gelismis_parametreler_ve_saglayici_secimi_gider() {
+        let mut e = eff("m");
+        e.top_p = Some(0.9);
+        e.seed = Some(7);
+        e.provider = Some(crate::llm::Provider {
+            only: Some(vec!["relace".into()]), allow_fallbacks: Some(false), ..Default::default()
+        });
+        let b = chat_body(&e, None, "u", "n", &json!({}));
+        assert_eq!(b["top_p"], 0.9);
+        assert_eq!(b["seed"], 7);
+        assert!(b.get("frequency_penalty").is_none(), "verilmeyen gonderilmez");
+        assert_eq!(b["provider"], json!({ "require_parameters": true, "only": ["relace"], "allow_fallbacks": false }));
+        e.provider = Some(crate::llm::Provider { require_parameters: Some(false), ..Default::default() });
+        assert_eq!(chat_body(&e, None, "u", "n", &json!({}))["provider"], json!({ "require_parameters": false }), "profil varsayilani ezer");
     }
 
     #[test]

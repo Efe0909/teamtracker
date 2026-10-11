@@ -5,7 +5,7 @@
 import { useEffect, useState } from "react";
 import { ApiError, errorText } from "../../api/client";
 import { useLlmLimitWrite, useLlmModels, useLlmProfile, useLlmProfileWrite, useLlmTasks } from "../../api/hooks";
-import type { LlmParams, LlmProfileView } from "../../api/types";
+import type { LlmParams, LlmProfileView, LlmProvider } from "../../api/types";
 import { ago } from "../../lib/labels";
 import { compat, featureLabel, UNIT_MINUTES, usd, validWindow, windowLabel, WINDOWS, type WindowUnit } from "../../lib/llm";
 import { navigate } from "../../lib/router";
@@ -35,14 +35,40 @@ interface Draft {
   temperature: string;
   timeout_s: string;
   reasoning_off: boolean;
+  // Gelismis (yalniz sohbet)
+  top_p: string;
+  frequency_penalty: string;
+  presence_penalty: string;
+  seed: string;
+  order: string;
+  only: string;
+  ignore: string;
+  quantizations: string;
+  sort: "" | NonNullable<LlmProvider["sort"]>;
+  allow_fallbacks: boolean;
+  require_parameters: boolean;
+  deny_data_collection: boolean;
+  zdr: boolean;
 }
 
 function draftOf(p: LlmProfileView): Draft {
   const s = (n: number | undefined) => (n === undefined ? "" : String(n));
+  const pr = p.params.provider ?? {};
+  const list = (v: string[] | undefined) => (v ?? []).join(", ");
   return {
     name: p.name, model: p.model, max_tokens: s(p.params.max_tokens), temperature: s(p.params.temperature),
     timeout_s: p.params.timeout_ms === undefined ? "" : String(p.params.timeout_ms / 1000), reasoning_off: p.effective.reasoning_off,
+    top_p: s(p.params.top_p), frequency_penalty: s(p.params.frequency_penalty), presence_penalty: s(p.params.presence_penalty),
+    seed: s(p.params.seed), order: list(pr.order), only: list(pr.only), ignore: list(pr.ignore),
+    quantizations: list(pr.quantizations), sort: pr.sort ?? "", allow_fallbacks: pr.allow_fallbacks ?? true,
+    require_parameters: pr.require_parameters ?? true, deny_data_collection: pr.data_collection === "deny", zdr: pr.zdr ?? false,
   };
+}
+
+/** "a, b" -> ["a","b"]; bos -> verilmez. */
+function slugs(s: string): string[] | undefined {
+  const v = s.split(",").map((x) => x.trim()).filter((x) => x !== "");
+  return v.length === 0 ? undefined : v;
 }
 
 /** Bos alan = uc turunun varsayilani (gonderilmez). */
@@ -57,8 +83,70 @@ function paramsOf(d: Draft, chat: boolean): LlmParams {
     if (mt !== undefined) p.max_tokens = mt;
     if (t !== undefined) p.temperature = t;
     if (!d.reasoning_off) p.reasoning_off = false;
+    const extra = { top_p: num(d.top_p), frequency_penalty: num(d.frequency_penalty), presence_penalty: num(d.presence_penalty), seed: num(d.seed) };
+    for (const [k, v] of Object.entries(extra)) if (v !== undefined) p[k as keyof typeof extra] = v;
+    const pr: LlmProvider = {};
+    const lists = { order: slugs(d.order), only: slugs(d.only), ignore: slugs(d.ignore), quantizations: slugs(d.quantizations) };
+    for (const [k, v] of Object.entries(lists)) if (v !== undefined) pr[k as keyof typeof lists] = v;
+    if (d.sort !== "") pr.sort = d.sort;
+    if (!d.allow_fallbacks) pr.allow_fallbacks = false;
+    if (!d.require_parameters) pr.require_parameters = false;
+    if (d.deny_data_collection) pr.data_collection = "deny";
+    if (d.zdr) pr.zdr = true;
+    if (Object.keys(pr).length > 0) p.provider = pr;
   }
   return p;
+}
+
+/** Profil sayfasinin "Gelismis ayarlar" bolumu: ornekleme + OpenRouter saglayici secimi. */
+function Advanced({ d, set }: { d: Draft; set: (x: Partial<Draft>) => void }) {
+  const text = (k: "top_p" | "frequency_penalty" | "presence_penalty" | "seed" | "order" | "only" | "ignore" | "quantizations", label: string, hint: string, ph?: string) => (
+    <label className={ui.field}>
+      <span>{label} <span className={ui.fieldHint}>({hint})</span></span>
+      <input className={ui.input} value={d[k]} placeholder={ph} spellCheck={false} onChange={(e) => set({ [k]: e.target.value })} />
+    </label>
+  );
+  const check = (k: "allow_fallbacks" | "require_parameters" | "deny_data_collection" | "zdr", label: string) => (
+    <label className={c.check}>
+      <input type="checkbox" checked={d[k]} onChange={(e) => set({ [k]: e.target.checked })} />
+      {label}
+    </label>
+  );
+  return (
+    <details className={c.advanced}>
+      <summary>Gelişmiş ayarlar</summary>
+      <p className={c.sub}>Parametreler</p>
+      <div className={c.fields}>
+        {text("top_p", "top_p", "0–1, boş: modelin")}
+        {text("frequency_penalty", "Sıklık cezası", "−2–2")}
+        {text("presence_penalty", "Varlık cezası", "−2–2")}
+        {text("seed", "Tohum (seed)", "tam sayı; aynı girdiye aynı cevap için")}
+      </div>
+      <p className={c.sub}>Sağlayıcı (OpenRouter yönlendirme; adlar virgülle, ör. <code>deepinfra, google-vertex</code>)</p>
+      <div className={c.fields}>
+        {text("only", "Yalnız", "yalnız bunlar", "relace")}
+        {text("ignore", "Hariç", "bunlara gitme")}
+        {text("order", "Sıra", "bu sırayla dene; yük dengeleme kapanır")}
+        {text("quantizations", "Nicemleme", "ör. fp8, bf16")}
+        <label className={ui.field}>
+          <span>Sırala <span className={ui.fieldHint}>(yük dengeleme kapanır)</span></span>
+          <select className={ui.input} value={d.sort} onChange={(e) => set({ sort: e.target.value as Draft["sort"] })}>
+            <option value="">Varsayılan (fiyata göre dengeli)</option>
+            <option value="price">En ucuz</option>
+            <option value="throughput">En hızlı (jeton/sn)</option>
+            <option value="latency">En düşük gecikme</option>
+          </select>
+        </label>
+      </div>
+      <div className={c.checks}>
+        {check("allow_fallbacks", "Başka sağlayıcıya geçebilir (yedek)")}
+        {check("require_parameters", "Parametre desteği şart (kapalıyken şema yok sayılabilir)")}
+        {check("deny_data_collection", "Veriyle eğitim yapan sağlayıcıları dışla")}
+        {check("zdr", "Yalnız sıfır veri saklayan (ZDR) uçlar")}
+      </div>
+      {!d.require_parameters && <p className={ui.error} role="note">Parametre desteği kapalı: yapılandırılmış çıktıyı desteklemeyen sağlayıcı seçilebilir, cevap bozuk gelebilir.</p>}
+    </details>
+  );
 }
 
 function ProfileScreen({ p }: { p: LlmProfileView }) {
@@ -143,6 +231,7 @@ function ProfileScreen({ p }: { p: LlmProfileView }) {
             Düşünme kapalı (kısa yapılandırılmış çıktı için)
           </label>
         )}
+        {chat && <Advanced d={d} set={set} />}
         {cp !== null && (
           <div className={c.compat} data-level={cp.level} role="note">
             {cp.level === "ok" ? "OpenRouter listesine göre uyumlu." : "Uyumluluk:"}

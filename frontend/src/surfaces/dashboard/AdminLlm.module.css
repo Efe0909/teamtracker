@@ -409,6 +409,22 @@ a.linkCard:hover {
   gap: var(--s-2);
   font-size: var(--fs-md);
 }
+/* Profil "Gelismis ayarlar": kapali gelir, acilinca parametre + saglayici alanlari. */
+.advanced {
+  margin-bottom: var(--s-3);
+  border-top: 1px dashed var(--line);
+  padding-top: var(--s-3);
+}
+.advanced > summary {
+  cursor: pointer;
+  font-weight: 600;
+  margin-bottom: var(--s-2);
+}
+.checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2) var(--s-5);
+}
 .compat {
   margin: 0 0 var(--s-3);
   padding: var(--s-2) var(--s-3);

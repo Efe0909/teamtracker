@@ -31,7 +31,8 @@ const usage: LlmUsageView = {
            limited: 0, prompt_tokens: 300, completion_tokens: 90, cost_usd: 0.0042, unpriced: 0, ms_total: 9000 }],
 };
 const eff = (model: string, profile_id: string, profile_name: string, timeout_ms: number) => ({
-  profile_id, profile_name, model, max_tokens: 1500, temperature: null, timeout_ms, reasoning_off: true, batch: 9,
+  profile_id, profile_name, model, max_tokens: 1500, temperature: null, timeout_ms, reasoning_off: true,
+  top_p: null, frequency_penalty: null, presence_penalty: null, seed: null, provider: null, batch: 9,
   enabled: true, store_bodies: false, prompt_version: 0,
 });
 const profile = (id: string, name: string, endpoint: "chat" | "decisions", model: string, used_by: LlmProfileView["used_by"]): LlmProfileView => ({
@@ -118,6 +119,19 @@ it("profil: ozel pencere dakikaya cevrilip profile yollanir", async () => {
   await waitFor(() => expect(posted.find((p) => p.url === "/api/admin/llm/profiles/p1/limits")?.body).toEqual(
     { window_minutes: 180, usd: 2.5 }));
   expect(screen.getByRole("button", { name: "Profili sil" })).toHaveProperty("disabled", true);
+});
+
+it("profil: gelismis ayarlar saglayici ve parametre olarak kaydedilir", async () => {
+  const { posted } = setup(["manage_llm"], <AdminLlmProfile id="p1" />);
+  fireEvent.change(await screen.findByLabelText(/^Yalnız \(/), { target: { value: "relace, deepinfra/turbo" } });
+  fireEvent.change(screen.getByLabelText(/^top_p/), { target: { value: "0,9" } });
+  fireEvent.change(screen.getByLabelText(/^Sırala/), { target: { value: "price" } });
+  fireEvent.click(screen.getByLabelText("Başka sağlayıcıya geçebilir (yedek)"));
+  fireEvent.click(screen.getByRole("button", { name: "Kaydet" }));
+  await waitFor(() => expect(posted.find((p) => p.url === "/api/admin/llm/profiles/p1")?.body).toEqual({
+    name: "Genel amaçlı", model: "deepseek/deepseek-v4.1-flash",
+    params: { top_p: 0.9, provider: { only: ["relace", "deepinfra/turbo"], sort: "price", allow_fallbacks: false } },
+  }));
 });
 
 it("gorev: yalniz ayni turdeki profiller; kalite sorulari admin olmayana kilitli", async () => {

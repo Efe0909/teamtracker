@@ -125,6 +125,59 @@ pub struct Params {
     /// desteklemeyen modelde `require_parameters` cagriyi dusurur; o zaman kapatilir.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reasoning_off: Option<bool>,
+    // Gelismis (yalniz sohbet): ornekleme parametreleri ve OpenRouter saglayici secimi.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub top_p: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub frequency_penalty: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub presence_penalty: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub seed: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider: Option<Provider>,
+}
+
+/// OpenRouter `provider` nesnesi (saglayici yonlendirme). Verilen alan oldugu gibi gider;
+/// `require_parameters` verilmezse `true` (sema destegi olmayan saglayiciya gitmesin).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Provider {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub order: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub only: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ignore: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub quantizations: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub allow_fallbacks: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub require_parameters: Option<bool>,
+    /// `price` | `throughput` | `latency`; verilirse yuk dengeleme kapanir.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sort: Option<String>,
+    /// `allow` | `deny`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub data_collection: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub zdr: Option<bool>,
+}
+
+impl Provider {
+    fn valid(&self) -> bool {
+        // Saglayici/nicemleme kisa adi: `deepinfra`, `google-vertex`, `deepinfra/turbo`, `fp8`.
+        let slug = |s: &String| {
+            (1..=60).contains(&s.len())
+                && s.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || "-._/".contains(c))
+        };
+        let list = |v: &Option<Vec<String>>| v.as_ref().is_none_or(|v| !v.is_empty() && v.len() <= 20 && v.iter().all(slug));
+        let one_of = |v: &Option<String>, set: &[&str]| v.as_deref().is_none_or(|s| set.contains(&s));
+        list(&self.order) && list(&self.only) && list(&self.ignore) && list(&self.quantizations)
+            && one_of(&self.sort, &["price", "throughput", "latency"])
+            && one_of(&self.data_collection, &["allow", "deny"])
+    }
 }
 
 impl Params {
@@ -134,14 +187,20 @@ impl Params {
         let within = |v: Option<u32>, lo: u32, hi: u32| v.is_none_or(|v| (lo..=hi).contains(&v));
         match endpoint {
             Endpoint::Decisions => {
-                let only_timeout = self.max_tokens.is_none() && self.temperature.is_none() && self.reasoning_off.is_none();
+                let only_timeout = Params { timeout_ms: self.timeout_ms, ..Params::default() } == *self;
                 if !only_timeout || !within(self.timeout_ms, 1000, 20_000) {
                     return Err(BAD);
                 }
             }
             Endpoint::Chat => {
-                let temp_ok = self.temperature.is_none_or(|t| t.is_finite() && (0.0..=2.0).contains(&t));
-                if !within(self.max_tokens, 1, 8000) || !temp_ok || !within(self.timeout_ms, 1000, 60_000) {
+                let range = |v: Option<f64>, lo: f64, hi: f64| v.is_none_or(|t| t.is_finite() && (lo..=hi).contains(&t));
+                let ok = within(self.max_tokens, 1, 8000) && within(self.timeout_ms, 1000, 60_000)
+                    && range(self.temperature, 0.0, 2.0)
+                    && range(self.top_p, 0.0, 1.0) && self.top_p != Some(0.0)
+                    && range(self.frequency_penalty, -2.0, 2.0)
+                    && range(self.presence_penalty, -2.0, 2.0)
+                    && self.provider.as_ref().is_none_or(Provider::valid);
+                if !ok {
                     return Err(BAD);
                 }
             }
@@ -185,6 +244,11 @@ pub struct Effective {
     pub temperature: Option<f64>,
     pub timeout_ms: u32,
     pub reasoning_off: bool,
+    pub top_p: Option<f64>,
+    pub frequency_penalty: Option<f64>,
+    pub presence_penalty: Option<f64>,
+    pub seed: Option<i64>,
+    pub provider: Option<Provider>,
     pub batch: u32,
     pub enabled: bool,
     pub store_bodies: bool,
@@ -210,6 +274,11 @@ impl Effective {
             temperature: p.temperature,
             timeout_ms: p.timeout_ms.unwrap_or(timeout),
             reasoning_off: p.reasoning_off.unwrap_or(true),
+            top_p: p.top_p,
+            frequency_penalty: p.frequency_penalty,
+            presence_penalty: p.presence_penalty,
+            seed: p.seed,
+            provider: p.provider.clone(),
             batch: DEFAULT_BATCH,
             enabled: true,
             store_bodies: false,
@@ -718,7 +787,14 @@ mod tests {
 
     #[test]
     fn parametre_sinirlari_uc_turune_gore() {
-        let ok = Params { max_tokens: Some(2000), temperature: Some(0.3), timeout_ms: Some(20_000), reasoning_off: Some(false) };
+        let ok = Params {
+            max_tokens: Some(2000), temperature: Some(0.3), timeout_ms: Some(20_000), reasoning_off: Some(false),
+            top_p: Some(1.0), frequency_penalty: Some(-2.0), presence_penalty: Some(0.5), seed: Some(-3),
+            provider: Some(Provider {
+                order: Some(vec!["deepinfra/turbo".into(), "google-vertex".into()]), quantizations: Some(vec!["fp8".into()]),
+                sort: Some("price".into()), data_collection: Some("deny".into()), zdr: Some(true), ..Provider::default()
+            }),
+        };
         assert_eq!(ok.validate(Endpoint::Chat), Ok(()));
         assert_eq!(Params::default().validate(Endpoint::Chat), Ok(()));
         for bad in [
@@ -727,6 +803,11 @@ mod tests {
             Params { temperature: Some(f64::NAN), ..Params::default() },
             Params { temperature: Some(2.5), ..Params::default() },
             Params { timeout_ms: Some(500), ..Params::default() },
+            Params { top_p: Some(0.0), ..Params::default() },
+            Params { presence_penalty: Some(3.0), ..Params::default() },
+            Params { provider: Some(Provider { sort: Some("fastest".into()), ..Provider::default() }), ..Params::default() },
+            Params { provider: Some(Provider { only: Some(vec![]), ..Provider::default() }), ..Params::default() },
+            Params { provider: Some(Provider { ignore: Some(vec!["Bad Name".into()]), ..Provider::default() }), ..Params::default() },
         ] {
             assert_eq!(bad.validate(Endpoint::Chat), Err("llm_params_invalid"), "{bad:?}");
         }
@@ -734,6 +815,7 @@ mod tests {
         assert_eq!(Params { timeout_ms: Some(5000), ..Params::default() }.validate(Endpoint::Decisions), Ok(()));
         assert_eq!(Params { max_tokens: Some(100), ..Params::default() }.validate(Endpoint::Decisions), Err("llm_params_invalid"));
         assert_eq!(Params { timeout_ms: Some(30_000), ..Params::default() }.validate(Endpoint::Decisions), Err("llm_params_invalid"));
+        assert_eq!(Params { provider: Some(Provider::default()), ..Params::default() }.validate(Endpoint::Decisions), Err("llm_params_invalid"));
         // Bilinmeyen alan sessizce yutulmaz; parti artik gorevin, profilin degil.
         assert!(serde_json::from_value::<Params>(serde_json::json!({ "max_token": 5 })).is_err());
         assert!(serde_json::from_value::<Params>(serde_json::json!({ "batch": 5 })).is_err());
