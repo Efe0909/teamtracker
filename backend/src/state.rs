@@ -59,6 +59,8 @@ pub struct AppState {
     /// Gercek zamanli kanal (`realtime.rs`): WebSocket baglantilari ve konulari.
     /// Surec bellekte; tek surec sartinin (KNOW-85) bir sebebi daha.
     pub hub: Arc<crate::realtime::Hub>,
+    /// Yonetim > LLM: OpenRouter model listesi ve anahtar kullanimi onbellegi.
+    pub llm_cache: Arc<crate::llm::Cache>,
 }
 
 impl FromRef<AppState> for Key {
@@ -103,6 +105,7 @@ impl AppState {
             presence: Arc::default(),
             structure: Arc::default(),
             hub: Arc::default(),
+            llm_cache: Arc::default(),
         })
     }
 

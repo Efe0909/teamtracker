@@ -18,8 +18,11 @@ use crate::{
 };
 
 pub const UNITS: &str = "units";
+/// Etkinlik Yonetimi koku; altindaki bolumler kendi key'iyle bulunur.
+pub const EVENT_MANAGEMENT: &str = "event_management";
 pub const EVENT_TYPES: &str = "event_types";
 pub const EVENT_LOCATIONS: &str = "event_locations";
+pub const EVENT_OUTCOMES: &str = "event_outcomes";
 
 /// Varsayilan kural (Efe, 2026-10-02): hazirlik etkinlikten en gec bu kadar
 /// gun once biter. Daha gec checkpoint REDDEDILMEZ, uyari isareti alir.
@@ -39,12 +42,17 @@ pub enum Editor {
     Branch,
     /// Dal izni yok, tek scope.
     Scope(&'static str),
+    /// Yalniz admin (Etkinlik Yonetimi'nin kendisi: ad/aciklama).
+    Admin,
 }
 
-pub fn editor(root_key: Option<&str>) -> Editor {
-    match root_key {
+/// `section_key`: dugumun en yakin key'li atasi (kendisi dahil), bkz `TreeIndex::root_key`.
+pub fn editor(section_key: Option<&str>) -> Editor {
+    match section_key {
+        Some(EVENT_MANAGEMENT) => Editor::Admin,
         Some(EVENT_TYPES) => Editor::Scope("manage_event_types"),
         Some(EVENT_LOCATIONS) => Editor::Scope("manage_event_locations"),
+        Some(EVENT_OUTCOMES) => Editor::Scope("manage_event_outcomes"),
         _ => Editor::Branch,
     }
 }
@@ -88,8 +96,38 @@ pub fn child_rule(tree: &TreeIndex, parent: &Node) -> ChildRule {
             _ => ChildRule::Closed,
         },
         Some(EVENT_LOCATIONS) if parent.key.is_some() => ChildRule::Fixed(NodeType::Location, Shape::Leaf),
+        Some(EVENT_OUTCOMES) if parent.key.is_some() => ChildRule::Fixed(NodeType::Outcome, Shape::Leaf),
         _ => ChildRule::Closed,
     }
+}
+
+/// Adi koddan belli dugumlerin SABIT adi: sablon slotlari ("Adımlar",
+/// "Widget'lar") ve widget'lar (katalogdaki ad). None = ad serbest.
+/// Aciklama yine duzenlenir; ad ne istekten ne yamadan degisir.
+pub fn fixed_name(n: &Node) -> Option<String> {
+    match n.node_type {
+        NodeType::Operational => OPTION_SLOTS.iter().find(|(_, s)| slot(n) == Some(s)).map(|(name, _)| (*name).to_string()),
+        NodeType::Widget => widget_label_of(&n.attrs).map(String::from),
+        _ => None,
+    }
+}
+
+/// `attrs.widget`'in katalog adi.
+pub fn widget_label_of(attrs: &Value) -> Option<&'static str> {
+    widget_of(attrs).map(widget_label)
+}
+
+/// Widget'in katalog adi (on yuzdeki `eventModel.ts` ile ayni metin).
+pub fn widget_label(w: WidgetType) -> &'static str {
+    match w {
+        WidgetType::Otf => "Etkinlik talep formu (OTF)",
+        WidgetType::Supplies => "Satın alımlar",
+        WidgetType::Record => "Kayıt",
+    }
+}
+
+fn widget_of(attrs: &Value) -> Option<WidgetType> {
+    attrs.get("widget").cloned().and_then(|v| serde_json::from_value(v).ok())
 }
 
 /// Sablonda secilebilen widget turleri (`record` sablonda yok: spec/73 §3).
@@ -203,7 +241,10 @@ mod tests {
     /// units(10) > cell(11)
     fn fixture() -> TreeIndex {
         TreeIndex::build(vec![
-            row(1, None, NodeType::Operational, Shape::List, Some(EVENT_TYPES), json!({})),
+            row(20, None, NodeType::Operational, Shape::List, Some(EVENT_MANAGEMENT), json!({})),
+            row(21, Some(20), NodeType::Operational, Shape::List, Some(EVENT_OUTCOMES), json!({})),
+            row(22, Some(21), NodeType::Outcome, Shape::Leaf, None, json!({})),
+            row(1, Some(20), NodeType::Operational, Shape::List, Some(EVENT_TYPES), json!({})),
             row(2, Some(1), NodeType::Choice, Shape::List, None, json!({})),
             row(3, Some(2), NodeType::Operational, Shape::List, None, json!({"slot": "steps"})),
             row(4, Some(3), NodeType::Checkpoint, Shape::Leaf, None, json!({"offset_days": -7})),
@@ -227,6 +268,28 @@ mod tests {
         assert_eq!(editor(t.root_key(u(4))), Editor::Scope("manage_event_types"));
         assert_eq!(editor(t.root_key(u(11))), Editor::Branch);
         assert!(under(&t, u(11), UNITS) && !under(&t, u(10), UNITS) && !under(&t, u(4), UNITS));
+    }
+
+    /// Etkinlik Yonetimi: bolum key'i en yakin key'li atadan gelir; kok yalniz admin,
+    /// kazanimlar kendi scope'unda; sabit adlar slot ve widget'ta.
+    #[test]
+    fn management_sections_and_fixed_names() {
+        let t = fixture();
+        let g = |id| t.get(u(id)).cloned().unwrap_or_else(|| panic!("yok {id}"));
+        assert_eq!(t.root_key(u(20)), Some(EVENT_MANAGEMENT));
+        assert_eq!(t.root_key(u(1)), Some(EVENT_TYPES));
+        assert_eq!(t.root_key(u(7)), Some(EVENT_TYPES), "widget bolumunun key'ini alir");
+        assert_eq!(t.root_key(u(22)), Some(EVENT_OUTCOMES));
+        assert_eq!(editor(t.root_key(u(20))), Editor::Admin);
+        assert_eq!(editor(t.root_key(u(22))), Editor::Scope("manage_event_outcomes"));
+        assert_eq!(child_rule(&t, &g(20)), ChildRule::Closed);
+        assert_eq!(child_rule(&t, &g(21)), ChildRule::Fixed(NodeType::Outcome, Shape::Leaf));
+        assert!(under(&t, u(22), EVENT_OUTCOMES) && !under(&t, u(21), EVENT_OUTCOMES));
+        assert_eq!(fixed_name(&g(3)).as_deref(), Some("Adımlar"));
+        assert_eq!(fixed_name(&g(6)).as_deref(), Some("Widget'lar"));
+        assert_eq!(fixed_name(&g(7)).as_deref(), Some("Etkinlik talep formu (OTF)"));
+        assert_eq!(fixed_name(&g(2)), None, "tur adi serbest");
+        assert_eq!(fixed_name(&g(4)), None, "checkpoint adi serbest");
     }
 
     #[test]

@@ -19,6 +19,9 @@ export type Route =
   | { name: "tree" }
   | { name: "notifications" }
   | { name: "admin" }
+  // Yonetim > Veri isleme ve LLM: profil ve gorev ayrintisi tam sayfa (KNOW-112).
+  | { name: "llmProfile"; id: Uuid }
+  | { name: "llmTask"; feature: string }
   | { name: "notFound" };
 
 export const QUERY_KEYS = [
@@ -64,6 +67,9 @@ export function parse(url: URL): Route {
   if (a === "outcome-tree" && seg.length === 1) return { name: "tree" };
   if (a === "notifications" && seg.length === 1) return { name: "notifications" };
   if (a === "admin" && seg.length === 1) return { name: "admin" };
+  const [, , c, d] = seg;
+  if (a === "admin" && b === "llm" && c === "profiles" && d !== undefined && seg.length === 4) return { name: "llmProfile", id: d };
+  if (a === "admin" && b === "llm" && c === "tasks" && d !== undefined && seg.length === 4) return { name: "llmTask", feature: d };
   return { name: "notFound" };
 }
 
@@ -97,5 +103,9 @@ export function href(r: Route): string {
       return "/notifications";
     case "admin":
       return "/admin";
+    case "llmProfile":
+      return `/admin/llm/profiles/${r.id}`;
+    case "llmTask":
+      return `/admin/llm/tasks/${r.feature}`;
   }
 }

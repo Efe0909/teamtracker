@@ -135,6 +135,7 @@ impl NodeAccess {
         match crate::refdata::editor(tree.root_key(node)) {
             crate::refdata::Editor::Branch => self.on(tree, node, scope),
             crate::refdata::Editor::Scope(s) => self.admin || self.scopes.iter().any(|x| x == s),
+            crate::refdata::Editor::Admin => self.admin,
         }
     }
 

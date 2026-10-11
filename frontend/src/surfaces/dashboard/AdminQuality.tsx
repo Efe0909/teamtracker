@@ -1,4 +1,4 @@
-// Yonetim > Kalite kapisi (yalniz admin): karar modeline giden sorular ve esikler.
+// Yonetim > Veri isleme ve LLM > Kalite kapisi (yalniz admin): karar modeline giden sorular ve esikler.
 // Kayit/kapanis metinleri bu sorularla tartilir (spec/76); degisiklik yeniden
 // derleme istemez, kaydedilince hemen gecerli olur. Soru adlari sabit.
 

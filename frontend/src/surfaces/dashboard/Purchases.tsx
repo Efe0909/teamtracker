@@ -12,15 +12,16 @@ import r from "../../features/record/record.module.css";
 import { ago, formatDay } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
 import { Icon } from "../../ui/icons";
-import { cx, IconButton, Segmented, useToast } from "../../ui/ui";
+import { cx, IconButton, Segmented, ui, useToast } from "../../ui/ui";
 import {
-  BOARD_COLUMNS, columnOf, etaOf, isLate, MATERIAL_STAGE, MATERIAL_TYPE, money, priceOf, purchaseHealth,
+  BOARD_COLUMNS, columnOf, dropState, etaOf, isLate, MATERIAL_STAGE, MATERIAL_TYPE, money, priceOf, purchaseHealth,
   purchaseTotals, type PurchaseHealth,
 } from "./eventModel";
 import d from "./dashboard.module.css";
 import { MaterialDetail } from "./MaterialDetail";
 import { PrioMark, type Run } from "./purchaseParts";
 import s from "./purchases.module.css";
+import { SuggestCards } from "./SuggestCards";
 
 const HEALTH: Record<PurchaseHealth, string> = {
   none: "Henüz gerekli görülen yok",
@@ -53,6 +54,8 @@ export function Purchases({ eventId, eventDate, items, onRemove }: {
 }) {
   const L = useLookup();
   const canEdit = L.can("manage_purchases");
+  // Öneriyi kabul edemeyene ya da kapsamı olmayana pasif öneri bile gösterilmez (spec/79 §9).
+  const canSuggest = canEdit && L.can("use_generative_ai") && !(L.meta.external_off ?? []).includes("suggest");
   const [view, setView] = useState<View>("board");
   const [openId, setOpenId] = useState<Uuid | null>(null);
   const [over, setOver] = useState<DropKey | null>(null);
@@ -67,6 +70,7 @@ export function Purchases({ eventId, eventDate, items, onRemove }: {
   const lateN = items.filter((m) => isLate(m, eventDate)).length;
   const last = items.reduce((a, m) => (m.updated_at > a ? m.updated_at : a), "");
   const open = items.find((m) => m.id === openId) ?? null;
+  const names = items.map((m) => m.name);
 
   const move = (id: Uuid, to: DropKey) => {
     const m = items.find((x) => x.id === id);
@@ -75,7 +79,8 @@ export function Purchases({ eventId, eventDate, items, onRemove }: {
       if (m.owned) toast({ text: "Elinde olan kalem sponsordan istenmez.", error: true });
       else if (!m.has_sponsor) run(eventOps.material(id, { has_sponsor: true }));
     } else if (columnOf(m) !== to) {
-      run(eventOps.material(id, m.owned ? { owned: false, state: BOARD_COLUMNS[to]!.state } : { state: BOARD_COLUMNS[to]!.state }));
+      const state = dropState(to, m);
+      run(eventOps.material(id, m.owned ? { owned: false, state } : { state }));
     }
   };
 
@@ -146,6 +151,10 @@ export function Purchases({ eventId, eventDate, items, onRemove }: {
           {HEALTH[health]}
         </span>
         <span className={s.grow} />
+        <a className={cx(ui.btn, ui["z-sm"])} href={`/api/events/${eventId}/purchases.xlsx`} download
+          title="Onaylı ve teslim edilen kalemler, Excel">
+          <Icon name="download" size={14} /> Excel
+        </a>
         <Segmented label="Görünüm" value={view} onChange={setView}
           options={[{ value: "board", label: "Pano" }, { value: "list", label: "Liste" }]} />
         {onRemove !== undefined && (
@@ -175,7 +184,10 @@ export function Purchases({ eventId, eventDate, items, onRemove }: {
                     <b>{c.name}</b><span className={s.colCount}>{its.length}</span>
                     <span className={s.colSum}>{sum > 0 ? money.format(sum) : ""}</span>
                   </div>
-                  {its.length === 0 ? <p className={s.empty}>Boş.{canEdit ? " Bir kartı buraya sürükle." : ""}</p> : its.map((m) => card(m, i === 0))}
+                  {its.length === 0 ? <p className={s.empty}>Boş.{canEdit ? " Bir kartı buraya sürükle." : ""}</p> : its.map((m) => card(m, i === 1))}
+                  {i === 0 && canSuggest && (
+                    <SuggestCards key={eventId} eventId={eventId} existing={names} run={run} busy={w.isPending} />
+                  )}
                   {i === 0 && canEdit && <AddForm eventId={eventId} run={run} busy={w.isPending} />}
                 </section>
               );
@@ -226,6 +238,11 @@ export function Purchases({ eventId, eventDate, items, onRemove }: {
               );
             })}
           </div>
+          {canSuggest && (
+            <div className={s.addList}>
+              <SuggestCards key={eventId} eventId={eventId} existing={names} run={run} busy={w.isPending} />
+            </div>
+          )}
           {canEdit && <div className={s.addList}><AddForm eventId={eventId} run={run} busy={w.isPending} /></div>}
         </>
       )}

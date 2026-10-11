@@ -95,6 +95,7 @@ sahip sayılır.
 | `hard_delete_nodes` | `units` içinde bağımlısı olan düğümü silme (`edit_nodes` ve dal izniyle birlikte) | `DELETE /api/nodes/{id}` |
 | `manage_event_types` | `event_types` alt ağacının tamamı: ekleme, düzenleme, silme. Dal izni gerekmez. | `/api/nodes*` |
 | `manage_event_locations` | `event_locations` alt ağacının tamamı, aynı kuralla | `/api/nodes*` |
+| `manage_event_outcomes` | `event_outcomes` (Etkinlik Kazanımları) alt ağacının tamamı, aynı kuralla. `event_management` kökünün kendisini (ad/açıklama) yalnız admin düzenler. | `/api/nodes*` |
 | `manage_users` | Panel ve kullanım verisi; kişi davet etme, açma ve kapatma (admin olmayanları); kendinde olan scope, rol ve dalı verip alma; avatar. Kendi satırına dokunamaz, `manage_users`'ı veremez (A1). | `GET /api/admin`, `GET /api/admin/activity`, `POST /api/admin/users`, `PATCH /api/admin/users/{id}` (op=`admin` hariç) |
 | `manage_teams` | Takım ve pillar kurma ve düzenleme, takım silme, takıma düğüm bağlama, üye ekleme ve çıkarma | `POST /api/teams`, `PATCH`/`DELETE /api/teams/{id}`, `/api/teams/{id}/nodes/{node}`, `POST /api/pillars`, `PATCH /api/pillars/{id}`, `/api/teams/{id}/members*`. Kişi kendini bir takıma ekleyince o takımın kayıtlarında `can_edit` kazanır. |
 | `edit_deadline` | Kaydın ve eylemin son tarihi. Kayıt yetkisinin **üstüne** eklenir (ikisi birlikte gerekir). Etkinlik adımlarının (checkpoint) tarihi bu scope'ta değil, `manage_events`'te (K4). | `PATCH /api/records/{id}` (`due_date`), `POST /api/records/{id}/actions` (`due_date` gelirse), `PATCH /api/actions/{id}` (`due_date`) |
@@ -104,6 +105,8 @@ sahip sayılır.
 | `manage_event_widgets` | Şablon widget'ı ekleme ve silme (`record` türü hariç) | `POST /api/events/{id}/widgets`, `DELETE /api/event-widgets/{id}` |
 | `manage_purchases` | Malzeme ve tedarikçi yazma. Etkinliği düzenleme yetkisi ayrıca aranmaz. Satın alınmış (`purchased`) kalemin tedariki donar: yalnız not, öncelik ve teslim işareti yazılır (`purchased_locked`). | `POST /api/events/{id}/materials`, `/api/materials/{id}`, `/api/materials/{id}/providers`, `/api/material-providers/*` |
 | `manage_budgets` | Kalem bütçesini yazma ya da silme (`budget`). Satın alım yetkisine ek: `PATCH /api/materials/{id}` içinde `budget` alanı bu yetkiyi ister, tedarik yetkisi tek başına yetmez. | `PATCH /api/materials/{id}` (`budget`) |
+| `use_generative_ai` | Üretken yapay zekâ özellikleri (spec/79 §9). Malzeme önerisi ayrıca `manage_purchases` ister (kabul edemeyen kişiye öneri çıkmaz). Etkinlik LLM yükü uçları da bunu arar; yoksa pasif öneri bile gösterilmez. | `POST /api/events/{id}/material-suggestions`, `GET /api/events/{id}/llm-context`, `POST /api/events/{id}/llm-restore` |
+| `manage_llm` | Yönetim › "Veri işleme ve LLM" sekmesinin **tamamı** (spec/79 §11): model ve parametre ayarı, "Dene", dolar limitleri, istem sürümleri, çağrı geçmişi ve maliyet, gövde saklama, temizleme kuralları. Yönetim menüsünü tek başına açar; kişiler/aktivite sekmeleri kilitli görünür (`manage_users` ister). Tersine `manage_users` sahibi LLM sekmesini kilitli görür. Kalite kapısı bu sekmenin bir görevidir; profili `manage_llm` ile değişir ama soruları yalnız admin düzenler (bölüm kilitli görünür). | `/api/admin/llm*` |
 | `review_purchases` | Kalemi "satın alındı" işaretleme ve geri alma (maliye incelemesi). Widget'taki onay (`state` 3) satın alındı demek değildir; yalnız onaylı, elde olmayan kalem işaretlenir (`not_approved`). | `PATCH /api/materials/{id}/purchased` |
 
 ## 4. Uç matrisi
@@ -272,6 +275,21 @@ Satırın sonundaki `dosya:satır` handler'ın yeridir. Toplam 97 uç.
 | `POST /api/admin/roles` | admin | `:464` |
 | `PATCH /api/admin/roles/{id}` | admin | `:477` |
 | `DELETE /api/admin/roles/{id}` | admin | `:492` |
+| `GET/PUT/DELETE /api/admin/quality`, `POST /api/admin/quality/try` | admin | `quality.rs` |
+
+### Yönetim › Veri işleme ve LLM (`llm.rs`, `llm_usage.rs`, spec/79 §11)
+
+Hepsi `require` ile ilk satırda: admin ya da `manage_llm`.
+
+| Uç | Not |
+|---|---|
+| `GET/PUT/DELETE /api/admin/llm`, `POST /api/admin/llm/redact-try` | temizleme kuralları ve temizleyici denemesi (metin modele gitmez) |
+| `GET /api/admin/llm/status`, `/usage`, `/calls`, `/calls/{id}`, `/key`, `/models` | okuma; `key` OpenRouter'a sunucudan gider, anahtar istemciye dönmez |
+| `GET/POST /api/admin/llm/profiles`, `GET/PUT/DELETE /api/admin/llm/profiles/{id}` | profil modeli değişikliği son 30 dk'da geçen bir "Dene" ister (`llm_model_untested`); kullanılan profil silinmez |
+| `GET /api/admin/llm/tasks`, `GET/PUT /api/admin/llm/tasks/{feature}` | görevi başka profile bağlamak o profille geçen bir "Dene" ister (`llm_profile_untested`) |
+| `POST /api/admin/llm/try` | gerçek çağrı; kaydetmez, `is_try` satırı yazar. Etkinlik kimliğiyle denenirse ayrıca `build_context` kuralları (görünürlük + `use_generative_ai`) geçerli |
+| `GET/POST /api/admin/llm/prompts/{feature}`, `PUT …/active` | etkinleştirme o sürümle geçen bir "Dene" ister (`llm_prompt_untested`) |
+| `POST /api/admin/llm/profiles/{id}/limits`, `GET /api/admin/llm/limits`, `DELETE /api/admin/llm/limits/{id}` | profil başına dolar tavanı |
 
 ## 5. Veri kapsamı ve erişim
 

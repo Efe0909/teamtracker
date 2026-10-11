@@ -172,32 +172,45 @@ function Timeline({ m, eventDate }: { m: Material; eventDate: string | null }) {
   if (m.has_sponsor && m.sponsor_date !== null) marks.push({ id: "sponsor", letter: "S", date: m.sponsor_date });
   if (eventDate === null || marks.length === 0) return null;
 
+  // Pencere: bugun ile etkinlik gunu + her iki yana pay. Pencere disindaki teklif kenara
+  // yapisir ve okunur ok ile isaretlenir; uzak tarih olcegi bozmaz.
+  const DAY = 864e5;
   const today = toIsoDay(new Date());
-  const times = [today, eventDate, ...marks.map((x) => x.date)].map((d) => Date.parse(d)).sort((a, b) => a - b);
-  const from = times[0]! - 864e5, to = times[times.length - 1]! + 864e5;
-  const pos = (d: string) => ((Date.parse(d) - from) / (to - from)) * 100;
+  const todayMs = Date.parse(today), eventMs = Date.parse(eventDate);
+  const lo = Math.min(todayMs, eventMs), hi = Math.max(todayMs, eventMs);
+  const pad = Math.max(7 * DAY, (hi - lo) * 0.25);
+  const from = lo - pad, to = hi + pad;
+  const pos = (ms: number) => ((Math.min(Math.max(ms, from), to) - from) / (to - from)) * 100;
   const rowTop = [52, 68, 84];
   const last = [-99, -99, -99];
-  const placed = [...marks].sort((a, b) => pos(a.date) - pos(b.date)).map((x) => {
-    const px = pos(x.date);
+  const placed = [...marks].sort((a, b) => Date.parse(a.date) - Date.parse(b.date)).map((x) => {
+    const ms = Date.parse(x.date);
+    const px = pos(ms);
     let row = 0;
     while (row < 2 && px - last[row]! < 15) row++;
     last[row] = px;
-    return { ...x, px, row };
+    const arrow = ms > to ? " →" : ms < from ? "← " : "";
+    return { ...x, px: Math.min(96, Math.max(4, px)), row, arrow };
   });
-  const ev = pos(eventDate);
+  const ev = pos(eventMs);
+  // Bugun ile etkinlik ayni yere dusuyorsa iki etiket ust uste biner: tek etiket.
+  const merged = Math.abs(pos(todayMs) - ev) < 18;
   return (
     <div className={s.tl} role="img" aria-label="Teklif varış tarihleri ve etkinlik günü">
       <div className={s.tlTrack} />
       <div className={s.tlLate} style={{ left: `${ev}%` }} />
-      <span className={s.tlTop} style={{ left: `${pos(today)}%` }}>bugün</span>
-      <span className={cx(s.tlTop, s.tlTopEvent)} style={{ left: `${ev}%` }}>Etkinlik · {formatDay(eventDate)}</span>
+      {merged
+        ? <span className={cx(s.tlTop, s.tlTopEvent)} style={{ left: `${ev}%` }}>Bugün · Etkinlik · {formatDay(eventDate)}</span>
+        : <>
+            <span className={s.tlTop} style={{ left: `${pos(todayMs)}%` }}>bugün</span>
+            <span className={cx(s.tlTop, s.tlTopEvent)} style={{ left: `${ev}%` }}>Etkinlik · {formatDay(eventDate)}</span>
+          </>}
       <span className={s.tlEvent} style={{ left: `${ev}%` }} />
       {placed.map((x) => (
         <span key={x.id}>
           <span className={cx(s.tlDot, x.date > eventDate && s.tlDotLate, (x.id === m.chosen_provider_id || (x.id === "sponsor" && m.sponsor_chosen)) && s.tlDotSel)}
             style={{ left: `${x.px}%` }} />
-          <span className={s.tlLabel} style={{ left: `${x.px}%`, top: rowTop[x.row] }}>{x.letter} · {formatDay(x.date)}</span>
+          <span className={s.tlLabel} style={{ left: `${x.px}%`, top: rowTop[x.row] }}>{x.arrow}{x.letter} · {formatDay(x.date)}</span>
         </span>
       ))}
     </div>

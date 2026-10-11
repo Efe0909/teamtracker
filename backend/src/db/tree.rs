@@ -195,9 +195,18 @@ impl TreeIndex {
         self.roots.iter().filter_map(|id| self.nodes.get(id)).find(|n| n.key.as_deref() == Some(key))
     }
 
-    /// Dugumun kokunun key'i (kok disi, key'siz eski kok icin None).
+    /// Dugumun bolumunun key'i: en yakin key'li ata (dugumun kendisi dahil).
+    /// Etkinlik Yonetimi altinda bolumler (`event_types` ...) kendi key'ini
+    /// tasir; kok key'i yalniz bolumsuz dugumlere (Birimler, kokun kendisi) duser.
     pub fn root_key(&self, id: Uuid) -> Option<&str> {
-        self.nodes.get(&id).and_then(|n| self.nodes.get(&n.root)).and_then(|r| r.key.as_deref())
+        let mut cur = self.nodes.get(&id);
+        while let Some(n) = cur {
+            if let Some(k) = n.key.as_deref() {
+                return Some(k);
+            }
+            cur = n.parent_id.and_then(|p| self.nodes.get(&p));
+        }
+        None
     }
 
     /// Dogrudan cocuklar, ekran sirasinda.

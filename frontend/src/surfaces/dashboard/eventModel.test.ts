@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import type { Material, MetaNode } from "../../api/types";
-import { bestOffer, columnOf, daysBefore, etaOf, isLate, isPhone, kindTemplate, overPct, placeLabel, priceOf, purchaseHealth, purchaseTotals, unitPrice } from "./eventModel";
+import { bestOffer, columnOf, daysBefore, dropState, etaOf, isLate, isPhone, kindTemplate, overPct, placeLabel, priceOf, purchaseHealth, purchaseTotals, unitPrice } from "./eventModel";
 
 it("butce asimi yuzdesi: fiyat ya da butce yoksa null", () => {
   expect(overPct(150, 100)).toBe(50);
@@ -97,8 +97,17 @@ it("gecikme: secili teklifin ya da sponsorun varisi etkinlikten sonraysa", () =>
 });
 
 it("pano sutunu ve toplamlar: zaten var Onaylandi'da, toplama girmez", () => {
-  expect([0, 1, 2, 3].map((state) => columnOf({ state, owned: false }))).toEqual([0, 0, 1, 2]);
+  // Planlanan · Tedarikçi aranıyor (1 ve 2) · Onaylandı
+  expect([0, 1, 2, 3].map((state) => columnOf({ state, owned: false }))).toEqual([0, 1, 1, 2]);
   expect(columnOf({ state: 0, owned: true })).toBe(2);
+  // Birakma: orta sutunda teklifi olan 2, yoksa 1; zaten ortadaki kalem degismez.
+  const none = { providers: [] }, some = { providers: [prov("a", 1, null)] };
+  expect(dropState(0, { state: 3, ...some })).toBe(0);
+  expect(dropState(2, { state: 0, ...none })).toBe(3);
+  expect(dropState(1, { state: 0, ...none })).toBe(1);
+  expect(dropState(1, { state: 3, ...some })).toBe(2);
+  expect(dropState(1, { state: 1, ...some })).toBe(1);
+  expect(dropState(1, { state: 2, ...none })).toBe(2);
   const items = [
     m({ state: 3, providers: [prov("a", 340, null)] }),
     m({ state: 2, providers: [prov("b", 2480, null)] }),

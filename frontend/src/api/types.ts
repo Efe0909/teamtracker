@@ -16,11 +16,13 @@ export type Priority = "critical" | "high" | "medium" | "low";
 /** Hangi turun nerede olabilecegini kok semasi soyler (Rust refdata.rs, spec/74). */
 export type NodeType =
   | "cell" | "machine" | "task" | "step" | "operational" | "generic"
-  | "option" | "checkpoint" | "widget" | "location";
+  | "option" | "checkpoint" | "widget" | "location" | "outcome";
 /** Cocuklara izin: leaf = cocuk yok; list = butun cocuklar ayni turde; tree = serbest. */
 export type Shape = "leaf" | "list" | "tree";
-/** Gocle dogan koklerin sabit anahtarlari: kod koku adla degil bununla bulur. */
-export type RootKey = "units" | "event_types" | "event_locations";
+/** Gocle dogan kok ve bolumlerin sabit anahtarlari: kod bunlari adla degil bununla bulur.
+ *  `event_management` kok; `event_types` / `event_locations` / `event_outcomes` onun bolumleri.
+ *  Dugumun `root_key`'i en yakin key'li atasidir (kendisi dahil). */
+export type RootKey = "units" | "event_management" | "event_types" | "event_locations" | "event_outcomes";
 export type TeamRole = "lead" | "mentor" | "member";
 
 // --- /api/meta -------------------------------------------------------------
@@ -101,7 +103,7 @@ export interface Meta {
   /** sort_order, sonra ad; pasifler de gelir. */
   pillars: MetaPillar[];
   nodes: MetaNode[];
-  external_off?: ("decision" | "resend" | "push")[];
+  external_off?: ("decision" | "resend" | "push" | "suggest")[];
   /** Manifest (backend/manifest.json): uygulama surumu ve gelistirici e-postasi. */
   version?: string;
   contact_email?: string;
@@ -356,11 +358,25 @@ export interface OtfInput extends OtfFields {
   items: OtfItem[];
   /** En cok 3 etkinlik sorumlusu, formdaki sirayla; telefon profilden. */
   contacts: Uuid[];
+  /** Etkinlik Kazanimlari'ndan secilenler (DB'de `event_otf_outcomes`, n:m).
+   *  `outcomes` alani yalniz listede olmayan serbest metin; Word'de ikisi birlesir. */
+  outcome_ids: Uuid[];
   /** "Formu gozden gecirdim" — yalniz PUT'ta; kopyayla dolan formun kilidini acar. */
   reviewed?: boolean;
 }
 
+export interface OtfOutcomeOption {
+  id: Uuid;
+  name: string;
+  /** Benzer kazanimlari ayirt etmek icin (Veri Yonetimi'nde yazilir). */
+  description: string | null;
+  /** Pasif ama formda secili kalanlar da listelenir. */
+  is_active: boolean;
+}
+
 export interface OtfView extends OtfInput {
+  /** Secilebilir kazanimlar, agac sirasinda. */
+  outcome_options: OtfOutcomeOption[];
   /** Kutu katalogu (tek kaynak Rust otf::SECTIONS). `key` bolumun aciklama alanini secer: `${key}_notes`. */
   catalog: { key: "layout" | "av" | "tech" | "host" | "care" | "other"; label: string; items: { key: string; label: string }[] }[];
   club_name: string;
@@ -374,6 +390,17 @@ export interface OtfView extends OtfInput {
   /** Form kopyayla dolduysa. `needs_review` iken Word indirilemez; "gozden
    *  gecirdim" ancak `edited` (kopyadan sonra en az bir alan degisti) ise. */
   review: { copied_from: Uuid | null; copied_title: string | null; needs_review: boolean; edited: boolean } | null;
+}
+
+/** Yapay zekâ önerisi (spec/79 §9): ad + açıklama; sayı yok. Kabulde kalem olur (açıklama = not). */
+export interface MaterialSuggestion {
+  name: string;
+  description: string;
+}
+
+export interface MaterialSuggestions {
+  items: MaterialSuggestion[];
+  batch_id: Uuid;
 }
 
 export interface MaterialPatch {
@@ -779,4 +806,279 @@ export interface QualityView {
   updated_by: Uuid | null;
   /** false: anahtar yok ya da manifest'te kapali; "Dene" bos doner. */
   service_on: boolean;
+}
+
+// --- Yonetim > Veri isleme ve LLM (Rust api/llm.rs + llm_usage.rs, spec/79 §11) ----
+
+/** Temizleme kurallari (`llm_config`, spec/79 §4). */
+export interface LlmRules {
+  patterns: boolean;
+  known_names: boolean;
+  capitalized: boolean;
+}
+
+export interface LlmConfig {
+  free_text_allowed: boolean;
+  rules: LlmRules;
+}
+
+export interface LlmConfigView {
+  config: LlmConfig;
+  defaults: LlmConfig;
+  customized: boolean;
+  updated_at: string | null;
+  updated_by: Uuid | null;
+}
+
+export type LlmFeature = "material_suggestions" | "quality_gate";
+export type LlmStatus = "ok" | "limit" | "http" | "timeout" | "network" | "parse" | "schema";
+
+export type LlmEndpoint = "chat" | "decisions";
+
+/** Profil parametreleri (satirdaki ham hali); yoksa uc turunun varsayilani. */
+export interface LlmParams {
+  max_tokens?: number;
+  temperature?: number;
+  timeout_ms?: number;
+  reasoning_off?: boolean;
+}
+
+/** Profil + gorev birlesimi (gecerli ayar). */
+export interface LlmEffective {
+  profile_id: Uuid | null;
+  profile_name: string;
+  model: string;
+  max_tokens: number;
+  temperature: number | null;
+  timeout_ms: number;
+  reasoning_off: boolean;
+  batch: number;
+  enabled: boolean;
+  store_bodies: boolean;
+  /** 0 = koddaki istem. */
+  prompt_version: number;
+}
+
+/** Profil: model + parametre + dolar limitleri; gorevler buna baglanir. */
+export interface LlmProfileView {
+  id: Uuid;
+  name: string;
+  endpoint: LlmEndpoint;
+  model: string;
+  params: LlmParams;
+  effective: LlmEffective;
+  tested_at: string | null;
+  created_at: string;
+  updated_at: string;
+  updated_by: Uuid | null;
+  /** Bu profile bagli gorevler (sozlesme anahtarlari). */
+  used_by: LlmFeature[];
+  limits: LlmLimit[];
+  service_on: boolean;
+}
+
+export interface LlmProfileIn {
+  name: string;
+  model: string;
+  params: LlmParams;
+}
+
+/** Gorev: koddaki sozlesme + istem + hangi profil. */
+export interface LlmTaskView {
+  feature: LlmFeature;
+  label: string;
+  endpoint: LlmEndpoint;
+  has_prompt: boolean;
+  has_batch: boolean;
+  profile: { id: Uuid; name: string; model: string } | null;
+  /** Satirdaki parti (null = varsayilan). */
+  batch: number | null;
+  effective: LlmEffective;
+  updated_at: string | null;
+  updated_by: Uuid | null;
+  service_on: boolean;
+  sample_input: unknown;
+}
+
+export interface LlmTaskIn {
+  profile_id: Uuid;
+  batch?: number;
+  enabled: boolean;
+  store_bodies: boolean;
+}
+
+/** Dene: bir gorevi bir profille; model/params/batch/prompt_version taslak olabilir. */
+export interface LlmTryIn {
+  feature: LlmFeature;
+  profile_id: Uuid;
+  model?: string;
+  params?: LlmParams;
+  batch?: number;
+  prompt_version?: number;
+  input: unknown;
+}
+
+export interface LlmTrace {
+  call_id: Uuid | null;
+  status: LlmStatus;
+  http_status: number | null;
+  error: string | null;
+  ms: number;
+  prompt_tokens: number | null;
+  completion_tokens: number | null;
+  cost_usd: number | null;
+  or_gen_id: string | null;
+  asked: number | null;
+  kept: number | null;
+  outcome: string | null;
+}
+
+/** "Dene" cevabi: tam iz yalniz burada, saklanmaz. */
+export interface LlmTryOut {
+  ok: boolean;
+  model: string;
+  trace: LlmTrace | null;
+  output: unknown;
+  request: unknown;
+  raw: string | null;
+}
+
+export interface LlmPromptVersion {
+  version: number;
+  body: string;
+  created_by: Uuid | null;
+  created_at: string;
+}
+
+export interface LlmPromptsView {
+  feature: LlmFeature;
+  active: number;
+  code_default: string;
+  versions: LlmPromptVersion[];
+}
+
+export interface LlmLimit {
+  id: Uuid;
+  profile_id: Uuid;
+  profile_name: string;
+  window_minutes: number;
+  usd: number;
+  spent: number;
+  created_at: string;
+}
+
+export interface LlmDayRow {
+  day: IsoDate;
+  feature: string;
+  model: string;
+  calls: number;
+  errors: number;
+  limited: number;
+  prompt_tokens: number;
+  completion_tokens: number;
+  cost_usd: number;
+  unpriced: number;
+  ms_total: number;
+}
+
+export interface LlmUsageView {
+  from: IsoDate;
+  to: IsoDate;
+  /** Bu gunden onceki satirlar ozetten: kisi kirilimi yok. */
+  boundary: IsoDate;
+  rows: LlmDayRow[];
+  by_user: { user_id: Uuid | null; calls: number; errors: number; cost_usd: number }[];
+}
+
+export interface LlmCall {
+  id: Uuid;
+  created_at: string;
+  feature: string;
+  model: string;
+  user_id: Uuid | null;
+  event_id: Uuid | null;
+  is_try: boolean;
+  prompt_version: number | null;
+  status: LlmStatus;
+  http_status: number | null;
+  error: string | null;
+  ms: number;
+  prompt_tokens: number | null;
+  completion_tokens: number | null;
+  cost_usd: number | null;
+  or_gen_id: string | null;
+  batch_id: Uuid | null;
+  asked: number | null;
+  kept: number | null;
+  outcome: string | null;
+  has_body: boolean;
+}
+
+export interface LlmCallsView {
+  rows: LlmCall[];
+  total: number;
+  next: string | null;
+}
+
+export interface LlmCallDetail extends LlmCall {
+  request: unknown;
+  response: string | null;
+}
+
+export interface LlmStatusView {
+  key_configured: boolean;
+  external_off: string[];
+  services: { feature: LlmFeature; label: string; service: string; on: boolean; enabled: boolean }[];
+  calls: number;
+  bodies: number;
+  daily_rows: number;
+  oldest_call: string | null;
+  size_bytes: number;
+  retention_days: number;
+  body_ttl_days: number;
+  boundary: IsoDate;
+}
+
+export interface LlmKeyView {
+  off: boolean;
+  error: boolean;
+  fetched_at: string | null;
+  data: {
+    limit: number | null;
+    limit_remaining: number | null;
+    limit_reset: string | null;
+    usage: number | null;
+    usage_daily: number | null;
+    usage_weekly: number | null;
+    usage_monthly: number | null;
+    is_free_tier: boolean | null;
+  } | null;
+}
+
+export interface LlmModelInfo {
+  id: string;
+  name: string;
+  context_length: number | null;
+  /** USD / 1M jeton; null = onceden bilinmiyor. */
+  prompt_per_m: number | null;
+  completion_per_m: number | null;
+  structured_outputs: boolean;
+  response_format: boolean;
+  reasoning: boolean;
+}
+
+export interface LlmModelsView {
+  error: boolean;
+  fetched_at: string | null;
+  models: LlmModelInfo[];
+}
+
+/** Ortak suzgec (Genel, Analiz, Cagrilar). Bos = hepsi. */
+export interface LlmFilter {
+  from: IsoDate;
+  to: IsoDate;
+  feature: string;
+  model: string;
+  user: string;
+  status: "" | "ok" | "error" | "limit";
 }

@@ -11,7 +11,7 @@
 
 ## Karar modeli
 
-`POST https://openrouter.ai/api/alpha/decisions`, `OPENROUTER_API_KEY` ve manifestteki `decision_model` kullanır. Varsayılan model `respan/span-01-lite`; zaman aşımı 3 saniye. Yalnız `noul` soruları gönderilir; state düz metindir. Kayıt/etkinlikte sorular somut eylem/sonuç (`specific`) ve bağlam (`context`); kapanışta yapılan iş/sonuç/gerekçe (`closing_justified`). Herhangi bir sorunun evet olasılığı **kendi eşiğinin** (`min`, varsayılan 0.5) altındaysa API 422 `low_quality` ve başarısız soru kodları döndürür.
+`POST https://openrouter.ai/api/alpha/decisions`, `OPENROUTER_API_KEY` ve `quality_gate` görevinin bağlı olduğu profilin modeli kullanılır: Yönetim › Veri işleme ve LLM › Modeller ve görevler'den değişir (`llm_profiles`/`llm_tasks`); ilk açılışta "Karar" profili manifestteki `decision_model` ile oluşur. Varsayılan model `respan/span-01-lite`; zaman aşımı 3 saniye (profilde 1-20 sn). Her çağrı `llm_calls`'e yazılır (kim, karar, süre; maliyet cevapta yoksa bilinmiyor) ve profil başına dolar limitine tabidir: limit dolunca kapı **atlanır** (kullanıcı engellenmez), spec/79 §11. Yalnız `noul` soruları gönderilir; state düz metindir. Kayıt/etkinlikte sorular somut eylem/sonuç (`specific`) ve bağlam (`context`); kapanışta yapılan iş/sonuç/gerekçe (`closing_justified`). Herhangi bir sorunun evet olasılığı **kendi eşiğinin** (`min`, varsayılan 0.5) altındaysa API 422 `low_quality` ve başarısız soru kodları döndürür.
 
 ### Soru metinleri ve eşikler yönetimden ayarlanır
 
@@ -46,7 +46,7 @@ Başlık, açıklama ve kapanış notu kalite değerlendirmesi için cihazdan Op
 ## Yapılandırma
 
 - `OPENROUTER_API_KEY`: isteğe bağlı karar servisi anahtarı.
-- `backend/manifest.json`: `decision_model` (varsayılan `respan/span-01-lite`; soru metinleri ve eşikler DB'de, yukarıya bak), `external_off`, `version`, `contact_email` — gizli değil, şifreli dosyada tutulmaz.
+- `backend/manifest.json`: `decision_model` (yalnız ilk açılıştaki "Karar" profilinin modeli; yönetimden değişen model `llm_profiles`'ta, soru metinleri ve eşikler `quality_config`'te), `external_off`, `version`, `contact_email` — gizli değil, şifreli dosyada tutulmaz.
 
 ## Test
 

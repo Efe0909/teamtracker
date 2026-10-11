@@ -184,9 +184,17 @@ pub async fn meta(State(st): State<AppState>, CurrentUser(me): CurrentUser) -> R
         "select node_id from node_favorites where user_id = $1 order by created_at")
         .bind(me.id).fetch_all(&st.pool).await?;
 
+    // Yonetimden kapatilan LLM ozelligi de "kapali" gorunur: on yuz cizmesin (spec/79 §11).
+    let mut external_off = st.cfg.external_off_keys();
+    for s in crate::llm::disabled_services(&st.pool).await? {
+        if !external_off.contains(&s) {
+            external_off.push(s);
+        }
+    }
+
     Ok(Json(Meta {
         me: MeInfo { id: me.id, is_admin: me.is_admin, scopes, team_ids, profile_complete, favorite_nodes },
-        users, teams, pillars, nodes, external_off: st.cfg.external_off_keys(),
+        users, teams, pillars, nodes, external_off,
         version: st.cfg.version.clone(), contact_email: st.cfg.contact_email.clone(),
     }))
 }

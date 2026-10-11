@@ -50,6 +50,7 @@ import {
   Send,
   SlidersHorizontal,
   Smartphone,
+  Sparkles,
   Star,
   Sun,
   Trash2,
@@ -129,6 +130,8 @@ const ICONS = {
   prCritical: Signal,
   truck: Truck,
   send: Send,
+  // yapay zeka onerisi (ayri bir gorsel dil: silik kart, kıvılcım)
+  sparkles: Sparkles,
 } satisfies Record<string, LucideIcon>;
 
 export type IconName = keyof typeof ICONS;

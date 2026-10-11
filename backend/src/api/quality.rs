@@ -1,4 +1,4 @@
-//! Yonetim > Kalite kapisi: karar modelinin sorulari ve esikleri (spec/76).
+//! Yonetim > Veri isleme ve LLM > Kalite kapisi: karar modelinin sorulari ve esikleri (spec/76).
 //!
 //! YALNIZ admin (soru metni kayit/kapanis kararlarini degistirir). Soru adlari
 //! sabit; yalniz metin ve esik. Her yazma bellekteki kopyayi da gunceller, yeniden
@@ -105,5 +105,5 @@ pub async fn try_it(
         Some(c) => { c.validate().map_err(AppError::BadRequest)?; c }
         None => st.quality.read().unwrap_or_else(|e| e.into_inner()).clone(),
     };
-    Ok(Json(decision::try_with(&st, &cfg, b.kind, &b.state).await))
+    Ok(Json(decision::try_with(&st, me.id, &cfg, b.kind, &b.state).await))
 }

@@ -10,6 +10,25 @@ import { useRealtimeUp, useTopic, type RealtimeEvent } from "./realtime";
 import type {
   ActionPatch,
   AdminView,
+  LlmCallDetail,
+  LlmCallsView,
+  LlmConfig,
+  LlmConfigView,
+  LlmEndpoint,
+  LlmFeature,
+  LlmProfileIn,
+  LlmProfileView,
+  LlmTaskIn,
+  LlmTaskView,
+  LlmTryIn,
+  LlmFilter,
+  LlmKeyView,
+  LlmLimit,
+  LlmModelsView,
+  LlmPromptsView,
+  LlmStatusView,
+  LlmTryOut,
+  LlmUsageView,
   Quality,
   QualityConfig,
   QualityView,
@@ -21,6 +40,7 @@ import type {
   IsoDate,
   MaterialPatch,
   MaterialProvider,
+  MaterialSuggestions,
   ProviderPatch,
   NewEvent,
   OtfInput,
@@ -71,6 +91,7 @@ export const keys = {
   nodes: ["nodes"] as const,
   admin: ["admin"] as const,
   quality: ["admin", "quality"] as const,
+  llm: ["admin", "llm"] as const,
   tags: ["tags"] as const,
   events: ["events"] as const,
   event: (id: Uuid) => ["event", id] as const,
@@ -365,7 +386,9 @@ export const eventOps = {
   addWidget: (id: Uuid, type: WidgetType, record_id: Uuid | null = null): EventOp =>
     ({ method: "POST", path: `/api/events/${id}/widgets`, body: { type, record_id } }),
   dropWidget: (wid: Uuid): EventOp => ({ method: "DELETE", path: `/api/event-widgets/${wid}` }),
-  addMaterial: (id: Uuid, name: string): EventOp => ({ method: "POST", path: `/api/events/${id}/materials`, body: { name } }),
+  /** `notes`: kabul edilen önerinin açıklaması (isteğe bağlı). */
+  addMaterial: (id: Uuid, name: string, notes?: string): EventOp =>
+    ({ method: "POST", path: `/api/events/${id}/materials`, body: notes === undefined ? { name } : { name, notes } }),
   material: (mid: Uuid, p: MaterialPatch): EventOp => ({ method: "PATCH", path: `/api/materials/${mid}`, body: p }),
   dropMaterial: (mid: Uuid): EventOp => ({ method: "DELETE", path: `/api/materials/${mid}` }),
   addProvider: (mid: Uuid, p: Omit<MaterialProvider, "id" | "overage_level">): EventOp =>
@@ -385,6 +408,15 @@ export function useEventWrite() {
       void qc.invalidateQueries({ queryKey: keys.recordsAll });
       void qc.invalidateQueries({ queryKey: keys.record(d.record_id) });
     },
+  });
+}
+
+/** Bir parti malzeme önerisi (tek model çağrısı, ~9 öneri). Sunucu durumsuz: reddedilenler
+ *  istekle gider. Cache'e yazılmaz; parti `lib/suggestions.ts`'te oturum boyunca tutulur. */
+export function useMaterialSuggestions(eventId: Uuid) {
+  return useMutation({
+    mutationFn: (rejected: string[]) =>
+      request<MaterialSuggestions>("POST", `/api/events/${eventId}/material-suggestions`, { rejected }),
   });
 }
 
@@ -719,5 +751,167 @@ export function useQualityTry() {
   return useMutation({
     mutationFn: (b: { kind: "entry" | "closing"; state: string; config: QualityConfig }) =>
       request<Quality>("POST", "/api/admin/quality/try", b),
+  });
+}
+
+// --- Yonetim > Veri isleme ve LLM (admin ya da manage_llm, spec/79 §11) --------------
+
+const filterQs = (f: LlmFilter, cursor?: string) =>
+  qs({ from: f.from, to: f.to, feature: f.feature, model: f.model, user: f.user, status: f.status, cursor });
+
+export function useLlmStatus() {
+  return useQuery({ queryKey: [...keys.llm, "status"], queryFn: () => request<LlmStatusView>("GET", "/api/admin/llm/status") });
+}
+
+export function useLlmUsage(f: LlmFilter) {
+  return useQuery({
+    queryKey: [...keys.llm, "usage", f],
+    queryFn: () => request<LlmUsageView>("GET", `/api/admin/llm/usage${filterQs(f)}`),
+  });
+}
+
+export function useLlmCalls(f: LlmFilter, cursor: string | undefined) {
+  return useQuery({
+    queryKey: [...keys.llm, "calls", f, cursor ?? ""],
+    queryFn: () => request<LlmCallsView>("GET", `/api/admin/llm/calls${filterQs(f, cursor)}`),
+  });
+}
+
+export function useLlmCall(id: Uuid | null) {
+  return useQuery({
+    queryKey: [...keys.llm, "call", id],
+    queryFn: () => request<LlmCallDetail>("GET", `/api/admin/llm/calls/${id ?? ""}`),
+    enabled: id !== null,
+  });
+}
+
+/** OpenRouter anahtar kullanimi; sunucu 5 dk onbellekler. `refresh` onbellegi atar. */
+export function useLlmKey(refresh: number) {
+  return useQuery({
+    queryKey: [...keys.llm, "key", refresh],
+    queryFn: () => request<LlmKeyView>("GET", `/api/admin/llm/key${refresh > 0 ? "?refresh=1" : ""}`),
+  });
+}
+
+/** OpenRouter model listesi; sunucu 1 saat onbellekler. */
+export function useLlmModels(refresh: number) {
+  return useQuery({
+    queryKey: [...keys.llm, "models", refresh],
+    queryFn: () => request<LlmModelsView>("GET", `/api/admin/llm/models${refresh > 0 ? "?refresh=1" : ""}`),
+    staleTime: 3_600_000,
+  });
+}
+
+// Profil ve gorev yazmalari birbirini etkiler (gorev profilin modelini gosterir, profil
+// kullanan gorevleri listeler): ikisi de yazilinca LLM onbellegi butunuyle tazelenir.
+const invalidateLlm = (qc: QueryClient) => void qc.invalidateQueries({ queryKey: keys.llm });
+
+export function useLlmProfiles() {
+  return useQuery({ queryKey: [...keys.llm, "profiles"], queryFn: () => request<LlmProfileView[]>("GET", "/api/admin/llm/profiles") });
+}
+
+export function useLlmProfile(id: Uuid) {
+  return useQuery({ queryKey: [...keys.llm, "profile", id], queryFn: () => request<LlmProfileView>("GET", `/api/admin/llm/profiles/${id}`) });
+}
+
+export function useLlmProfileWrite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (
+      op: { create: LlmProfileIn & { endpoint: LlmEndpoint } } | { put: Uuid; body: LlmProfileIn } | { remove: Uuid },
+    ): Promise<LlmProfileView | LlmProfileView[]> =>
+      "create" in op ? request<LlmProfileView>("POST", "/api/admin/llm/profiles", op.create)
+        : "put" in op ? request<LlmProfileView>("PUT", `/api/admin/llm/profiles/${op.put}`, op.body)
+        : request<LlmProfileView[]>("DELETE", `/api/admin/llm/profiles/${op.remove}`),
+    onSuccess: () => invalidateLlm(qc),
+  });
+}
+
+export function useLlmTasks() {
+  return useQuery({ queryKey: [...keys.llm, "tasks"], queryFn: () => request<LlmTaskView[]>("GET", "/api/admin/llm/tasks") });
+}
+
+export function useLlmTask(feature: LlmFeature) {
+  return useQuery({ queryKey: [...keys.llm, "task", feature], queryFn: () => request<LlmTaskView>("GET", `/api/admin/llm/tasks/${feature}`) });
+}
+
+export function useLlmTaskWrite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ feature, body }: { feature: LlmFeature; body: LlmTaskIn }) =>
+      request<LlmTaskView>("PUT", `/api/admin/llm/tasks/${feature}`, body),
+    onSuccess: () => invalidateLlm(qc),
+  });
+}
+
+export function useLlmTry() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (b: LlmTryIn) => request<LlmTryOut>("POST", "/api/admin/llm/try", b),
+    // Dene de bir cagri: gecmis ve maliyet tazelensin (ayar formlari yerinde kalsin).
+    onSettled: () => void qc.invalidateQueries({
+      queryKey: keys.llm, predicate: (q) => ["usage", "calls", "status", "limits"].includes(String(q.queryKey[2])),
+    }),
+  });
+}
+
+export function useLlmPrompts(feature: LlmFeature) {
+  return useQuery({
+    queryKey: [...keys.llm, "prompts", feature],
+    queryFn: () => request<LlmPromptsView>("GET", `/api/admin/llm/prompts/${feature}`),
+  });
+}
+
+export function useLlmPromptWrite(feature: LlmFeature) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (op: { add: string } | { activate: number }) =>
+      "add" in op
+        ? request<LlmPromptsView>("POST", `/api/admin/llm/prompts/${feature}`, { body: op.add })
+        : request<LlmPromptsView>("PUT", `/api/admin/llm/prompts/${feature}/active`, { version: op.activate }),
+    onSuccess: (v) => {
+      qc.setQueryData([...keys.llm, "prompts", feature], v);
+      void qc.invalidateQueries({ queryKey: [...keys.llm, "task", feature] });
+      void qc.invalidateQueries({ queryKey: [...keys.llm, "tasks"] });
+    },
+  });
+}
+
+/** Butun limitler (Genel'deki "en dolu limitler"). */
+export function useLlmLimits() {
+  return useQuery({ queryKey: [...keys.llm, "limits"], queryFn: () => request<LlmLimit[]>("GET", "/api/admin/llm/limits") });
+}
+
+/** Profil limitleri: ekle (ayni pencere guncellenir) ya da sil; cevap profilin guncel hali. */
+export function useLlmLimitWrite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (op: { profile: Uuid; window_minutes: number; usd: number } | { remove: Uuid }) =>
+      "remove" in op
+        ? request<LlmProfileView>("DELETE", `/api/admin/llm/limits/${op.remove}`)
+        : request<LlmProfileView>("POST", `/api/admin/llm/profiles/${op.profile}/limits`,
+            { window_minutes: op.window_minutes, usd: op.usd }),
+    onSuccess: () => invalidateLlm(qc),
+  });
+}
+
+/** Temizleyici denemesi: metin modele gitmez, yalniz temizlenmis hali doner. */
+export function useLlmRedactTry() {
+  return useMutation({
+    mutationFn: (b: { text: string; config: LlmConfig }) => request<{ text: string }>("POST", "/api/admin/llm/redact-try", b),
+  });
+}
+
+/** Temizleme kurallari (`/api/admin/llm`); null = varsayilana don. */
+export function useLlmConfig() {
+  return useQuery({ queryKey: [...keys.llm, "config"], queryFn: () => request<LlmConfigView>("GET", "/api/admin/llm") });
+}
+
+export function useLlmConfigWrite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (cfg: LlmConfig | null) =>
+      cfg === null ? request<LlmConfigView>("DELETE", "/api/admin/llm") : request<LlmConfigView>("PUT", "/api/admin/llm", cfg),
+    onSuccess: (v) => qc.setQueryData([...keys.llm, "config"], v),
   });
 }

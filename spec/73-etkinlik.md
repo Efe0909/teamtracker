@@ -292,8 +292,11 @@ Yeni widget türü tanımlandıkça ilgili türlerin şablonuna eklenir.
 - **Başlık noktası**: "Gerekli mi?" adımını geçmiş ve elde olmayan malzemelere bakar.
   Hepsi onaylı → yeşil · kritik bekleyen var → kırmızı · başka bekleyen var → turuncu ·
   hiçbiri yok → gri. Yanında toplam, onaylı tutar ve son güncelleme (`max(updated_at)`).
-- **Pano** (varsayılan) ya da **liste**. Pano sütunları: Gerekli mi? (karar bekleyen ve
-  tedarikçi aranan) · Tedarikçi bulundu · Onaylandı; "zaten var" kalem Onaylandı'da
+- **Pano** (varsayılan) ya da **liste**. Pano sütunları: **Planlanan** (`state` 0) ·
+  **Tedarikçi aranıyor** (1 ve 2: tedarikçi bulunsa da onay gelene kadar aranıyor sayılır;
+  kartın etiketi aranıyor/bulundu ayrımını gösterir) · **Onaylandı** (3). Sütuna
+  bırakınca yazılan `state`: Planlanan 0, Onaylandı 3, ortadaki sütun teklifi olan kalem
+  için 2, olmayan için 1 (zaten ortadaki kalem değişmez). "Zaten var" kalem Onaylandı'da
   ev ikonuyla durur, toplama girmez. Kart sütunlar arasında sürüklenir (`state` yazar);
   altta **sponsor şeridi**: oraya bırakmak kalemi yerinden almaz, `has_sponsor`
   koyar (kopyası şeritte ad + öncelik olarak görünür). Karta/satıra basınca aynı
@@ -330,8 +333,10 @@ Eski formatta, geç ya da kurala uymayan OTF işleme alınmaz.
   yapar: `{{anahtar}}` → değer, işaretli kutu → ☒. Yayında Python yok.
   Üniversite yeni sürüm yayınlarsa araç yeniden koşar; etiket eşleşmezse durur.
   `otf.rs` testleri her anahtarın şablonda olduğunu doğrular.
-- **Veri:** `event_otf` (amaç, bitiş saati, danışman, yaş grubu, kazanımlar,
-  altı bölüm açıklaması), `event_otf_items` (işaretli kutu + isteğe bağlı adet),
+- **Veri:** `event_otf` (amaç, bitiş saati, danışman, yaş grubu, serbest metin
+  kazanımlar, altı bölüm açıklaması), `event_otf_outcomes` (Etkinlik
+  Kazanımları listesinden seçilenler, n:m; Word'de adları serbest metinden önce
+  yazılır — spec/74 §3b), `event_otf_items` (işaretli kutu + isteğe bağlı adet),
   `event_otf_contacts` (en çok 3 sorumlu; telefon profilden). Etkinlikten
   gelenler (ad, tarih, başlangıç saati, yer, katılımcı sayısı) **tekrar tutulmaz**,
   dosya üretilirken okunur.
@@ -398,6 +403,13 @@ Eski formatta, geç ya da kurala uymayan OTF işleme alınmaz.
   `POST /api/checkpoint-requests/{id}`, `DELETE /api/event-widgets/{id}`,
   `PATCH/DELETE /api/materials/{id}`, `POST /api/materials/{id}/providers`,
   `DELETE /api/material-providers/{id}`. Yazma uçları güncel ayrıntıyı döner.
+
+## 6b. LLM yükü — kişisel ve kurumsal veri içermeyen etkinlik JSON'u
+
+Satın alma önerisi ve üye maili taslağı gibi işler için modele, kişisel ve kurumsal veri
+içermeyen etkinlik JSON'u verilir: `GET /api/events/{id}/llm-context`, `POST …/llm-restore`,
+`GET/PUT/DELETE /api/admin/llm`. Değişmezler, yük şeması, temizleyici ve kararlar
+**`79-llm-yuku.md`**'de.
 
 ## 6a. Açık sorular
 

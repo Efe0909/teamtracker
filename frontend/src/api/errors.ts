@@ -77,6 +77,7 @@ export type ApiErrorCode =
   | "invalid_contact"
   | "invalid_price"
   | "invalid_budget"
+  | "xlsx_template"
   | "invalid_qty"
   | "invalid_provider"
   | "no_sponsor"
@@ -84,6 +85,7 @@ export type ApiErrorCode =
   | "not_approved"
   | "purchased_locked"
   | "invalid_otf_item"
+  | "invalid_outcome"
   | "invalid_quantity"
   | "too_many_contacts"
   | "otf_template"
@@ -92,6 +94,7 @@ export type ApiErrorCode =
   | "otf_unreviewed"
   | "root_locked"
   | "operational_locked"
+  | "name_locked"
   | "shape_violation"
   | "type_not_allowed"
   | "invalid_attrs"
@@ -115,6 +118,23 @@ export type ApiErrorCode =
   | "quality_questions_mismatch"
   | "quality_text_invalid"
   | "quality_min_invalid"
+  | "free_text_disabled"
+  | "suggest_unavailable"
+  | "suggest_limit"
+  | "llm_service_off"
+  | "llm_model_invalid"
+  | "llm_model_untested"
+  | "llm_params_invalid"
+  | "llm_limit_invalid"
+  | "llm_prompt_invalid"
+  | "llm_prompt_untested"
+  | "llm_profile_name_invalid"
+  | "llm_profile_name_taken"
+  | "llm_profile_in_use"
+  | "llm_profile_mismatch"
+  | "llm_profile_untested"
+  | "invalid_date"
+  | "invalid_filter"
   | "low_quality";
 
 export const ERRORS = {
@@ -190,6 +210,7 @@ export const ERRORS = {
   invalid_contact: "Tedarikçi boş olamaz ve 300 karakteri aşamaz.",
   invalid_price: "Fiyat geçersiz.",
   invalid_budget: "Bütçe 0'dan büyük olmalı; boş bırakmak bütçeyi siler.",
+  xlsx_template: "Excel dosyası hazırlanamadı. Sunucu kaydı bakılmalı.",
   invalid_qty: "Adet 1 ile 1.000.000 arasında olmalı.",
   invalid_provider: "Seçilen teklif bu kaleme ait değil. Sayfayı yenile.",
   no_sponsor: "Önce kalemi sponsordan iste.",
@@ -197,6 +218,7 @@ export const ERRORS = {
   not_approved: "Önce kalemi Onaylandı adımına getir.",
   purchased_locked: "Maliye satın alındı olarak işaretlemiş. Tedariği değiştirmek için önce o işaret kaldırılmalı.",
   invalid_otf_item: "Formda olmayan bir kalem seçildi. Sayfayı yenile.",
+  invalid_outcome: "Seçilen kazanım listede yok ya da kapatılmış. Sayfayı yenile.",
   invalid_quantity: "Adet 1 ile 10000 arasında olmalı.",
   too_many_contacts: "Formda en çok 3 etkinlik sorumlusu yer alır.",
   otf_template: "Form şablonu okunamadı. Yöneticiye haber ver.",
@@ -205,6 +227,7 @@ export const ERRORS = {
   otf_unreviewed: "Form başka bir etkinlikten kopyalandı; indirmeden önce gözden geçirip işaretle.",
   root_locked: "Kök düğümler kodla gelir: yalnız adı ve açıklaması değişir; taşınamaz, kapatılamaz, silinemez.",
   operational_locked: "Bu düğüm sistemin yapısının parçası: yalnız adı ve açıklaması değişir.",
+  name_locked: "Bu düğümün adı koddan gelir ve değişmez (Adımlar, Widget'lar, widget'lar); açıklaması değişebilir.",
   shape_violation: "Bu düğümün yapısına uymuyor (yaprak düğüme alt düğüm eklenemez; listede bütün öğeler aynı türde olmalı).",
   type_not_allowed: "Bu tür buraya eklenemez ya da taşınamaz.",
   invalid_attrs: "Düğüm ayarları geçersiz.",
@@ -228,6 +251,23 @@ export const ERRORS = {
   quality_questions_mismatch: "Soru listesi bozuk: üç soru da bulunmalı.",
   quality_text_invalid: "Sorular ve ölçütler boş olamaz; soru en çok 3000, ölçüt en çok 400 karakter.",
   quality_min_invalid: "Eşik 0,05 ile 0,95 arasında olmalı.",
+  free_text_disabled: "Serbest metni yapay zekâya göndermek yönetimden kapatılmış.",
+  suggest_unavailable: "Öneri servisi şu an kullanılamıyor.",
+  suggest_limit: "Yapay zekâ harcama limiti doldu. Biraz sonra tekrar dene ya da yöneticiye haber ver.",
+  llm_service_off: "Yapay zekâ servisi kapalı (anahtar yok ya da manifestte kapatılmış): deneme yapılamaz.",
+  llm_model_invalid: "Model adı geçersiz. OpenRouter biçiminde yaz: sağlayıcı/model.",
+  llm_model_untested: "Bu modeli kaydetmeden önce son 30 dakika içinde başarılı bir “Dene” yapılmalı.",
+  llm_params_invalid: "Parametrelerden biri sınır dışında.",
+  llm_limit_invalid: "Limit geçersiz: pencere 15 dakika ile 31 gün, tutar 0'dan büyük olmalı.",
+  llm_prompt_invalid: "İstem boş, çok uzun ya da böyle bir sürüm yok.",
+  llm_prompt_untested: "Bu istemi etkinleştirmeden önce son 30 dakika içinde onunla başarılı bir “Dene” yapılmalı.",
+  llm_profile_name_invalid: "Profil adı boş olamaz, en çok 60 karakter.",
+  llm_profile_name_taken: "Bu adda bir profil zaten var.",
+  llm_profile_in_use: "Bu profili kullanan görevler var. Önce onları başka profile bağla.",
+  llm_profile_mismatch: "Görev bu profili kullanamaz: türleri farklı (sohbet / karar).",
+  llm_profile_untested: "Görevi bu profile bağlamadan önce son 30 dakika içinde bu görevle başarılı bir “Dene” yapılmalı.",
+  invalid_date: "Tarih aralığı geçersiz.",
+  invalid_filter: "Süzgeç geçersiz.",
   low_quality: "Metin yeterli bilgi içermiyor.",
 } satisfies Record<ApiErrorCode, string>;
 

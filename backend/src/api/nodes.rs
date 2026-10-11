@@ -8,9 +8,10 @@
 //! Yazma uclari agacin GUNCEL halini dondurur: on yuz ikinci bir GET atmaz.
 //! Her yazma sonrasi `rebuild_tree` — kismi guncelleme YOK (KNOW-179).
 //!
-//! YETKI kok semasina gore (`NodeAccess::node`): Birimler `edit_nodes` + dal
+//! YETKI bolum semasina gore (`NodeAccess::node`): Birimler `edit_nodes` + dal
 //! izni, Etkinlik Turleri `manage_event_types`, Etkinlik Yerleri
-//! `manage_event_locations`. Okuma herkese acik.
+//! `manage_event_locations`, Etkinlik Kazanimlari `manage_event_outcomes`,
+//! Etkinlik Yonetimi'nin kendisi yalniz admin. Okuma herkese acik.
 
 use std::collections::HashMap;
 
@@ -98,7 +99,7 @@ pub async fn tree(State(st): State<AppState>, CurrentUser(me): CurrentUser) -> R
 }
 
 fn locked(n: &crate::db::tree::Node) -> Option<&'static str> {
-    if n.key.is_some() {
+    if n.parent_id.is_none() && n.key.is_some() {
         Some("root")
     } else if n.node_type == NodeType::Operational {
         Some("operational")
@@ -278,6 +279,8 @@ pub async fn create(
         (node_type, shape, parent.name.clone())
     };
     let attrs = attrs_for(node_type, b.attrs)?;
+    // Adi koddan belli dugum (widget): istekteki ad yok sayilir, katalog adi yazilir.
+    let name = fixed_name_for(node_type, &attrs).unwrap_or(name);
 
     let mut tx = st.pool.begin().await?;
     // Kardeslerin SONUNA: sira elle verilmiyor, ekleme sirasi korunuyor.
@@ -303,6 +306,11 @@ pub async fn create(
     tx.commit().await?;
     st.rebuild_tree().await?;
     Ok(Json(view(&st, &access).await?))
+}
+
+/// Yeni/degisen widget'in sabit adi (attrs.widget'tan); baska turde None.
+fn fixed_name_for(t: NodeType, attrs: &Value) -> Option<String> {
+    (t == NodeType::Widget).then(|| refdata::widget_label_of(attrs)).flatten().map(String::from)
 }
 
 /// Tetikleyicinin `shape_violation` istisnasi anlasilir koda.
@@ -367,6 +375,13 @@ pub async fn patch(
         if !access.node(&tree, id, NodeScope::Edit) {
             return Err(AppError::Forbidden);
         }
+        // Sabit adli dugum (slot, widget): ad degismez; widget'in turu degisirse
+        // ad yeni katalog adina doner (asagida), elle yazilan ad reddedilir.
+        if let (Some(fixed), Some(wanted)) = (refdata::fixed_name(node), name.as_ref()) {
+            if *wanted != fixed {
+                return Err(AppError::Conflict("name_locked"));
+            }
+        }
         let next = Next {
             name: name.unwrap_or_else(|| node.name.clone()),
             node_type: new_type.unwrap_or(node.node_type),
@@ -379,6 +394,13 @@ pub async fn patch(
                 None => node.attrs.clone(),
             },
         };
+        // Widget'in turu degisti: ad yeni katalog adi.
+        let mut next = next;
+        if next.attrs != node.attrs {
+            if let Some(n) = fixed_name_for(next.node_type, &next.attrs) {
+                next.name = n;
+            }
+        }
         if next.name != node.name && node.node_type != NodeType::Operational {
             check_name(&next.name)?;
         }
@@ -398,7 +420,7 @@ pub async fn patch(
             if !access.node(&tree, target, NodeScope::Edit) {
                 return Err(AppError::Forbidden);
             }
-            if t.root != node.root {
+            if tree.root_key(target) != tree.root_key(id) {
                 return Err(AppError::BadRequest("type_not_allowed"));
             }
             if !t.is_active {

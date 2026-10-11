@@ -28,6 +28,7 @@ function toInput(v: OtfView): OtfInput {
     host_notes: v.host_notes, care_notes: v.care_notes, other_notes: v.other_notes,
     items: [...v.items].sort((a, b) => a.item.localeCompare(b.item)),
     contacts: v.contacts,
+    outcome_ids: v.outcome_ids,
   };
 }
 
@@ -93,6 +94,12 @@ function Form({ eventId, event, canEdit, view }: { eventId: Uuid; event: EventDe
     if (id === null) contacts.splice(at, 1);
     else contacts[at] = id;
     return { ...d, contacts };
+  });
+  // Kazanim secimi: liste sirasinda tutulur (kirli karsilastirmasi ve sunucu sirasi ayni).
+  const toggleOutcome = (id: Uuid) => setDraft((d) => {
+    const on = new Set(d.outcome_ids);
+    if (!on.delete(id)) on.add(id);
+    return { ...d, outcome_ids: view.outcome_options.map((o) => o.id).filter((x) => on.has(x)) };
   });
   const copy = (text: string) => {
     void navigator.clipboard.writeText(text).then(
@@ -223,7 +230,28 @@ function Form({ eventId, event, canEdit, view }: { eventId: Uuid; event: EventDe
             {text("advisor", "Danışman / Konuşmacı")}
             {text("age_group", "Katılımcı yaş grubu")}
           </div>
-          {text("outcomes", "Kazanımlar", true)}
+          <fieldset className={cx(ui.field, s.otfSection)}>
+            <legend>Kazanımlar</legend>
+            {view.outcome_options.length === 0 ? (
+              <span className={r.muted}>Listede kazanım yok. Veri Yönetimi › Etkinlik Kazanımları'ndan eklenir.</span>
+            ) : (
+              <div className={s.otfItems}>
+                {view.outcome_options.map((o) => {
+                  const on = draft.outcome_ids.includes(o.id);
+                  return (
+                    <span key={o.id} className={s.otfItem} data-on={on} title={o.description ?? undefined}>
+                      <label>
+                        <input type="checkbox" checked={on} disabled={ro} onChange={() => toggleOutcome(o.id)} />
+                        {o.name}{!o.is_active && " (kapalı)"}
+                      </label>
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+            {text("outcomes", "Listede olmayan kazanımlar (serbest metin)", true)}
+            <span className={ui.fieldHint}>Seçilenler ve yazılanlar Word'de alt alta kazanımlar alanına girer.</span>
+          </fieldset>
 
           {view.catalog.map((sec) => (
             <fieldset key={sec.key} className={cx(ui.field, s.otfSection)}>

@@ -25,7 +25,11 @@ docker exec -i ekiptakip-db psql -U ekiptakip -d "$ID" -q -v ON_ERROR_STOP=1 <se
 kill $(cat "$S/pids"); : >"$S/pids"; sleep 0.5
 start 18099 EKIPTAKIP_AUTH=sahte
 start 18100 GOOGLE_CLIENT_ID=test-client GOOGLE_CLIENT_SECRET=test-secret
-B=http://127.0.0.1:18099 BG=http://127.0.0.1:18100 \
+# LLM cagri yolu (spec/79 §11): sahte OpenRouter + anahtarli ucuncu surec. Gercek anahtar yok.
+python3 tools/openrouter_stub.py 18101 >"$S/stub.log" 2>&1 &
+echo $! >>"$S/pids"; disown
+start 18102 EKIPTAKIP_AUTH=sahte OPENROUTER_API_KEY=stub-key EKIPTAKIP_OPENROUTER_URL=http://127.0.0.1:18101
+B=http://127.0.0.1:18099 BG=http://127.0.0.1:18100 BL=http://127.0.0.1:18102 \
   PSQL="docker exec ekiptakip-db psql -U ekiptakip -d $ID" bash tools/check_api.sh
 rc=$?
 kill $(cat "$S/pids") 2>/dev/null

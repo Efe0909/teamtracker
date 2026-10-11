@@ -12,6 +12,8 @@ mod chats;
 mod common;
 mod events;
 mod home;
+mod llm;
+mod llm_usage;
 mod meta;
 mod nodes;
 mod notify;
@@ -70,6 +72,9 @@ pub fn router() -> Router<AppState> {
         .route("/api/events/{id}/checkpoints", post(events::add_checkpoint))
         .route("/api/events/{id}/widgets", post(events::add_widget))
         .route("/api/events/{id}/materials", post(events::add_material))
+        .route("/api/events/{id}/llm-context", get(events::llm_context))
+        .route("/api/events/{id}/llm-restore", post(events::llm_restore))
+        .route("/api/events/{id}/material-suggestions", post(events::material_suggestions))
         .route("/api/events/{id}/otf", get(otf::get).put(otf::put))
         .route("/api/events/{id}/otf/autofill", post(otf::autofill))
         .route("/api/events/{id}/otf.docx", get(otf::docx))
@@ -82,6 +87,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/materials/{id}/providers", post(events::add_provider))
         .route("/api/material-providers/{id}", patch(events::patch_provider).delete(events::delete_provider))
         .route("/api/materials/{id}/purchased", patch(events::set_purchased))
+        .route("/api/events/{id}/purchases.xlsx", get(events::purchases_xlsx))
         .route("/api/chats/{id}/feed", get(chats::feed))
         .route("/api/chats/{id}/messages", post(chats::post))
         .route("/api/chats/inbox", get(chats::inbox))
@@ -117,6 +123,26 @@ pub fn router() -> Router<AppState> {
         .route("/api/admin/activity", get(admin::activity))
         .route("/api/admin/quality", get(quality::get).put(quality::put).delete(quality::reset))
         .route("/api/admin/quality/try", post(quality::try_it))
+        .route("/api/admin/llm", get(llm::get).put(llm::put).delete(llm::reset))
+        // Yonetim > Veri isleme ve LLM (spec/79 §11): admin ya da manage_llm.
+        .route("/api/admin/llm/redact-try", post(llm::redact_try))
+        .route("/api/admin/llm/status", get(llm_usage::status))
+        .route("/api/admin/llm/usage", get(llm_usage::usage))
+        .route("/api/admin/llm/calls", get(llm_usage::calls))
+        .route("/api/admin/llm/calls/{id}", get(llm_usage::call))
+        .route("/api/admin/llm/key", get(llm_usage::key))
+        .route("/api/admin/llm/models", get(llm_usage::models))
+        .route("/api/admin/llm/profiles", get(llm::list_profiles).post(llm::create_profile))
+        .route("/api/admin/llm/profiles/{id}",
+            get(llm::get_profile).put(llm::put_profile).delete(llm::delete_profile))
+        .route("/api/admin/llm/profiles/{id}/limits", post(llm::put_limit))
+        .route("/api/admin/llm/limits", get(llm::list_limits))
+        .route("/api/admin/llm/limits/{id}", delete(llm::delete_limit))
+        .route("/api/admin/llm/tasks", get(llm::list_tasks))
+        .route("/api/admin/llm/tasks/{feature}", get(llm::get_task).put(llm::put_task))
+        .route("/api/admin/llm/try", post(llm::try_it))
+        .route("/api/admin/llm/prompts/{feature}", get(llm::get_prompts).post(llm::add_prompt))
+        .route("/api/admin/llm/prompts/{feature}/active", put(llm::activate_prompt))
         .route("/api/admin/users", post(admin::add_user))
         .route("/api/admin/users/{id}", patch(admin::patch_user))
         .route("/api/admin/roles", post(admin::create_role))

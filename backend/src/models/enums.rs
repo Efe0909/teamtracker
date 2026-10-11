@@ -53,13 +53,15 @@ sql_enum!(
     /// yapisal bir seviye, digeri kaydin turu.
     /// Hangi turun nerede olabilecegini KOK SEMASI soyler (src/refdata.rs,
     /// spec/74): Birimler'de cell/machine/task/step/generic, Etkinlik
-    /// Turleri'nde option/checkpoint/widget, Etkinlik Yerleri'nde location.
+    /// Turleri'nde option/checkpoint/widget, Etkinlik Yerleri'nde location,
+    /// Etkinlik Kazanimlari'nda outcome.
     /// `operational` = kodun yarattigi slot (kokler + otomatik slotlar).
     NodeType {
         Cell => "cell", Machine => "machine",
         Task => "task", Step => "step", Operational => "operational", Generic => "generic",
         // `option` Rust'ta Choice: `Option` adi derive kodundaki std Option'u golgeler.
         Choice => "option", Checkpoint => "checkpoint", Widget => "widget", Location => "location",
+        Outcome => "outcome",
     }
 );
 

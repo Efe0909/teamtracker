@@ -256,6 +256,23 @@ her `403`'ü tek yerden yazar (Python'daki tek exception handler'ın karşılı�
 (`csrf: /yol` vs `METOD /yol`, sorgu dizgisi yazılmaz). Yalnız oturumlu red yazılır. Sözleşme
 testi: `backend/tools/check_api.sh` `csrf_gate` ve `record_permissions` bölümleri.
 
+**Yönetim ayarları (göç 024, 2026-10-10).** Tür listesi bir CHECK kısıtıdır. 001'deki liste
+`quality_config_changed/_reset` ve `llm_config_changed/_reset`'i tanımıyordu: bu yazmalar
+kısıtta düşüyor, `audit::log_event` hatayı yalnız loga yazdığı için istek yine geçiyordu
+(kalite ve temizleme ayarı değişiklikleri hiç iz bırakmadı). 024 listeyi koddaki her türü
+kapsayacak biçimde genişletti ve LLM yönetim olaylarını ekledi: `llm_profile_changed`
+(ayrıntı: profil adı + model), `llm_task_changed` (görev → profil adı), `llm_prompt_changed` (özellik + sürüm), `llm_limit_changed`
+(profil + pencere + tutar), `llm_bodies_on/off` (görev). Yeni bir tür eklemek = göçte
+kısıtı genişletmek; `check_api.sh` en az bir yazmayı tabloda arar.
+
+**LLM çağrı kaydı (spec/79 §11).** `llm_calls`: kim, hangi özellik/model, durum, süre, jeton,
+maliyet; istem ve cevap **yok**. 180 gün sonra silinir; gün × özellik × model toplamı
+(`llm_usage_daily`, kişi yok) kalıcıdır. Gövde (`llm_call_bodies`: modele giden istek ve
+cevap) **varsayılan kapalı**; özellik başına yönetimden açılır, amaç hata ayıklama, 7 gün sonra
+silinir, açma/kapama denetim izine yazılır. Öneri isteği temizlenmiş haliyle saklanır; kalite
+kapısının isteği kaydın ham başlık + açıklamasıdır (DB'de zaten duran metnin 7 günlük kopyası).
+Silme işi `main.rs` günlük süpürmesinde (`llm::sweep`).
+
 ---
 
 ## 9. Yayın katmanının payı

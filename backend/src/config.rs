@@ -49,6 +49,13 @@ pub struct Config {
     /// Karar modeli (spec/76): anahtar bos ise kalite kontrolu KAPALI.
     pub decision_key: String,
     pub decision_model: String,
+    /// Malzeme onerisi modeli (spec/79 §9); ayni `OPENROUTER_API_KEY`.
+    /// Yalniz ilk acilistaki "Genel amacli" profilin modeli (`llm::ensure_defaults`, spec/79 §11).
+    pub suggest_model: String,
+    /// OpenRouter kok adresi. YALNIZ gelistirmede `EKIPTAKIP_OPENROUTER_URL` ile
+    /// degisir (yerel sozlesme testinin sahte sunucusu, `tools/openrouter_stub.py`);
+    /// yayinda her zaman gercek adres: anahtar baska bir yere gonderilemez.
+    pub openrouter_url: String,
     /// Manifest `external_off`: elle kapatilan dis servisler (KNOW-358).
     pub external_off: Vec<String>,
 
@@ -60,14 +67,17 @@ pub struct Config {
 }
 
 /// Dis servisler. Kapali olan ya azalir (decision: yalniz uzunluk kurali)
-/// ya da hic calismaz (resend: kuyrukta bekler, push: liste calisir).
+/// ya da hic calismaz (resend: kuyrukta bekler, push: liste calisir, suggest: oneri cikmaz).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Service { Decision, Resend, Push }
+pub enum Service { Decision, Resend, Push, Suggest }
 
 impl Service {
-    pub const ALL: [Service; 3] = [Service::Decision, Service::Resend, Service::Push];
+    pub const ALL: [Service; 4] = [Service::Decision, Service::Resend, Service::Push, Service::Suggest];
     pub fn key(self) -> &'static str {
-        match self { Service::Decision => "decision", Service::Resend => "resend", Service::Push => "push" }
+        match self {
+            Service::Decision => "decision", Service::Resend => "resend", Service::Push => "push",
+            Service::Suggest => "suggest",
+        }
     }
 }
 
@@ -85,12 +95,20 @@ pub struct Manifest {
     pub version: String,
     /// Gelistirici iletisimi: web push `sub` varsayilani ve kisisel veri notundaki adres.
     pub contact_email: String,
-    /// `all` ya da `decision` | `resend` | `push`; bilinmeyen ad acilisi durdurur.
+    /// `all` ya da `decision` | `resend` | `push` | `suggest`; bilinmeyen ad acilisi durdurur.
     pub external_off: Vec<String>,
     pub decision_model: String,
+    /// Varsayilanli: alan sonradan geldi, ~/nix'teki mevcut manifest bilmiyor; zorunlu olsa acilis duserdi.
+    #[serde(default = "default_suggest_model")]
+    pub suggest_model: String,
+}
+
+fn default_suggest_model() -> String {
+    "deepseek/deepseek-v4.1-flash".into()
 }
 
 const EMBEDDED_MANIFEST: &str = include_str!("../manifest.json");
+const OPENROUTER_URL: &str = "https://openrouter.ai";
 
 impl Manifest {
     pub fn load() -> Result<Self, String> {
@@ -196,6 +214,11 @@ impl Config {
                 .unwrap_or_else(|| "OZUMAKER".into()),
             decision_key: var("OPENROUTER_API_KEY"),
             decision_model: manifest.decision_model,
+            suggest_model: manifest.suggest_model,
+            openrouter_url: match var("EKIPTAKIP_OPENROUTER_URL").trim_end_matches('/') {
+                url if !url.is_empty() && env == Env::Development => url.to_string(),
+                _ => OPENROUTER_URL.into(),
+            },
             external_off: manifest.external_off,
             version: manifest.version,
             contact_email: manifest.contact_email,
@@ -206,7 +229,8 @@ impl Config {
     /// TEK KAPI: servis listede degil VE anahtari/yapilandirmasi var.
     pub fn external_on(&self, s: Service) -> bool {
         let configured = match s {
-            Service::Decision => !self.decision_key.is_empty(),
+            // Oneri ve karar ayni OpenRouter anahtarini kullanir; kill switch'leri ayri.
+            Service::Decision | Service::Suggest => !self.decision_key.is_empty(),
             Service::Resend => !self.mail_api_key.is_empty(),
             Service::Push => !self.vapid_private.is_empty(),
         };
@@ -260,6 +284,16 @@ mod tests {
         assert!(manifest("[]").unwrap().external_off.is_empty());
         // Yazim hatasi sessizce "acik" birakmaz.
         assert!(manifest(r#"["desicion"]"#).is_err());
+    }
+
+    /// ~/nix'teki mevcut manifest `suggest_model`'i bilmiyor: yine de acilmali (varsayilan model),
+    /// `suggest` ayri kapatilabilmeli.
+    #[test]
+    fn eski_manifest_oneri_modeli_olmadan_acilir() {
+        let old = r#"{"version":"1","contact_email":"a@b.c","external_off":["suggest"],"decision_model":"m"}"#;
+        let m = Manifest::parse(old).unwrap();
+        assert_eq!(m.suggest_model, "deepseek/deepseek-v4.1-flash");
+        assert!(listed(&m.external_off, Service::Suggest) && !listed(&m.external_off, Service::Decision));
     }
 
     /// Gomulu manifest gecerli ve surum tek yerde: Cargo.toml + package.json ayni.

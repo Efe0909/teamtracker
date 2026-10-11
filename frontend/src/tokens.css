@@ -66,6 +66,15 @@
   --heat-3: light-dark(#30a14e, #26a641);
   --heat-4: light-dark(#216e39, #39d353);
 
+  /* Kategorik grafik dizisi (Yonetim > LLM: model basina yigilmis cubuk). Sira sabit:
+     ayni model hep ayni rengi alir (lib/llm.ts sirasi). */
+  --chart-1: light-dark(#6e56cf, #8e7cf0);
+  --chart-2: light-dark(#12a594, #3dd6c1);
+  --chart-3: light-dark(#e5484d, #ff6369);
+  --chart-4: light-dark(#f5a524, #ffc53d);
+  --chart-5: light-dark(#1f5bc4, #7eb6ff);
+  --chart-6: light-dark(#d6409f, #f27bc5);
+
   /* light-dark() yalniz RENK alir: golgenin rengi temaya gore, geometri sabit. */
   --sh: 0 1px 2px light-dark(rgb(16 16 24 / 0.05), rgb(0 0 0 / 0.4));
   /* yukselti: acilir menu, dialog, toast */

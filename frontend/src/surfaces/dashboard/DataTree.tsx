@@ -52,10 +52,9 @@ function offsetText(days: number): string {
   return days === 0 ? "0 gün" : `${days < 0 ? "−" : "+"}${Math.abs(days)} gün`;
 }
 
-/** Satirda okunacak ayar: checkpoint gun farki ya da widget adi. */
+/** Satirda okunacak ayar: checkpoint gun farki. (Widget'in adi zaten katalog adi: tekrarlanmaz.) */
 function attrText(n: TreeNode): string | null {
   if (n.node_type === "checkpoint" && n.attrs.offset_days !== undefined) return offsetText(n.attrs.offset_days);
-  if (n.node_type === "widget" && n.attrs.widget !== undefined) return WIDGET[n.attrs.widget].label;
   return null;
 }
 
@@ -154,10 +153,11 @@ function TreeScreen({ tree }: { tree: TreeView }) {
         <h1>Veri Yönetimi</h1>
       </div>
       <p className={s.lead}>
-        Kökler (Konular, Etkinlik Türleri, Etkinlik Yerleri) koddan gelir; yalnız adları ve açıklamaları
-        değişir. Konular serbest bir ağaç: türü ve yapıyı sen seçersin. Etkinlik Türleri ve Etkinlik Yerleri
-        yönetilen listeler: türü sistem atar, her etkinlik türünün Adımlar ve Widget'lar bölümleri
-        kendiliğinden açılır. Değişiklik anında uygulanır.
+        Kökler (Konular, Etkinlik Yönetimi) koddan gelir; yalnız adları ve açıklamaları değişir. Konular
+        serbest bir ağaç: türü ve yapıyı sen seçersin. Etkinlik Yönetimi'nin altındaki Etkinlik Türleri,
+        Etkinlik Yerleri ve Etkinlik Kazanımları yönetilen listeler: türü sistem atar, her etkinlik türünün
+        Adımlar ve Widget'lar bölümleri kendiliğinden açılır. Adı koddan belli olan düğümlerin (Adımlar,
+        Widget'lar, widget'lar) adı sabittir, açıklaması değişir. Değişiklik anında uygulanır.
       </p>
       {!canWrite && <p className={s.lead}>Yapıyı değiştirmek için editör yetkisi gerekiyor. Yöneticine söyle.</p>}
 
@@ -362,7 +362,9 @@ function AddForm(props: { parent: TreeNode; onClose: (added: boolean) => void })
   const [widget, setWidget] = useState<TemplateWidget>("otf");
   const [err, setErr] = useState<string | null>(null);
   const nameLabel = fixed ? `${TYPE_LABEL[type]} adı` : "Alt düğüm adı";
-  const nameValid = Array.from(name.trim()).length >= 5;
+  // Widget'in adi koddan (katalog): sorulmaz.
+  const nameFixed = type === "widget";
+  const nameValid = nameFixed || Array.from(name.trim()).length >= 5;
   const descValid = bypassQuality || desc.trim() === "" || Array.from(desc.trim()).length >= 30;
 
   return (
@@ -371,7 +373,11 @@ function AddForm(props: { parent: TreeNode; onClose: (added: boolean) => void })
       onSubmit={(e) => {
         e.preventDefault();
         setErr(null);
-        const body: NewNode = { name, parent_id: parent.id, description: desc.trim() === "" ? null : desc };
+        const body: NewNode = {
+          name: nameFixed ? WIDGET[widget].label : name,
+          parent_id: parent.id,
+          description: desc.trim() === "" ? null : desc,
+        };
         if (!fixed) {
           body.node_type = type;
           body.shape = shape;
@@ -383,12 +389,14 @@ function AddForm(props: { parent: TreeNode; onClose: (added: boolean) => void })
     >
       {err !== null && <p className={ui.error} role="alert">{err}</p>}
       <div className={ui.grid2}>
-        <label className={ui.field}>
-          <span>{nameLabel}<Req /></span>
-          <input className={ui.input} value={name} onChange={(e) => setName(e.target.value)} required maxLength={200}
-            autoFocus placeholder={nameLabel.toLocaleLowerCase("tr")} />
-          <small className={ui.fieldHint}>{Array.from(name.trim()).length}/5 karakter</small>
-        </label>
+        {!nameFixed && (
+          <label className={ui.field}>
+            <span>{nameLabel}<Req /></span>
+            <input className={ui.input} value={name} onChange={(e) => setName(e.target.value)} required maxLength={200}
+              autoFocus placeholder={nameLabel.toLocaleLowerCase("tr")} />
+            <small className={ui.fieldHint}>{Array.from(name.trim()).length}/5 karakter</small>
+          </label>
+        )}
         {!fixed && (
           <div className={ui.field}>
             <span>Tür</span>
@@ -442,7 +450,9 @@ function EditForm(props: { node: TreeNode; tree: TreeView; byId: ReadonlyMap<Uui
 
   // Kok ve slot: yalniz ad/aciklama (spec/74 §4.1-4.2).
   const locked = node.locked !== null;
-  const nameValid = node.node_type === "operational" || Array.from(name.trim()).length >= 5 || name.trim() === node.name;
+  // Adi koddan belli dugum (sablon slotu, widget): ad sabit, yalniz aciklama degisir.
+  const nameFixed = node.node_type === "widget" || (node.node_type === "operational" && node.attrs.slot !== undefined);
+  const nameValid = nameFixed || node.node_type === "operational" || Array.from(name.trim()).length >= 5 || name.trim() === node.name;
   const descValid = bypassQuality || desc.trim() === "" || Array.from(desc.trim()).length >= 30 || desc.trim() === (node.description ?? "");
   // Tur ve shape yalniz serbest kokte (Konular) secilir; sabit kurallarda sunucunun.
   const free = !locked && node.root_key === "units";
@@ -505,11 +515,19 @@ function EditForm(props: { node: TreeNode; tree: TreeView; byId: ReadonlyMap<Uui
       {err !== null && <p className={ui.error} role="alert">{err}</p>}
       {locked && <p className={ui.fieldHint}>Kod tarafından yönetilir: yalnız ad ve açıklama değişir.</p>}
       <div className={ui.grid2}>
-        <label className={ui.field}>
-          <span>Ad<Req /></span>
-          <input className={ui.input} value={name} onChange={(e) => setName(e.target.value)} required maxLength={200} autoFocus />
-          <small className={ui.fieldHint}>{Array.from(name.trim()).length}/5 karakter</small>
-        </label>
+        {nameFixed ? (
+          <div className={ui.field}>
+            <span>Ad</span>
+            <input className={ui.input} value={node.name} readOnly aria-readonly="true" />
+            <small className={ui.fieldHint}>Ad koddan gelir, değişmez.</small>
+          </div>
+        ) : (
+          <label className={ui.field}>
+            <span>Ad<Req /></span>
+            <input className={ui.input} value={name} onChange={(e) => setName(e.target.value)} required maxLength={200} autoFocus />
+            <small className={ui.fieldHint}>{Array.from(name.trim()).length}/5 karakter</small>
+          </label>
+        )}
         {free && (
           <div className={ui.field}>
             <span>Tür</span>

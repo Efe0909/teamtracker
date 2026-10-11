@@ -57,7 +57,7 @@ docker exec ekiptakip-db createdb -U ekiptakip ekiptakip_alpha02
 | `cargo test` | birim: ağaç, filtre, hız sınırı, karar modeli yanıtı, manifest/sürüm tutarlılığı |
 | `npm run build` | CSS Modules tipleri + ham renk denetimi + `tsc` strict + Vite |
 | `npm test` | vitest + testing-library |
-| `backend/tools/local_test.sh` | JSON sözleşmesi yerelde: atılıp yıkılan DB + iki süreç |
+| `backend/tools/local_test.sh` | JSON sözleşmesi yerelde: atılıp yıkılan DB + üç süreç (sahte kimlik, Google kipi, sahte OpenRouter'a bağlı LLM süreci) |
 
 ## Yayına alma
 

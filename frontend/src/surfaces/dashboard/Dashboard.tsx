@@ -17,6 +17,8 @@ import { Avatar, cx, IconButton, Kbd, Link, Menu, MenuItem, MenuLabel, MenuRadio
 import { ErrorScreen } from "../errors/ErrorScreen";
 import { signOut } from "../Session";
 import { Admin } from "./Admin";
+import { AdminLlmProfile } from "./AdminLlmProfile";
+import { AdminLlmTask } from "./AdminLlmTask";
 import s from "./dashboard.module.css";
 import { DataTree } from "./DataTree";
 import { EventPage } from "./EventPage";
@@ -104,6 +106,10 @@ function Page({ route }: { route: Route }) {
       return <Notifications />;
     case "admin":
       return <Admin />;
+    case "llmProfile":
+      return <AdminLlmProfile id={route.id} />;
+    case "llmTask":
+      return <AdminLlmTask feature={route.feature} />;
     case "notFound":
       return <ErrorScreen code="not_found" />;
     default: {
@@ -138,8 +144,8 @@ const NAV: NavItem[] = [
   { route: { name: "tree" }, icon: "tree", label: "Veri yönetimi", match: ["tree"] },
 ];
 
-/** Yalniz admin ya da manage_users gorur; uc yine kendisi kontrol eder. */
-const ADMIN_NAV: NavItem = { route: { name: "admin" }, icon: "lock", label: "Yönetim", match: ["admin"] };
+/** Yalniz admin, manage_users ya da manage_llm gorur; uc yine kendisi kontrol eder. */
+const ADMIN_NAV: NavItem = { route: { name: "admin" }, icon: "lock", label: "Yönetim", match: ["admin", "llmProfile", "llmTask"] };
 
 const THEME_OPTS: { value: Theme; label: string; icon: IconName }[] = [
   { value: "light", label: "Açık", icon: "sun" },
@@ -151,7 +157,7 @@ function Sidebar({ route, onSearch, onFold }: { route: Route; onSearch: () => vo
   const L = useLookup();
   const theme = useTheme();
   const unread = useNotifications().data?.unread ?? 0;
-  const admin = L.meta.me.is_admin || L.can("manage_users");
+  const admin = L.can("manage_users") || L.can("manage_llm");
   const mine = new Set(L.meta.me.team_ids);
   const teams = [...L.plainTeams].sort((a, b) => Number(mine.has(b.id)) - Number(mine.has(a.id)) || a.name.localeCompare(b.name, "tr"));
   const [profileOpen, setProfileOpen] = useState(!L.meta.me.profile_complete);
