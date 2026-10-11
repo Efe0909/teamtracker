@@ -16,22 +16,20 @@ import { AdminAvatar, EditableAvatar } from "../../features/profile/EditableAvat
 import { useStored } from "../../lib/stored";
 import { AdminActivity } from "./AdminActivity";
 import { AdminLlm } from "./AdminLlm";
-import { AdminQuality } from "./AdminQuality";
 import { ErrorScreen } from "../errors/ErrorScreen";
 import s from "./dashboard.module.css";
 
-type Tab = "people" | "activity" | "quality" | "llm";
+type Tab = "people" | "activity" | "llm";
 
 const SUBTITLE: Record<Tab, string> = {
   people: "Kim girebilir, neyi değiştirebilir.",
   activity: "Kim ne zaman uğruyor, ne kadar iş çıkarıyor.",
-  quality: "Kayıt ve kapanış notlarını tartan modelin soruları ve eşikleri.",
-  llm: "Yapay zekâ çağrıları: model, limit, istem, maliyet, geçmiş ve modele giden verinin temizlenmesi.",
+  llm: "Yapay zekâ: model, limit, istem, maliyet, geçmiş, kalite kapısı ve modele giden verinin temizlenmesi.",
 };
 
 /** Modulu iki kapsam acar, kapsamlari ayri (spec/79 §11.7): `manage_users` kisiler ve
- *  aktivite, `manage_llm` LLM sekmesi; Kalite kapisi yalniz admin. Yetkin olmayan sekme
- *  KILITLI gorunur. Uclar yine kendisi kontrol eder. */
+ *  aktivite, `manage_llm` LLM sekmesi (Kalite kapisi onun icinde, yalniz admin). Yetkin
+ *  olmayan sekme KILITLI gorunur. Uclar yine kendisi kontrol eder. */
 export function Admin() {
   const L = useLookup();
   const people = L.can("manage_users");
@@ -52,12 +50,9 @@ export function Admin() {
         options={[
           { value: "people", label: "Kişiler ve roller", locked: !people },
           { value: "activity", label: "Aktivite", locked: !people },
-          // Soru metni kayıt kararlarını değiştirir: yalnız admin (uç da 403 verir).
-          { value: "quality", label: "Kalite kapısı", locked: !L.meta.me.is_admin },
           { value: "llm", label: "Veri işleme ve LLM", locked: !llm },
         ]} />
-      {tab === "quality" ? <AdminQuality /> : tab === "activity" ? <AdminActivity />
-        : tab === "llm" ? <AdminLlm /> : <People />}
+      {tab === "activity" ? <AdminActivity /> : tab === "llm" ? <AdminLlm /> : <People />}
     </div>
   );
 }

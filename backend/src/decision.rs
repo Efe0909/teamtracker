@@ -7,7 +7,7 @@
 //! kurali yine de API'de.
 //!
 //! Soru ADLARI sabit (kod bunlara baglanir); soru METINLERI ve esikler
-//! `quality_config` tablosunda, Yonetim > Kalite kapisi'ndan degisir. Satir
+//! `quality_config` tablosunda, Yonetim > Veri isleme ve LLM > Kalite kapisi'ndan degisir. Satir
 //! yoksa asagidaki varsayilanlar gecerli.
 //!
 //! Model adi ve zaman asimi `llm_features` (`quality_gate`), cagri `llm::run`'dan

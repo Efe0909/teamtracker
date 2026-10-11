@@ -342,7 +342,7 @@ Göç 024 ayrıca `security_events` tür kısıtını genişletir (spec/70 §8):
 ### 11.5 İstem DB'de, sürümlü
 
 - Yalnız `chat` özelliklerinin istemi (`material_suggestions` `SYSTEM`). Kapının "istemi" kalite
-  soruları; onlar Kalite kapısı sekmesinde kalır (spec/76).
+  soruları; onlar Kalite kapısı alt sekmesinde, yalnız admin (spec/76).
 - Yeni sürüm = yeni satır; etkinleştirmek `prompt_version`'ı değiştirir; geri almak eski sürümü
   etkinleştirmek. Etkinleştirme de model gibi son 30 dk'da etkin model + o sürümle geçen bir
   Dene ister (400 `llm_prompt_untested`; servis kapalıysa uyarıyla kabul). Koddaki istem
@@ -368,7 +368,11 @@ Göç 024 ayrıca `security_events` tür kısıtını genişletir (spec/70 §8):
   kuralları (karar: temizleme dahil). Admin her şeyi yapar.
 - Yönetim menüsü: `is_admin || manage_users || manage_llm`; üçü de yoksa modül hiç görünmez.
   Sekmeler kilitli görünür: `manage_llm` sahibi kişiler/aktivite sekmelerini, `manage_users`
-  sahibi LLM sekmesini kilit simgesiyle görür (tıklanmaz). Kalite kapısı sekmesi admin'e kalır.
+  sahibi LLM sekmesini kilit simgesiyle görür (tıklanmaz).
+- **Kalite kapısı LLM sekmesinin içinde** (alt sekme, Efe 2026-10-11): ayrı üst sekme yok. Soru
+  metinleri ve eşikler kayıt kararlarını değiştirdiği için **yalnız admin** düzenler
+  (`/api/admin/quality` admin'e özel kaldı); admin olmayan `manage_llm` sahibi alt sekmeyi
+  kilitli görür. Kapının modeli ve zaman aşımı ise Modeller'de, `manage_llm` ile değişir.
 - `GET/PUT/DELETE /api/admin/llm` (temizleme) `admin_only` → `admin || manage_llm`; sözleşme aynı.
 - Kontrol her ucun ilk satırında (KNOW-99).
 
@@ -380,7 +384,7 @@ KPI kartları, model başına çubuk liste, sonuç dağılımı + "en çok hata 
 reasoning jetonu kartları (bizde yok), boyut sınırıyla silme (saklama süreyle).
 
 - **Üst:** alt sekmeler (Segmented) Genel · Analiz · Çağrılar · Modeller · Limitler · İstemler ·
-  Temizleme · Veri. Sağda durum hapı ("Servis açık · 1 234 kayıt" / "Kapalı: anahtar yok" /
+  Kalite kapısı (yalnız admin) · Temizleme · Veri. Sağda durum hapı ("Servis açık · 1 234 kayıt" / "Kapalı: anahtar yok" /
   "Kapalı: external_off") ve yenile düğmesi.
 - **Ortak süzgeç** (Genel, Analiz, Çağrılar): zaman (bugün, 7 gün, 30 gün, bu ay, tümü; gün
   sınırı Türkiye saati), özellik, model, kullanıcı, sonuç (başarılı / hatalı / limite takılan).
@@ -470,8 +474,6 @@ birlikte geldi.
   eklenebilir (bu tasarımda yok).
 - **Kayan pencere** mi takvim mi: varsayılan kayan ("1 ay" = 30 gün). Takvim ayı istenirse
   pencere türü sütunu eklenir.
-- **Kalite kapısı sekmesi** ayrı ve admin'e özel kalıyor; LLM sayfasına taşınırsa `manage_llm`
-  sahibi kayıt kapısının sorularını da değiştirebilir hale gelir.
 - **Model tek, yedek yok.** Etkin model düşerse (sağlayıcı kesintisi) çağrı hata döner; ikinci
   model (fallback) bu tasarımda yok, OpenRouter'ın `models: [...]` dizisiyle sonra eklenebilir.
 - Kullanıcı kabul/ret sayıları hâlâ istemcide (§8); `kept` yalnız sunucu süzgecini anlatır.

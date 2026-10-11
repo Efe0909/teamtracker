@@ -1,4 +1,4 @@
-//! Yonetim > Kalite kapisi: karar modelinin sorulari ve esikleri (spec/76).
+//! Yonetim > Veri isleme ve LLM > Kalite kapisi: karar modelinin sorulari ve esikleri (spec/76).
 //!
 //! YALNIZ admin (soru metni kayit/kapanis kararlarini degistirir). Soru adlari
 //! sabit; yalniz metin ve esik. Her yazma bellekteki kopyayi da gunceller, yeniden

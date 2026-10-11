@@ -17,9 +17,10 @@ import { useStored } from "../../lib/stored";
 import { SortTh } from "../../ui/SortTh";
 import { Button, cx, Empty, IconButton, Loading, Segmented, ui } from "../../ui/ui";
 import { AdminLlmCleaning, AdminLlmData, AdminLlmLimits, AdminLlmModels, AdminLlmPrompts } from "./AdminLlmSettings";
+import { AdminQuality } from "./AdminQuality";
 import c from "./AdminLlm.module.css";
 
-type Sub = "overview" | "analysis" | "calls" | "models" | "limits" | "prompts" | "cleaning" | "data";
+type Sub = "overview" | "analysis" | "calls" | "models" | "limits" | "prompts" | "quality" | "cleaning" | "data";
 
 const SUBS: { value: Sub; label: string }[] = [
   { value: "overview", label: "Genel" },
@@ -28,13 +29,18 @@ const SUBS: { value: Sub; label: string }[] = [
   { value: "models", label: "Modeller" },
   { value: "limits", label: "Limitler" },
   { value: "prompts", label: "İstemler" },
+  { value: "quality", label: "Kalite kapısı" },
   { value: "cleaning", label: "Temizleme" },
   { value: "data", label: "Veri" },
 ];
 
 export function AdminLlm() {
+  const L = useLookup();
+  // Kalite sorulari kayit kararlarini degistirir: yalniz admin (uc da 403 verir).
+  const admin = L.meta.me.is_admin;
   const [stored, setSub] = useStored<string>("admin.llm.tab", "overview");
-  const sub: Sub = SUBS.some((s) => s.value === stored) ? (stored as Sub) : "overview";
+  const known = SUBS.some((s) => s.value === stored) && (admin || stored !== "quality");
+  const sub: Sub = known ? (stored as Sub) : "overview";
   const [filter, setFilter] = useState<LlmFilter>(() => emptyFilter(new Date()));
   const [range, setRange] = useState<Range>("30d");
   const status = useLlmStatus();
@@ -43,7 +49,8 @@ export function AdminLlm() {
   return (
     <>
       <div className={c.top}>
-        <Segmented label="LLM bölümü" value={sub} onChange={setSub} options={SUBS} />
+        <Segmented label="LLM bölümü" value={sub} onChange={setSub}
+          options={SUBS.map((s) => ({ ...s, locked: s.value === "quality" && !admin }))} />
         <div className={c.topRight}>
           <StatusPill s={status.data} />
           <IconButton icon="restore" label="Yenile" onClick={() => void qc.invalidateQueries({ queryKey: ["admin", "llm"] })} />
@@ -61,6 +68,7 @@ export function AdminLlm() {
         : sub === "models" ? <AdminLlmModels />
         : sub === "limits" ? <AdminLlmLimits />
         : sub === "prompts" ? <AdminLlmPrompts />
+        : sub === "quality" ? <AdminQuality />
         : sub === "cleaning" ? <AdminLlmCleaning />
         : <AdminLlmData />}
     </>

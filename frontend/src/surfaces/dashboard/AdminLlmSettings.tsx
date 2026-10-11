@@ -421,7 +421,7 @@ export function AdminLlmPrompts() {
       <p className={c.note}>
         İstem sürümlüdür: yeni sürüm etkin olmadan kaydedilir; o sürümle başarılı bir “Dene”den sonra (30 dk içinde)
         etkinleştirilir. İstem güvence değildir: kişi alanlarının yükte olmaması, serbest metin kapısı ve sunucu süzgeci
-        istemden bağımsız çalışır (spec/79 §2). Kalite kapısının “istemi” Kalite kapısı sekmesindeki sorulardır.
+        istemden bağımsız çalışır (spec/79 §2). Kalite kapısının “istemi” Kalite kapısı alt sekmesindeki sorulardır.
       </p>
       {withPrompt.length > 1 && (
         <Segmented label="Özellik" value={v.feature} onChange={setPicked} options={withPrompt.map((x) => ({ value: x.feature, label: x.label }))} />
