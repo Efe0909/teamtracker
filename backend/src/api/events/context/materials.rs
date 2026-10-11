@@ -209,9 +209,9 @@ pub struct SuggestIn {
     /// Onceki partilerde reddedilenler; yalniz modele ipucu, guvenilmeyen girdi.
     #[serde(default)]
     rejected: Vec<String>,
-    /// Varsayilan KAPALI (spec/79 §2 madde 4).
+    /// Verilmezse yonetimdeki `free_text_allowed` (spec/79 §2 madde 4); `true` ayar kapaliyken 400.
     #[serde(default)]
-    free_text: bool,
+    free_text: Option<bool>,
 }
 
 #[derive(Deserialize)]
@@ -302,9 +302,9 @@ pub(crate) async fn material_suggestions(
 ) -> Result<Json<SuggestOut>> {
     let id = common::id(&raw)?;
     require_scope(&st, &me, "manage_purchases").await?;
-    let ctx = build_context(&st, &me, id, b.free_text).await?;
-
     let cfg = crate::api::llm::load(&st.pool).await?;
+    let ctx = build_context(&st, &me, id, b.free_text.unwrap_or(cfg.free_text_allowed)).await?;
+
     let known = known_names(&st).await?;
     let skip = b.rejected.len().saturating_sub(REJECTED_MAX);
     let rejected: Vec<String> = b.rejected.iter().skip(skip).map(|r| r.trim().to_string())
@@ -329,12 +329,17 @@ pub(crate) async fn material_suggestions(
 
 /// `GET /api/events/{id}/material-brief[?free_text=true]`: oneri ucunun modele kullanici
 /// mesaji olarak gonderdigi ozetin aynisi (`max_items` yonetimdeki partiden; `rejected`
-/// istekle gelir, burada bos). Model cagrilmaz. Kapi `llm_context` ile ayni.
+/// istekle gelir, burada bos). Model cagrilmaz. Kapi `llm_context` ile ayni; `free_text`
+/// verilmezse oneri ucu gibi yonetim ayarina uyar.
 pub(crate) async fn material_brief(
     State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>, Query(q): Query<Params>,
 ) -> Result<Json<MaterialBrief>> {
     let id = common::id(&raw)?;
-    let ctx = build_context(&st, &me, id, q.free_text).await?;
+    let free = match q.free_text {
+        Some(f) => f,
+        None => crate::api::llm::load(&st.pool).await?.free_text_allowed,
+    };
+    let ctx = build_context(&st, &me, id, free).await?;
     let e = llm::settings(&st, suggest_contract()).await;
     Ok(Json(MaterialBrief::from_context(&ctx).with_max_items(e.batch)))
 }

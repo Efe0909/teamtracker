@@ -36,7 +36,7 @@ const USE_AI: &str = "use_generative_ai";
 #[derive(Deserialize)]
 pub struct Params {
     #[serde(default)]
-    free_text: bool,
+    free_text: Option<bool>,
 }
 
 /// Metin alanlarini kurallardan geciren yardimci.
@@ -328,7 +328,7 @@ pub(crate) async fn llm_context(
     State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>, Query(q): Query<Params>,
 ) -> Result<Json<Context>> {
     let id = common::id(&raw)?;
-    Ok(Json(build_context(&st, &me, id, q.free_text).await?))
+    Ok(Json(build_context(&st, &me, id, q.free_text.unwrap_or(false)).await?))
 }
 
 /// Uc ile dahili cagiranlarin (modele istek kuran islevler) ortak yolu: ayni kapsam ve

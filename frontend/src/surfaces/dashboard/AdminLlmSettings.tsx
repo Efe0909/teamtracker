@@ -413,7 +413,7 @@ export function AdminLlmCleaning() {
           </label>
           <label className={c.check}>
             <input type="checkbox" checked={d.free_text_allowed} onChange={(e) => setDraft({ ...d, free_text_allowed: e.target.checked })} />
-            Serbest metin gönderilebilir (başlık, açıklama, notlar; istekte ayrıca açılmalı)
+            Serbest metin gönderilir (başlık, açıklama, notlar; malzeme önerisi bu ayara uyar)
           </label>
         </div>
         {err !== null && <p className={ui.error} role="alert">{err}</p>}

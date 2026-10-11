@@ -31,8 +31,11 @@ zorundadır.
    sunucuda, model cevabına `llm-restore` ile konur; modele hiç gitmez.
 4. **Serbest metin varsayılan KAPALI.** Başlık, açıklama, yer açıklaması, malzeme notu,
    elle eklenmiş adım etiketi ve OTF metinleri (amaç, yaş grubu, serbest kazanım,
-   bölüm notları) yalnız `?free_text=true` ile gider. Tek kapı budur; başka bir yoldan
-   serbest metin yüke giremez.
+   bölüm notları) yalnız `free_text` açıkken gider. Tek kapı budur; başka bir yoldan
+   serbest metin yüke giremez. `llm-context` için bayrak istekte (`?free_text=true`)
+   açılır; malzeme önerisi ve `material-brief` bayrak verilmezse yönetimdeki
+   `free_text_allowed`'a uyar (2026-10-11: öneri isteği bayrak göndermediği için ayar
+   açıkken de serbest metin gitmiyordu).
 5. **Giden her metin temizleyiciden geçer.** Serbest metin açıkken de, her zaman giden
    kısa etiketler (malzeme adı, kazanım adı/açıklaması, şablon adım etiketi) de. Kural
    kapatılabilir (§4), kapı kapatılamaz.
@@ -103,7 +106,7 @@ güvence 2. ve 4. maddelerdir: kişi alanları yapısal olarak yok, serbest meti
 | Uç | Kim | Ne |
 |---|---|---|
 | `GET /api/events/{id}/llm-context[?free_text=true]` | etkinliği görebilen | tam yük (§3) |
-| `GET /api/events/{id}/material-brief[?free_text=true]` | etkinliği görebilen | malzeme önerisinin modele giden daraltılmış özeti (§9), model çağrılmaz |
+| `GET /api/events/{id}/material-brief[?free_text=true\|false]` | etkinliği görebilen | malzeme önerisinin modele giden daraltılmış özeti (§9), model çağrılmaz; bayraksız yönetim ayarına uyar |
 | `POST /api/events/{id}/llm-restore` `{text}` | etkinliği görebilen | yer tutucuları doldurur, ≤ 20 000 karakter |
 | `GET/PUT/DELETE /api/admin/llm` | admin ya da `manage_llm` | `{free_text_allowed, rules{patterns, known_names, capitalized}}`; bilinmeyen alan reddedilir |
 | `POST /api/admin/llm/redact-try` `{text, config?}` | admin ya da `manage_llm` | temizleyici denemesi; metin modele gitmez, ≤ 4000 karakter |
@@ -115,7 +118,8 @@ anahtarı ve "Dene" kutusu (metin yaz, taslak kurallarla temizlenmiş halini gö
 
 ## 6. Kararlar (2026-10-09, Efe ile)
 
-- Serbest metin varsayılan kapalı, `?free_text=true` ile açık; kurallar ve yoğunluk
+- Serbest metin varsayılan kapalı, `?free_text=true` ile açık (malzeme önerisi bayraksız
+  yönetim ayarına uyar, §2 madde 4); kurallar ve yoğunluk
   yönetimden ayarlanır, kod değişikliği gerekmez.
 - Yer adı yüke girmez: satın alma önerisi için ilgisiz, mail için yer tutucu yeter. Yer
   açıklaması serbest metin sayılır.
@@ -181,7 +185,7 @@ silik "öneri kartları". Üretken yapay zekâ ilk kez kullanıcıya görünür.
    Gerekçe: öneri güvenilmeyen gösterim verisidir, kabul normal malzeme ekleme ucundan
    (yetki ve doğrulama orada) geçer; imzalamak bir şey korumaz. Başka gün reddedilen bir
    öneri geri gelebilir, bu kabul edilen davranıştır.
-8. **Uç.** `POST /api/events/{id}/material-suggestions` `{rejected: string[]}` →
+8. **Uç.** `POST /api/events/{id}/material-suggestions` `{rejected: string[], free_text?: bool}` →
    `{items: [{name, description}], batch_id}`. Görünürlük + `use_generative_ai` +
    `manage_purchases`. İstemciden gelen `rejected` güvenilmez metindir: en çok 50 öğe, öğe
    başına ≤ 80 karakter, modele gitmeden `redact`'tan geçer (§2 madde 5).

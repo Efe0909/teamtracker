@@ -953,11 +953,13 @@ ok "$(grep -c '@' <<<"$R")" 0 "e-posta sizmadi"
 R=$(g w "/api/events/$EVID/material-brief")
 ok "$(jq -r '[.existing[]|select(.name=="Lazer kesim")|.type]|length' <<<"$R")" 1 "ozet: mevcut kalem ad + tur"
 ok "$(jq -r '.max_items|type' <<<"$R")" number "ozet: parti boyu"
-ok "$(jq -r '.event|has("description")' <<<"$R")" false "ozet: serbest metin varsayilan kapali"
+ok "$(jq -r .event.description <<<"$R")" "{{KISI}} ile gorus, {{EPOSTA}}, {{NO}}" "ozet: bayraksiz yonetim ayarina uyar (acik)"
+ok "$(g w "/api/events/$EVID/material-brief?free_text=false" | jq -r '.event|has("description")')" false "ozet: istekte kapatilabilir"
 ok "$(grep -ciE 'kesimhane|0212|2480|offers|participant_count' <<<"$R")" 0 "ozet: teklif/fiyat/sayi yok"
 ok "$(g w "/api/events/$EVID/material-brief?free_text=true" | jq -r .event.description)" "{{KISI}} ile gorus, {{EPOSTA}}, {{NO}}" "ozet: serbest metin temizlenir"
 ok "$(w w PUT "$WT" /api/admin/llm '{"free_text_allowed":false,"rules":{"patterns":true,"known_names":true,"capitalized":false}}' | jq -r .customized)" true "admin ayari kaydeder"
 ok "$(g w "/api/events/$EVID/llm-context?free_text=true" | jq -r .error)" free_text_disabled "serbest metin ana anahtardan kapatilabilir"
+ok "$(g w "/api/events/$EVID/material-brief" | jq -r '.event|has("description")')" false "ozet: ayar kapaliyken bayraksiz serbest metin yok"
 ok "$(wc_ n PUT "$NT" /api/admin/llm '{"free_text_allowed":true,"rules":{"patterns":false,"known_names":false,"capitalized":false}}')" 403 "admin degil ayar yazamaz"
 ok "$(w w PUT "$WT" /api/admin/llm '{"bogus":1}' | jq -r .error)" invalid_body "bilinmeyen alan reddedilir"
 ok "$(w w DELETE "$WT" /api/admin/llm '' | jq -r .customized)" false "varsayilana don"
@@ -1167,9 +1169,14 @@ ok "$(jq -r '[.ok, (.output.items|length), .trace.cost_usd, (.request.messages|l
 ok "$(wl w PUT "$WT" $PG '{"name":"Genel amaçlı","model":"stub/good"}' | jq -r '[.model, (.tested_at!=null)]|@csv')" '"stub/good",true' "denenmis model profile kaydedildi"
 ok "$(wl w PUT "$WT" $TS "{\"profile_id\":\"$GEN\",\"enabled\":true,\"store_bodies\":true}" | jq -r '[.effective.model, .effective.store_bodies]|@csv')" '"stub/good",true' "gorev profilin modelini alir; govde acik"
 ok "$(DB "select count(*) from security_events where event_type='llm_bodies_on'")" 1 "govde saklama denetim izi"
+DESC0=$(DB "select coalesce(description,'') from events where id='$EVID'")
+DB "update events set description='robot kolu yapimi' where id='$EVID'" >/dev/null
 wl w POST "$WT" "/api/events/$EVID/material-suggestions" '{}' >/dev/null
+DB "update events set description=nullif('$DESC0','') where id='$EVID'" >/dev/null
 CID=$(DB "select id from llm_calls where model='stub/good' and not is_try")
-ok "$(gl w "/api/admin/llm/calls/$CID" | jq -r '[.has_body, .request.model, (.response|contains("Servo")), (tostring|contains("stub-key"))]|@csv')" 'true,"stub/good",true,false' "govde saklandi, anahtar yok"
+R=$(gl w "/api/admin/llm/calls/$CID")
+ok "$(jq -r '[.has_body, .request.model, (.response|contains("Servo")), (tostring|contains("stub-key"))]|@csv' <<<"$R")" 'true,"stub/good",true,false' "govde saklandi, anahtar yok"
+ok "$(jq -r '.request.messages[1].content|contains("robot kolu")' <<<"$R")" true "oneri bayraksiz: ayar acikken serbest metin gider"
 # Gorevi baska profile baglamak o profille gecen bir Dene ister.
 DES=$(wl w POST "$WT" /api/admin/llm/profiles '{"name":"Tasarım","endpoint":"chat","model":"stub/design"}' | jq -r .id)
 ok "$(wl w PUT "$WT" $TS "{\"profile_id\":\"$DES\",\"enabled\":true,\"store_bodies\":false}" | jq -r .error)" llm_profile_untested "denenmemis profile baglanmaz"
