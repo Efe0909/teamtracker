@@ -24,6 +24,12 @@
 | `75-yetki.md` | yetki modeli: katmanlar, scope sözlüğü, 97 uçluk matris, kararlar (K1-K5) ve kapanan açıklar (A1-A5), 2026-10-03 — **uygulandı** |
 | `76-bilgi-yogunlugu.md` | metin alt sınırları, OpenRouter kalite denetimi, override izi, dış servis kill switch'i ve kapanış notu — **uygulandı** |
 | `79-llm-yuku.md` | LLM'e giden etkinlik JSON'u: kişisel/kurumsal veri içermeyen yük, değişmezler, temizleyici (`redact`), malzeme önerisi; §11 Yönetim › Veri işleme ve LLM (çağrı kaydı, maliyet, model ayarı, dolar limiti, istem sürümleri, `manage_llm`) — **uygulandı** |
+| `81-maliye.md` | Maliye: iki para (SEB alacağı + kulüp kasası), fatura formu ve onayı (fatura yalnız kaleme bağlı, bölünmüş), SEB iade dosyaları, değişmez kasa defteri (ters kayıt), dönem/kategori/etkinlik bütçesi, malzemeler, etkinlikten bağımsız 3 sütunlu duvar, tedarikçiler, mail şablonları, kur sabitleme — **tasarım** (göç 028) |
+| `82-profil.md` | global profil ve ayarlar sayfası (pencere yerine): profilim, hesap numaralarım (IBAN), bildirimler, görünüm, gizlilik ve veri — **tasarım** (göç 027) |
+| `83-belge-ekleri.md` | ekler: PDF/OOXML/metin aileleri, makro ve eski Office reddi, amaç başına sınır (varsayılan 10 MB), indirme sunumu, fatura/kasa eklerinin kilidi — **tasarım** (göç 026) |
+| `84-birlestirme.md` | serbest metin mükerrerleri: normalize anahtar, aday (sözcük kümesi + trigram + embedding), yumuşak ve geri alınabilir birleştirme, günlük — **tasarım** (göç 029) |
+| `85-embedding.md` | `embeddings` LLM profil türü (OpenRouter, OpenAI uyumlu), pgvector açılışta, eskime denetimli dizinleme, karma anlamsal arama; spec/79 değişmezleri — **tasarım** (göç 031) |
+| `86-baglantilar-graf.md` | `@[ad](record:id)` / `@[ad](event:id)` bağlantıları, `links` tablosu, geri bağlantılar, Obsidian tarzı graf (kayıt + etkinlik + ağaç) — **tasarım** (göç 030) |
 | `60-kaynak-uyarlama.md` | kaynak panoların çözümlemesi: veri hattı, ekran ekran uyarlama, alınmayacaklar |
 | `61-arastirma-sentezi.md` | IWS ve ekip araçları kaynak taraması — bizim ölçeğe uyan/uymayan pratikler |
 | `referans/` | kaynak arayüz dosyaları (`spec/referans/layout-a.html`) |
@@ -46,6 +52,9 @@ Kaynak sistemden uyarlanacak ekranlar. Sıra, `app.py` içindeki `MODULES` kayd�
 | | Pivot & Veri Analizi | `pivot` | var (git'te değil) | `60-kaynak-uyarlama.md` 2.3 | | bekliyor |
 | | Takvim | `takvim` | | | | bekliyor |
 | 73 | Etkinlik Planlama | `/events` | eskiz (git'te değil) | `73-etkinlik.md` | — | **yazıldı** — PR bekliyor (`claude/events-backend`) |
+| 81 | Maliye | `/finance` | eskiz (artifact, git'te değil) | `81-maliye.md` | — | **tasarım** |
+| 82 | Profil ve ayarlar | `/profile` | eskiz (artifact, git'te değil) | `82-profil.md` | — | **tasarım** |
+| 86 | Graf | `/graph` | yok | `86-baglantilar-graf.md` | — | **tasarım** |
 | | Görev Tanımları & Şemalar | `tanimlar` | | `60-kaynak-uyarlama.md` 2.8 | | bekliyor |
 | | Ekip Arşivi | `arsiv` | | | | bekliyor |
 | | Dosyalar / NAS | `dosyalar` | var (git'te değil) | `60-kaynak-uyarlama.md` 2.7 | | bekliyor — karar verildi (`20-sema.md` §3b), modül henüz yazılmadı |
