@@ -472,7 +472,9 @@ macro_rules! unowned {
         "not exists (select 1 from card_attachments x where x.attachment_id = a.id)
          and not exists (select 1 from message_attachments x where x.attachment_id = a.id)
          and not exists (select 1 from users x where x.avatar_id = a.id)
-         and not exists (select 1 from teams x where x.banner_id = a.id)"
+         and not exists (select 1 from teams x where x.banner_id = a.id)
+         and not exists (select 1 from invoice_attachments x where x.attachment_id = a.id)
+         and not exists (select 1 from ledger_attachments x where x.attachment_id = a.id)"
     };
 }
 pub(crate) use unowned;
@@ -484,6 +486,8 @@ const OWNER_TABLES: &[(&str, &str)] = &[
     ("message_attachments", "attachment_id"),
     ("users", "avatar_id"),
     ("teams", "banner_id"),
+    ("invoice_attachments", "attachment_id"),
+    ("ledger_attachments", "attachment_id"),
 ];
 
 /// Eke isaret eden ama SAHIPLENMEYEN tablolar (etiket baglari).

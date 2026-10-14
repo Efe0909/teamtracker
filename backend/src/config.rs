@@ -67,16 +67,17 @@ pub struct Config {
 }
 
 /// Dis servisler. Kapali olan ya azalir (decision: yalniz uzunluk kurali)
-/// ya da hic calismaz (resend: kuyrukta bekler, push: liste calisir, suggest: oneri cikmaz).
+/// ya da hic calismaz (resend: kuyrukta bekler, push: liste calisir, suggest: oneri cikmaz,
+/// fx: fatura formu kuru elle ister, spec/81 §13).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Service { Decision, Resend, Push, Suggest }
+pub enum Service { Decision, Resend, Push, Suggest, Fx }
 
 impl Service {
-    pub const ALL: [Service; 4] = [Service::Decision, Service::Resend, Service::Push, Service::Suggest];
+    pub const ALL: [Service; 5] = [Service::Decision, Service::Resend, Service::Push, Service::Suggest, Service::Fx];
     pub fn key(self) -> &'static str {
         match self {
             Service::Decision => "decision", Service::Resend => "resend", Service::Push => "push",
-            Service::Suggest => "suggest",
+            Service::Suggest => "suggest", Service::Fx => "fx",
         }
     }
 }
@@ -233,6 +234,8 @@ impl Config {
             Service::Decision | Service::Suggest => !self.decision_key.is_empty(),
             Service::Resend => !self.mail_api_key.is_empty(),
             Service::Push => !self.vapid_private.is_empty(),
+            // TCMB acik veri: anahtar yok; yalniz kill switch kapatir.
+            Service::Fx => true,
         };
         configured && !listed(&self.external_off, s)
     }

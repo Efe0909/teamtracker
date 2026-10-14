@@ -62,6 +62,8 @@ sql_enum!(
         // `option` Rust'ta Choice: `Option` adi derive kodundaki std Option'u golgeler.
         Choice => "option", Checkpoint => "checkpoint", Widget => "widget", Location => "location",
         Outcome => "outcome",
+        // Maliye > Butce Kategorileri (spec/81 §3.1): attrs.ledger = seb | general.
+        Category => "category",
     }
 );
 

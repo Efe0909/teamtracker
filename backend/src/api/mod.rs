@@ -12,6 +12,7 @@ mod cards;
 mod chats;
 mod common;
 mod events;
+mod finance;
 mod home;
 mod llm;
 mod llm_usage;
@@ -109,6 +110,20 @@ pub fn router() -> Router<AppState> {
         .route("/api/me/bank-accounts", get(bank_accounts::list).post(bank_accounts::create))
         .route("/api/me/bank-accounts/{id}", patch(bank_accounts::patch).delete(bank_accounts::delete))
         .route("/api/me/export", get(profile::export))
+        // Maliye (spec/81)
+        .route("/api/finance/summary", get(finance::summary))
+        .route("/api/finance/fx", get(finance::fx))
+        .route("/api/finance/purchasable", get(finance::purchasable))
+        .route("/api/finance/invoices", get(finance::list).post(finance::submit))
+        .route("/api/finance/invoices/{id}", get(finance::get).put(finance::edit))
+        .route("/api/finance/invoices/{id}/decision", post(finance::decide))
+        .route("/api/finance/invoices/{id}/claim", put(finance::move_claim))
+        .route("/api/finance/claims", get(finance::claims).post(finance::create_claim))
+        .route("/api/finance/claims/{id}", get(finance::claim).patch(finance::patch_claim))
+        .route("/api/finance/ledger", get(finance::ledger).post(finance::add_entry))
+        .route("/api/finance/ledger/{id}/reverse", post(finance::reverse_entry))
+        .route("/api/finance/ledger/checks", post(finance::add_check))
+        .route("/api/finance/payouts", post(finance::payout))
         .route("/api/chats/{id}/prefs", put(notify::set_chat))
         .route("/api/push/vapid", get(notify::vapid))
         .route("/api/push/subscriptions", post(notify::subscribe).delete(notify::unsubscribe))

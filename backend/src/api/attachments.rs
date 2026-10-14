@@ -336,6 +336,14 @@ pub async fn delete(
     if !(me.is_admin || b.uploader_id == Some(me.id)) {
         return Err(AppError::Forbidden);
     }
+    // Fatura ve kasa belgesi yasal saklama: silinmez (spec/83 D7).
+    let locked: bool = sqlx::query_scalar(
+        "select exists(select 1 from invoice_attachments where attachment_id = $1)
+             or exists(select 1 from ledger_attachments where attachment_id = $1)")
+        .bind(id).fetch_one(&st.pool).await?;
+    if locked {
+        return Err(AppError::Conflict("attachment_locked"));
+    }
     sqlx::query("update attachments set deleted_at = now(), deleted_by = $2 where id = $1")
         .bind(id).bind(me.id).execute(&st.pool).await?;
     let root = std::path::Path::new(&b.mount_path).join(&b.media_prefix);
@@ -406,6 +414,14 @@ pub async fn remove_tag(
 /// (spec/83 §4.1: fatura eki sohbete takilmaz) ve henuz hicbir yere
 /// BAGLANMAMIS mi. Baskasinin ekini kendi mesajina asamazsin.
 pub async fn claimable(p: &PgPool, me: Uuid, ids: &mut Vec<Uuid>) -> Result<()> {
+    claimable_for(p, me, ids, media::Purpose::Chat).await
+}
+
+/// `claimable`'in amacli hali: fatura `invoice`, kasa `ledger` amacli eki alir.
+/// `p` havuz ya da islem olabilir (fatura gonderimi tek islemde).
+pub async fn claimable_for<'e, E: sqlx::PgExecutor<'e>>(
+    p: E, me: Uuid, ids: &mut Vec<Uuid>, purpose: media::Purpose,
+) -> Result<()> {
     ids.sort();
     ids.dedup();
     if ids.is_empty() {
@@ -414,7 +430,7 @@ pub async fn claimable(p: &PgPool, me: Uuid, ids: &mut Vec<Uuid>) -> Result<()> 
     let n: i64 = sqlx::query_scalar(concat!(
         "select count(*) from attachments a
           where a.id = any($1) and a.uploader_id = $2 and a.deleted_at is null
-            and a.purpose = 'chat' and ", media::unowned!()))
-        .bind(&*ids).bind(me).fetch_one(p).await?;
+            and a.purpose = $3 and ", media::unowned!()))
+        .bind(&*ids).bind(me).bind(purpose.key()).fetch_one(p).await?;
     if n as usize == ids.len() { Ok(()) } else { Err(AppError::BadRequest("invalid_attachment")) }
 }

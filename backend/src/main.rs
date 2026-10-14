@@ -16,6 +16,7 @@ mod csrf;
 mod db;
 mod decision;
 mod error;
+mod finance;
 mod llm;
 mod media;
 mod mentions;
