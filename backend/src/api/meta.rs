@@ -33,6 +33,15 @@ pub struct Meta {
     /// Manifest'ten (backend/manifest.json).
     version: String,
     contact_email: String,
+    /// Yukleme amaci basina sinir ve dosya secicinin `accept`'i (spec/83 §2);
+    /// on yuz "en fazla 10 MB" metnini buradan yazar.
+    upload_limits: std::collections::BTreeMap<&'static str, UploadLimit>,
+}
+
+#[derive(Serialize)]
+struct UploadLimit {
+    max_bytes: usize,
+    accept: String,
 }
 
 #[derive(Serialize)]
@@ -196,5 +205,8 @@ pub async fn meta(State(st): State<AppState>, CurrentUser(me): CurrentUser) -> R
         me: MeInfo { id: me.id, is_admin: me.is_admin, scopes, team_ids, profile_complete, favorite_nodes },
         users, teams, pillars, nodes, external_off,
         version: st.cfg.version.clone(), contact_email: st.cfg.contact_email.clone(),
+        upload_limits: crate::media::Purpose::ALL.into_iter()
+            .map(|p| (p.key(), UploadLimit { max_bytes: p.max_bytes(), accept: p.accept() }))
+            .collect(),
     }))
 }

@@ -38,6 +38,11 @@ export type ApiErrorCode =
   | "file_too_big"
   | "bad_file_type"
   | "corrupt_image"
+  | "corrupt_file"
+  | "macro_not_allowed"
+  | "legacy_office_not_allowed"
+  | "bad_text_encoding"
+  | "invalid_purpose"
   | "storage_offline"
   | "invalid_attachment"
   | "invalid_card_type"
@@ -169,11 +174,16 @@ export const ERRORS = {
   unknown_role: "Seçilen rol bulunamadı.",
   role_exists: "Bu adla bir rol zaten var.",
   empty_file: "Dosya boş.",
-  file_too_big: "Dosya çok büyük. En fazla 10 MB.",
-  bad_file_type: "Yalnız JPEG, PNG, WebP ve GIF yüklenebilir.",
+  file_too_big: "Dosya bu alan için çok büyük.",
+  bad_file_type: "Bu dosya türü burada yüklenemez.",
   corrupt_image: "Görsel bozuk ya da okunamıyor.",
-  storage_offline: "Depolama diski şu an erişilemiyor. Metin mesajları çalışıyor; görseli sonra dene.",
-  invalid_attachment: "Bu görsel iliştirilemez (başkasının ya da zaten kullanılmış).",
+  corrupt_file: "Dosya bozuk görünüyor.",
+  macro_not_allowed: "Makro içeren belge yüklenemez; makrosuz kaydedip tekrar dene.",
+  legacy_office_not_allowed: "Eski Office biçimi desteklenmiyor; .docx, .xlsx ya da .pptx olarak kaydet.",
+  bad_text_encoding: "Metin dosyası UTF-8 olmalı.",
+  invalid_purpose: "Yükleme türü tanınmadı.",
+  storage_offline: "Depolama diski şu an erişilemiyor. Metin mesajları çalışıyor; dosyayı sonra dene.",
+  invalid_attachment: "Bu dosya iliştirilemez (başkasının ya da zaten kullanılmış).",
   invalid_card_type: "Bu kart türü bu işlemi desteklemiyor.",
   invalid_when: "Tarih ve saat geçersiz.",
   invalid_link: "Bağlantı http:// ya da https:// ile başlamalı.",

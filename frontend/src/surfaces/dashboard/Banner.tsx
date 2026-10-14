@@ -35,7 +35,7 @@ export function Banner({ team, can }: { team: MetaTeam; can: boolean }) {
             onChange={(e) => {
               const f = e.target.files?.[0];
               e.target.value = "";
-              if (f !== undefined) upload<Attachment>(f).then((a) => set(a.id)).catch(fail);
+              if (f !== undefined) upload<Attachment>(f, "banner").then((a) => set(a.id)).catch(fail);
             }} />
         </div>
       )}

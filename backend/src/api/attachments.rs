@@ -50,6 +50,9 @@ pub struct TagOut {
 pub struct AttachView {
     pub id: Uuid,
     mime: String,
+    /// `image` | `document` | `text` (spec/83): gorsel kucuk resimle, digerleri dosya cipiyle.
+    kind: String,
+    byte_size: i64,
     width: Option<i32>,
     height: Option<i32>,
     original_name: Option<String>,
@@ -63,6 +66,8 @@ pub struct AttachView {
 struct Row {
     id: Uuid,
     mime: String,
+    kind: String,
+    byte_size: i64,
     width: Option<i32>,
     height: Option<i32>,
     original_name: Option<String>,
@@ -77,7 +82,7 @@ pub async fn views(p: &PgPool, me: &User, ids: &[Uuid], can_tag: bool) -> Result
         return Ok(HashMap::new());
     }
     let rows: Vec<Row> = sqlx::query_as(
-        "select id, mime, width, height, original_name, uploader_id, deleted_at
+        "select id, mime, kind, byte_size, width, height, original_name, uploader_id, deleted_at
            from attachments where id = any($1)")
         .bind(ids).fetch_all(p).await?;
     let mut tags: HashMap<Uuid, Vec<TagOut>> = HashMap::new();
@@ -94,7 +99,8 @@ pub async fn views(p: &PgPool, me: &User, ids: &[Uuid], can_tag: bool) -> Result
         can_delete: r.deleted_at.is_none() && (me.is_admin || r.uploader_id == Some(me.id)),
         can_tag: can_tag && r.deleted_at.is_none(),
         tags: tags.remove(&r.id).unwrap_or_default(),
-        mime: r.mime, width: r.width, height: r.height, original_name: r.original_name,
+        mime: r.mime, kind: r.kind, byte_size: r.byte_size, width: r.width, height: r.height,
+        original_name: r.original_name,
     })).collect())
 }
 
@@ -152,46 +158,59 @@ async fn one(st: &AppState, me: &User, id: Uuid) -> Result<AttachView> {
 pub struct UploadQuery {
     #[serde(default)]
     name: Option<String>,
+    /// spec/83 §2; yoksa `chat` (eski istemci degismeden calisir).
+    #[serde(default)]
+    purpose: Option<String>,
 }
 
 pub async fn upload(
     State(st): State<AppState>, CurrentUser(me): CurrentUser, Query(q): Query<UploadQuery>,
     body: std::result::Result<Bytes, BytesRejection>,
 ) -> Result<Json<AttachView>> {
+    let purpose = match q.purpose.as_deref() {
+        None => media::Purpose::Chat,
+        Some(p) => media::Purpose::parse(p).ok_or(AppError::BadRequest("invalid_purpose"))?,
+    };
     // Govde siniri asilirsa axum reddi duz metin; koda cevrilir.
     let bytes = body.map_err(|_| AppError::BadRequest("file_too_big"))?;
     let volume = media::active_volume(&st.pool).await?
         .ok_or(AppError::Conflict("storage_offline"))?;
-    let processed = tokio::task::spawn_blocking(move || media::process(&bytes)).await
-        .map_err(|_| AppError::BadRequest("corrupt_image"))?
+    // Ad gosterim icin ve metin alt turu (uzanti) icin; yol parcasi atilir, uzunluk sinirli.
+    let name = q.name.as_deref()
+        .and_then(|n| n.rsplit(['/', '\\']).next())
+        .map(|n| n.chars().take(200).collect::<String>())
+        .filter(|n| !n.trim().is_empty());
+    let for_type = name.clone();
+    let processed = tokio::task::spawn_blocking(move || media::process(&bytes, for_type.as_deref(), purpose)).await
+        .map_err(|_| AppError::BadRequest("corrupt_file"))?
         .map_err(media_err)?;
-    let (key, thumb_key) = media::new_keys(processed.mime);
+    let (key, thumb_key) = media::new_keys(processed.format);
     let root = volume.root();
-    let (path, thumb_path) = match (media::path_in(&root, &key), media::path_in(&root, &thumb_key)) {
-        (Some(a), Some(b)) => (a, b),
-        _ => return Err(AppError::Conflict("storage_offline")),
+    let path = media::path_in(&root, &key).ok_or(AppError::Conflict("storage_offline"))?;
+    let thumb_path = match &thumb_key {
+        Some(k) => Some(media::path_in(&root, k).ok_or(AppError::Conflict("storage_offline"))?),
+        None => None,
     };
     let checksum = media::checksum(&processed.stored);
     let size = processed.stored.len() as i64;
     let (stored, thumb) = (processed.stored, processed.thumb);
     tokio::task::spawn_blocking(move || {
         media::write_atomic(&path, &stored)?;
-        media::write_atomic(&thumb_path, &thumb).inspect_err(|_| {
-            let _ = std::fs::remove_file(&path);
-        })
+        if let (Some(tp), Some(t)) = (thumb_path, thumb) {
+            media::write_atomic(&tp, &t).inspect_err(|_| {
+                let _ = std::fs::remove_file(&path);
+            })?;
+        }
+        Ok::<(), MediaError>(())
     }).await.map_err(|_| AppError::Conflict("storage_offline"))?.map_err(media_err)?;
 
-    // Ad yalniz gosterim icin; yol parcasi atilir, uzunluk sinirli.
-    let name = q.name.as_deref()
-        .and_then(|n| n.rsplit(['/', '\\']).next())
-        .map(|n| n.chars().take(200).collect::<String>())
-        .filter(|n| !n.trim().is_empty());
     let id: Uuid = sqlx::query_scalar(
-        "insert into attachments (volume_id, uploader_id, mime, byte_size, checksum, width, height,
-                                  original_name, storage_key, thumb_key)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) returning id")
-        .bind(volume.id).bind(me.id).bind(processed.mime).bind(size).bind(checksum)
-        .bind(processed.width as i32).bind(processed.height as i32).bind(name)
+        "insert into attachments (volume_id, uploader_id, mime, kind, purpose, byte_size, checksum,
+                                  width, height, original_name, storage_key, thumb_key)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) returning id")
+        .bind(volume.id).bind(me.id).bind(processed.format.mime()).bind(processed.format.kind().key())
+        .bind(purpose.key()).bind(size).bind(checksum)
+        .bind(processed.width.map(|w| w as i32)).bind(processed.height.map(|h| h as i32)).bind(name)
         .bind(&key).bind(&thumb_key)
         .fetch_one(&st.pool).await?;
     // Yeni ek henuz hicbir yere bagli degil: etiket baglaninca acilir.
@@ -212,6 +231,7 @@ fn media_err(e: MediaError) -> AppError {
 struct Blob {
     uploader_id: Option<Uuid>,
     mime: String,
+    kind: String,
     original_name: Option<String>,
     storage_key: String,
     thumb_key: Option<String>,
@@ -222,7 +242,7 @@ struct Blob {
 /// Silinmemis ekin blob bilgisi; silinmis ya da yok -> 404.
 async fn blob(st: &AppState, id: Uuid) -> Result<Blob> {
     sqlx::query_as(
-        "select a.uploader_id, a.mime, a.original_name, a.storage_key, a.thumb_key,
+        "select a.uploader_id, a.mime, a.kind, a.original_name, a.storage_key, a.thumb_key,
                 v.mount_path, v.media_prefix
            from attachments a join storage_volumes v on v.id = a.volume_id
           where a.id = $1 and a.deleted_at is null")
@@ -246,23 +266,54 @@ async fn serve(st: &AppState, me: &User, raw: &str, thumb: bool) -> Result<Respo
             }
         }
     }
+    let kind = media::Kind::parse(&b.kind).unwrap_or(media::Kind::Document);
     let root = std::path::Path::new(&b.mount_path).join(&b.media_prefix);
     let (key, mime) = match (thumb, &b.thumb_key) {
         (true, Some(t)) => (t.as_str(), media::THUMB_MIME),
-        _ => (b.storage_key.as_str(), b.mime.as_str()),
+        // Belgenin kucuk resmi yok: tam dosyaya dusmesin.
+        (true, None) => return Err(AppError::NotFound),
+        (false, _) => (b.storage_key.as_str(), b.mime.as_str()),
     };
     let path = media::path_in(&root, key).ok_or(AppError::NotFound)?;
     let bytes = tokio::fs::read(path).await.map_err(|_| AppError::NotFound)?;
     // Icerik kimlikle degismez: uzun onbellek. Tur VERITABANINDAN, sniff yok.
-    let name = b.original_name.unwrap_or_else(|| "gorsel".into()).replace(['"', '\r', '\n'], "");
-    Ok((
+    let name = b.original_name.unwrap_or_else(|| "ek".into());
+    let (content_type, disposition) = match kind {
+        media::Kind::Image => (mime.to_string(), "inline"),
+        // Metin asla text/html olarak sunulmaz; belge ve metin indirilir (spec/83 D6).
+        media::Kind::Text => ("text/plain; charset=utf-8".to_string(), "attachment"),
+        media::Kind::Document => (mime.to_string(), "attachment"),
+    };
+    let mut res = (
         [
-            (header::CONTENT_TYPE, mime.to_string()),
+            (header::CONTENT_TYPE, content_type),
             (header::CACHE_CONTROL, "private, max-age=31536000, immutable".into()),
-            (header::CONTENT_DISPOSITION, format!("inline; filename=\"{name}\"")),
+            (header::CONTENT_DISPOSITION, content_disposition(disposition, &name)),
+            (header::X_CONTENT_TYPE_OPTIONS, "nosniff".into()),
         ],
         bytes,
-    ).into_response())
+    ).into_response();
+    if kind != media::Kind::Image {
+        res.headers_mut().insert(header::CONTENT_SECURITY_POLICY, header::HeaderValue::from_static("sandbox"));
+    }
+    Ok(res)
+}
+
+/// RFC 6266 + 5987: ASCII yedek ad + `filename*` UTF-8. Turkce karakterli ad
+/// bazi tarayicida ham yazilinca bozuluyordu.
+fn content_disposition(kind: &str, name: &str) -> String {
+    let ascii: String = name.chars()
+        .map(|c| if (c.is_ascii_graphic() && c != '"' && c != '\\') || c == ' ' { c } else { '_' })
+        .collect();
+    let mut enc = String::new();
+    for b in name.bytes() {
+        if b.is_ascii_alphanumeric() || b"!#$&+-.^_`|~".contains(&b) {
+            enc.push(b as char);
+        } else {
+            enc.push_str(&format!("%{b:02X}"));
+        }
+    }
+    format!("{kind}; filename=\"{ascii}\"; filename*=UTF-8''{enc}")
 }
 
 pub async fn get(State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>) -> Result<Response> {
@@ -351,19 +402,19 @@ pub async fn remove_tag(
     Ok(Json(one(&st, &me, id).await?))
 }
 
-/// Mesaj/kart bagi icin: bu ekler BENIM yukledigim, silinmemis ve henuz
-/// hicbir yere BAGLANMAMIS mi. Baskasinin ekini kendi mesajina asamazsin.
+/// Mesaj/kart bagi icin: bu ekler BENIM yukledigim, silinmemis, sohbet amacli
+/// (spec/83 §4.1: fatura eki sohbete takilmaz) ve henuz hicbir yere
+/// BAGLANMAMIS mi. Baskasinin ekini kendi mesajina asamazsin.
 pub async fn claimable(p: &PgPool, me: Uuid, ids: &mut Vec<Uuid>) -> Result<()> {
     ids.sort();
     ids.dedup();
     if ids.is_empty() {
         return Ok(());
     }
-    let n: i64 = sqlx::query_scalar(
+    let n: i64 = sqlx::query_scalar(concat!(
         "select count(*) from attachments a
           where a.id = any($1) and a.uploader_id = $2 and a.deleted_at is null
-            and not exists (select 1 from message_attachments x where x.attachment_id = a.id)
-            and not exists (select 1 from card_attachments x where x.attachment_id = a.id)")
+            and a.purpose = 'chat' and ", media::unowned!()))
         .bind(&*ids).bind(me).fetch_one(p).await?;
     if n as usize == ids.len() { Ok(()) } else { Err(AppError::BadRequest("invalid_attachment")) }
 }

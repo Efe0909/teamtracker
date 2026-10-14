@@ -107,7 +107,12 @@ export interface Meta {
   /** Manifest (backend/manifest.json): uygulama surumu ve gelistirici e-postasi. */
   version?: string;
   contact_email?: string;
+  /** Yukleme amaci basina sinir ve `accept` (spec/83 §2). Eski sunucuda yok. */
+  upload_limits?: Partial<Record<UploadPurpose, { max_bytes: number; accept: string }>>;
 }
+
+/** Yuklemenin amaci: sinir ve kabul edilen turler sunucuda (spec/83 §2). */
+export type UploadPurpose = "chat" | "avatar" | "banner" | "invoice" | "ledger";
 
 // --- kayitlar --------------------------------------------------------------
 
@@ -449,6 +454,9 @@ export interface Membership {
 export interface Attachment {
   id: Uuid;
   mime: string;
+  /** Gorsel kucuk resimle, belge/metin dosya cipiyle cizilir (spec/83). */
+  kind: "image" | "document" | "text";
+  byte_size: number;
   width: number | null;
   height: number | null;
   original_name: string | null;

@@ -763,6 +763,34 @@ A2=$(up n "$NT" "$J/px.png" | jq -r .id)
 M2=$(w n POST "$NT" "/api/chats/$BCHAT/messages" "{\"body\":\"\",\"attachment_ids\":[\"$A2\"]}" | jq -r .id)
 ok "$(g n "/api/chats/$BCHAT/feed" | jq -r ".attachments[\"$M2\"][0].id")" "$A2" "ayni fotograf hedefe bagimsiz yuklenir"
 
+# Belge ve metin (spec/83): aile baytlardan, sinir amactan, sunum indirme.
+t document_attachments
+upp(){ curl -s -b "$J/$1" -X POST -H "X-CSRF-Token: $2" --data-binary "@$3" "$B/api/attachments?name=$4&purpose=$5"; }
+hdr(){ curl -s -o /dev/null -D - -b "$J/n" "$B/api/attachments/$1" | tr -d '\r' | grep -i "^$2:" | cut -d' ' -f2-; }
+printf '%%PDF-1.7\n1 0 obj\n<<>>\nendobj\n%%%%EOF\n' >"$J/f.pdf"
+D1=$(upp n "$NT" "$J/f.pdf" "fatura.pdf" chat)
+ok "$(jq -r '.kind+" "+.mime' <<<"$D1")" "document application/pdf" "PDF belge olarak"
+D1=$(jq -r .id <<<"$D1")
+ok "$(hdr "$D1" content-disposition | cut -d';' -f1)" attachment "belge indirilir"
+ok "$(hdr "$D1" x-content-type-options)" nosniff "nosniff"
+ok "$(hdr "$D1" content-security-policy)" sandbox "sandbox"
+ok "$(code -b "$J/n" "$B/api/attachments/$D1/thumb")" 404 "belgenin kucuk resmi yok"
+printf '# Gündem\n- bütçe\n' >"$J/n.md"
+T1=$(upp n "$NT" "$J/n.md" "toplantı.md" chat | jq -r .id)
+ok "$(hdr "$T1" content-type)" "text/plain; charset=utf-8" "metin hep duz metin"
+ok "$(hdr "$T1" content-disposition | grep -c "filename\*=UTF-8''toplant%C4%B1.md")" 1 "Turkce ad RFC 5987"
+ok "$(upp n "$NT" "$J/f.pdf" "f.pdf" avatar | jq -r .error)" bad_file_type "profil fotografi yalniz gorsel"
+head -c 6000000 /dev/zero | tr '\0' a >"$J/six.txt"
+ok "$(upp n "$NT" "$J/six.txt" "six.txt" avatar | jq -r .error)" file_too_big "profil siniri 5 MB"
+ok "$(upp n "$NT" "$J/six.txt" "six.txt" chat | jq -r .kind)" text "sohbet siniri 10 MB"
+ok "$(upp n "$NT" "$J/f.pdf" "f.pdf" nope | jq -r .error)" invalid_purpose "bilinmeyen amac"
+ok "$(w n PATCH "$NT" /api/me/profile "{\"avatar_id\":\"$D1\"}" | jq -r .error)" invalid_avatar "belge profil fotografi olmaz"
+M3=$(w n POST "$NT" "/api/chats/$BCHAT/messages" "{\"body\":\"belge\",\"attachment_ids\":[\"$D1\",\"$T1\"]}" | jq -r .id)
+ok "$(g n "/api/chats/$BCHAT/feed" | jq -r "[.attachments[\"$M3\"][].kind]|sort|join(\",\")")" "document,text" "mesaja belge ve metin"
+I1=$(upp n "$NT" "$J/f.pdf" "f.pdf" invoice | jq -r .id)
+ok "$(w n POST "$NT" "/api/chats/$BCHAT/messages" "{\"body\":\"\",\"attachment_ids\":[\"$I1\"]}" | jq -r .error)" invalid_attachment "fatura eki sohbete takilmaz"
+ok "$(g n /api/meta | jq -r '.upload_limits.avatar.max_bytes')" 5242880 "meta sinirlari"
+
 t attachment_tags
 ok "$(wc_ n POST "$NT" "/api/attachments/$A1/tags" '{"name":"İstanbul"}')" 403 "tag_media yoksa 403"
 w w POST "$WT" "/api/attachments/$A1/tags" '{"name":"İstanbul"}' >/dev/null

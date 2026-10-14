@@ -43,7 +43,7 @@ export function AdminAvatar({ user, size = 32, onPick, busy }: {
       <input ref={file} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(e) => {
         const f = e.target.files?.[0];
         e.target.value = "";
-        if (f !== undefined) upload<Attachment>(f).then((a) => onPick(a.id)).catch((x: unknown) => toast({ text: errorText(x), error: true }));
+        if (f !== undefined) upload<Attachment>(f, "avatar").then((a) => onPick(a.id)).catch((x: unknown) => toast({ text: errorText(x), error: true }));
       }} />
     </>
   );

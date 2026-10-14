@@ -115,7 +115,7 @@ pub fn router() -> Router<AppState> {
         // 12m, uygulama 10 MB — sinir asan istek nginx'ten degil buradan
         // anlasilir kodla doner.
         .route("/api/attachments", post(attachments::upload)
-            .layer(DefaultBodyLimit::max(media::MAX_BYTES + 1)))
+            .layer(DefaultBodyLimit::max(media::LARGEST_MAX_BYTES + 1)))
         .route("/api/attachments/{id}", get(attachments::get).delete(attachments::delete))
         .route("/api/attachments/{id}/thumb", get(attachments::thumb))
         .route("/api/attachments/{id}/tags", post(attachments::add_tag))

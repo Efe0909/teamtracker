@@ -2,6 +2,7 @@
 // uc basina islevler hooks.ts'te bunu kullanir.
 
 import { ERRORS, isErrorCode, type ApiErrorCode } from "./errors";
+import type { UploadPurpose } from "./types";
 
 export class ApiError extends Error {
   readonly code: ApiErrorCode;
@@ -59,13 +60,14 @@ export async function request<T>(method: Method, path: string, body?: unknown): 
   return data as T;
 }
 
-/** Ham dosya yukleme (JSON degil): ek sahipsiz dogar, mesaj/kart sonra baglar. */
-export async function upload<T>(file: File): Promise<T> {
+/** Ham dosya yukleme (JSON degil): ek sahipsiz dogar, mesaj/kart sonra baglar.
+ *  `purpose` sinir ve turleri secer (spec/83 §2); varsayilan sohbet. */
+export async function upload<T>(file: File, purpose: UploadPurpose = "chat"): Promise<T> {
   const headers: Record<string, string> = { Accept: "application/json" };
   if (csrf !== null) headers["X-CSRF-Token"] = csrf;
   let r: Response;
   try {
-    r = await fetch(`/api/attachments${qs({ name: file.name })}`, { method: "POST", headers, body: file });
+    r = await fetch(`/api/attachments${qs({ name: file.name, purpose })}`, { method: "POST", headers, body: file });
   } catch {
     throw new ApiError("network", 0);
   }

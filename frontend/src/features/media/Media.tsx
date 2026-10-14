@@ -6,11 +6,40 @@ import { useId, useRef, useState } from "react";
 import { errorText } from "../../api/client";
 import { attachmentUrl, useDeleteAttachment, useTagAttachment, useTags } from "../../api/hooks";
 import type { Attachment } from "../../api/types";
-import { Icon } from "../../ui/icons";
+import { Icon, type IconName } from "../../ui/icons";
 import { Button, Dialog, ui, useToast } from "../../ui/ui";
 import s from "./media.module.css";
 
 export const IMAGE_ACCEPT = "image/jpeg,image/png,image/webp,image/gif";
+
+/** Belge/metin cipindeki tur rozeti (spec/83). */
+const BADGE: Record<string, string> = {
+  "application/pdf": "PDF",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "DOCX",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "XLSX",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation": "PPTX",
+  "text/markdown": "MD",
+  "text/plain": "TXT",
+  "text/csv": "CSV",
+  "text/x-python": "PY",
+};
+
+export function formatBytes(n: number): string {
+  const f = (v: number) => v.toLocaleString("tr-TR", { maximumFractionDigits: 1 });
+  return n < 1024 * 1024 ? `${f(Math.max(n, 1) / 1024)} KB` : `${f(n / 1024 / 1024)} MB`;
+}
+
+/** Belge ve metin: tiklayinca iner (sunucu `attachment` olarak sunar). */
+function FileChip({ a }: { a: Attachment }) {
+  const name = a.original_name ?? "dosya";
+  return (
+    <a className={s.file} href={attachmentUrl(a.id)} download={name} title={`${name} dosyasını indir`}>
+      <span className={s.badge}>{BADGE[a.mime] ?? "DOSYA"}</span>
+      <span className={s.fileName}>{name}</span>
+      <span className={s.fileSize}>{formatBytes(a.byte_size)}</span>
+    </a>
+  );
+}
 
 export function Attachments({ items }: { items: Attachment[] }) {
   const [open, setOpen] = useState<Attachment | null>(null);
@@ -19,7 +48,9 @@ export function Attachments({ items }: { items: Attachment[] }) {
     <div className={s.grid}>
       {items.map((a) =>
         a.deleted ? (
-          <span key={a.id} className={s.tomb}>(görsel silindi)</span>
+          <span key={a.id} className={s.tomb}>{a.kind === "image" ? "(görsel silindi)" : "(dosya silindi)"}</span>
+        ) : a.kind !== "image" ? (
+          <FileChip key={a.id} a={a} />
         ) : (
           <button key={a.id} type="button" className={s.thumb} onClick={() => setOpen(a)}
             aria-label={`Görseli aç${a.original_name !== null ? `: ${a.original_name}` : ""}`}>
@@ -84,18 +115,22 @@ function Lightbox({ a, onClose }: { a: Attachment; onClose: () => void }) {
   );
 }
 
-/** Gorsel secme dugmesi: gizli dosya kutusu + ikon. Yuklemeyi cagiran yapar. */
-export function ImagePicker(props: { onFiles: (files: File[]) => void; busy: boolean; label?: string }) {
+/** Dosya secme dugmesi: gizli dosya kutusu + ikon. Yuklemeyi cagiran yapar.
+ *  Varsayilan gorsel; sohbet `accept`'i `/api/meta.upload_limits`'ten verir. */
+export function ImagePicker(props: {
+  onFiles: (files: File[]) => void; busy: boolean; label?: string; accept?: string | undefined; icon?: IconName; title?: string;
+}) {
   const input = useRef<HTMLInputElement>(null);
+  const title = props.title ?? props.label ?? "Görsel ekle";
   return (
     <>
-      <input ref={input} type="file" accept={IMAGE_ACCEPT} multiple hidden onChange={(e) => {
+      <input ref={input} type="file" accept={props.accept ?? IMAGE_ACCEPT} multiple hidden onChange={(e) => {
         props.onFiles([...(e.target.files ?? [])]);
         e.target.value = "";
       }} />
       <Button variant="ghost" disabled={props.busy} onClick={() => input.current?.click()}
-        aria-label={props.label ?? "Görsel ekle"} title={props.label ?? "Görsel ekle"}>
-        <Icon name="image" size={16} />{props.label !== undefined && ` ${props.label}`}
+        aria-label={title} title={title}>
+        <Icon name={props.icon ?? "image"} size={16} />{props.label !== undefined && ` ${props.label}`}
       </Button>
     </>
   );

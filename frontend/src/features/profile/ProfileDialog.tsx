@@ -56,7 +56,7 @@ function ProfileForm({ onDone }: { onDone: () => void }) {
 
   const pick = (f: File) => {
     setBusy(true);
-    upload<Attachment>(f)
+    upload<Attachment>(f, "avatar")
       .then((a) => setAvatar(a.id))
       .catch((e: unknown) => setErr(errorText(e)))
       .finally(() => setBusy(false));

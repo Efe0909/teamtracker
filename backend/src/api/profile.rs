@@ -120,11 +120,13 @@ pub async fn patch(
     }
     let avatar = match p.avatar_id {
         Some(Some(a)) => {
-            // Yalniz kendi yukledigi, silinmemis ek.
+            // Yalniz kendi yukledigi, silinmemis, profil sinirindaki gorsel (spec/83 §4.1).
             let ok: bool = sqlx::query_scalar(
                 "select exists(select 1 from attachments
-                                where id = $1 and uploader_id = $2 and deleted_at is null)")
-                .bind(a).bind(me.id).fetch_one(&mut *tx).await?;
+                                where id = $1 and uploader_id = $2 and deleted_at is null
+                                  and kind = 'image' and byte_size <= $3)")
+                .bind(a).bind(me.id).bind(crate::media::Purpose::Avatar.max_bytes() as i64)
+                .fetch_one(&mut *tx).await?;
             if !ok {
                 return Err(AppError::BadRequest("invalid_avatar"));
             }

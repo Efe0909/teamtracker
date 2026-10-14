@@ -33,6 +33,45 @@
   font-size: var(--fs-xs);
   line-height: 1.4;
 }
+/* belge/metin cipi (spec/83): tur rozeti + ad + boyut, tiklayinca iner */
+.file {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  max-width: 320px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--panel);
+  color: var(--txt);
+  text-decoration: none;
+  font-size: var(--fs-sm);
+}
+.file:hover {
+  border-color: var(--line-strong);
+  background: var(--panel2);
+}
+.badge {
+  flex: none;
+  padding: 1px 5px;
+  border-radius: var(--r-sm);
+  background: var(--tint);
+  color: var(--dim);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+}
+.fileName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fileSize {
+  flex: none;
+  color: var(--dim);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+}
 .tomb {
   font-size: var(--fs-sm);
   font-style: italic;
