@@ -4,6 +4,7 @@
 
 import type { RecordQuery } from "../../api/hooks";
 import type { Uuid } from "../../api/types";
+import { profileHref, profileTab, safeReturn, type ProfileTab } from "../../features/profile/tabs";
 
 export type Route =
   | { name: "home" }
@@ -22,6 +23,8 @@ export type Route =
   // Yonetim > Veri isleme ve LLM: profil ve gorev ayrintisi tam sayfa (KNOW-112).
   | { name: "llmProfile"; id: Uuid }
   | { name: "llmTask"; feature: string }
+  // Profil ve ayarlar (spec/82): bolum ve donus adresi URL'de.
+  | { name: "profile"; tab: ProfileTab; ret: string | null }
   | { name: "notFound" };
 
 export const QUERY_KEYS = [
@@ -67,6 +70,9 @@ export function parse(url: URL): Route {
   if (a === "outcome-tree" && seg.length === 1) return { name: "tree" };
   if (a === "notifications" && seg.length === 1) return { name: "notifications" };
   if (a === "admin" && seg.length === 1) return { name: "admin" };
+  if (a === "profile" && seg.length === 1) {
+    return { name: "profile", tab: profileTab(url.searchParams.get("tab")), ret: safeReturn(url.searchParams.get("return")) };
+  }
   const [, , c, d] = seg;
   if (a === "admin" && b === "llm" && c === "profiles" && d !== undefined && seg.length === 4) return { name: "llmProfile", id: d };
   if (a === "admin" && b === "llm" && c === "tasks" && d !== undefined && seg.length === 4) return { name: "llmTask", feature: d };
@@ -107,5 +113,7 @@ export function href(r: Route): string {
       return `/admin/llm/profiles/${r.id}`;
     case "llmTask":
       return `/admin/llm/tasks/${r.feature}`;
+    case "profile":
+      return profileHref(r.tab, r.ret);
   }
 }

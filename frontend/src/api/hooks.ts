@@ -10,6 +10,7 @@ import { useRealtimeUp, useTopic, type RealtimeEvent } from "./realtime";
 import type {
   ActionPatch,
   AdminView,
+  BankAccount,
   LlmCallDetail,
   LlmCallsView,
   LlmConfig,
@@ -86,6 +87,7 @@ export const keys = {
   team: (id: Uuid) => ["team", id] as const,
   notifications: ["notifications"] as const,
   notifyPrefs: ["notify-prefs"] as const,
+  bankAccounts: ["bank-accounts"] as const,
   adminActivity: ["admin", "activity"] as const,
   myActions: ["my-actions"] as const,
   nodes: ["nodes"] as const,
@@ -702,6 +704,40 @@ export function useMarkSeen() {
   return useMutation({
     mutationFn: () => request<null>("POST", "/api/notifications/seen"),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.notifications }),
+  });
+}
+
+/** Hesap numaralarim (spec/82 §4). Her yazma guncel listeyi doner; `meta`
+ *  tazelenir (`has_bank_account` fatura formunu yonlendirir). */
+export function useBankAccounts() {
+  return useQuery({ queryKey: keys.bankAccounts, queryFn: () => request<BankAccount[]>("GET", "/api/me/bank-accounts") });
+}
+
+export type BankAccountOp =
+  | { op: "add"; label: string; holder_name: string; iban: string }
+  | { op: "edit"; id: Uuid; label?: string; holder_name?: string; is_default?: true }
+  | { op: "delete"; id: Uuid };
+
+export function useBankAccountWrite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (o: BankAccountOp) => {
+      switch (o.op) {
+        case "add":
+          return request<BankAccount[]>("POST", "/api/me/bank-accounts",
+            { label: o.label, holder_name: o.holder_name, iban: o.iban });
+        case "edit": {
+          const { op: _op, id, ...body } = o;
+          return request<BankAccount[]>("PATCH", `/api/me/bank-accounts/${id}`, body);
+        }
+        case "delete":
+          return request<BankAccount[]>("DELETE", `/api/me/bank-accounts/${o.id}`);
+      }
+    },
+    onSuccess: (list) => {
+      qc.setQueryData(keys.bankAccounts, list);
+      void qc.invalidateQueries({ queryKey: keys.meta });
+    },
   });
 }
 

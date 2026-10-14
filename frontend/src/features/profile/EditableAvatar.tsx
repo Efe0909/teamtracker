@@ -1,28 +1,26 @@
-// Kendi avatarinin ustunde kucuk kalem: tiklaninca profil penceresi (foto
-// yukleme orada). Baskasinin avatarinda kalem yok — profil yalniz sahibince
-// duzenlenir (PATCH /api/me/profile).
+// Kendi avatarinin ustunde kucuk kalem: tiklaninca profil sayfasi (foto
+// yukleme orada, spec/82). Baskasinin avatarinda kalem yok — profil yalniz
+// sahibince duzenlenir (PATCH /api/me/profile).
 
-import { useRef, useState } from "react";
+import { useRef } from "react";
 import { errorText, upload } from "../../api/client";
 import type { Attachment, MetaUser } from "../../api/types";
 import { useLookup } from "../../lib/lookup";
+import { navigate } from "../../lib/router";
 import { Icon } from "../../ui/icons";
 import { Avatar, useToast } from "../../ui/ui";
-import { ProfileDialog } from "./ProfileDialog";
 import s from "./profile.module.css";
+import { profileHref } from "./tabs";
 
 export function EditableAvatar({ user, size = 40 }: { user: MetaUser; size?: number }) {
   const L = useLookup();
-  const [open, setOpen] = useState(false);
   if (user.id !== L.me.id) return <Avatar user={user} size={size} />;
   return (
-    <>
-      <button type="button" className={s.editAv} aria-label="Profil fotoğrafını değiştir" onClick={() => setOpen(true)}>
-        <Avatar user={user} size={size} />
-        <span className={s.pen}><Icon name="edit" size={11} /></span>
-      </button>
-      <ProfileDialog open={open} onClose={() => setOpen(false)} />
-    </>
+    <button type="button" className={s.editAv} aria-label="Profil fotoğrafını değiştir"
+      onClick={() => navigate(profileHref("info", null))}>
+      <Avatar user={user} size={size} />
+      <span className={s.pen}><Icon name="edit" size={11} /></span>
+    </button>
   );
 }
 

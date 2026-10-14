@@ -97,6 +97,8 @@ export interface Meta {
     id: Uuid; is_admin: boolean; scopes: string[]; team_ids: Uuid[]; profile_complete: boolean;
     /** Secicilerdeki favori dugumler (spec/74 §6). */
     favorite_nodes: Uuid[];
+    /** Silinmemis hesap numarasi var mi (spec/82 P4); eski sunucuda yok. */
+    has_bank_account?: boolean;
   };
   users: MetaUser[];
   teams: MetaTeam[];
@@ -109,6 +111,17 @@ export interface Meta {
   contact_email?: string;
   /** Yukleme amaci basina sinir ve `accept` (spec/83 §2). Eski sunucuda yok. */
   upload_limits?: Partial<Record<UploadPurpose, { max_bytes: number; accept: string }>>;
+}
+
+/** Kisinin kendi hesap numarasi (spec/82 §4). `iban` yalniz sahibine tam doner. */
+export interface BankAccount {
+  id: Uuid;
+  label: string;
+  holder_name: string;
+  iban: string | null;
+  iban_last4: string;
+  is_default: boolean;
+  created_at: string;
 }
 
 /** Yuklemenin amaci: sinir ve kabul edilen turler sunucuda (spec/83 §2). */

@@ -7,6 +7,7 @@
 mod admin;
 mod attachments;
 mod auth;
+mod bank_accounts;
 mod cards;
 mod chats;
 mod common;
@@ -105,6 +106,9 @@ pub fn router() -> Router<AppState> {
         .route("/api/notifications", get(notify::list))
         .route("/api/notifications/seen", post(notify::seen))
         .route("/api/me/notifications", get(notify::prefs).patch(notify::patch_prefs))
+        .route("/api/me/bank-accounts", get(bank_accounts::list).post(bank_accounts::create))
+        .route("/api/me/bank-accounts/{id}", patch(bank_accounts::patch).delete(bank_accounts::delete))
+        .route("/api/me/export", get(profile::export))
         .route("/api/chats/{id}/prefs", put(notify::set_chat))
         .route("/api/push/vapid", get(notify::vapid))
         .route("/api/push/subscriptions", post(notify::subscribe).delete(notify::unsubscribe))

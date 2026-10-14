@@ -55,6 +55,8 @@ struct MeInfo {
     profile_complete: bool,
     /// Secicilerdeki favori dugumler (spec/74 §6), eklenme sirasinda.
     favorite_nodes: Vec<Uuid>,
+    /// Silinmemis hesap numarasi var mi: fatura formu yoksa profile yonlendirir (spec/82 P4).
+    has_bank_account: bool,
 }
 
 #[derive(Serialize, sqlx::FromRow)]
@@ -140,8 +142,10 @@ pub async fn meta(State(st): State<AppState>, CurrentUser(me): CurrentUser) -> R
     let scopes = db::scope::active(&st.pool, &me).await?;
     let team_ids = sqlx::query_scalar("select team_id from team_members where user_id = $1")
         .bind(me.id).fetch_all(&st.pool).await?;
-    let profile_complete: bool = sqlx::query_scalar(
-        "select coalesce(btrim(phone), '') <> '' from users where id = $1")
+    let (profile_complete, has_bank_account): (bool, bool) = sqlx::query_as(
+        "select coalesce(btrim(phone), '') <> '',
+                exists(select 1 from bank_accounts b where b.user_id = u.id and b.deleted_at is null)
+           from users u where u.id = $1")
         .bind(me.id).fetch_one(&st.pool).await?;
     let user_rows: Vec<UserRow> = sqlx::query_as(
         "select id, name, color, is_admin, last_seen_at, nickname, phone, avatar_id,
@@ -202,7 +206,9 @@ pub async fn meta(State(st): State<AppState>, CurrentUser(me): CurrentUser) -> R
     }
 
     Ok(Json(Meta {
-        me: MeInfo { id: me.id, is_admin: me.is_admin, scopes, team_ids, profile_complete, favorite_nodes },
+        me: MeInfo {
+            id: me.id, is_admin: me.is_admin, scopes, team_ids, profile_complete, favorite_nodes, has_bank_account,
+        },
         users, teams, pillars, nodes, external_off,
         version: st.cfg.version.clone(), contact_email: st.cfg.contact_email.clone(),
         upload_limits: crate::media::Purpose::ALL.into_iter()

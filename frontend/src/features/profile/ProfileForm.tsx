@@ -1,5 +1,6 @@
-// Kisinin kendi profili (sol-alt menuden). Telefon zorunlu: bossa pencere
-// kapatilamaz (`profile_complete`), diger alanlar istege bagli.
+// Kisinin kendi profil alanlari (spec/82 §3.1): Profil sayfasinin "Profilim"
+// bolumu. Telefon zorunlu: bossa uygulama bu sayfadan cikmaz (`profile_complete`,
+// `ProfileGate`), diger alanlar istege bagli.
 
 import { useRef, useState } from "react";
 import { errorText, upload } from "../../api/client";
@@ -8,7 +9,7 @@ import { privacyUrl } from "../../api/session";
 import type { Attachment } from "../../api/types";
 import { useLookup } from "../../lib/lookup";
 import { Icon } from "../../ui/icons";
-import { Avatar, Button, Dialog, Req, ui, useToast } from "../../ui/ui";
+import { Avatar, Button, Req, ui, useToast } from "../../ui/ui";
 import s from "./profile.module.css";
 
 /** Yazarken telefon: yalniz rakam, basta hep 0, `0532 000 00 00` gruplari.
@@ -23,19 +24,7 @@ const PHONE_PATTERN = "0\\d{3} \\d{3} \\d{2} \\d{2}";
 
 const MONTHS =["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
 
-export function ProfileDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const L = useLookup();
-  const complete = L.meta.me.profile_complete;
-  // Telefonsuz profil kapatilamaz: kapatma isteklerini yutar.
-  return (
-    <Dialog open={open} onClose={() => { if (complete) onClose(); }} title="Profilim"
-      {...(complete ? {} : { hint: "Devam etmeden önce telefon numaranı gir; ekip arkadaşların sana ulaşabilsin." })}>
-      <ProfileForm onDone={onClose} />
-    </Dialog>
-  );
-}
-
-function ProfileForm({ onDone }: { onDone: () => void }) {
+export function ProfileForm({ onDone }: { onDone: () => void }) {
   const L = useLookup();
   const me = L.me;
   const m = usePatchProfile();

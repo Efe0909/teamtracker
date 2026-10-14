@@ -6,6 +6,8 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { EventDetail, Meta, RecordSummary } from "../../api/types";
 import { LookupProvider } from "../../lib/lookup";
+import { ProfilePage, useProfileGate } from "../../features/profile/ProfilePage";
+import { ToastProvider } from "../../ui/ui";
 import MobileApp, { CameraFlow, TopBar } from "./MobileApp";
 import { setCsrf } from "../../api/client";
 import { keys } from "../../api/hooks";
@@ -107,7 +109,7 @@ describe("mobil üst çubuk ve hesap menüsü (spec/31)", () => {
     expect(screen.getByRole("button", { name: "Hesap menüsü" })).toBeTruthy();
   });
 
-  it("eksik profilde profil tamamlama diyalogu açılır", () => {
+  it("eksik profilde profil sayfası telefon uyarısını gösterir (spec/82 P6)", () => {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const incompleteMeta: Meta = {
       ...META,
@@ -116,11 +118,27 @@ describe("mobil üst çubuk ve hesap menüsü (spec/31)", () => {
     render(
       <QueryClientProvider client={qc}>
         <LookupProvider meta={incompleteMeta}>
-          <TopBar title="Test" />
+          <ToastProvider>
+            <ProfilePage tab="info" ret={null} hrefOf={(t) => `/profile?tab=${t}`} />
+          </ToastProvider>
         </LookupProvider>
       </QueryClientProvider>,
     );
     expect(screen.getByText(/Devam etmeden önce telefon numaranı gir/)).toBeTruthy();
+    expect(screen.getByRole("link", { name: /Hesap numaralarım/ }).getAttribute("href")).toBe("/profile?tab=accounts");
+  });
+
+  it("eksik profilde kapı profil dışındaki adresi profile çevirir", () => {
+    const go = vi.fn();
+    function Probe({ on }: { on: boolean }) {
+      useProfileGate(on, go);
+      return null;
+    }
+    const incompleteMeta: Meta = { ...META, me: { ...META.me, profile_complete: false } };
+    const { rerender } = render(<LookupProvider meta={incompleteMeta}><Probe on /></LookupProvider>);
+    expect(go).not.toHaveBeenCalled();
+    rerender(<LookupProvider meta={incompleteMeta}><Probe on={false} /></LookupProvider>);
+    expect(go).toHaveBeenCalledTimes(1);
   });
 });
 

@@ -791,6 +791,23 @@ I1=$(upp n "$NT" "$J/f.pdf" "f.pdf" invoice | jq -r .id)
 ok "$(w n POST "$NT" "/api/chats/$BCHAT/messages" "{\"body\":\"\",\"attachment_ids\":[\"$I1\"]}" | jq -r .error)" invalid_attachment "fatura eki sohbete takilmaz"
 ok "$(g n /api/meta | jq -r '.upload_limits.avatar.max_bytes')" 5242880 "meta sinirlari"
 
+# Hesap numaralarim (spec/82 §4): yalniz sahibi, mod-97, yumusak silme.
+t bank_accounts
+IB1=TR690001000000000000000000; IB2=TR400006200000000000000001
+ok "$(g n /api/meta | jq -r '.me.has_bank_account')" false "hesap yok"
+ok "$(w n POST "$NT" /api/me/bank-accounts '{"label":"Ziraat","holder_name":"Deniz","iban":"TR690001000000000000000001"}' | jq -r .error)" invalid_iban "saglama tutmaz"
+ok "$(w n POST "$NT" /api/me/bank-accounts "{\"label\":\"Ziraat\",\"holder_name\":\"Deniz\",\"iban\":\"tr69 0001 0000 0000 0000 0000 00\"}" | jq -r '.[0].iban+" "+(.[0].is_default|tostring)')" "$IB1 true" "ilk hesap varsayilan, normalize"
+L2=$(w n POST "$NT" /api/me/bank-accounts "{\"label\":\"Garanti\",\"holder_name\":\"Deniz\",\"iban\":\"$IB2\"}")
+ok "$(jq -r '[.[]|.is_default|tostring]|join(",")' <<<"$L2")" "true,false" "ikinci varsayilan degil"
+BA1=$(jq -r '.[0].id' <<<"$L2"); BA2=$(jq -r '.[1].id' <<<"$L2")
+ok "$(g w /api/me/bank-accounts | jq -r 'length')" 0 "baskasinin hesabi listede yok"
+ok "$(wc_ w PATCH "$WT" "/api/me/bank-accounts/$BA2" '{"is_default":true}')" 404 "baskasinin hesabi yazilamaz"
+ok "$(w n PATCH "$NT" "/api/me/bank-accounts/$BA2" '{"is_default":true}' | jq -r '.[0].id')" "$BA2" "varsayilan degisir"
+ok "$(w n DELETE "$NT" "/api/me/bank-accounts/$BA2" '' | jq -r '.[0].id+" "+(.[0].is_default|tostring)')" "$BA1 true" "varsayilan silinince kalan varsayilan"
+ok "$(DB "select coalesce(iban,'-')||' '||iban_last4 from bank_accounts where id='$BA2'")" "- 0001" "silinen: IBAN gider, son 4 kalir"
+ok "$(g n /api/meta | jq -r '.me.has_bank_account')" true "meta hesap var"
+ok "$(g n /api/me/export | jq -r '.bank_accounts|length')" 1 "disa aktarimda kendi hesaplari"
+
 t attachment_tags
 ok "$(wc_ n POST "$NT" "/api/attachments/$A1/tags" '{"name":"İstanbul"}')" 403 "tag_media yoksa 403"
 w w POST "$WT" "/api/attachments/$A1/tags" '{"name":"İstanbul"}' >/dev/null

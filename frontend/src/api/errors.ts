@@ -39,6 +39,11 @@ export type ApiErrorCode =
   | "bad_file_type"
   | "corrupt_image"
   | "corrupt_file"
+  | "invalid_account_label"
+  | "invalid_holder"
+  | "invalid_iban"
+  | "too_many_accounts"
+  | "invalid_default"
   | "macro_not_allowed"
   | "legacy_office_not_allowed"
   | "bad_text_encoding"
@@ -178,6 +183,11 @@ export const ERRORS = {
   bad_file_type: "Bu dosya türü burada yüklenemez.",
   corrupt_image: "Görsel bozuk ya da okunamıyor.",
   corrupt_file: "Dosya bozuk görünüyor.",
+  invalid_account_label: "Hesap adı 1-60 karakter olmalı (ör. “Ziraat”).",
+  invalid_holder: "Hesap sahibinin adını yaz.",
+  invalid_iban: "IBAN geçersiz. Boşluklar sorun değil; hanelerden biri yanlış olabilir.",
+  too_many_accounts: "En fazla 5 hesap numarası eklenebilir.",
+  invalid_default: "Varsayılan hesap kaldırılamaz; başka bir hesabı varsayılan yap.",
   macro_not_allowed: "Makro içeren belge yüklenemez; makrosuz kaydedip tekrar dene.",
   legacy_office_not_allowed: "Eski Office biçimi desteklenmiyor; .docx, .xlsx ya da .pptx olarak kaydet.",
   bad_text_encoding: "Metin dosyası UTF-8 olmalı.",

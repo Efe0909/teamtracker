@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { formatPhone } from "./ProfileDialog";
+import { formatPhone } from "./ProfileForm";
 
 it("telefonu 0532 000 00 00 biciminde yazar", () => {
   expect(formatPhone("")).toBe("0");

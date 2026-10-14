@@ -5,11 +5,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useNotifications } from "../../api/hooks";
-import { NotifySettings } from "../../features/profile/NotifySettings";
-import { ProfileDialog } from "../../features/profile/ProfileDialog";
+import { ProfilePage, useProfileGate } from "../../features/profile/ProfilePage";
+import type { ProfileTab } from "../../features/profile/tabs";
 import { useLookup } from "../../lib/lookup";
 import { mergeOrder, moveTo } from "../../lib/order";
-import { useLocation } from "../../lib/router";
+import { navigate, useLocation } from "../../lib/router";
 import { useStored } from "../../lib/stored";
 import { setTheme, useTheme, type Theme } from "../../lib/theme";
 import { Icon, type IconName } from "../../ui/icons";
@@ -42,6 +42,7 @@ export default function Dashboard() {
 
   // Gezinince cekmece kapanir.
   useEffect(() => setDrawer(false), [route.name, "id" in route ? route.id : ""]);
+  useProfileGate(route.name === "profile", goProfileInfo);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
@@ -78,10 +79,22 @@ export default function Dashboard() {
   );
 }
 
+const profileTo = (tab: ProfileTab) => href({ name: "profile", tab, ret: null });
+const goProfileInfo = () => navigate(profileTo("info"), { replace: true });
+
 function Page({ route }: { route: Route }) {
   switch (route.name) {
     case "home":
       return <Home />;
+    case "profile":
+      return (
+        <div className={s.page}>
+          <div className={s.pageHead}>
+            <div className={s.pageTitle}><h1>Profil ve ayarlar</h1></div>
+          </div>
+          <ProfilePage tab={route.tab} ret={route.ret} hrefOf={profileTo} />
+        </div>
+      );
     case "tasks":
       return <Tasks query={route.query} />;
     case "record":
@@ -160,8 +173,6 @@ function Sidebar({ route, onSearch, onFold }: { route: Route; onSearch: () => vo
   const admin = L.can("manage_users") || L.can("manage_llm");
   const mine = new Set(L.meta.me.team_ids);
   const teams = [...L.plainTeams].sort((a, b) => Number(mine.has(b.id)) - Number(mine.has(a.id)) || a.name.localeCompare(b.name, "tr"));
-  const [profileOpen, setProfileOpen] = useState(!L.meta.me.profile_complete);
-  const [notifyOpen, setNotifyOpen] = useState(false);
   const [teamsOpen, setTeamsOpen] = useStored("nav.teams.open", true);
   const current = route.name === "team" || route.name === "pillar" ? route.id : null;
 
@@ -321,11 +332,11 @@ function Sidebar({ route, onSearch, onFold }: { route: Route; onSearch: () => vo
           </button>
         }
       >
-        <MenuItem icon="user" onSelect={() => setProfileOpen(true)}>
-          Profilim
+        <MenuItem icon="user" onSelect={() => navigate(profileTo("info"))}>
+          Profil ve ayarlar
         </MenuItem>
-        <MenuItem icon="bell" onSelect={() => setNotifyOpen(true)}>
-          Bildirimler
+        <MenuItem icon="bell" onSelect={() => navigate(profileTo("notifications"))}>
+          Bildirim ayarları
         </MenuItem>
         <MenuSep />
         <MenuLabel>Tema</MenuLabel>
@@ -335,8 +346,6 @@ function Sidebar({ route, onSearch, onFold }: { route: Route; onSearch: () => vo
           Çıkış yap
         </MenuItem>
       </Menu>
-      <NotifySettings open={notifyOpen} onClose={() => setNotifyOpen(false)} />
-      <ProfileDialog open={profileOpen} onClose={() => setProfileOpen(false)} />
     </nav>
   );
 }

@@ -52,3 +52,146 @@
   background: var(--panel);
   color: var(--txt);
 }
+
+/* --- profil sayfasi (spec/82): yan gezinme + bolum ------------------------- */
+.page {
+  display: grid;
+  grid-template-columns: 210px minmax(0, 1fr);
+  gap: var(--s-5);
+  align-items: start;
+  max-width: 900px;
+}
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tab {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 7px var(--s-2);
+  border-radius: var(--r-sm);
+  color: var(--dim);
+  text-decoration: none;
+}
+.tab:hover {
+  background: var(--tint);
+  color: var(--txt);
+}
+.tab[aria-current="page"] {
+  background: var(--acc-bg);
+  color: var(--acc-strong);
+  font-weight: 500;
+}
+.body {
+  display: grid;
+  gap: var(--s-4);
+  min-width: 0;
+  padding: var(--s-4) var(--s-5);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--panel);
+}
+.sectionTitle {
+  margin: 0;
+  font-size: var(--fs-lg);
+  font-weight: 600;
+}
+.notice {
+  margin: 0;
+  padding: var(--s-3) var(--s-4);
+  border-radius: var(--r-md);
+  background: var(--warn-bg);
+  color: var(--warn-text);
+  font-size: var(--fs-sm);
+}
+.notice a {
+  color: inherit;
+  font-weight: 600;
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.chip {
+  padding: 2px 8px;
+  border-radius: var(--r-sm);
+  background: var(--tint);
+  color: var(--dim);
+  font-size: var(--fs-sm);
+}
+.prose {
+  max-width: 65ch;
+}
+.prose p,
+.prose ul {
+  margin: 0;
+}
+.prose ul {
+  display: grid;
+  gap: 6px;
+  padding-left: 18px;
+}
+
+/* hesap numaralari */
+.accounts {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+.account {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 10px var(--s-3);
+}
+.account + .account {
+  border-top: 1px solid var(--line);
+}
+.accountText {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+.accountText b {
+  font-weight: 500;
+}
+.iban {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--dim);
+}
+input.iban {
+  color: var(--txt);
+}
+.defaultTag {
+  padding: 1px 6px;
+  border-radius: var(--r-sm);
+  background: var(--acc-bg);
+  color: var(--acc-strong);
+  font-size: var(--fs-xs);
+}
+.addForm {
+  padding: var(--s-3);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--r-md);
+}
+
+@media (max-width: 760px) {
+  .page {
+    grid-template-columns: 1fr;
+  }
+  .side {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .body {
+    padding: var(--s-3);
+  }
+}
