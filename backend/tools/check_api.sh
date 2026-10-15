@@ -998,7 +998,10 @@ EC=$(w n POST "$NT" /api/finance/claims "{\"kind\":\"event\",\"event_id\":\"$EVI
 ok "$(jq -r '"\(.claim.kind) \(.claim.invoice_count) \(.claim.seb_total)"' <<<"$EC")" "event 1 50.0" "etkinlik dosyasi aciliskta faturalari alir"
 ok "$(w n POST "$NT" /api/finance/claims "{\"kind\":\"event\",\"event_id\":\"$EVID\"}" | jq -r .error)" claim_exists "ikinci dosya acilmaz"
 ok "$(curl -s -b "$J/n" "$B/api/finance/claims/$(jq -r .claim.id <<<"$EC")/xlsx" | head -c 2)" PK "iade dosyasi Excel'i"
-ok "$(g n /api/finance/claim-slots | jq -r --arg e "$EVID" '[.[]|select(.event_id==$e)]|.[0].claim_id != null')" true "satir artik dosyali"
+SL=$(g n /api/finance/claim-slots)
+ok "$(jq -r --arg e "$EVID" '[.[]|select(.event_id==$e)]|.[0].claim_id != null' <<<"$SL")" true "satir artik dosyali"
+ok "$(jq -r '[.[]|select(.kind=="monthly" and .month==null)]|length' <<<"$SL")" 0 "etkinlik dosyasi aylik satir olarak sizmaz"
+ok "$(jq -r --arg e "$EVID" '[.[]|select(.event_id==$e)]|length' <<<"$SL")" 1 "etkinlik tek satir"
 DB "delete from user_scopes where user_id='$DENIZ' and scope in ('review_purchases','manage_ledger')" >/dev/null
 
 # Maliye > satin alimlar: kuyruk sayimlari, duvar, tedarikci bul-ya-da-ac + geri doldurma.

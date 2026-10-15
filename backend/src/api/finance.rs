@@ -800,7 +800,7 @@ pub async fn claim_slots(State(st): State<AppState>, CurrentUser(me): CurrentUse
                      from invoices i join invoice_items ii on ii.invoice_id = i.id
                     where i.status = 'approved' and ii.funding = 'seb' and i.claim_id is null
                     group by 1) m
-             full join reimbursement_claims c on c.kind = 'monthly' and c.month = m.month
+             full join (select * from reimbursement_claims where kind = 'monthly') c on c.month = m.month
            union all
            select 'event', null, e.id, e.title, e.date, c.id, c.status,
                   (case when c.id is not null then (select count(*) from invoices i where i.claim_id = c.id)
@@ -817,7 +817,7 @@ pub async fn claim_slots(State(st): State<AppState>, CurrentUser(me): CurrentUse
                       and (i.claim_id is null or exists (select 1 from reimbursement_claims k
                                                           where k.id = i.claim_id and k.kind = 'monthly' and k.status = 'draft'))
                     group by 1) x
-             full join reimbursement_claims c on c.kind = 'event' and c.event_id = x.event_id
+             full join (select * from reimbursement_claims where kind = 'event') c on c.event_id = x.event_id
              join events e on e.id = coalesce(c.event_id, x.event_id)
          ) t
           order by (status = 'paid') nulls first, coalesce(month, event_date) desc nulls last")
