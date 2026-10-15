@@ -47,7 +47,7 @@ KNOW-377 (açıklama Markdown kaynağı saklanır), `75-yetki.md` (görme), `85-
   `GET /api/links/backlinks?kind=record&id=` → kaynak (kayıt/etkinlik), nereden (açıklama,
   mesaj), ne zaman. Görme izniyle süzülür.
 
-## 4. Veri (göç 030)
+## 4. Veri (göç 031)
 
 ```sql
 create table links (

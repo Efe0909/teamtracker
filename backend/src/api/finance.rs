@@ -765,6 +765,65 @@ pub async fn claims(State(st): State<AppState>, CurrentUser(me): CurrentUser) ->
         .fetch_all(&st.pool).await?))
 }
 
+/// Iade listesinin satiri: dosya acilmis olsun olmasin. `claim_id` bos = "Dosya acilmadi".
+#[derive(Serialize, sqlx::FromRow)]
+pub struct ClaimSlot {
+    kind: String,
+    month: Option<NaiveDate>,
+    event_id: Option<Uuid>,
+    event_title: Option<String>,
+    event_date: Option<NaiveDate>,
+    claim_id: Option<Uuid>,
+    status: Option<String>,
+    invoice_count: i64,
+    seb_total: f64,
+}
+
+/// SEB fonlu onayli faturasi olan her ay ve her etkinlik + acik dosyalar (spec/81 §3.6).
+/// Acik dosyada sayilar dosyanin kendisinden, acilmamis satirda onayli faturalardan gelir;
+/// etkinlik satiri yalniz dosyaya girebilecek (dosyasiz ya da taslak aylik dosyada) faturalari sayar.
+pub async fn claim_slots(State(st): State<AppState>, CurrentUser(me): CurrentUser) -> Result<Json<Vec<ClaimSlot>>> {
+    need_viewer(&st, &me).await?;
+    Ok(Json(sqlx::query_as(
+        "select * from (
+           select 'monthly'::text as kind, coalesce(c.month, m.month) as month, null::uuid as event_id,
+                  null::text as event_title, null::date as event_date, c.id as claim_id, c.status,
+                  (case when c.id is not null then (select count(*) from invoices i where i.claim_id = c.id)
+                        else coalesce(m.n, 0) end)::bigint as invoice_count,
+                  (case when c.id is not null then
+                          coalesce((select sum(round(ii.amount * coalesce(i.fx_rate, 1), 2)) from invoices i
+                                      join invoice_items ii on ii.invoice_id = i.id
+                                     where i.claim_id = c.id and ii.funding = 'seb'), 0)
+                        else coalesce(m.seb, 0) end)::float8 as seb_total
+             from (select date_trunc('month', i.purchased_on)::date as month, count(distinct i.id) as n,
+                          sum(round(ii.amount * coalesce(i.fx_rate, 1), 2)) as seb
+                     from invoices i join invoice_items ii on ii.invoice_id = i.id
+                    where i.status = 'approved' and ii.funding = 'seb' and i.claim_id is null
+                    group by 1) m
+             full join reimbursement_claims c on c.kind = 'monthly' and c.month = m.month
+           union all
+           select 'event', null, e.id, e.title, e.date, c.id, c.status,
+                  (case when c.id is not null then (select count(*) from invoices i where i.claim_id = c.id)
+                        else coalesce(x.n, 0) end)::bigint,
+                  (case when c.id is not null then
+                          coalesce((select sum(round(ii.amount * coalesce(i.fx_rate, 1), 2)) from invoices i
+                                      join invoice_items ii on ii.invoice_id = i.id
+                                     where i.claim_id = c.id and ii.funding = 'seb'), 0)
+                        else coalesce(x.seb, 0) end)::float8
+             from (select em.event_id, count(distinct i.id) as n, sum(round(ii.amount * coalesce(i.fx_rate, 1), 2)) as seb
+                     from invoice_items ii join invoices i on i.id = ii.invoice_id
+                     join event_materials em on em.material_id = ii.material_id
+                    where i.status = 'approved' and ii.funding = 'seb'
+                      and (i.claim_id is null or exists (select 1 from reimbursement_claims k
+                                                          where k.id = i.claim_id and k.kind = 'monthly' and k.status = 'draft'))
+                    group by 1) x
+             full join reimbursement_claims c on c.kind = 'event' and c.event_id = x.event_id
+             join events e on e.id = coalesce(c.event_id, x.event_id)
+         ) t
+          order by (status = 'paid') nulls first, coalesce(month, event_date) desc nulls last")
+        .fetch_all(&st.pool).await?))
+}
+
 #[derive(Deserialize)]
 pub struct ClaimIn {
     kind: String,
@@ -797,6 +856,18 @@ pub async fn create_claim(
         _ => return Err(AppError::BadRequest("invalid_claim")),
     };
     let id = id.ok_or(AppError::Conflict("claim_exists"))?;
+    if let (Some(e), "event") = (b.event_id, b.kind.as_str()) {
+        // Acilista, etkinligin SEB fonlu onayli faturalari dosyaya girer: dosyasiz olanlar ve
+        // taslak aylik dosyadakiler (gonderilmis dosyadakilere dokunulmaz).
+        sqlx::query(
+            "update invoices i set claim_id = $1, updated_at = now()
+              where i.status = 'approved'
+                and (i.claim_id is null or exists (select 1 from reimbursement_claims k
+                                                    where k.id = i.claim_id and k.kind = 'monthly' and k.status = 'draft'))
+                and exists (select 1 from invoice_items ii join event_materials em on em.material_id = ii.material_id
+                             where ii.invoice_id = i.id and ii.funding = 'seb' and em.event_id = $2)")
+            .bind(id).bind(e).execute(&st.pool).await?;
+    }
     Ok(Json(claim_detail(&st, id).await?))
 }
 
@@ -837,6 +908,50 @@ async fn claim_detail(st: &AppState, id: Uuid) -> Result<ClaimDetail> {
 pub async fn claim(State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>) -> Result<Json<ClaimDetail>> {
     need_viewer(&st, &me).await?;
     Ok(Json(claim_detail(&st, common::id(&raw)?).await?))
+}
+
+/// `GET /api/finance/claims/{id}/xlsx`: dosyadaki kalemlerin dokumu (SEB'e eklenecek).
+pub async fn claim_xlsx(
+    State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>,
+) -> Result<axum::response::Response> {
+    use axum::{http::header, response::IntoResponse};
+    need_viewer(&st, &me).await?;
+    let id = common::id(&raw)?;
+    let claim: ClaimOut = sqlx::query_as(concat!(claim_select!(), "where c.id = $1"))
+        .bind(id).fetch_optional(&st.pool).await?.ok_or(AppError::NotFound)?;
+    type Item = (NaiveDate, String, String, Option<String>, Option<String>, f64);
+    let rows: Vec<Item> = sqlx::query_as(
+        "select i.purchased_on, u.name, m.name, e.title, ii.funding,
+                round(ii.amount * coalesce(i.fx_rate, 1), 2)::float8
+           from invoices i join invoice_items ii on ii.invoice_id = i.id
+           join materials m on m.id = ii.material_id
+           join users u on u.id = i.submitted_by
+           left join event_materials em on em.material_id = m.id
+           left join events e on e.id = em.event_id
+          where i.claim_id = $1 order by i.purchased_on, u.name, m.name")
+        .bind(id).fetch_all(&st.pool).await?;
+    let funding = |f: Option<String>| match f.as_deref() { Some("seb") => "SEB", Some("general") => "Kulüp kasası", _ => "" };
+    let data: Vec<Vec<crate::xlsx::Cell>> = rows.into_iter().map(|(on, who, item, ev, fund, amount)| vec![
+        on.format("%d.%m.%Y").to_string().into(), who.into(), item.into(), ev.unwrap_or_default().into(),
+        funding(fund).into(), amount.into(),
+    ]).collect();
+    let bytes = crate::xlsx::table("Harcama bildirimi", &["Fatura günü", "Kişi", "Kalem", "Etkinlik", "Kaynak", "Tutar (₺)"], &data)
+        .map_err(|e| {
+            tracing::error!("iade xlsx: {e}");
+            AppError::Conflict("xlsx_failed")
+        })?;
+    let name = match (claim.kind.as_str(), claim.month) {
+        ("monthly", Some(m)) => format!("iade-{}.xlsx", m.format("%Y-%m")),
+        _ => format!("iade-{id}.xlsx"),
+    };
+    Ok((
+        [
+            (header::CONTENT_TYPE, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet".to_string()),
+            (header::CACHE_CONTROL, "no-store".into()),
+            (header::CONTENT_DISPOSITION, format!("attachment; filename=\"{name}\"")),
+        ],
+        bytes,
+    ).into_response())
 }
 
 #[derive(Deserialize)]

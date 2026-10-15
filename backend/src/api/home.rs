@@ -37,8 +37,9 @@ pub async fn home(State(st): State<AppState>, CurrentUser(me): CurrentUser) -> R
     // Tek sorgu: dort sayac. "Geciken" tanimi filters.rs `overdue` ile ayni.
     let counts = sqlx::query_as(
         "select
-           (select count(*) from actions
-             where owner_id = $1 and status in ('open','in_progress')) as my_open_actions,
+           (select count(*) from actions a
+             where exists(select 1 from action_assignees x where x.action_id = a.id and x.user_id = $1)
+               and a.status in ('open','in_progress')) as my_open_actions,
            (select count(*) from records
              where status not in ('closed','cancelled')) as open_records,
            (select count(*) from records r

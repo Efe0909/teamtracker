@@ -32,6 +32,7 @@ import type {
   LlmUsageView,
   ClaimDetail,
   ClaimRow,
+  ClaimSlot,
   ClaimStatus,
   FinanceSummary,
   FxQuote,
@@ -41,6 +42,13 @@ import type {
   Ledger,
   LedgerView,
   MaterialType,
+  Analysis,
+  AnalysisGroup,
+  BudgetView,
+  FinancePeriod,
+  MailTemplate,
+  RecurringExpense,
+  MatFull,
   MatList,
   MatQueue,
   MatRow,
@@ -1052,6 +1060,14 @@ export function useClaims() {
   return useQuery({ queryKey: financeKeys.claims, queryFn: () => request<ClaimRow[]>("GET", "/api/finance/claims") });
 }
 
+/** Her ay + her SEB fonlu etkinlik; dosya acilmamis satirlar dahil. */
+export function useClaimSlots() {
+  return useQuery({
+    queryKey: [...financeKeys.all, "claim-slots"] as const,
+    queryFn: () => request<ClaimSlot[]>("GET", "/api/finance/claim-slots"),
+  });
+}
+
 export function useClaim(id: Uuid | null) {
   return useQuery({
     queryKey: financeKeys.claim(id ?? ""),
@@ -1121,6 +1137,31 @@ export interface MatFilter {
   kind?: string;
   category?: Uuid;
   q?: string;
+  /** Etkinlik gunu ya da gerektigi gun araligi (iki uc dahil). */
+  from?: IsoDate;
+  to?: IsoDate;
+}
+
+/** Tek kalem ayrintisi (etkinlikli ya da etkinliksiz). */
+export function useMaterialFull(id: Uuid | null) {
+  return useQuery({
+    queryKey: [...financeKeys.all, "material", id ?? ""] as const,
+    queryFn: () => request<MatFull>("GET", `/api/finance/materials/${id ?? ""}`),
+    enabled: id !== null,
+  });
+}
+
+/** Maliye ayrintisinin yazma kapisi: ayni `eventOps` yollari (etkinliksiz kalemde de calisir);
+ *  cevap sekline bakilmaz, ilgili sorgular yenilenir. */
+export function useMaterialRun() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (op: EventOp) => request<unknown>(op.method, op.path, op.body),
+    onSuccess: () => {
+      afterFinance(qc);
+      void qc.invalidateQueries({ queryKey: ["event"] });
+    },
+  });
 }
 
 export function useMaterialsQueue(f: MatFilter) {
@@ -1203,6 +1244,109 @@ export function useVendorWrite() {
       v.id === null
         ? request<{ vendor: VendorRow; existing: boolean }>("POST", "/api/finance/vendors", v.body)
         : request<VendorRow>("PATCH", `/api/finance/vendors/${v.id}`, v.body).then((vendor) => ({ vendor, existing: false })),
+    onSuccess: () => afterFinance(qc),
+  });
+}
+
+// --- butce, analiz, tekrarlayan giderler, mail sablonlari (spec/81 §8-§12) ----------------
+
+export function usePeriods() {
+  return useQuery({
+    queryKey: [...financeKeys.all, "periods"] as const,
+    queryFn: () => request<FinancePeriod[]>("GET", "/api/finance/periods"),
+  });
+}
+
+export function usePeriodWrite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v:
+      | { op: "create"; name: string; from: IsoDate; to: IsoDate }
+      | { op: "update"; id: Uuid; name: string; from: IsoDate; to: IsoDate }
+      | { op: "delete"; id: Uuid }) => {
+      switch (v.op) {
+        case "create": return request<FinancePeriod>("POST", "/api/finance/periods", { name: v.name, from: v.from, to: v.to });
+        case "update": return request<FinancePeriod>("PATCH", `/api/finance/periods/${v.id}`, { name: v.name, from: v.from, to: v.to });
+        case "delete": return request<unknown>("DELETE", `/api/finance/periods/${v.id}`);
+      }
+    },
+    onSuccess: () => afterFinance(qc),
+  });
+}
+
+/** `period` bossa sunucu bugunu iceren (yoksa en yeni) donemi secer. */
+export function useBudget(period: Uuid | null) {
+  return useQuery({
+    queryKey: [...financeKeys.all, "budget", period ?? ""] as const,
+    queryFn: () => request<BudgetView>("GET", `/api/finance/budget${qs({ period: period ?? undefined })}`),
+    placeholderData: (prev) => prev,
+  });
+}
+
+/** Tek satir yaz; `amount: null` satiri siler. Cevap donemin guncel gorunumudur. */
+export function useBudgetLine() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { period_id: Uuid; category_id: Uuid; event_id?: Uuid | null; amount: number | null; note?: string }) =>
+      request<BudgetView>("PUT", "/api/finance/budget", v),
+    onSuccess: (view, v) => {
+      qc.setQueryData([...financeKeys.all, "budget", v.period_id], view);
+      void qc.invalidateQueries({ queryKey: financeKeys.all });
+    },
+  });
+}
+
+export function useAnalysis(group: AnalysisGroup, from: IsoDate | null, to: IsoDate | null) {
+  return useQuery({
+    queryKey: [...financeKeys.all, "analysis", group, from ?? "", to ?? ""] as const,
+    queryFn: () => request<Analysis>("GET", `/api/finance/analysis${qs({ group, from: from ?? undefined, to: to ?? undefined })}`),
+    placeholderData: (prev) => prev,
+  });
+}
+
+export function useRecurring() {
+  return useQuery({
+    queryKey: [...financeKeys.all, "recurring"] as const,
+    queryFn: () => request<RecurringExpense[]>("GET", "/api/finance/recurring"),
+  });
+}
+
+export function useRecurringWrite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v:
+      | { op: "create"; name: string; amount: number; currency?: string; every: "month" | "year"; next_on: IsoDate; category_id?: Uuid | null }
+      | { op: "update"; id: Uuid; patch: Partial<Pick<RecurringExpense, "name" | "amount" | "every" | "next_on" | "is_active" | "category_id">> }
+      | { op: "delete"; id: Uuid }) => {
+      switch (v.op) {
+        case "create": { const { op: _o, ...body } = v; return request<RecurringExpense>("POST", "/api/finance/recurring", body); }
+        case "update": return request<RecurringExpense>("PATCH", `/api/finance/recurring/${v.id}`, v.patch);
+        case "delete": return request<unknown>("DELETE", `/api/finance/recurring/${v.id}`);
+      }
+    },
+    onSuccess: () => afterFinance(qc),
+  });
+}
+
+export function useTemplates() {
+  return useQuery({
+    queryKey: [...financeKeys.all, "templates"] as const,
+    queryFn: () => request<MailTemplate[]>("GET", "/api/finance/templates"),
+  });
+}
+
+export function useTemplateWrite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v:
+      | { op: "save"; id: Uuid | null; name: string; format: "html" | "md"; body: string }
+      | { op: "delete"; id: Uuid }) => {
+      if (v.op === "delete") return request<unknown>("DELETE", `/api/finance/templates/${v.id}`);
+      const body = { name: v.name, format: v.format, body: v.body };
+      return v.id === null
+        ? request<MailTemplate>("POST", "/api/finance/templates", body)
+        : request<MailTemplate>("PUT", `/api/finance/templates/${v.id}`, body);
+    },
     onSuccess: () => afterFinance(qc),
   });
 }

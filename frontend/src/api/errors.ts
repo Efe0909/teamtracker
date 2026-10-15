@@ -17,6 +17,7 @@ export type ApiErrorCode =
   | "invalid_pillar"
   | "invalid_reply"
   | "unknown_user"
+  | "too_many_owners"
   | "unknown_team"
   | "open_actions"
   | "stale_field"
@@ -124,6 +125,12 @@ export type ApiErrorCode =
   | "invalid_price"
   | "invalid_budget"
   | "xlsx_template"
+  | "xlsx_failed"
+  | "invalid_period"
+  | "period_overlap"
+  | "invalid_every"
+  | "invalid_format"
+  | "template_exists"
   | "invalid_qty"
   | "invalid_provider"
   | "no_sponsor"
@@ -197,6 +204,7 @@ export const ERRORS = {
   invalid_pillar: "Seçilen pillar geçersiz.",
   invalid_reply: "Yanıtlanan mesaj bu sohbette değil.",
   unknown_user: "Seçilen kişi bulunamadı ya da hesabı kapalı.",
+  too_many_owners: "Bir eyleme en fazla 20 kişi atanabilir.",
   unknown_team: "Seçilen takım bulunamadı.",
   open_actions: "Kayıt, açık eylemleri varken kapanmaz. Önce eylemleri kapat.",
   bad_origin: "Canlı bağlantı bu adresten kurulamaz. Sayfayı uygulamanın kendi adresinden aç.",
@@ -304,6 +312,12 @@ export const ERRORS = {
   invalid_price: "Fiyat geçersiz.",
   invalid_budget: "Bütçe 0'dan büyük olmalı; boş bırakmak bütçeyi siler.",
   xlsx_template: "Excel dosyası hazırlanamadı. Sunucu kaydı bakılmalı.",
+  xlsx_failed: "Excel dosyası hazırlanamadı. Sunucu kaydı bakılmalı.",
+  invalid_period: "Dönemin sonu başlangıcından önce olamaz (en fazla 800 gün).",
+  period_overlap: "Bu tarihler başka bir dönemle çakışıyor ya da bu ad kullanılıyor.",
+  invalid_every: "Tekrar aylık ya da yıllık olmalı.",
+  invalid_format: "Şablon .html ya da .md olmalı.",
+  template_exists: "Bu adla başka bir şablon var.",
   invalid_qty: "Adet 1 ile 1.000.000 arasında olmalı.",
   invalid_provider: "Seçilen teklif bu kaleme ait değil. Sayfayı yenile.",
   no_sponsor: "Önce kalemi sponsordan iste.",

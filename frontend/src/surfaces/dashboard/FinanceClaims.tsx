@@ -3,76 +3,105 @@
 
 import { useState } from "react";
 import { errorText } from "../../api/client";
-import { useClaim, useClaims, useClaimWrite, useEvents } from "../../api/hooks";
-import type { ClaimRow, ClaimStatus } from "../../api/types";
+import { useClaim, useClaimSlots, useClaimWrite } from "../../api/hooks";
+import type { ClaimRow, ClaimSlot, ClaimStatus } from "../../api/types";
 import { useLookup } from "../../lib/lookup";
 import { money, parseAmount } from "../../lib/money";
-import { Button, cx, Link, Loading, Picker, ui, useToast } from "../../ui/ui";
+import { navigate } from "../../lib/router";
+import { Button, cx, Link, Loading, ui, useToast } from "../../ui/ui";
 import { CLAIM_STATUS, fin, formatDay, INVOICE_STATUS, StatusTag } from "./Finance";
 import s from "./fin.module.css";
 
 const STEPS: ClaimStatus[] = ["draft", "sent", "office_approved", "paid"];
 const STEP_LABEL: Record<ClaimStatus, string> = { draft: "Hazırlandı", sent: "SEB'e gitti", office_approved: "Ofis onayladı", paid: "İade geldi" };
-const NEXT_LABEL: Partial<Record<ClaimStatus, string>> = { draft: "SEB'e gönderildi", sent: "Ofis onayladı", office_approved: "İade geldi" };
+const NEXT_LABEL: Partial<Record<ClaimStatus, string>> = {
+  draft: "SEB'e gönderildi olarak işaretle", sent: "Ofis onayladı olarak işaretle", office_approved: "İade geldi, kasaya al",
+};
 
-export function claimTitle(c: ClaimRow): string {
-  if (c.kind === "event") return c.event_title ?? "Etkinlik";
-  if (c.month === null) return "Aylık";
-  const [y, m] = c.month.split("-").map(Number);
+function monthTitle(month: string | null): string {
+  if (month === null) return "Aylık";
+  const [y, m] = month.split("-").map(Number);
   return new Date(y ?? 2000, (m ?? 1) - 1, 1).toLocaleDateString("tr-TR", { month: "long", year: "numeric" });
 }
 
+export function claimTitle(c: Pick<ClaimRow, "kind" | "event_title" | "month">): string {
+  return c.kind === "event" ? c.event_title ?? "Etkinlik" : monthTitle(c.month);
+}
+
+/** Dosya olmayan ya da olan her ay ve etkinlik satir olarak gorunur; acilmamis satira
+ *  tiklaninca dosya acilir ve ayrinti gelir. "Dosya ac" formu yok. */
 export function FinanceClaims({ id }: { id: string | null }) {
   const L = useLookup();
-  const q = useClaims();
-  const events = useEvents();
+  const q = useClaimSlots();
   const w = useClaimWrite();
   const toast = useToast();
-  const [ev, setEv] = useState("");
   const canWrite = L.can("review_purchases");
+  const open = (c: ClaimSlot) => {
+    const body = c.kind === "monthly" && c.month !== null
+      ? ({ op: "create", kind: "monthly", month: c.month } as const)
+      : c.event_id !== null ? ({ op: "create", kind: "event", event_id: c.event_id } as const) : null;
+    if (body === null) return;
+    w.mutate(body, {
+      onSuccess: (d) => navigate(fin("claims", d.claim.id)),
+      onError: (x) => toast({ text: errorText(x), error: true }),
+    });
+  };
+  const rows = q.data ?? [];
+  const groups: { title: string; rows: ClaimSlot[] }[] = [
+    { title: "Aylık dosyalar", rows: rows.filter((c) => c.kind === "monthly") },
+    { title: "Etkinlikler", rows: rows.filter((c) => c.kind === "event") },
+  ];
   return (
     <div className={s.split}>
       <div className={s.panel}>
         <div className={s.ph}><h2>İade dosyaları</h2></div>
-        {q.data === undefined ? <Loading /> : q.data.length === 0 ? (
-          <div className={s.empty}>Henüz dosya yok. İlk SEB fonlu fatura onaylanınca ayın dosyası açılır.</div>
-        ) : (
-          <div className={s.list}>
-            {q.data.map((c) => (
-              <Link key={c.id} href={fin("claims", c.id)} className={cx(s.row, s.rInv)} aria-current={c.id === id ? "page" : undefined}>
-                <span className={s.t}>
-                  <b>{claimTitle(c)}</b>
-                  <span>{c.kind === "monthly" ? "Aylık" : "Etkinlik bazlı"} · {c.invoice_count} fatura{c.people > 0 ? ` · ${c.people} kişiye iade` : ""}</span>
-                </span>
-                <StatusTag {...CLAIM_STATUS[c.status]} />
-                <span className={s.num}>{money(c.seb_total)}</span>
-              </Link>
-            ))}
-          </div>
-        )}
-        {canWrite && (
-          <form className={s.inlineForm} onSubmit={(e) => {
-            e.preventDefault();
-            w.mutate({ op: "create", kind: "event", event_id: ev }, {
-              onSuccess: () => { setEv(""); toast({ text: "Etkinlik dosyası açıldı", error: false }); },
-              onError: (x) => toast({ text: errorText(x), error: true }),
-            });
-          }}>
-            <span className={s.sub}>Etkinlik bazlı dosya: o etkinliğin faturaları aylık dosya yerine buraya taşınabilir.</span>
-            <div className={s.formRow}>
-              <Picker label="Etkinlik" value={ev} onChange={setEv}
-                options={[{ value: "", label: "Etkinlik seç…" }, ...(events.data ?? []).map((e) => ({ value: e.id, label: e.title }))]} />
-              <Button type="submit" disabled={ev === "" || w.isPending}>Dosya aç</Button>
+        {q.data === undefined ? <Loading /> : rows.length === 0 ? (
+          <div className={s.empty}>Henüz SEB fonlu onaylı fatura yok. İlk fatura onaylanınca ayın ve etkinliğin satırı burada görünür.</div>
+        ) : groups.map((g) => g.rows.length > 0 && (
+          <div key={g.title}>
+            <div className={s.groupTitle}>{g.title}</div>
+            <div className={s.list}>
+              {g.rows.map((c) => {
+                const title = claimTitle(c);
+                const meta = `${c.invoice_count} fatura${c.kind === "event" && c.event_date !== null ? ` · ${formatDay(c.event_date)}` : ""}`;
+                if (c.claim_id !== null) {
+                  return (
+                    <Link key={c.claim_id} href={fin("claims", c.claim_id)} className={cx(s.row, s.rInv)}
+                      aria-current={c.claim_id === id ? "page" : undefined}>
+                      <span className={s.t}><b>{title}</b><span>{meta}</span></span>
+                      {c.status !== null && <StatusTag {...CLAIM_STATUS[c.status]} />}
+                      <span className={s.num}>{money(c.seb_total)}</span>
+                    </Link>
+                  );
+                }
+                return (
+                  <button key={`${c.kind}-${c.month ?? c.event_id ?? ""}`} type="button" className={cx(s.row, s.rInv)}
+                    disabled={!canWrite || w.isPending} onClick={() => open(c)}
+                    title={canWrite ? "Dosyayı aç" : "Dosya açmak için “Satın alımları incele” yetkisi gerekir"}>
+                    <span className={s.t}><b>{title}</b><span>{meta}</span></span>
+                    <StatusTag label="Dosya açılmadı" tone="" />
+                    <span className={s.num}>{money(c.seb_total)}</span>
+                  </button>
+                );
+              })}
             </div>
-          </form>
-        )}
+          </div>
+        ))}
       </div>
       {id !== null ? <ClaimPanel id={id} /> : (
-        <div className={s.panel}><div className={s.empty}>Ayrıntı için bir dosya seç.</div></div>
+        <div className={s.panel}><div className={s.empty}>Ayrıntı için bir satır seç; “Dosya açılmadı” satırına tıklayınca dosya açılır.</div></div>
       )}
     </div>
   );
 }
+
+/** Her durumda sıradaki adım: uygulamada tek düğme, uygulamanın dışında yapılacak iş bir cümle. */
+const NEXT_HINT: Record<ClaimStatus, string> = {
+  draft: "Uygulama dışında: harcama bildirimi ve faturaları SEB'e e-postayla gönder, sonra buradan “SEB'e gitti” işaretle. İşaretlendikten sonra dosyaya fatura eklenmez.",
+  sent: "Uygulama dışında: SEB ofisinin onayını bekle. Onay yanıtı gelince işaretle.",
+  office_approved: "Uygulama dışında: iade bankaya girince gelen tutarı kontrol et, sonra “İade geldi”yi işaretle; tutar kasa defterine gelir yazılır.",
+  paid: "Bu dosya tamamlandı: iade kasaya yazıldı, üyelerin payı ödenebilir borç oldu.",
+};
 
 function ClaimPanel({ id }: { id: string }) {
   const L = useLookup();
@@ -98,6 +127,7 @@ function ClaimPanel({ id }: { id: string }) {
       <div className={s.ph}>
         <h2>{claimTitle(c)} · {c.kind === "monthly" ? "aylık dosya" : "etkinlik dosyası"}</h2>
         <span className={s.grow} />
+        <a className={cx(ui.btn, ui["v-default"], ui["z-sm"])} href={`/api/finance/claims/${c.id}/xlsx`}>Excel</a>
         <StatusTag {...CLAIM_STATUS[c.status]} />
       </div>
       <div className={s.pb}>
@@ -108,10 +138,30 @@ function ClaimPanel({ id }: { id: string }) {
             </span>
           ))}
         </div>
+        <div className={s.callout}>
+          <b>{c.status === "paid" ? "Tamamlandı" : "Sıradaki adım"}</b>
+          <p style={{ margin: "4px 0 0" }}>{NEXT_HINT[c.status]}</p>
+          {c.status === "draft" && invoices.length === 0 && (
+            <p style={{ margin: "4px 0 0" }}>Önce dosyada fatura olmalı: aşağıdaki liste boş.</p>
+          )}
+          {canWrite && next !== undefined && (
+            <div style={{ marginTop: 8 }}>
+              <Button variant="primary" disabled={w.isPending || (next === "sent" && invoices.length === 0)}
+                onClick={() => (next === "paid" ? (setReceived(String(c.seb_total).replace(".", ",")), setPaying(true)) : go(next))}>
+                {NEXT_LABEL[c.status]}
+              </Button>
+            </div>
+          )}
+          {!canWrite && c.status !== "paid" && (
+            <p style={{ margin: "4px 0 0" }}>Adımı işaretlemek için “Satın alımları incele” yetkisi gerekir.</p>
+          )}
+        </div>
         <div>
           <div className={s.sub} style={{ marginBottom: 6 }}>Kime ne kadar iade edilecek (SEB fonlu kısım)</div>
           <div className={s.items}>
-            {people.length === 0 && <div className={s.empty}>Dosyada SEB fonlu kalem yok.</div>}
+            {people.length === 0 && (
+              <div className={s.empty}>Dosyada SEB fonlu kalem yok: faturalar genel kasa kalemleri olabilir ya da dosyaya henüz fatura girmedi.</div>
+            )}
             {people.map((p) => (
               <div key={p.user_id ?? "club"} className={s.item}>
                 <span className={s.t}>
@@ -131,8 +181,15 @@ function ClaimPanel({ id }: { id: string }) {
           </div>
         </div>
         <div>
-          <div className={s.sub} style={{ marginBottom: 6 }}>Faturalar</div>
+          <div className={s.sub} style={{ marginBottom: 6 }}>Faturalar · {invoices.length}</div>
           <div className={cx(s.list, s.items)}>
+            {invoices.length === 0 && (
+              <div className={s.empty}>
+                {c.kind === "monthly"
+                  ? "Bu aya ait SEB fonlu bir fatura onaylanınca kendiliğinden buraya girer."
+                  : "Bu etkinliğin SEB fonlu onaylı faturaları dosya açılırken buraya taşınır; sonradan onaylananlar için fatura sayfasından “dosyaya taşı” de."}
+              </div>
+            )}
             {invoices.map((r) => (
               <Link key={r.id} href={fin("invoices", r.id)} className={cx(s.row, s.rInv)}>
                 <span className={s.t}>
@@ -145,11 +202,6 @@ function ClaimPanel({ id }: { id: string }) {
             ))}
           </div>
         </div>
-        {c.status === "office_approved" && (
-          <div className={cx(s.callout, s.calloutWarn)}>
-            Para bankaya girince “İade geldi” de: kasa defterine gelir satırı açılır, üyelerin payı ödenebilir borç olur.
-          </div>
-        )}
       </div>
       {paying && (
         <form className={s.inlineForm} onSubmit={(e) => {
@@ -169,17 +221,9 @@ function ClaimPanel({ id }: { id: string }) {
           </div>
         </form>
       )}
-      {canWrite && (next !== undefined || prev !== undefined) && (
+      {canWrite && prev !== undefined && (
         <div className={s.bar}>
-          {next !== undefined && (
-            <Button variant="primary" disabled={w.isPending || (next === "sent" && invoices.length === 0)}
-              onClick={() => (next === "paid" ? (setReceived(String(c.seb_total).replace(".", ",")), setPaying(true)) : go(next))}>
-              {NEXT_LABEL[c.status]}
-            </Button>
-          )}
-          {prev !== undefined && (
-            <Button variant="ghost" disabled={w.isPending} onClick={() => go(prev)}>Bir adım geri</Button>
-          )}
+          <Button variant="ghost" disabled={w.isPending} onClick={() => go(prev)}>Bir adım geri</Button>
         </div>
       )}
     </div>

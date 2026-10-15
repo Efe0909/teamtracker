@@ -9,6 +9,7 @@ const FIELD: Record<string, string> = {
   status: "Durum",
   priority: "Öncelik",
   owner_id: "Sorumlu",
+  owner_ids: "Sahipler",
   team_id: "Takım",
   pillar_id: "Pillar",
   unit_id: "Konu",
@@ -30,6 +31,11 @@ function parseChange(body: string | null): { from: unknown; to: unknown } | null
 
 function valueText(field: string, v: unknown, L: Lookup, action: boolean): string {
   if (v === null || v === undefined || v === "") return "—";
+  // Eylemin atananlari: kimlik dizisi (eski kayitlarda tek kimlik de olabilir).
+  if (field === "owner_ids") {
+    const ids = Array.isArray(v) ? v : [v];
+    return ids.length === 0 ? "havuzda" : ids.map((i) => L.user(String(i))?.name ?? "silinmiş kişi").join(", ");
+  }
   const s = String(v);
   switch (field) {
     case "status":
@@ -111,7 +117,10 @@ export function describe(item: FeedItem | Notice, L: Lookup): string {
     case "checkpoint_denied":
       return `“${item.subject_label ?? ""}” adımı için isteği reddetti`;
     case "action_added": {
-      const owner = ch !== null && ch.to !== null ? ` (${valueText("owner_id", ch.to, L, true)})` : "";
+      const to = ch?.to;
+      // Eski kayitlar tek kimlik, yenileri dizi tasir; bos dizi = havuzda (yazilmaz).
+      const owner = to === null || to === undefined || (Array.isArray(to) && to.length === 0)
+        ? "" : ` (${valueText("owner_ids", to, L, true)})`;
       return `eylem ekledi: “${item.subject_label ?? ""}”${owner}`;
     }
     case "action_changed":

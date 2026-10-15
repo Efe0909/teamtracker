@@ -496,7 +496,8 @@ function LinkedRecord({ id, onRemove }: { id: Uuid; onRemove: (() => void) | und
               <Status status={a.status} action />
               <span className={s.evActTitle}>{a.title}</span>
               <Due date={a.due_date} done={isDone(a.status)} />
-              <Avatar user={L.user(a.owner_id)} size={20} />
+              {a.owner_ids.length === 0 ? <Avatar user={undefined} size={20} />
+                : a.owner_ids.slice(0, 3).map((o) => <Avatar key={o} user={L.user(o)} size={20} />)}
             </li>
           ))}
         </ul>

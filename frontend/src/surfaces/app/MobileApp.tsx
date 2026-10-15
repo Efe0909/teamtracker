@@ -14,6 +14,7 @@ import { Avatar, Button, cx, Dialog, Empty, Link, Loading, Menu, MenuItem, MenuL
 import { ErrorScreen } from "../errors/ErrorScreen";
 import { signOut } from "../Session";
 import s from "./app.module.css";
+import { InvoiceNewPage, InvoicesPage } from "./Invoices";
 import { ActionsPage, ChatsPage, NewPage, NotificationsPage, SearchPage, TeamsListPage } from "./pages";
 import { RecordPage, TeamPage } from "./RecordPage";
 import { href, parse, type Route } from "./routes";
@@ -41,6 +42,8 @@ function Page({ route }: { route: Route }) {
     case "record": return <RecordPage key={route.id} id={route.id} />;
     case "team": return <TeamPage key={route.id} id={route.id} />;
     case "new": return <NewPage />;
+    case "invoiceNew": return <InvoiceNewPage />;
+    case "invoices": return <InvoicesPage />;
     case "notFound": return <><TopBar title="Bulunamadı" /><ErrorScreen code="not_found" /></>;
   }
 }
@@ -59,6 +62,8 @@ function MobileUserMenu() {
       <MenuLabel>{L.me.name}</MenuLabel>
       <MenuItem icon="user" onSelect={() => navigate(profileTo("info"))}>Profil ve ayarlar</MenuItem>
       <MenuItem icon="bell" onSelect={() => navigate(profileTo("notifications"))}>Bildirim ayarları</MenuItem>
+      <MenuItem icon="wallet" onSelect={() => navigate(href({ name: "invoiceNew" }))}>Fatura ekle</MenuItem>
+      <MenuItem icon="wallet" onSelect={() => navigate(href({ name: "invoices" }))}>Faturalarım</MenuItem>
       <MenuSep /><MenuLabel>Tema</MenuLabel>
       <MenuRadio value={theme} onChange={setTheme} options={THEME_OPTS} />
       <MenuSep /><MenuItem icon="logout" onSelect={() => void signOut()}>Çıkış yap</MenuItem>

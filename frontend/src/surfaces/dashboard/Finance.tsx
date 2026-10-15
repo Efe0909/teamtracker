@@ -14,10 +14,14 @@ import { money } from "../../lib/money";
 import { navigate } from "../../lib/router";
 import { Button, cx, Link, Loading, ui, useToast } from "../../ui/ui";
 import d from "./dashboard.module.css";
+import { FinanceAnalysis } from "./FinanceAnalysis";
+import { FinanceBudget } from "./FinanceBudget";
 import { FinanceClaims } from "./FinanceClaims";
 import { FinanceInvoices, InvoiceDetail } from "./FinanceInvoices";
 import { FinanceLedger } from "./FinanceLedger";
 import { FinanceMaterials, FinanceVendors, FinanceWall } from "./FinancePurchasing";
+import { FinanceRecurring } from "./FinanceRecurring";
+import { FinanceTemplates } from "./FinanceTemplates";
 import s from "./fin.module.css";
 import { href, type FinanceSection } from "./routes";
 
@@ -60,7 +64,8 @@ export function formatDay(iso: string | null): string {
 const TITLES: Record<FinanceSection, string> = {
   home: "Genel", invoices: "Fatura onayı", new: "Fatura ekle", edit: "Faturayı düzelt", mine: "Faturalarım",
   claims: "SEB iadeleri", ledger: "Kulüp kasası", materials: "Malzemeler", wall: "Satın alım duvarı",
-  vendors: "Tedarikçiler",
+  vendors: "Tedarikçiler", budget: "Dönem bütçesi", analysis: "Analiz", recurring: "Tekrarlayan giderler",
+  templates: "Mail şablonları",
 };
 
 export function Finance({ section, id }: { section: FinanceSection; id: string | null }) {
@@ -89,6 +94,10 @@ export function Finance({ section, id }: { section: FinanceSection; id: string |
           {effective === "materials" && <FinanceMaterials />}
           {effective === "wall" && <FinanceWall />}
           {effective === "vendors" && <FinanceVendors id={id} />}
+          {effective === "budget" && <FinanceBudget />}
+          {effective === "analysis" && <FinanceAnalysis />}
+          {effective === "recurring" && <FinanceRecurring />}
+          {effective === "templates" && <FinanceTemplates id={id} />}
           {effective === "mine" && <Mine id={id} />}
           {effective === "new" && <NewInvoice />}
           {effective === "edit" && id !== null && <EditInvoice id={id} />}

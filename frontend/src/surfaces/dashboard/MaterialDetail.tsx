@@ -3,7 +3,7 @@
 // gore karsilastirilir. Sponsor teklifler arasinda bir SECENEKTIR; sponsorun
 // sureci burada yok, son secim yetkilidir. Satin alinmis kalemde tedarik donar.
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { eventOps } from "../../api/hooks";
 import type { Material, MaterialProvider, MaterialType, Priority } from "../../api/types";
 import { ago, formatDay, PRIORITY, PRIORITY_ORDER, toIsoDay } from "../../lib/labels";
@@ -21,8 +21,10 @@ type Kind = "link" | "phone";
 const kindOf = (p: Pick<MaterialProvider, "contact" | "name">): Kind => (p.name !== null || isPhone(p.contact) ? "phone" : "link");
 const hrefOf = (c: string) => (/^https?:\/\//.test(c) ? c : `https://${c}`);
 
-export function MaterialDetail({ m, eventDate, canEdit, canBudget, busy, run, onClose }: {
+export function MaterialDetail({ m, eventDate, canEdit, canBudget, busy, run, onClose, extra }: {
   m: Material;
+  /** Teklif bolumunden sonra, alt cubuktan once (Maliye: etkinlik, kategori, faturalar). */
+  extra?: ReactNode;
   eventDate: string | null;
   canEdit: boolean;
   /** `manage_budgets`: butce yazilir. Yoksa alan okunur kalir. */
@@ -130,6 +132,8 @@ export function MaterialDetail({ m, eventDate, canEdit, canBudget, busy, run, on
           <Offers m={m} eventDate={eventDate} can={canProcure} run={run} editing={editing} setEditing={setEditing} />
           {canProcure && <ProviderForm m={m} run={run} />}
         </div>
+
+        {extra}
 
         <div className={s.foot}>
           {confirmDel ? (

@@ -1,0 +1,108 @@
+/* Coklu kisi secici. Ham renk YOK — yalniz token. */
+
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  max-width: 100%;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: var(--r-md);
+  background: none;
+  color: var(--txt);
+  font: inherit;
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+.trigger:hover:not(:disabled) {
+  background: var(--panel2);
+}
+.trigger:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: 1px;
+}
+.trigger:disabled {
+  cursor: default;
+}
+.stack {
+  display: inline-flex;
+}
+.stack > * + * {
+  margin-left: -6px;
+}
+.names {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.none {
+  color: var(--dim);
+}
+.panel {
+  display: grid;
+  gap: var(--s-2);
+  min-width: 220px;
+}
+.search {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--line-field);
+  border-radius: var(--r-md);
+  background: var(--panel);
+  color: var(--txt);
+  font: inherit;
+}
+.list {
+  display: grid;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.item {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 6px 4px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+.item:hover {
+  background: var(--panel2);
+}
+.item input {
+  accent-color: var(--acc-fill);
+  margin: 0;
+}
+.item span {
+  flex: 1 1 auto;
+}
+.foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--s-2);
+  padding-top: var(--s-2);
+  border-top: 1px solid var(--line);
+}
+.link {
+  border: 0;
+  background: none;
+  color: var(--dim);
+  font: inherit;
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+.link:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.done {
+  padding: 4px 12px;
+  border: 1px solid var(--acc);
+  border-radius: var(--r-md);
+  background: var(--acc-bg);
+  color: var(--acc-strong);
+  font: inherit;
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}

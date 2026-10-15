@@ -6,17 +6,21 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import { errorText } from "../../api/client";
 import {
-  useMaterialsQueue, usePurchaseWrite, useVendor, useVendors, useVendorWrite, useWall, type PurchaseOp,
+  useMaterialFull, useMaterialRun, useMaterialsQueue, usePurchaseWrite, useVendor, useVendors, useVendorWrite, useWall,
+  type PurchaseOp,
 } from "../../api/hooks";
-import type { Ledger, MaterialType, MatQueue, MatRow, MetaNode, Uuid, VendorIn, VendorRow } from "../../api/types";
-import { ago, daysFromToday, dueLabel, formatDay } from "../../lib/labels";
+import type { IsoDate, Ledger, MaterialType, MatQueue, MatRow, MetaNode, Uuid, VendorIn, VendorRow } from "../../api/types";
+import { ago, daysFromToday, dueLabel, formatDay, toIsoDay } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
 import { money, parseAmount } from "../../lib/money";
 import { navigate } from "../../lib/router";
+import { DateField } from "../../ui/DateField";
 import { Button, cx, Link, Loading, Picker, Segmented, ui, useToast } from "../../ui/ui";
 import { MATERIAL_STAGE, MATERIAL_TYPE } from "./eventModel";
 import { fin, INVOICE_STATUS, StatusTag } from "./Finance";
 import s from "./fin.module.css";
+import { MaterialDetail } from "./MaterialDetail";
+import type { Run } from "./purchaseParts";
 import p from "./purchases.module.css";
 import { href } from "./routes";
 
@@ -63,15 +67,60 @@ function priceText(m: MatRow): string {
 
 // --- Malzemeler -----------------------------------------------------------------
 
-const QUEUES: { value: MatQueue; label: string; hint: string }[] = [
-  { value: "review", label: "Alınacak", hint: "Onaylı, henüz satın alınmadı" },
-  { value: "ship", label: "Teslim bekliyor", hint: "Satın alındı, teslim edilmedi" },
-  { value: "invoice", label: "Faturasız", hint: "Satın alındı, onaylı faturası yok" },
-  { value: "open", label: "Hazırlanıyor", hint: "Henüz onaylanmadı" },
-  { value: "all", label: "Tümü", hint: "Bütün kalemler" },
+// Durum cipi (kuyruk) sade bir filtredir; hazir ayarlar yalniz GORUNEN cipleri doldurur
+// (gizli sorgu yok), kullanici sonra tek tek degistirir.
+const QUEUES: { value: MatQueue; label: string }[] = [
+  { value: "review", label: "Alınacak" },
+  { value: "ship", label: "Teslim bekliyor" },
+  { value: "invoice", label: "Faturasız" },
+  { value: "open", label: "Hazırlanıyor" },
+  { value: "all", label: "Tümü" },
 ];
 
 type EventFilter = { id: Uuid; title: string } | "none" | null;
+type RangeKey = "" | "week" | "month" | "past" | "custom";
+const RANGES_LABEL: Record<RangeKey, string> = {
+  "": "Her tarih", week: "Önümüzdeki 7 gün", month: "Önümüzdeki 30 gün", past: "Geçmiş (geciken)", custom: "Aralık seç…",
+};
+
+function plusDays(n: number): IsoDate {
+  const d = new Date();
+  d.setDate(d.getDate() + n);
+  return toIsoDay(d);
+}
+
+function rangeDates(k: RangeKey, custom: { from: IsoDate | null; to: IsoDate | null }): { from?: IsoDate; to?: IsoDate } {
+  switch (k) {
+    case "week": return { from: plusDays(0), to: plusDays(7) };
+    case "month": return { from: plusDays(0), to: plusDays(30) };
+    case "past": return { to: plusDays(-1) };
+    case "custom": return { ...(custom.from !== null ? { from: custom.from } : {}), ...(custom.to !== null ? { to: custom.to } : {}) };
+    default: return {};
+  }
+}
+
+/** Hazir ayar: durum + tarih araligi + etkinlik cipini doldurur; baska hicbir sey yapmaz. */
+const PRESETS: { key: string; label: string; queue: MatQueue; range: RangeKey; event: "none" | null }[] = [
+  { key: "week", label: "Bu hafta alınacak", queue: "review", range: "week", event: null },
+  { key: "late", label: "Geciken", queue: "review", range: "past", event: null },
+  { key: "ship", label: "Teslim bekleyen", queue: "ship", range: "", event: null },
+  { key: "invoice", label: "Faturası eksik", queue: "invoice", range: "", event: null },
+  { key: "noevent", label: "Etkinliksiz", queue: "all", range: "", event: "none" },
+];
+
+type Group = { key: string; rows: MatRow[] };
+
+/** Ayni (normalize) adli kalemler tek grup; sira ilk gorulen satira gore. */
+function groupRows(rows: MatRow[]): Group[] {
+  const map = new Map<string, Group>();
+  for (const r of rows) {
+    const key = r.group_key === "" ? r.id : r.group_key;
+    const g = map.get(key);
+    if (g === undefined) map.set(key, { key, rows: [r] });
+    else g.rows.push(r);
+  }
+  return [...map.values()];
+}
 
 export function FinanceMaterials() {
   const L = useLookup();
@@ -82,26 +131,42 @@ export function FinanceMaterials() {
   const [event, setEvent] = useState<EventFilter>(null);
   const [kind, setKind] = useState<MaterialType | "">("");
   const [category, setCategory] = useState<Uuid | "">("");
+  const [range, setRange] = useState<RangeKey>("");
+  const [custom, setCustom] = useState<{ from: IsoDate | null; to: IsoDate | null }>({ from: null, to: null });
   const [text, setText] = useState("");
   const q = useDebounced(text);
   const [picked, setPicked] = useState<ReadonlySet<Uuid>>(new Set());
+  const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
+  const [detail, setDetail] = useState<Uuid | null>(null);
+  const dates = rangeDates(range, custom);
   const list = useMaterialsQueue({
     queue,
     ...(event === "none" ? { event: "none" } : event !== null ? { event: event.id } : {}),
     ...(kind !== "" ? { kind } : {}),
     ...(category !== "" ? { category } : {}),
     ...(q !== "" ? { q } : {}),
+    ...dates,
   });
   const w = usePurchaseWrite();
   const selectable = queue === "review" && canBuy;
   const rows = list.data?.rows ?? [];
   const sum = rows.reduce((a, m) => a + (m.owned ? 0 : m.price ?? 0), 0);
+  const groups = groupRows(rows);
 
   // Etkinlik secenekleri: yuklu satirlardan (secili olan her zaman listede).
   const events = new Map<Uuid, string>();
   if (event !== null && event !== "none") events.set(event.id, event.title);
   for (const m of rows) if (m.event_id !== null) events.set(m.event_id, m.event_title ?? "Etkinlik");
   const eventValue = event === null ? "" : event === "none" ? "none" : event.id;
+
+  const presetOn = (p: (typeof PRESETS)[number]) =>
+    queue === p.queue && range === p.range && (event === "none" ? "none" : event === null ? null : "x") === p.event
+    && kind === "" && category === "" && text === "";
+  const applyPreset = (p: (typeof PRESETS)[number]) => {
+    if (presetOn(p)) { setQueue("review"); setRange(""); setEvent(null); return; }
+    setQueue(p.queue); setRange(p.range); setEvent(p.event); setKind(""); setCategory(""); setText("");
+    setPicked(new Set());
+  };
 
   const markBought = async () => {
     const ids = [...picked];
@@ -112,18 +177,117 @@ export function FinanceMaterials() {
     else toast({ text: `${failed.length} kalem işaretlenemedi: ${errorText(failed[0]?.reason)}`, error: true });
   };
 
+  const toggle = (ids: Uuid[], on: boolean) => {
+    const next = new Set(picked);
+    for (const id of ids) if (on) next.add(id); else next.delete(id);
+    setPicked(next);
+  };
+
+  const item = (m: MatRow, nested: boolean) => {
+    const st = stateTag(m);
+    const due = m.event_date ?? m.needed_by;
+    return (
+      <div key={m.id} role="button" tabIndex={0} aria-label={`${m.name}, ayrıntıyı aç`}
+        className={cx(s.row, s.clickRow, selectable ? s.rMatSel : s.rMat, nested && s.nested)}
+        onClick={(e) => { if (!(e.target as HTMLElement).closest("a, input, button")) setDetail(m.id); }}
+        onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); setDetail(m.id); } }}>
+        {selectable && (
+          <input type="checkbox" aria-label={`${m.name} seç`} checked={picked.has(m.id)}
+            onClick={(e) => e.stopPropagation()}
+            onChange={(e) => toggle([m.id], e.target.checked)} />
+        )}
+        <span className={s.t}>
+          <b>{m.name}{m.qty > 1 ? ` ×${m.qty}` : ""}</b>
+          <span>
+            {m.event_id !== null
+              ? <Link href={href({ name: "event", id: m.event_id })}>{m.event_title}</Link>
+              : "Etkinliksiz"}
+            {due !== null && ` · ${formatDay(due)}`}
+            {m.supplier !== null && ` · ${m.supplier}`}
+            {m.eta !== null && ` · varış ${formatDay(m.eta)}`}
+          </span>
+        </span>
+        <span className={s.tags}>
+          <CategoryTag id={m.category_id} cats={cats} />
+          <StatusTag {...st} />
+          {m.purchased && <StatusTag label={m.invoiced ? "Faturalı" : "Faturasız"} tone={m.invoiced ? s.tOk ?? "" : s.tWarn ?? ""} />}
+        </span>
+        <span className={s.num}>{priceText(m)}</span>
+      </div>
+    );
+  };
+
+  const groupRow = (g: Group) => {
+    if (g.rows.length === 1) return item(g.rows[0] as MatRow, false);
+    const first = g.rows[0] as MatRow;
+    const isOpen = open.has(g.key);
+    const eventsN = new Set(g.rows.flatMap((r) => (r.event_id === null ? [] : [r.event_id]))).size;
+    const free = g.rows.filter((r) => r.event_id === null).length;
+    const suppliers = [...new Set(g.rows.flatMap((r) => (r.supplier === null ? [] : [r.supplier])))];
+    const qty = g.rows.reduce((a, r) => a + r.qty, 0);
+    const total = g.rows.reduce((a, r) => a + (r.owned ? 0 : r.price ?? 0), 0);
+    const ids = g.rows.map((r) => r.id);
+    const all = ids.every((id) => picked.has(id));
+    return (
+      <div key={g.key}>
+        <div className={cx(s.row, selectable ? s.rMatSel : s.rMat, s.groupRow)}>
+          {selectable && (
+            <input type="checkbox" aria-label={`${first.name}: hepsini seç`} checked={all}
+              onChange={(e) => toggle(ids, e.target.checked)} />
+          )}
+          <button type="button" className={s.groupBtn} aria-expanded={isOpen}
+            onClick={() => { const n = new Set(open); if (isOpen) n.delete(g.key); else n.add(g.key); setOpen(n); }}>
+            <span className={s.t}>
+              <b>{first.name}{qty > 1 ? ` ×${qty}` : ""}</b>
+              <span>
+                {eventsN > 0 && `${eventsN} etkinlik`}
+                {eventsN > 0 && free > 0 && " · "}
+                {free > 0 && `${free} etkinliksiz`}
+                {` · ${g.rows.length} kalem`}
+                {suppliers.length > 0 && ` · ${suppliers.slice(0, 2).join(", ")}${suppliers.length > 2 ? ` +${suppliers.length - 2}` : ""}`}
+              </span>
+            </span>
+          </button>
+          <span className={s.tags}><span className={s.tag}>{isOpen ? "Daralt" : "Aç"}</span></span>
+          <span className={s.num}>{total > 0 ? money(total) : "—"}</span>
+        </div>
+        {isOpen && g.rows.map((r) => item(r, true))}
+      </div>
+    );
+  };
+
   return (
     <div className={s.panel}>
       <div className={s.ph}>
-        <Segmented label="Kuyruk" value={queue}
-          onChange={(v) => { setQueue(v); setPicked(new Set()); }}
-          options={QUEUES.map((x) => ({ value: x.value, label: x.label, count: list.data?.counts[x.value] ?? 0 }))} />
+        <h2>Malzemeler</h2>
+        <span className={s.sub}>{groups.length} ad · {rows.length} kalem · {money(sum)}</span>
         <span className={s.grow} />
-        <span className={s.sub}>{QUEUES.find((x) => x.value === queue)?.hint}</span>
+      </div>
+      <div className={s.filters}>
+        <span className={s.chips} role="group" aria-label="Hazır ayarlar">
+          {PRESETS.map((p) => (
+            <button key={p.key} type="button" className={s.fchip} aria-pressed={presetOn(p)} onClick={() => applyPreset(p)}>
+              {p.label}
+            </button>
+          ))}
+        </span>
       </div>
       <div className={s.filters}>
         <input className={cx(ui.input, s.search)} type="search" value={text} onChange={(e) => setText(e.target.value)}
           placeholder="Kalem ya da tedarikçi ara" aria-label="Kalem ya da tedarikçi ara" />
+        <Picker look="chip" label="Durum" value={queue} active={queue !== "review"}
+          onChange={(v) => { setQueue(v); setPicked(new Set()); }}
+          options={QUEUES.map((x) => ({ value: x.value, label: `${x.label} (${list.data?.counts[x.value] ?? 0})` }))} />
+        <Picker look="chip" label="Tarih" value={range} active={range !== ""} onChange={setRange}
+          options={(Object.keys(RANGES_LABEL) as RangeKey[]).map((k) => ({ value: k, label: RANGES_LABEL[k] }))} />
+        {range === "custom" && (
+          <>
+            <DateField aria-label="Başlangıç" placeholder="Başlangıç" value={custom.from} clearable
+              onChange={(v) => setCustom({ ...custom, from: v })} />
+            <DateField aria-label="Bitiş" placeholder="Bitiş" value={custom.to} clearable
+              onChange={(v) => setCustom({ ...custom, to: v })} />
+          </>
+        )}
         <Picker look="chip" label="Etkinlik" value={eventValue} active={event !== null}
           onChange={(v) => setEvent(v === "" ? null : v === "none" ? "none" : { id: v, title: events.get(v) ?? "Etkinlik" })}
           options={[
@@ -136,8 +300,6 @@ export function FinanceMaterials() {
             ...(Object.keys(MATERIAL_TYPE) as MaterialType[]).map((k) => ({ value: k, label: MATERIAL_TYPE[k] }))]} />
         <Picker look="chip" label="Kategori" value={category} active={category !== ""} onChange={setCategory}
           options={[{ value: "", label: "Bütün kategoriler" }, ...cats.map((c) => ({ value: c.id, label: c.name }))]} />
-        <span className={s.grow} />
-        <span className={s.sub}>{rows.length} kalem · {money(sum)}</span>
       </div>
       {selectable && picked.size > 0 && (
         <div className={s.bulk}>
@@ -149,48 +311,55 @@ export function FinanceMaterials() {
       )}
       {list.error !== null ? <p role="alert" className={s.empty}>{errorText(list.error)}</p>
         : list.data === undefined ? <Loading />
-        : rows.length === 0 ? <div className={s.empty}>Bu kuyrukta kalem yok.</div>
-        : (
-          <div className={s.list}>
-            {rows.map((m) => {
-              const st = stateTag(m);
-              const due = m.event_date ?? m.needed_by;
-              return (
-                <div key={m.id} className={cx(s.row, selectable ? s.rMatSel : s.rMat)}>
-                  {selectable && (
-                    <input type="checkbox" aria-label={`${m.name} seç`} checked={picked.has(m.id)}
-                      onChange={(e) => {
-                        const next = new Set(picked);
-                        if (e.target.checked) next.add(m.id); else next.delete(m.id);
-                        setPicked(next);
-                      }} />
-                  )}
-                  <span className={s.t}>
-                    <b>{m.name}{m.qty > 1 ? ` ×${m.qty}` : ""}</b>
-                    <span>
-                      {m.event_id !== null
-                        ? <Link href={href({ name: "event", id: m.event_id })}>{m.event_title}</Link>
-                        : "Etkinliksiz"}
-                      {due !== null && ` · ${formatDay(due)}`}
-                      {m.supplier !== null && ` · ${m.supplier}`}
-                      {m.eta !== null && ` · varış ${formatDay(m.eta)}`}
-                    </span>
-                  </span>
-                  <span className={s.tags}>
-                    <CategoryTag id={m.category_id} cats={cats} />
-                    <StatusTag {...st} />
-                    {m.purchased && <StatusTag label={m.invoiced ? "Faturalı" : "Faturasız"} tone={m.invoiced ? s.tOk ?? "" : s.tWarn ?? ""} />}
-                  </span>
-                  <span className={s.num}>{priceText(m)}</span>
-                </div>
-              );
-            })}
-          </div>
-        )}
+        : rows.length === 0 ? <div className={s.empty}>Bu süzgeçte kalem yok.</div>
+        : <div className={s.list}>{groups.map(groupRow)}</div>}
       {queue === "review" && !canBuy && (
         <p className={cx(s.sub, s.foot)}>Satın alındı işaretlemek için “Satın alımları incele” yetkisi gerekir.</p>
       )}
+      {detail !== null && <MaterialDetailHost id={detail} onClose={() => setDetail(null)} />}
     </div>
+  );
+}
+
+/** Kalem ayrintisi (Malzemeler ve duvar ortak): etkinlik widget'inin ayni penceresi;
+ *  etkinliksiz kalemde de calisir. Ek olarak etkinlik, kategori ve faturalar. */
+function MaterialDetailHost({ id, onClose }: { id: Uuid; onClose: () => void }) {
+  const L = useLookup();
+  const cats = useCategories();
+  const toast = useToast();
+  const q = useMaterialFull(id);
+  const w = useMaterialRun();
+  const run: Run = (op, ok) =>
+    w.mutate(op, { onSuccess: () => ok?.(), onError: (e) => toast({ text: errorText(e), error: true }) });
+  useEffect(() => {
+    if (q.error !== null) {
+      toast({ text: errorText(q.error), error: true });
+      onClose();
+    }
+  }, [q.error, toast, onClose]);
+  const d = q.data;
+  if (d === undefined) return null;
+  const extra = (
+    <div className={p.sec}>
+      <div className={p.label}>Maliye</div>
+      <p className={p.note}>
+        {d.event_id !== null
+          ? <>Etkinlik: <Link href={href({ name: "event", id: d.event_id })}>{d.event_title}</Link>{d.event_date !== null && ` · ${formatDay(d.event_date)}`}</>
+          : <>Etkinliksiz{d.needed_by !== null && ` · gerektiği gün ${formatDay(d.needed_by)}`}</>}
+        {d.category_id !== null && <> · <CategoryTag id={d.category_id} cats={cats} /></>}
+      </p>
+      {d.invoices.length === 0
+        ? <p className={p.note}>Bu kaleme bağlı fatura yok.</p>
+        : d.invoices.map((i) => (
+          <Link key={i.id} href={fin("invoices", i.id)} className={p.note}>
+            {formatDay(i.purchased_on)} · {INVOICE_STATUS[i.status].label} · {money(i.amount)}
+          </Link>
+        ))}
+    </div>
+  );
+  return (
+    <MaterialDetail m={d.material} eventDate={d.event_date} canEdit={L.can("manage_purchases")}
+      canBudget={L.can("manage_budgets")} busy={w.isPending} run={run} onClose={onClose} extra={extra} />
   );
 }
 
@@ -228,6 +397,7 @@ export function FinanceWall() {
   const q = useDebounced(text);
   const [limits, setLimits] = useState<Record<ColKey, number>>({ prep: PAGE, tobuy: PAGE, bought: PAGE });
   const [over, setOver] = useState<ColKey | null>(null);
+  const [detail, setDetail] = useState<Uuid | null>(null);
   const dragging = useRef<MatRow | null>(null);
   const wall = useWall({
     ...(ahead !== null ? { ahead } : {}),
@@ -296,7 +466,10 @@ export function FinanceWall() {
     const late = col !== "bought" && m.needed_by !== null && daysFromToday(m.needed_by) < 0;
     const draggable = (["prep", "tobuy", "bought"] as const).some((k) => allowed(m, k));
     return (
-      <div key={m.id} className={cx(p.mcard, late && p.mcardCrit)} draggable={draggable}
+      <div key={m.id} role="button" tabIndex={0} aria-label={`${m.name}, ayrıntıyı aç`}
+        className={cx(p.mcard, late && p.mcardCrit)} draggable={draggable}
+        onClick={() => setDetail(m.id)}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setDetail(m.id); } }}
         onDragStart={(e) => {
           dragging.current = m;
           e.dataTransfer.effectAllowed = "move";
@@ -323,12 +496,6 @@ export function FinanceWall() {
           <span className={p.price}>{priceText(m)}</span>
         </div>
         {m.supplier !== null && <span className={s.cardSub}>{m.supplier}</span>}
-        <div className={s.cardActs}>
-          {col === "prep" && allowed(m, "tobuy") && <Button size="sm" variant="ghost" disabled={w.isPending} onClick={() => void move(m, "tobuy")}>Onayla →</Button>}
-          {col === "tobuy" && allowed(m, "prep") && <Button size="sm" variant="ghost" disabled={w.isPending} onClick={() => void move(m, "prep")}>← Geri</Button>}
-          {col === "tobuy" && allowed(m, "bought") && <Button size="sm" variant="ghost" disabled={w.isPending} onClick={() => void move(m, "bought")}>Alındı →</Button>}
-          {col === "bought" && allowed(m, "tobuy") && <Button size="sm" variant="ghost" disabled={w.isPending} onClick={() => void move(m, "tobuy")}>← Geri al</Button>}
-        </div>
       </div>
     );
   };
@@ -381,6 +548,7 @@ export function FinanceWall() {
           })}
         </div>
       </div>
+      {detail !== null && <MaterialDetailHost id={detail} onClose={() => setDetail(null)} />}
     </div>
   );
 }
@@ -479,7 +647,7 @@ export function FinanceVendors({ id }: { id: string | null }) {
                   <b>{v.name}</b>
                   <span>{[v.contact, v.aliases.length > 0 ? `aynı: ${v.aliases.join(", ")}` : null].filter(Boolean).join(" · ") || "—"}</span>
                 </span>
-                <span className={s.sub}>{v.offer_count} teklif</span>
+                <span className={s.sub}>{v.event_count > 0 && `${v.event_count} etkinlik · `}{v.offer_count} teklif</span>
                 <span className={s.num}>{v.invoice_total > 0 ? money(v.invoice_total) : ""}</span>
               </Link>
             ))}

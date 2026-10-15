@@ -187,8 +187,9 @@ ok "$(g n "/api/records/$BUTCE" | jq -r .access.can_edit_deadline)" false "son t
 ok "$(wc_ n PATCH "$NT" "/api/records/$BUTCE" '{"field":"due_date","value":"2026-12-01"}')" 403 "son tarih 403"
 
 t actions
-R=$(w w POST "$WT" "/api/records/$BUTCE/actions" "{\"title\":\"Sozlesme taslagi\",\"owner_id\":\"$DENIZ\"}")
+R=$(w w POST "$WT" "/api/records/$BUTCE/actions" "{\"title\":\"Sozlesme taslagi\",\"owner_ids\":[\"$DENIZ\"]}")
 ok "$(jq '.actions|length' <<<"$R")" 3 "eklendi"
+ok "$(jq -r '.actions[]|select(.title=="Sozlesme taslagi")|.owner_ids|join(",")' <<<"$R")" "$DENIZ" "atanan owner_ids'te"
 A=$(DB "select id from actions where title='Sozlesme taslagi'")
 ok "$(w w PATCH "$WT" "/api/actions/$A" '{"field":"status","value":"closed","closing_note":"Sozlesme taslagi tamamlandi ve yoneticiye gonderildi."}' | jq -r ".actions[]|select(.id==\"$A\").status")" closed "kapandi"
 ok "$(DB "select resolved_by from actions where id='$A'")" "$SELIN" "kapatan izde"
@@ -984,20 +985,144 @@ ok "$(w n POST "$NT" "/api/finance/invoices/$F2ID/decision" '{"action":"cancel",
 ok "$(g n /api/finance/ledger | jq -r '"\(.entries[0].kind) \(.entries[0].amount) \(.balance)"')" "reversal 1012.5 400.0" "gider ters kayitla doner"
 ok "$(DB "select purchased from materials where id='$MC'")" f "baska faturasi yok: satin alindi kalkar"
 ok "$(g n "/api/finance/fx?currency=TRY&on=$(date +%F)" | jq -r .error)" invalid_currency "TL'nin kuru sorulmaz"
+# Iade listesi: dosya acilmadan da etkinlik/ay satiri gorunur; acinca etkinligin faturalari girer.
+MD=$(DB "insert into materials (name, state) values ('Stant masasi', 3) returning id" | head -1)
+DB "insert into event_materials values ('$MD','$EVID')" >/dev/null
+INV3=$(upp n "$NT" "$J/f.pdf" "stant.pdf" invoice | jq -r .id)
+F3=$(w n POST "$NT" /api/finance/invoices "$(inv 50 "{\"material_id\":\"$MD\",\"amount\":50}" "$INV3")" | jq -r .id)
+w n POST "$NT" "/api/finance/invoices/$F3/decision" '{"action":"approve"}' >/dev/null
+SL=$(g n /api/finance/claim-slots)
+ok "$(jq -r --arg e "$EVID" '[.[]|select(.event_id==$e)]|.[0]|"\(.claim_id) \(.invoice_count) \(.seb_total)"' <<<"$SL")" "null 1 50.0" "etkinlik satiri dosya acilmadan gorunur"
+ok "$(jq -r '[.[]|select(.kind=="monthly")]|length >= 1' <<<"$SL")" true "ay satiri"
+EC=$(w n POST "$NT" /api/finance/claims "{\"kind\":\"event\",\"event_id\":\"$EVID\"}")
+ok "$(jq -r '"\(.claim.kind) \(.claim.invoice_count) \(.claim.seb_total)"' <<<"$EC")" "event 1 50.0" "etkinlik dosyasi aciliskta faturalari alir"
+ok "$(w n POST "$NT" /api/finance/claims "{\"kind\":\"event\",\"event_id\":\"$EVID\"}" | jq -r .error)" claim_exists "ikinci dosya acilmaz"
+ok "$(curl -s -b "$J/n" "$B/api/finance/claims/$(jq -r .claim.id <<<"$EC")/xlsx" | head -c 2)" PK "iade dosyasi Excel'i"
+ok "$(g n /api/finance/claim-slots | jq -r --arg e "$EVID" '[.[]|select(.event_id==$e)]|.[0].claim_id != null')" true "satir artik dosyali"
 DB "delete from user_scopes where user_id='$DENIZ' and scope in ('review_purchases','manage_ledger')" >/dev/null
+
+# Maliye > satin alimlar: kuyruk sayimlari, duvar, tedarikci bul-ya-da-ac + geri doldurma.
+t finance_purchasing
+DB "insert into user_scopes (user_id,scope) values ('$DENIZ','manage_purchases'), ('$DENIZ','manage_ledger')" >/dev/null
+PCAT=$(DB "select id from nodes where node_type='category' and attrs->>'ledger'='general' order by sort_order limit 1")
+ok "$(w n POST "$NT" /api/finance/materials '{"name":"Kategorisiz"}' | jq -r .error)" category_required "etkinliksiz kalem kategorisiz acilmaz"
+FAR=$(DB "select current_date + 400")
+P_FAR=$(w n POST "$NT" /api/finance/materials "{\"name\":\"Uzak kalem\",\"category_id\":\"$PCAT\",\"needed_by\":\"$FAR\"}" | jq -r .id)
+P_NEAR=$(w n POST "$NT" /api/finance/materials "{\"name\":\"Yakin kalem\",\"category_id\":\"$PCAT\"}" | jq -r .id)
+ok "$(g n "/api/finance/materials?queue=review" | jq -r .counts.review)" "$(DB "select count(*) from materials m where m.state=3 and not m.owned and not m.purchased")" "inceleme kuyrugu sayimi"
+ok "$(g n "/api/finance/materials?queue=open" | jq -r .counts.open)" "$(DB "select count(*) from materials m where m.state<3 and not m.owned")" "hazirlaniyor sayimi"
+ok "$(g n "/api/finance/materials?queue=all" | jq -r --arg a "$P_NEAR" '[.rows[]|select(.id==$a)]|length')" 1 "tumu kuyrugunda"
+ok "$(g n "/api/finance/materials?queue=open" | jq -r --arg a "$P_NEAR" '[.rows[]|select(.id==$a)]|length')" 1 "state 0 hazirlaniyor kuyrugunda"
+# Duvar: sutunlar ve ileri/geri araligi.
+ok "$(g n "/api/finance/wall" | jq -r '[.prep.total,.tobuy.total,.bought.total]|map(type)|join(",")')" "number,number,number" "duvarin uc sutunu"
+ok "$(g n "/api/finance/wall?ahead=30&back=7" | jq -r '"\(.ahead) \(.back)"')" "30 7" "aralik geri doner"
+ok "$(g n "/api/finance/wall" | jq -r --arg a "$P_NEAR" '[.prep.items[]|select(.id==$a)]|length')" 1 "state<3 hazirlik sutununda"
+w n PATCH "$NT" "/api/finance/materials/$P_FAR" '{"state":3}' >/dev/null
+ok "$(g n "/api/finance/wall?ahead=30" | jq -r --arg a "$P_FAR" '[.tobuy.items[]|select(.id==$a)]|length')" 0 "aralik disi kalem alinacakta gorunmez"
+ok "$(g n "/api/finance/wall?ahead=30" | jq -r '.tobuy.hidden >= 1')" true "aralik disi sayisi"
+ok "$(g n "/api/finance/wall?ahead=0" | jq -r --arg a "$P_FAR" '[.tobuy.items[]|select(.id==$a)]|length')" 1 "0 = tumu"
+# Kural: etkinlik kalemi duvardan degismez; alinan kalem geri adima alinmaz.
+PEV=$(DB "select material_id from event_materials limit 1")
+ok "$(w n PATCH "$NT" "/api/finance/materials/$PEV" '{"state":1}' | jq -r .error)" event_material "etkinlik kalemi duvardan yonetilmez"
+DB "update materials set purchased=true, purchased_at=now() where id='$P_FAR'" >/dev/null
+ok "$(w n PATCH "$NT" "/api/finance/materials/$P_FAR" '{"state":1}' | jq -r .error)" purchased_locked "alinan kalem geri alinmaz"
+# Tedarikci: ayni anahtar ayni tedarikci; teklif yazinca baglanir.
+V1=$(w n POST "$NT" /api/finance/vendors '{"name":"Koli Market"}')
+ok "$(jq -r .existing <<<"$V1")" false "yeni tedarikci"
+V2=$(w n POST "$NT" /api/finance/vendors '{"name":"KOLİ MARKET Ltd. Şti."}')
+ok "$(jq -r '"\(.existing) \(.vendor.id == "'"$(jq -r .vendor.id <<<"$V1")"'")"' <<<"$V2")" "true true" "yazim farki yeni satir acmaz"
+ok "$(DB "select count(*) from vendors where name_key='ekin matbaa'")" 1 "geri doldurma tedarikciyi acti"
+ok "$(DB "select count(*) from material_providers p join materials m on m.id=p.material_id where m.name='Koli bandı' and p.vendor_id is not null")" 2 "tohum teklifleri baglandi (telefon baglanmaz)"
+PK=$(w n POST "$NT" /api/finance/materials "{\"name\":\"Teklifli\",\"category_id\":\"$PCAT\",\"offer\":{\"name\":\"Ekin Matbaa A.Ş.\",\"price\":50}}" | jq -r .id)
+ok "$(DB "select count(*) from material_providers p join vendors v on v.id=p.vendor_id where p.material_id='$PK' and v.name_key='ekin matbaa'")" 1 "yazilan ad mevcut tedarikciye baglanir"
+# Ayrinti: etkinliksiz kalem de ayni /api/materials uclariyla duzenlenir (cevap kalemin kendisi).
+ok "$(g n "/api/finance/materials/$PK" | jq -r '"\(.material.name) \(.material.providers|length) \(.event_id) \(.invoices|length)"')" "Teklifli 1 null 0" "etkinliksiz kalem ayrintisi"
+ok "$(g n "/api/finance/materials/$PEV" | jq -r '.event_id != null')" true "etkinlik kalemi ayrintisi"
+ok "$(w n POST "$NT" "/api/materials/$P_NEAR/providers" '{"contact":"Boya Dukkani","price":10}' | jq -r '"\(.name) \(.providers|length)"')" "Yakin kalem 1" "etkinliksiz kaleme teklif"
+ok "$(w n PATCH "$NT" "/api/materials/$P_NEAR" '{"qty":4}' | jq -r .qty)" 4 "etkinliksiz kalem yamasi"
+ok "$(DB "select count(*) from material_providers p join vendors v on v.id=p.vendor_id where p.material_id='$P_NEAR' and v.name='Boya Dukkani'")" 1 "teklif tedarikciye baglandi"
+# Tarih araligi: araligin disindakiler listeden duser; gruplama anahtari ayni adda ayni.
+ok "$(g n "/api/finance/materials?queue=all&from=$FAR&to=$FAR" | jq -r --arg a "$P_FAR" '[.rows[]|select(.id==$a)]|length')" 1 "aralik icindeki kalem"
+ok "$(g n "/api/finance/materials?queue=all&from=$(DB "select current_date + 500")" | jq -r '.rows|length')" 0 "aralik disi bos"
+ok "$(g n "/api/finance/materials?queue=all" | jq -r '[.rows[]|select(.group_key=="")]|length')" 0 "her satirin grup anahtari var"
+ok "$(w n DELETE "$NT" "/api/materials/$P_NEAR" '' | jq -r .deleted)" true "etkinliksiz kalem silinir"
+DB "delete from materials where id in ('$P_FAR','$P_NEAR','$PK')" >/dev/null
+DB "delete from user_scopes where user_id='$DENIZ' and scope in ('manage_purchases','manage_ledger')" >/dev/null
+
+# Maliye > butce ve analiz (spec/81 §8, §12): donemler, plan vs gercek, Excel ciktisi.
+t finance_budget
+ok "$(wc_ n GET "$NT" /api/finance/periods '')" 403 "maliye disi donemleri goremez"
+DB "insert into user_scopes (user_id,scope) values ('$DENIZ','manage_budgets')" >/dev/null
+Y0=$(DB "select date_trunc('year', current_date)::date")
+Y1=$(DB "select (date_trunc('year', current_date) + interval '1 year' - interval '1 day')::date")
+ok "$(w n POST "$NT" /api/finance/periods '{"name":"","from":"2030-01-01","to":"2030-02-01"}' | jq -r .error)" invalid_name "donem adi bos olmaz"
+ok "$(w n POST "$NT" /api/finance/periods '{"name":"Ters","from":"2030-02-01","to":"2030-01-01"}' | jq -r .error)" invalid_period "bitis baslangictan once olmaz"
+PER=$(w n POST "$NT" /api/finance/periods "{\"name\":\"Bu yil\",\"from\":\"$Y0\",\"to\":\"$Y1\"}" | jq -r .id)
+ok "$(DB "select upper(span) - lower(span) > 300 from finance_periods where id='$PER'")" t "donem kaydedildi"
+ok "$(w n POST "$NT" /api/finance/periods "{\"name\":\"Cakisan\",\"from\":\"$Y0\",\"to\":\"$Y0\"}" | jq -r .error)" period_overlap "donemler cakismaz"
+BPC=$(DB "select id from nodes where node_type='category' and attrs->>'ledger'='general' order by sort_order limit 1")
+BV=$(w n PUT "$NT" /api/finance/budget "{\"period_id\":\"$PER\",\"category_id\":\"$BPC\",\"amount\":1000,\"note\":\"yillik\"}")
+ok "$(jq -r --arg c "$BPC" '[.rows[]|select(.category_id==$c and .event_id==null)]|.[0]|"\(.planned) \(.note)"' <<<"$BV")" "1000.0 yillik" "satir yazildi"
+ok "$(jq -r --arg c "$BPC" '[.rows[]|select(.category_id==$c and .event_id==null)]|.[0].spent >= 240' <<<"$BV")" true "harcanan faturadan"
+ok "$(jq -r --arg e "$EVID" '[.rows[]|select(.event_id==$e)]|map(.spent)|add >= 400' <<<"$BV")" true "etkinlik satiri faturadan"
+ok "$(w n PUT "$NT" /api/finance/budget "{\"period_id\":\"$PER\",\"category_id\":\"$BPC\",\"amount\":-5}" | jq -r .error)" invalid_amount "negatif tutar"
+ok "$(w n PUT "$NT" /api/finance/budget "{\"period_id\":\"$PER\",\"category_id\":\"$BPC\",\"event_id\":\"$EVID\",\"amount\":250}" | jq -r --arg e "$EVID" --arg c "$BPC" '[.rows[]|select(.event_id==$e and .category_id==$c)]|.[0].planned')" "250.0" "etkinlik payi"
+ok "$(g n "/api/finance/budget?period=$PER" | jq -r .period.name)" "Bu yil" "donem gorunumu"
+ok "$(w n PUT "$NT" /api/finance/budget "{\"period_id\":\"$PER\",\"category_id\":\"$BPC\"}" | jq -r --arg c "$BPC" '[.rows[]|select(.category_id==$c and .event_id==null)]|.[0].planned')" "0.0" "tutarsiz istek satiri siler"
+AN=$(g n "/api/finance/analysis?group=category")
+ok "$(jq -r '.group' <<<"$AN")" category "analiz kirilimi"
+ok "$(jq -r '[.rows[]|.spent_seb + .spent_general]|add > 0' <<<"$AN")" true "analiz harcanani toplar"
+ok "$(jq -r '.rows|map(.label)|index("Kategorisiz") != null' <<<"$AN")" true "kategorisiz satiri"
+ok "$(g n "/api/finance/analysis?group=nonsense" | jq -r .group)" month "bilinmeyen kirilim aya duser"
+ok "$(curl -s -b "$J/n" "$B/api/finance/analysis.xlsx?group=month" | head -c 2)" PK "analiz Excel'i"
+ok "$(curl -s -b "$J/n" "$B/api/finance/budget.xlsx?period=$PER" | head -c 2)" PK "butce Excel'i"
+ok "$(wc_ n DELETE "$NT" "/api/finance/periods/$PER" '')" 200 "donem silinir"
+ok "$(DB "select count(*) from budget_lines where period_id='$PER'")" 0 "satirlari da gider"
+DB "delete from user_scopes where user_id='$DENIZ' and scope='manage_budgets'" >/dev/null
+
+# Tekrarlayan giderler (yazma manage_ledger) ve mail sablonlari (maliye).
+t finance_recurring_templates
+DB "insert into user_scopes (user_id,scope) values ('$DENIZ','manage_budgets')" >/dev/null
+ok "$(wc_ n POST "$NT" /api/finance/recurring '{"name":"Alan adi","amount":120,"every":"year","next_on":"2031-01-01"}')" 403 "kasa yetkisiz tekrarlayan gider acilmaz"
+DB "insert into user_scopes (user_id,scope) values ('$DENIZ','manage_ledger')" >/dev/null
+ok "$(w n POST "$NT" /api/finance/recurring '{"name":"Alan adi","amount":120,"every":"week","next_on":"2031-01-01"}' | jq -r .error)" invalid_every "yalniz ay/yil"
+RC=$(w n POST "$NT" /api/finance/recurring '{"name":"Alan adi","amount":120,"every":"year","next_on":"2031-01-01"}')
+ok "$(jq -r '"\(.currency) \(.amount) \(.is_active)"' <<<"$RC")" "TRY 120.0 true" "tekrarlayan gider"
+RCID=$(jq -r .id <<<"$RC")
+ok "$(w n PATCH "$NT" "/api/finance/recurring/$RCID" '{"next_on":"2032-01-01","is_active":false}' | jq -r '"\(.next_on) \(.is_active)"')" "2032-01-01 false" "ileri alinir, durdurulur"
+ok "$(w n PATCH "$NT" "/api/finance/recurring/$RCID" '{"amount":0}' | jq -r .error)" invalid_amount "sifir tutar"
+ok "$(g n /api/finance/recurring | jq -r 'length')" 1 "liste"
+ok "$(wc_ n DELETE "$NT" "/api/finance/recurring/$RCID" '')" 200 "silinir"
+TP=$(w n POST "$NT" /api/finance/templates '{"name":"SEB bildirimi","format":"md","body":"Merhaba {{kulup_adi}}, toplam {{toplam:para}}"}')
+ok "$(jq -r '"\(.format) \(.name)"' <<<"$TP")" "md SEB bildirimi" "sablon yuklenir"
+TPID=$(jq -r .id <<<"$TP")
+ok "$(w n POST "$NT" /api/finance/templates '{"name":"SEB bildirimi","format":"md","body":"x"}' | jq -r .error)" template_exists "ayni ad"
+ok "$(w n POST "$NT" /api/finance/templates '{"name":"X","format":"docx","body":"x"}' | jq -r .error)" invalid_format "bicim"
+ok "$(w n PUT "$NT" "/api/finance/templates/$TPID" '{"name":"SEB bildirimi","format":"html","body":"<p>{{toplam:para}}</p>"}' | jq -r .format)" html "sablon degisir"
+ok "$(g n /api/finance/templates | jq -r '.[0].body')" "<p>{{toplam:para}}</p>" "liste govde tasir"
+ok "$(wc_ n DELETE "$NT" "/api/finance/templates/$TPID" '')" 200 "sablon silinir"
+DB "delete from user_scopes where user_id='$DENIZ' and scope in ('manage_budgets','manage_ledger')" >/dev/null
 
 t action_owner_participant
 # K1: eyleme atanan kayda katilimci olur, eylemini kapatabilir (A3 de kapanir).
 ok "$(g c2 "/api/records/$VEKALET" | jq -r .access.can_edit)" false "atanmadan once duzenleyemez"
-w w POST "$WT" "/api/records/$VEKALET/actions" "{\"title\":\"Can'in eylemi\",\"owner_id\":\"$CAN\"}" >/dev/null
+w w POST "$WT" "/api/records/$VEKALET/actions" "{\"title\":\"Can'in eylemi\",\"owner_ids\":[\"$CAN\"]}" >/dev/null
 ok "$(DB "select count(*) from record_participants where record_id='$VEKALET' and user_id='$CAN'")" 1 "acilista sahip katilimci"
 CA=$(DB "select id from actions where title='Can''in eylemi'")
 ok "$(w c2 PATCH "$CT" "/api/actions/$CA" '{"field":"status","value":"closed","closing_note":"Eylem tamamlandi ve sonuc ekip arkadaslariyla paylasildi."}' | jq -r ".actions[]|select(.id==\"$CA\").status")" closed "sahip kendi eylemini kapatir"
-w w PATCH "$WT" "/api/actions/$CA" "{\"field\":\"owner_id\",\"value\":\"$ZEYNEP\"}" >/dev/null
+w w PATCH "$WT" "/api/actions/$CA" "{\"field\":\"owner_ids\",\"value\":[\"$ZEYNEP\"]}" >/dev/null
 ok "$(DB "select count(*) from record_participants where record_id='$VEKALET' and user_id='$ZEYNEP'")" 1 "atamada sahip katilimci"
-w w PATCH "$WT" "/api/actions/$CA" "{\"field\":\"owner_id\",\"value\":\"$CAN\"}" >/dev/null
+w w PATCH "$WT" "/api/actions/$CA" "{\"field\":\"owner_ids\",\"value\":[\"$CAN\"]}" >/dev/null
 ok "$(DB "select count(*) from record_participants where record_id='$VEKALET' and user_id='$CAN'")" 1 "idempotent"
-ok "$(DB "select count(*) from actions a where owner_id is not null and not exists (select 1 from record_participants p where p.record_id=a.record_id and p.user_id=a.owner_id)")" 0 "katilimci olmayan eylem sahibi yok"
+ok "$(DB "select count(*) from action_assignees x join actions a on a.id=x.action_id where not exists (select 1 from record_participants p where p.record_id=a.record_id and p.user_id=x.user_id)")" 0 "katilimci olmayan eylem sahibi yok"
+# Birden fazla kisi: hepsi katilimci olur, hepsinin "Acik eylemim"inde gorunur, kume degisince kaydedilir.
+MA2=$(w w PATCH "$WT" "/api/actions/$CA" "{\"field\":\"owner_ids\",\"value\":[\"$CAN\",\"$ZEYNEP\",\"$CAN\"]}")
+ok "$(jq -r ".actions[]|select(.id==\"$CA\")|.owner_ids|length" <<<"$MA2")" 2 "tekrarsiz iki atanan"
+w w PATCH "$WT" "/api/actions/$CA" '{"field":"status","value":"open"}' >/dev/null
+ok "$(DB "select count(*) from action_assignees where action_id='$CA'")" 2 "iki satir"
+ok "$(g c2 /api/actions/mine | jq -r "[.[]|select(.id==\"$CA\")]|length")" 1 "ilk atanan acik eylemini gorur"
+ok "$(w w PATCH "$WT" "/api/actions/$CA" '{"field":"owner_ids","value":["00000000-0000-0000-0000-000000000000"]}' | jq -r .error)" unknown_user "bilinmeyen kisi"
+ok "$(w w PATCH "$WT" "/api/actions/$CA" '{"field":"owner_ids","value":[]}' | jq -r ".actions[]|select(.id==\"$CA\")|.owner_ids|length")" 0 "bos kume = havuzda"
 
 t card_request_mode
 # K5: request kipinde kart cevabi ve oy yalniz onayli uyeye ve duzenleyene.

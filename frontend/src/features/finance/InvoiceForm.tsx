@@ -33,7 +33,6 @@ interface Draft {
   rate: string;
   rateOn: IsoDate | null;
   rateSource: "tcmb" | "manual";
-  groups: string[];
   picked: Record<Uuid, string>;
   paidBy: "member" | "club";
   accountId: Uuid | null;
@@ -43,16 +42,15 @@ interface Draft {
 function emptyDraft(): Draft {
   return {
     files: [], purchasedOn: todayIso(), currency: "TRY", total: "", rate: "", rateOn: null, rateSource: "tcmb",
-    groups: [], picked: {}, paidBy: "member", accountId: null, note: "",
+    picked: {}, paidBy: "member", accountId: null, note: "",
   };
 }
 
 function fromInvoice(v: InvoiceView): Draft {
-  const groups = [...new Set(v.items.map((i) => i.event_id ?? NONE))];
   return {
     files: v.attachments, purchasedOn: v.purchased_on, currency: v.currency, total: String(v.total).replace(".", ","),
     rate: v.fx_rate === null ? "" : String(v.fx_rate).replace(".", ","), rateOn: v.fx_on,
-    rateSource: v.fx_source ?? "tcmb", groups,
+    rateSource: v.fx_source ?? "tcmb",
     picked: Object.fromEntries(v.items.map((i) => [i.material_id, String(i.amount).replace(".", ",")])),
     paidBy: v.paid_by, accountId: v.payee?.id ?? null, note: v.note ?? "",
   };
@@ -72,8 +70,9 @@ export function InvoiceForm(props: {
   onDone: (inv: InvoiceView) => void;
   /** Hesap yoksa gidilecek yer; `ret` bu formun adresi. */
   accountsHref: string;
-  /** "Listede yok": etkinlik sayfasi, satin alimlar vurgulu (D-6). */
-  eventHref: (eventId: Uuid) => string;
+  /** "Listede yok": etkinlik sayfasi, satin alimlar vurgulu (D-6). Yoksa (mobil: etkinlik
+   *  sayfasi masaustunde) baglanti cizilmez. */
+  eventHref?: ((eventId: Uuid) => string) | undefined;
 }) {
   const L = useLookup();
   const q = usePurchasable();
@@ -83,7 +82,7 @@ export function InvoiceForm(props: {
   const [uploading, setUploading] = useState(0);
   const [err, setErr] = useState<string | null>(null);
   const [fxNote, setFxNote] = useState<string | null>(null);
-  const [addEvent, setAddEvent] = useState<string>("");
+  const [search, setSearch] = useState("");
   const file = useRef<HTMLInputElement>(null);
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setD((x) => ({ ...x, [k]: v }));
 
@@ -114,37 +113,60 @@ export function InvoiceForm(props: {
     return () => { live = false; };
   }, [d.currency, d.purchasedOn, d.rateSource]);
 
-  const byGroup = useMemo(() => {
+  // Bilinen kalemler: secilebilir liste + (duzeltmede) faturanin kendi kalemleri.
+  const known = useMemo(() => {
+    const m = new Map<Uuid, { name: string; eventTitle: string | null; qty: number | null; price: number | null }>();
+    for (const i of props.initial?.items ?? []) m.set(i.material_id, { name: i.name, eventTitle: i.event_title, qty: null, price: null });
+    for (const p of q.data ?? []) m.set(p.id, { name: p.name, eventTitle: p.event_title, qty: p.qty, price: p.price });
+    return m;
+  }, [q.data, props.initial]);
+
+  // Arama sonucu: etkinlige gore gruplu, secilenler cikarilmis; "Etkinliksiz" en sonda.
+  const results = useMemo(() => {
+    const needle = search.trim().toLocaleLowerCase("tr");
     const m = new Map<string, Purchasable[]>();
     for (const p of q.data ?? []) {
+      if (d.picked[p.id] !== undefined) continue;
+      if (needle !== "" && !`${p.name} ${p.event_title ?? "etkinliksiz"}`.toLocaleLowerCase("tr").includes(needle)) continue;
       const k = p.event_id ?? NONE;
       m.set(k, [...(m.get(k) ?? []), p]);
     }
-    return m;
-  }, [q.data]);
-
-  const groupTitle = (k: string) => {
-    if (k === NONE) return "Etkinliğe bağlı olmayan kalemler";
-    const p = byGroup.get(k)?.[0];
-    return p?.event_title ?? "Etkinlik";
-  };
+    return [...m.entries()].sort(([a], [b]) => (a === NONE ? 1 : b === NONE ? -1 : 0));
+  }, [q.data, search, d.picked]);
 
   const total = parseAmount(d.total);
   const rate = d.currency === "TRY" ? null : parseRate(d.rate);
   const pickedIds = Object.keys(d.picked);
   const dist = pickedIds.reduce((a, id) => a + cents(parseAmount(d.picked[id] ?? "") ?? 0), 0);
   const diff = total === null ? null : cents(total) - dist;
-  const derived = [...new Set(pickedIds.map((id) => q.data?.find((p) => p.id === id)?.event_title ?? null))];
+  const derived = [...new Set(pickedIds.map((id) => known.get(id)?.eventTitle ?? null))];
   const sym = SYMBOL[d.currency] ?? d.currency;
   const accounts = acc.data ?? [];
   const needsAccount = d.paidBy === "member" && acc.data !== undefined && accounts.length === 0;
+  const fmt = (c: number) => (c / 100).toLocaleString("tr-TR", { minimumFractionDigits: 2 });
 
-  // Ilk secilen kalem faturanin tamamini alir (tek kalemli fatura en sik durum).
-  const toggle = (p: Purchasable, on: boolean) => setD((x) => {
+  // Kalem eklenince tutar onerisi: TL faturada kartin fiyati, degilse (ya da fiyat yoksa)
+  // dagitilmamis kalan. Kullanici her zaman degistirebilir.
+  const add = (p: Purchasable) => setD((x) => {
+    const left = parseAmount(x.total);
+    const used = Object.values(x.picked).reduce((a, v) => a + cents(parseAmount(v) ?? 0), 0);
+    const rest = left === null ? 0 : cents(left) - used;
+    const guess = x.currency === "TRY" && p.price !== null && p.price > 0 ? String(p.price).replace(".", ",")
+      : rest > 0 ? (rest / 100).toFixed(2).replace(".", ",") : "";
+    return { ...x, picked: { ...x.picked, [p.id]: guess } };
+  });
+  const remove = (id: Uuid) => setD((x) => {
     const picked = { ...x.picked };
-    if (on) picked[p.id] = Object.keys(picked).length === 0 ? x.total : "";
-    else delete picked[p.id];
+    delete picked[id];
     return { ...x, picked };
+  });
+  /** Bu kaleme dagitilmamis kalanin tamamini yazar. */
+  const fillRest = (id: Uuid) => setD((x) => {
+    const left = parseAmount(x.total);
+    if (left === null) return x;
+    const others = Object.entries(x.picked).filter(([k]) => k !== id).reduce((a, [, v]) => a + cents(parseAmount(v) ?? 0), 0);
+    const rest = cents(left) - others;
+    return rest > 0 ? { ...x, picked: { ...x.picked, [id]: (rest / 100).toFixed(2).replace(".", ",") } } : x;
   });
 
   const addFiles = (files: File[]) => {
@@ -191,7 +213,6 @@ export function InvoiceForm(props: {
   };
 
   if (q.data === undefined) return <Loading />;
-  const left = [...byGroup.keys()].filter((k) => !d.groups.includes(k));
   const accept = L.meta.upload_limits?.invoice?.accept;
 
   return (
@@ -273,57 +294,70 @@ export function InvoiceForm(props: {
 
       <div className={ui.field}>
         <span>Bu fatura hangi kalemler için?<Req /></span>
-        <div className={s.evPick}>
-          <Picker label="Eklenecek etkinlik" value={addEvent} onChange={setAddEvent}
-            options={[{ value: "", label: left.length === 0 ? "Eklenecek etkinlik yok" : "Etkinlik seç…" },
-              ...left.map((k) => ({ value: k, label: groupTitle(k) }))]} />
-          <Button type="button" size="sm" disabled={addEvent === ""}
-            onClick={() => { set("groups", [...d.groups, addEvent]); setAddEvent(""); }}>Etkinlik ekle</Button>
-        </div>
-        {d.groups.map((g) => {
-          const items = byGroup.get(g) ?? [];
-          return (
-            <div key={g} className={s.group}>
-              <div className={s.groupHead}>
-                <b>{groupTitle(g)}</b>
-                <span className={s.dim}>{items.filter((p) => d.picked[p.id] !== undefined).length} kalem seçili</span>
-                <span className={s.grow} />
-                {g !== NONE && (
-                  <a className={s.link} href={props.eventHref(g)}
-                    onClick={(e) => { keepDraft(); onLinkClick(e, props.eventHref(g)); }}>Listede yok, kalem ekle</a>
-                )}
-                <Button type="button" size="sm" variant="ghost" onClick={() => setD((x) => {
-                  const picked = { ...x.picked };
-                  for (const p of items) delete picked[p.id];
-                  return { ...x, groups: x.groups.filter((y) => y !== g), picked };
-                })}>Kaldır</Button>
+        {pickedIds.length > 0 && (
+          <div className={s.group}>
+            {pickedIds.map((id) => {
+              const k = known.get(id);
+              return (
+                <div key={id} className={s.itemRow}>
+                  <span className={s.itemLabel}>
+                    <span>
+                      {k?.name ?? "Kalem"}
+                      <span className={s.dim}> · {k?.eventTitle ?? "Etkinliksiz"}{k?.qty != null && k.qty > 1 ? ` · ${k.qty} adet` : ""}{k?.price != null ? ` · teklif ${money(k.price)}` : ""}</span>
+                    </span>
+                  </span>
+                  <span className={s.itemTools}>
+                    <input className={cx(ui.input, s.num, s.itemAmount)} inputMode="decimal"
+                      aria-label={`${k?.name ?? "Kalem"} tutarı`} value={d.picked[id] ?? ""} placeholder={`0,00 ${sym}`}
+                      onChange={(e) => setD((x) => ({ ...x, picked: { ...x.picked, [id]: e.target.value } }))} />
+                    {diff !== null && diff > 0 && (
+                      <button type="button" className={s.x} title="Kalan tutarı bu kaleme yaz" aria-label="Kalan tutarı bu kaleme yaz"
+                        onClick={() => fillRest(id)}><Icon name="plus" size={12} /></button>
+                    )}
+                    <button type="button" className={s.x} aria-label={`${k?.name ?? "Kalem"} kalemini çıkar`}
+                      onClick={() => remove(id)}><Icon name="x" size={12} /></button>
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        <div className={s.itemSearch}>
+          <input className={ui.input} type="search" value={search} onChange={(e) => setSearch(e.target.value)}
+            placeholder="Kalem ya da etkinlik ara, listeden seç" aria-label="Kalem ara" autoComplete="off" />
+          <div className={s.results} role="listbox" aria-label="Seçilebilir kalemler">
+            {results.length === 0 && (
+              <p className={s.dim}>{search.trim() === "" ? "Seçilecek onaylı kalem kalmadı." : "Eşleşen onaylı kalem yok."}</p>
+            )}
+            {results.map(([g, items]) => (
+              <div key={g}>
+                <div className={s.resHead}>
+                  <b>{g === NONE ? "Etkinliksiz" : items[0]?.event_title ?? "Etkinlik"}</b>
+                  <span className={s.grow} />
+                  {g !== NONE && props.eventHref !== undefined && (
+                    <a className={s.link} href={props.eventHref(g)}
+                      onClick={(e) => { keepDraft(); onLinkClick(e, props.eventHref?.(g) ?? "/"); }}>Listede yok, kalem ekle</a>
+                  )}
+                </div>
+                {items.map((p) => (
+                  <button key={p.id} type="button" role="option" aria-selected={false} className={s.resItem} onClick={() => add(p)}>
+                    <span>{p.name}<span className={s.dim}>{p.qty > 1 ? ` · ${p.qty} adet` : ""}{p.purchased ? " · satın alındı" : ""}</span></span>
+                    <span className={cx(s.num, s.dim)}>{p.price !== null && p.price > 0 ? money(p.price) : ""}</span>
+                  </button>
+                ))}
               </div>
-              {items.length === 0 && <p className={s.dim}>Bu etkinlikte onaylı kalem yok.</p>}
-              {items.map((p) => {
-                const on = d.picked[p.id] !== undefined;
-                return (
-                  <div key={p.id} className={s.itemRow}>
-                    <label className={s.itemLabel}>
-                      <input type="checkbox" checked={on} onChange={(e) => toggle(p, e.target.checked)} />
-                      <span>
-                        {p.name}
-                        <span className={s.dim}> · {p.qty} adet{p.price !== null ? ` · teklif ${money(p.price)}` : ""}{p.purchased ? " · satın alındı" : ""}</span>
-                      </span>
-                    </label>
-                    <input className={cx(ui.input, s.num, s.itemAmount)} inputMode="decimal" disabled={!on}
-                      aria-label={`${p.name} tutarı`} value={d.picked[p.id] ?? ""} placeholder={on ? `0,00 ${sym}` : ""}
-                      onChange={(e) => setD((x) => ({ ...x, picked: { ...x.picked, [p.id]: e.target.value } }))} />
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })}
+            ))}
+          </div>
+        </div>
         <div className={cx(s.sum, diff === 0 && pickedIds.length > 0 ? s.sumOk : s.sumWarn)} aria-live="polite">
-          <span>Dağıtılan</span>
+          <span>
+            {diff === null ? "Önce faturanın tutarını yaz"
+              : diff === 0 && pickedIds.length > 0 ? "Tutarlar tamam"
+              : diff > 0 ? "Dağıtılacak kalan" : "Fazla dağıtılan"}
+          </span>
           <span className={s.num}>
-            {(dist / 100).toLocaleString("tr-TR", { minimumFractionDigits: 2 })} / {total === null ? "—" : total.toLocaleString("tr-TR", { minimumFractionDigits: 2 })} {sym}
-            {diff !== null && diff !== 0 && ` · fark ${(diff / 100).toLocaleString("tr-TR", { minimumFractionDigits: 2 })} ${sym}`}
+            {diff !== null && diff !== 0 && `${fmt(Math.abs(diff))} ${sym} · `}
+            {fmt(dist)} / {total === null ? "—" : fmt(cents(total))} {sym}
           </span>
         </div>
         <span className={ui.fieldHint}>

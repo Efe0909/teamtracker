@@ -180,7 +180,8 @@ export interface Action {
   id: Uuid;
   title: string;
   status: ActionStatus;
-  owner_id: Uuid | null;
+  /** Atananlar; bos = havuzda. Her atanan kayda katilimcidir. */
+  owner_ids: Uuid[];
   due_date: IsoDate | null;
   created_at: IsoTime;
   resolved_at: IsoTime | null;
@@ -549,7 +550,7 @@ export type RecordPatch = (
 
 export type ActionPatch = (
   | { field: "status"; value: ActionStatus }
-  | { field: "owner_id"; value: Uuid | null }
+  | { field: "owner_ids"; value: Uuid[] }
   | { field: "due_date"; value: IsoDate | null }
   | { field: "title"; value: string }
 ) & { closing_note?: string; quality_override?: boolean };
@@ -572,7 +573,8 @@ export interface NewRecord {
 
 export interface NewAction {
   title: string;
-  owner_id: Uuid | null;
+  /** Birden fazla kisi atanabilir; bos = havuzda. */
+  owner_ids: Uuid[];
   due_date: IsoDate | null;
 }
 
@@ -1219,6 +1221,19 @@ export interface Purchasable {
   event_date: IsoDate | null;
 }
 
+/** Iade listesi satiri: dosya acilmis olsun olmasin; `claim_id` bos = "Dosya acilmadi". */
+export interface ClaimSlot {
+  kind: "monthly" | "event";
+  month: IsoDate | null;
+  event_id: Uuid | null;
+  event_title: string | null;
+  event_date: IsoDate | null;
+  claim_id: Uuid | null;
+  status: ClaimStatus | null;
+  invoice_count: number;
+  seb_total: number;
+}
+
 export interface ClaimRow {
   id: Uuid;
   kind: "monthly" | "event";
@@ -1325,6 +1340,19 @@ export interface MatRow {
   created_by: Uuid | null;
   created_at: IsoTime;
   purchased_at: IsoTime | null;
+  /** Ayni adli kalemler tek satira toplanir (sunucu normalize anahtari); duvarda bos. */
+  group_key: string;
+}
+
+/** Tek kalem ayrintisi (etkinlikli ya da etkinliksiz): widget'in kalem sekli + Maliye alanlari. */
+export interface MatFull {
+  material: Material;
+  event_id: Uuid | null;
+  event_title: string | null;
+  event_date: IsoDate | null;
+  category_id: Uuid | null;
+  needed_by: IsoDate | null;
+  invoices: { id: Uuid; purchased_on: IsoDate; status: InvoiceStatus; amount: number }[];
 }
 
 export type MatQueue = "review" | "ship" | "invoice" | "open" | "all";
@@ -1360,6 +1388,8 @@ export interface VendorRow {
   issues_invoice: boolean | null;
   note: string | null;
   offer_count: number;
+  /** Tekliflerinin ait oldugu farkli etkinlik sayisi. */
+  event_count: number;
   invoice_total: number;
   aliases: string[];
   created_at: IsoTime;
@@ -1381,4 +1411,68 @@ export interface VendorIn {
   url?: string | null;
   issues_invoice?: boolean | null;
   note?: string | null;
+}
+
+/** Maliye donemi (spec/81 §3.2): ikisi de dahil gun. */
+export interface FinancePeriod {
+  id: Uuid;
+  name: string;
+  from: IsoDate;
+  to: IsoDate;
+}
+
+/** Plan vs gercek satiri: kategori ya da kategori x etkinlik. Bos kategori = kategorisiz. */
+export interface BudgetRow {
+  category_id: Uuid | null;
+  event_id: Uuid | null;
+  event_title: string | null;
+  planned: number;
+  spent: number;
+  committed: number;
+  note: string | null;
+}
+
+export interface BudgetView {
+  period: FinancePeriod | null;
+  rows: BudgetRow[];
+  can_write: boolean;
+}
+
+export type AnalysisGroup = "month" | "period" | "event" | "category";
+
+export interface AnalysisRow {
+  label: string;
+  spent_seb: number;
+  spent_general: number;
+  committed: number;
+  claimed: number;
+  received: number;
+  budget: number;
+  income: number;
+}
+
+export interface Analysis {
+  group: AnalysisGroup;
+  from: IsoDate;
+  to: IsoDate;
+  rows: AnalysisRow[];
+}
+
+export interface RecurringExpense {
+  id: Uuid;
+  name: string;
+  amount: number;
+  currency: string;
+  every: "month" | "year";
+  next_on: IsoDate;
+  category_id: Uuid | null;
+  is_active: boolean;
+}
+
+export interface MailTemplate {
+  id: Uuid;
+  name: string;
+  format: "html" | "md";
+  body: string;
+  updated_at: IsoTime;
 }
