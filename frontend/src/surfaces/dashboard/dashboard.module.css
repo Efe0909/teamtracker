@@ -2371,3 +2371,17 @@ li[data-state="todo"] > .evStep > span:first-child {
   display: flex;
   gap: var(--s-2);
 }
+
+/* Fatura formundan gelinince donus seridi (spec/81 D-6) */
+.returnStrip {
+  margin: 0 0 var(--s-3);
+  padding: var(--s-3) var(--s-4);
+  border-radius: var(--r-md);
+  background: var(--info-bg);
+  color: var(--info-text);
+  font-size: var(--fs-sm);
+}
+.returnStrip a {
+  color: inherit;
+  font-weight: 600;
+}

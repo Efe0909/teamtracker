@@ -29,7 +29,8 @@ export type Route =
   | { name: "finance"; section: FinanceSection; id: string | null }
   | { name: "notFound" };
 
-export type FinanceSection = "home" | "invoices" | "new" | "edit" | "mine" | "claims" | "ledger";
+export type FinanceSection =
+  | "home" | "invoices" | "new" | "edit" | "mine" | "claims" | "ledger" | "materials" | "wall" | "vendors";
 
 export const QUERY_KEYS = [
   "kind", "status", "priority", "team", "person", "node", "pillar", "search", "quick",
@@ -86,6 +87,10 @@ export function parse(url: URL): Route {
     if (b === "claims" && seg.length === 2) return f("claims");
     if (b === "claims" && seg[2] !== undefined && seg.length === 3) return f("claims", seg[2]);
     if (b === "ledger" && seg.length === 2) return f("ledger");
+    if (b === "materials" && seg.length === 2) return f("materials");
+    if (b === "wall" && seg.length === 2) return f("wall");
+    if (b === "vendors" && seg.length === 2) return f("vendors");
+    if (b === "vendors" && seg[2] !== undefined && seg.length === 3) return f("vendors", seg[2]);
   }
   if (a === "profile" && seg.length === 1) {
     return { name: "profile", tab: profileTab(url.searchParams.get("tab")), ret: safeReturn(url.searchParams.get("return")) };
@@ -143,9 +148,12 @@ export function href(r: Route): string {
         case "invoices":
         case "mine":
         case "claims":
+        case "vendors":
           return r.id === null ? `/finance/${r.section}` : `/finance/${r.section}/${r.id}`;
         case "ledger":
-          return "/finance/ledger";
+        case "materials":
+        case "wall":
+          return `/finance/${r.section}`;
       }
   }
 }

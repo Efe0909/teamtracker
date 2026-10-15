@@ -43,7 +43,7 @@ const UPCOMING_DAYS: i64 = 30;
 
 const VIEW_SCOPES: [&str; 4] = ["review_purchases", "manage_budgets", "manage_ledger", "manage_purchases"];
 
-async fn is_viewer(st: &AppState, me: &User) -> Result<bool> {
+pub(super) async fn is_viewer(st: &AppState, me: &User) -> Result<bool> {
     if me.is_admin {
         return Ok(true);
     }
@@ -51,11 +51,11 @@ async fn is_viewer(st: &AppState, me: &User) -> Result<bool> {
     Ok(VIEW_SCOPES.iter().any(|s| active.iter().any(|a| a == s)))
 }
 
-async fn need_viewer(st: &AppState, me: &User) -> Result<()> {
+pub(super) async fn need_viewer(st: &AppState, me: &User) -> Result<()> {
     if is_viewer(st, me).await? { Ok(()) } else { Err(AppError::Forbidden) }
 }
 
-async fn need(st: &AppState, me: &User, scope: &'static str) -> Result<()> {
+pub(super) async fn need(st: &AppState, me: &User, scope: &'static str) -> Result<()> {
     if common::has_scope(st, me, scope).await? { Ok(()) } else { Err(AppError::Denied(scope_denied(scope))) }
 }
 
@@ -63,13 +63,14 @@ fn scope_denied(scope: &str) -> &'static str {
     match scope {
         "review_purchases" => "review_purchases_required",
         "manage_ledger" => "manage_ledger_required",
+        "manage_purchases" => "manage_purchases_required",
         _ => "forbidden",
     }
 }
 
 /// Istanbul gunu: sunucu UTC; gece yarisindan sonraki 3 saat "dun" gorunmesin.
 /// Turkiye 2016'dan beri sabit UTC+3 (yaz saati yok).
-fn today() -> NaiveDate {
+pub(super) fn today() -> NaiveDate {
     (Utc::now() + chrono::Duration::hours(3)).date_naive()
 }
 

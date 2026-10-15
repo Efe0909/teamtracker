@@ -1298,3 +1298,87 @@ export interface FxQuote {
   rate: number;
   source: "tcmb";
 }
+
+/** Maliye > Malzemeler satiri (spec/81 §7): kart fiyati secili teklif / sponsor / en dusuk. */
+export interface MatRow {
+  id: Uuid;
+  name: string;
+  qty: number;
+  kind: MaterialType;
+  priority: Priority;
+  state: number;
+  owned: boolean;
+  purchased: boolean;
+  delivered: boolean;
+  sponsor_chosen: boolean;
+  price: number | null;
+  budget: number | null;
+  eta: IsoDate | null;
+  supplier: string | null;
+  offer_count: number;
+  event_id: Uuid | null;
+  event_title: string | null;
+  event_date: IsoDate | null;
+  category_id: Uuid | null;
+  needed_by: IsoDate | null;
+  invoiced: boolean;
+  created_by: Uuid | null;
+  created_at: IsoTime;
+  purchased_at: IsoTime | null;
+}
+
+export type MatQueue = "review" | "ship" | "invoice" | "open" | "all";
+
+export interface MatList {
+  rows: MatRow[];
+  counts: Record<MatQueue, number>;
+}
+
+export interface WallColumn {
+  items: MatRow[];
+  total: number;
+  hidden: number;
+  sum: number;
+}
+
+export interface Wall {
+  prep: WallColumn;
+  tobuy: WallColumn;
+  bought: WallColumn;
+  ahead: number;
+  back: number;
+  categories: Record<Uuid, number>;
+}
+
+export interface VendorRow {
+  id: Uuid;
+  name: string;
+  contact: string | null;
+  phone: string | null;
+  email: string | null;
+  url: string | null;
+  issues_invoice: boolean | null;
+  note: string | null;
+  offer_count: number;
+  invoice_total: number;
+  aliases: string[];
+  created_at: IsoTime;
+}
+
+export interface VendorDetail {
+  vendor: VendorRow;
+  merged_into: Uuid | null;
+  offers: { material_id: Uuid; material: string; event_title: string | null; price: number | null;
+    chosen: boolean; purchased: boolean; at: IsoTime }[];
+  invoices: { id: Uuid; purchased_on: IsoDate; total_try: number; status: InvoiceStatus }[];
+}
+
+export interface VendorIn {
+  name: string;
+  contact?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  url?: string | null;
+  issues_invoice?: boolean | null;
+  note?: string | null;
+}

@@ -70,6 +70,11 @@ export type ApiErrorCode =
   | "attachment_locked"
   | "review_purchases_required"
   | "manage_ledger_required"
+  | "manage_purchases_required"
+  | "category_required"
+  | "event_material"
+  | "vendor_merged"
+  | "vendor_exists"
   | "invalid_user_id"
   | "invalid_holder"
   | "invalid_iban"
@@ -245,6 +250,11 @@ export const ERRORS = {
   attachment_locked: "Bu belge bir faturaya ya da kasa kaydına bağlı; silinemez.",
   review_purchases_required: "Bu işlem için “Satın alımları incele” yetkisi gerekiyor.",
   manage_ledger_required: "Bu işlem için “Kasa defterini yönet” yetkisi gerekiyor.",
+  manage_purchases_required: "Bu işlem için “Satın alımları yönet” yetkisi gerekiyor.",
+  category_required: "Etkinlikten bağımsız kalem için bir bütçe kategorisi seç.",
+  event_material: "Bu kalem bir etkinliğe bağlı; tedariği etkinlik sayfasındaki satın alımlarda yönetilir.",
+  vendor_merged: "Bu tedarikçi başka bir kayıtla birleştirilmiş. Birleşen kaydı düzenle.",
+  vendor_exists: "Bu adla bir tedarikçi zaten var.",
   invalid_user_id: "Kişi bulunamadı.",
   invalid_holder: "Hesap sahibinin adını yaz.",
   invalid_iban: "IBAN geçersiz. Boşluklar sorun değil; hanelerden biri yanlış olabilir.",

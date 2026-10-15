@@ -38,8 +38,17 @@ import type {
   InvoiceIn,
   InvoiceRow,
   InvoiceView,
+  Ledger,
   LedgerView,
+  MaterialType,
+  MatList,
+  MatQueue,
+  MatRow,
   Purchasable,
+  VendorDetail,
+  VendorIn,
+  VendorRow,
+  Wall,
   Quality,
   QualityConfig,
   QualityView,
@@ -1103,6 +1112,98 @@ export function useLedgerWrite() {
       qc.setQueryData(financeKeys.ledger, l);
       afterFinance(qc);
     },
+  });
+}
+
+export interface MatFilter {
+  queue: MatQueue;
+  event?: string;
+  kind?: string;
+  category?: Uuid;
+  q?: string;
+}
+
+export function useMaterialsQueue(f: MatFilter) {
+  return useQuery({
+    queryKey: [...financeKeys.all, "materials", f] as const,
+    queryFn: () => request<MatList>("GET", `/api/finance/materials${qs({ ...f })}`),
+    placeholderData: (prev) => prev,
+  });
+}
+
+export interface WallFilter {
+  ahead?: number;
+  back?: number;
+  ledger?: Ledger;
+  category?: Uuid;
+  q?: string;
+  limit_prep?: number;
+  limit_tobuy?: number;
+  limit_bought?: number;
+}
+
+export function useWall(f: WallFilter) {
+  return useQuery({
+    queryKey: [...financeKeys.all, "wall", f] as const,
+    queryFn: () => request<Wall>("GET", `/api/finance/wall${qs({
+      ...f, ahead: f.ahead?.toString(), back: f.back?.toString(), limit_prep: f.limit_prep?.toString(),
+      limit_tobuy: f.limit_tobuy?.toString(), limit_bought: f.limit_bought?.toString(),
+    })}`),
+    placeholderData: (prev) => prev,
+  });
+}
+
+export type PurchaseOp =
+  | { op: "create"; name: string; category_id: Uuid; needed_by?: IsoDate; qty?: number; kind?: MaterialType;
+      offer?: { vendor_id?: Uuid; name?: string; price?: number } }
+  | { op: "patch"; id: Uuid; state?: number; needed_by?: IsoDate | null; category_id?: Uuid }
+  | { op: "purchased"; id: Uuid; purchased: boolean };
+
+export function usePurchaseWrite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: PurchaseOp): Promise<unknown> => {
+      switch (v.op) {
+        case "create": {
+          const { op: _op, ...body } = v;
+          return request<MatRow>("POST", "/api/finance/materials", body);
+        }
+        case "patch": {
+          const { op: _op, id, ...body } = v;
+          return request<MatRow>("PATCH", `/api/finance/materials/${id}`, body);
+        }
+        case "purchased":
+          return request<unknown>("PATCH", `/api/materials/${v.id}/purchased`, { purchased: v.purchased });
+      }
+    },
+    onSuccess: () => afterFinance(qc),
+  });
+}
+
+export function useVendors(q: string) {
+  return useQuery({
+    queryKey: [...financeKeys.all, "vendors", q] as const,
+    queryFn: () => request<VendorRow[]>("GET", `/api/finance/vendors${qs({ q: q.trim() === "" ? undefined : q })}`),
+    placeholderData: (prev) => prev,
+  });
+}
+
+export function useVendor(id: Uuid | null) {
+  return useQuery({
+    queryKey: [...financeKeys.all, "vendor", id ?? ""] as const,
+    queryFn: () => request<VendorDetail>("GET", `/api/finance/vendors/${id ?? ""}`),
+    enabled: id !== null,
+  });
+}
+
+export function useVendorWrite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { id: null; body: VendorIn } | { id: Uuid; body: Partial<VendorIn> }) =>
+      v.id === null
+        ? request<{ vendor: VendorRow; existing: boolean }>("POST", "/api/finance/vendors", v.body)
+        : request<VendorRow>("PATCH", `/api/finance/vendors/${v.id}`, v.body).then((vendor) => ({ vendor, existing: false })),
+    onSuccess: () => afterFinance(qc),
   });
 }
 

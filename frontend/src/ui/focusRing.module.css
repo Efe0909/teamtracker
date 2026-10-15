@@ -1,0 +1,23 @@
+/* Nabiz halkasi: tiklanana kadar (FocusRing). Ham renk yok. */
+.ring {
+  border-radius: var(--r-lg);
+  box-shadow: 0 0 0 2px var(--acc);
+  animation: pulse 1.4s ease-out infinite;
+}
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 2px var(--acc), 0 0 0 2px var(--acc-soft);
+  }
+  70% {
+    box-shadow: 0 0 0 2px var(--acc), 0 0 0 12px transparent;
+  }
+  100% {
+    box-shadow: 0 0 0 2px var(--acc), 0 0 0 0 transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ring {
+    animation: none;
+    box-shadow: 0 0 0 2px var(--acc), 0 0 0 5px var(--acc-soft);
+  }
+}

@@ -1,6 +1,6 @@
 // Maliye (spec/81 §10): yan gezinme + bolumler. Gormek "maliye" yetkisi ister
-// (§4); digerleri yalniz "Fatura ekle" ve "Faturalarim"i gorur. Kanban/duvar,
-// malzemeler, tedarikciler ve sablonlar sonraki adim (PR #76 yapilacaklari).
+// (§4); digerleri yalniz "Fatura ekle" ve "Faturalarim"i gorur. Butce, analiz
+// ve sablonlar sonraki adim (PR #76 yapilacaklari).
 
 import { useEffect, useState } from "react";
 import { errorText } from "../../api/client";
@@ -17,6 +17,7 @@ import d from "./dashboard.module.css";
 import { FinanceClaims } from "./FinanceClaims";
 import { FinanceInvoices, InvoiceDetail } from "./FinanceInvoices";
 import { FinanceLedger } from "./FinanceLedger";
+import { FinanceMaterials, FinanceVendors, FinanceWall } from "./FinancePurchasing";
 import s from "./fin.module.css";
 import { href, type FinanceSection } from "./routes";
 
@@ -58,7 +59,8 @@ export function formatDay(iso: string | null): string {
 
 const TITLES: Record<FinanceSection, string> = {
   home: "Genel", invoices: "Fatura onayı", new: "Fatura ekle", edit: "Faturayı düzelt", mine: "Faturalarım",
-  claims: "SEB iadeleri", ledger: "Kulüp kasası",
+  claims: "SEB iadeleri", ledger: "Kulüp kasası", materials: "Malzemeler", wall: "Satın alım duvarı",
+  vendors: "Tedarikçiler",
 };
 
 export function Finance({ section, id }: { section: FinanceSection; id: string | null }) {
@@ -84,6 +86,9 @@ export function Finance({ section, id }: { section: FinanceSection; id: string |
           {effective === "invoices" && <FinanceInvoices id={id} />}
           {effective === "claims" && <FinanceClaims id={id} />}
           {effective === "ledger" && <FinanceLedger />}
+          {effective === "materials" && <FinanceMaterials />}
+          {effective === "wall" && <FinanceWall />}
+          {effective === "vendors" && <FinanceVendors id={id} />}
           {effective === "mine" && <Mine id={id} />}
           {effective === "new" && <NewInvoice />}
           {effective === "edit" && id !== null && <EditInvoice id={id} />}
@@ -111,6 +116,10 @@ function FinanceNav({ section, viewer }: { section: FinanceSection; viewer: bool
           {item("invoices", "Fatura onayı", viewer ? pending.data?.length : undefined)}
           {item("claims", "SEB iadeleri")}
           {item("ledger", "Kulüp kasası")}
+          <div className={s.grp}>Satın alım</div>
+          {item("materials", "Malzemeler")}
+          {item("wall", "Satın alım duvarı")}
+          {item("vendors", "Tedarikçiler")}
         </>
       )}
       <div className={s.grp}>Gönder</div>

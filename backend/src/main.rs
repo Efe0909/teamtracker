@@ -23,6 +23,7 @@ mod mentions;
 #[allow(dead_code)]
 mod models;
 mod mail;
+mod normalize;
 mod otf;
 mod openrouter;
 mod purchases_xlsx;

@@ -21,6 +21,7 @@ mod nodes;
 mod notify;
 mod otf;
 mod profile;
+mod purchasing;
 mod quality;
 mod records;
 mod teams;
@@ -124,6 +125,11 @@ pub fn router() -> Router<AppState> {
         .route("/api/finance/ledger/{id}/reverse", post(finance::reverse_entry))
         .route("/api/finance/ledger/checks", post(finance::add_check))
         .route("/api/finance/payouts", post(finance::payout))
+        .route("/api/finance/materials", get(purchasing::materials).post(purchasing::create_material))
+        .route("/api/finance/materials/{id}", patch(purchasing::patch_material))
+        .route("/api/finance/wall", get(purchasing::wall))
+        .route("/api/finance/vendors", get(purchasing::vendors).post(purchasing::create_vendor))
+        .route("/api/finance/vendors/{id}", get(purchasing::vendor).patch(purchasing::patch_vendor))
         .route("/api/chats/{id}/prefs", put(notify::set_chat))
         .route("/api/push/vapid", get(notify::vapid))
         .route("/api/push/subscriptions", post(notify::subscribe).delete(notify::unsubscribe))
