@@ -74,7 +74,7 @@ export function FinanceLedger() {
       <div className={s.panel}>
         <div className={s.pos}>
           <div>
-            <span className={s.lbl}><span className={cx(s.dot, s.dotAcc)} />Defter bakiyesi</span>
+            <span className={s.lbl}><span className={cx(s.dot, s.dotOk)} />Defter bakiyesi</span>
             <span className={s.val}>{money(v.balance)}</span>
             <span className={s.meta}>
               {v.last_check === null ? "Mutabakat yapılmadı"

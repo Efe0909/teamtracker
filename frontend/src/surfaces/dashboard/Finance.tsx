@@ -79,52 +79,61 @@ export function Finance({ section, id }: { section: FinanceSection; id: string |
           <p className={d.pageSub}>{TITLES[effective]}</p>
         </div>
       </div>
-      <div className={s.shell}>
-        <FinanceNav section={effective} viewer={viewer} />
-        <div className={s.main}>
-          {effective === "home" && <Home />}
-          {effective === "invoices" && <FinanceInvoices id={id} />}
-          {effective === "claims" && <FinanceClaims id={id} />}
-          {effective === "ledger" && <FinanceLedger />}
-          {effective === "materials" && <FinanceMaterials />}
-          {effective === "wall" && <FinanceWall />}
-          {effective === "vendors" && <FinanceVendors id={id} />}
-          {effective === "mine" && <Mine id={id} />}
-          {effective === "new" && <NewInvoice />}
-          {effective === "edit" && id !== null && <EditInvoice id={id} />}
-        </div>
+      <FinanceNav section={effective} viewer={viewer} />
+      <div className={s.main}>
+        {effective === "home" && <Home />}
+        {effective === "invoices" && <FinanceInvoices id={id} />}
+        {effective === "claims" && <FinanceClaims id={id} />}
+        {effective === "ledger" && <FinanceLedger />}
+        {effective === "materials" && <FinanceMaterials />}
+        {effective === "wall" && <FinanceWall />}
+        {effective === "vendors" && <FinanceVendors id={id} />}
+        {effective === "mine" && <Mine id={id} />}
+        {effective === "new" && <NewInvoice />}
+        {effective === "edit" && id !== null && <EditInvoice id={id} />}
       </div>
     </div>
   );
 }
 
+/** Bolum gezinmesi. Yeni bolum icin yalniz bu diziye satir eklenir. */
+const NAV_GROUPS: { label: string; viewerOnly: boolean; items: { section: FinanceSection; label: string }[] }[] = [
+  { label: "Takip", viewerOnly: true, items: [
+    { section: "home", label: "Genel" },
+    { section: "invoices", label: "Fatura onayı" },
+    { section: "claims", label: "SEB iadeleri" },
+    { section: "ledger", label: "Kulüp kasası" },
+  ] },
+  { label: "Satın alım", viewerOnly: true, items: [
+    { section: "materials", label: "Malzemeler" },
+    { section: "wall", label: "Satın alım duvarı" },
+    { section: "vendors", label: "Tedarikçiler" },
+  ] },
+  { label: "Gönder", viewerOnly: false, items: [
+    { section: "new", label: "Fatura ekle" },
+    { section: "mine", label: "Faturalarım" },
+  ] },
+];
+
 function FinanceNav({ section, viewer }: { section: FinanceSection; viewer: boolean }) {
   const pending = useInvoices({ status: "pending" });
-  const item = (sec: FinanceSection, label: string, count?: number) => (
-    <Link href={fin(sec)} className={s.navItem}
-      aria-current={section === sec || (sec === "invoices" && section === "edit") ? "page" : undefined}>
-      <span>{label}</span>
-      {count !== undefined && count > 0 && <span className={s.count}>{count}</span>}
-    </Link>
-  );
   return (
-    <nav className={s.nav} aria-label="Maliye bölümleri">
-      {viewer && (
-        <>
-          <div className={s.grp}>Takip</div>
-          {item("home", "Genel")}
-          {item("invoices", "Fatura onayı", viewer ? pending.data?.length : undefined)}
-          {item("claims", "SEB iadeleri")}
-          {item("ledger", "Kulüp kasası")}
-          <div className={s.grp}>Satın alım</div>
-          {item("materials", "Malzemeler")}
-          {item("wall", "Satın alım duvarı")}
-          {item("vendors", "Tedarikçiler")}
-        </>
-      )}
-      <div className={s.grp}>Gönder</div>
-      {item("new", "Fatura ekle")}
-      {item("mine", "Faturalarım")}
+    <nav className={s.subnav} aria-label="Maliye bölümleri">
+      {NAV_GROUPS.filter((g) => viewer || !g.viewerOnly).map((g) => (
+        <div key={g.label} className={s.subGroup}>
+          <span className={s.subGrp}>{g.label}</span>
+          {g.items.map((it) => {
+            const count = it.section === "invoices" ? pending.data?.length : undefined;
+            return (
+              <Link key={it.section} href={fin(it.section)} className={s.navItem}
+                aria-current={section === it.section || (it.section === "invoices" && section === "edit") ? "page" : undefined}>
+                <span>{it.label}</span>
+                {count !== undefined && count > 0 && <span className={s.count}>{count}</span>}
+              </Link>
+            );
+          })}
+        </div>
+      ))}
     </nav>
   );
 }
@@ -146,25 +155,26 @@ function Home() {
     <>
       <div className={s.panel}>
         <div className={s.pos}>
-          <div>
-            <span className={s.lbl}><span className={cx(s.dot, s.dotAcc)} />Kulüp kasası</span>
+          <Link href={fin("ledger")} className={cx(s.tile, s.tileLink)}>
+            <span className={s.lbl}><span className={cx(s.dot, s.dotOk)} />Kulüp kasası</span>
             <span className={s.val}>{money(v.cash_balance)}</span>
             <span className={s.meta}>
               {v.last_check === null ? "Mutabakat yapılmadı"
                 : `Son mutabakat ${formatDay(v.last_check.checked_on)} · ${v.last_check.diff === 0 ? "banka ile aynı" : `fark ${money(v.last_check.diff)}`}`}
             </span>
-          </div>
-          <div>
+          </Link>
+          <Link href={fin("claims")} className={cx(s.tile, s.tileLink)}>
             <span className={s.lbl}><span className={cx(s.dot, s.dotWarn)} />SEB'den alacak</span>
             <span className={s.val}>{money(v.seb_receivable)}</span>
             <span className={s.meta}>{v.claims_waiting} dosyada iade bekliyor</span>
-          </div>
-          <div>
+          </Link>
+          {/* Ayni sayfada asagidaki "Uyelere borc" paneline atlar (plain anchor: SPA yonlendirmesine girmez). */}
+          <a href="#member-debts" className={cx(s.tile, s.tileLink)}>
             <span className={s.lbl}><span className={cx(s.dot, s.dotErr)} />Üyelere borç</span>
             <span className={cx(s.val, debt > 0 && s.neg)}>{debt > 0 ? `−${money(debt)}` : money(0)}</span>
             <span className={s.meta}>{v.member_debts.length} kişi</span>
-          </div>
-          <div>
+          </a>
+          <div className={s.tile}>
             <span className={s.lbl}>Net durum</span>
             <span className={s.val}>{money(net)}</span>
             <span className={s.meta}>Kasa + SEB alacağı − üyelere borç</span>
@@ -231,7 +241,7 @@ function Home() {
       </div>
 
       {v.member_debts.length > 0 && (
-        <div className={s.panel}>
+        <div id="member-debts" className={s.panel}>
           <div className={s.ph}><h2>Üyelere borç</h2><span className={s.sub}>onaylı, üyenin ödediği faturalar − yapılan ödemeler</span></div>
           <div className={s.list}>
             {v.member_debts.map((x) => (

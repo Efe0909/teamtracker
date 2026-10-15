@@ -1,27 +1,31 @@
-/* Maliye sayfasi (spec/81 §10): yan gezinme + bolum. Eskizin dili; ham renk YOK. */
+/* Maliye sayfasi (spec/81 §10): ust sekme cubugu + bolum. Eskizin dili; ham renk YOK. */
 
-.shell {
-  display: grid;
-  grid-template-columns: 200px minmax(0, 1fr);
-  gap: var(--s-5);
-  align-items: start;
-}
-.nav {
+/* bolum cubugu: gruplar yan yana, sarar; grup etiketi tiklanabilir gorunmez */
+.subnav {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  position: sticky;
-  top: 16px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-4);
+  max-width: 100%;
 }
-.grp {
-  padding: var(--s-3) var(--s-2) 2px;
-  font-size: var(--fs-xs);
+.subGroup {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+}
+.subGroup + .subGroup {
+  padding-left: var(--s-4);
+  border-left: 1px solid var(--line);
+}
+.subGrp {
+  padding-right: var(--s-2);
   color: var(--dim);
+  font-size: var(--fs-xs);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-}
-.grp:first-child {
-  padding-top: 0;
+  cursor: default;
+  user-select: none;
 }
 .navItem {
   display: flex;
@@ -32,6 +36,7 @@
   border-radius: var(--r-sm);
   color: var(--dim);
   text-decoration: none;
+  white-space: nowrap;
 }
 .navItem:hover {
   background: var(--tint);
@@ -105,18 +110,30 @@
   display: flex;
   flex-wrap: wrap;
 }
-.pos > div {
+.tile {
   flex: 1 1 170px;
   display: flex;
   flex-direction: column;
   gap: 2px;
   padding: var(--s-4);
   border-right: 1px solid var(--line);
+  color: inherit;
+  text-decoration: none;
 }
-.pos > div:last-child {
+.tile:last-child {
   border-right: 0;
   background: var(--panel2);
   border-radius: 0 var(--r-lg) var(--r-lg) 0;
+}
+a.tileLink:hover {
+  background: var(--tint);
+}
+a.tileLink:hover .val {
+  color: var(--acc-strong);
+}
+a.tileLink:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: -2px;
 }
 .lbl {
   display: flex;
@@ -475,17 +492,8 @@ button.row:hover {
 }
 
 @media (max-width: 900px) {
-  .shell,
   .split {
     grid-template-columns: 1fr;
-  }
-  .nav {
-    position: static;
-    flex-direction: row;
-    flex-wrap: wrap;
-  }
-  .grp {
-    display: none;
   }
   .rLed {
     grid-template-columns: 56px minmax(0, 1fr) 100px;
@@ -494,7 +502,7 @@ button.row:hover {
   .rLed > :nth-child(5) {
     display: none;
   }
-  .pos > div {
+  .tile {
     border-right: 0;
     border-bottom: 1px solid var(--line);
   }
