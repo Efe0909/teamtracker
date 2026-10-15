@@ -152,7 +152,7 @@ function EventView({ e }: { e: EventDetail }) {
                         onRemove={canStructure && e.can_edit ? drop : undefined} />;
                     }
                     return (
-                      <FocusRing key={w.id} active={focus === "supplies"}>
+                      <FocusRing key={w.id} active={focus === "supplies"} className={s.evWide}>
                         <Purchases eventId={e.id} eventDate={e.date} items={e.materials}
                           onRemove={canStructure && e.can_edit ? drop : undefined} />
                       </FocusRing>

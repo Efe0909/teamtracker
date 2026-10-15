@@ -5,14 +5,15 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import s from "./focusRing.module.css";
 
-export function FocusRing({ active, children }: { active: boolean; children: ReactNode }) {
+/** className: sarmalayiciya ek sinif (ornek: izgarada tam genislik); halka ile birlikte uygulanir. */
+export function FocusRing({ active, children, className }: { active: boolean; children: ReactNode; className?: string }) {
   const [on, setOn] = useState(active);
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (active) box.current?.scrollIntoView({ block: "center", behavior: "smooth" });
   }, [active]);
   return (
-    <div ref={box} className={on ? s.ring : undefined} onClickCapture={() => setOn(false)}>
+    <div ref={box} className={[on ? s.ring : "", className ?? ""].filter(Boolean).join(" ") || undefined} onClickCapture={() => setOn(false)}>
       {children}
     </div>
   );
