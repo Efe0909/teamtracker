@@ -1719,6 +1719,78 @@ a.row:hover {
   background: var(--acc-bg);
 }
 
+/* --- kullanici listesi: yogun satir, siralama, toplu ekleme ------------------ */
+.userTools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2) var(--s-4);
+  margin-bottom: var(--s-2);
+}
+.allCheck {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--dim);
+  font-size: var(--fs-sm);
+}
+.sortBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+}
+.sortBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--dim);
+  font: inherit;
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+.sortBtn:hover {
+  border-color: var(--line-strong);
+  color: var(--txt);
+}
+.sortBtn[data-on="true"] {
+  border-color: var(--acc);
+  background: var(--acc-bg);
+  color: var(--acc-strong);
+}
+.userIdent {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.userMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  color: var(--dim);
+  font-size: var(--fs-sm);
+}
+.userRow {
+  padding: 10px 14px;
+}
+.userRow .personHead {
+  margin-bottom: 6px;
+}
+.userRow .chips {
+  margin-bottom: 0;
+}
+.batchBox {
+  margin: 0 0 var(--s-4);
+}
+
 /* --- Etkinlik Planlama (Events.tsx): tablo + sag ray (takvim, ajanda) --- */
 .evLayout {
   display: grid;

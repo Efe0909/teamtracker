@@ -14,8 +14,10 @@ import { Button, Empty, Loading, Picker as UiPicker, Req, Segmented, Tag, ui, us
 import { NodeTreePicker } from "../../features/nodes/NodePicker";
 import { AdminAvatar, EditableAvatar } from "../../features/profile/EditableAvatar";
 import { useStored } from "../../lib/stored";
+import { useSort } from "../../lib/sort";
 import { AdminActivity } from "./AdminActivity";
 import { AdminLlm } from "./AdminLlm";
+import { BatchAdd, nameFromEmail, scopeLabel, SortBar } from "./AdminUserTools";
 import { ErrorScreen } from "../errors/ErrorScreen";
 import s from "./dashboard.module.css";
 
@@ -71,10 +73,22 @@ function PeopleScreen({ v }: { v: AdminView }) {
   const roleById = new Map(v.roles.map((r) => [r.id, r]));
   const [peopleOpen, setPeopleOpen] = useStored("admin.people.open", true);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const sorter = useSort("admin.people", v.people, {
+    name: (p) => p.name,
+    email: (p) => p.email,
+    seen: (p) => p.last_seen_at,
+    scopes: (p) => p.scopes.length,
+  });
+  const existing = new Set(v.people.map((p) => p.email.toLowerCase()));
+  const allOn = v.people.length > 0 && v.people.every((p) => selected.has(p.id));
   return (
     <>
       <h2 className={s.sectionTitle}>Kişi ekle</h2>
       <AddUser />
+      <details className={`${s.personEdit} ${s.batchBox}`}>
+        <summary>Toplu ekle</summary>
+        <BatchAdd existing={existing} />
+      </details>
       <h2 className={s.sectionTitle}>
         <button type="button" className={s.navHeadBtn} aria-expanded={peopleOpen} onClick={() => setPeopleOpen(!peopleOpen)}
           style={{ font: "inherit", color: "inherit", padding: 0 }}>
@@ -86,8 +100,20 @@ function PeopleScreen({ v }: { v: AdminView }) {
       ) : (
         <>
           {selected.size > 0 && <BulkBar v={v} selected={selected} onClear={() => setSelected(new Set())} />}
+          <div className={s.userTools}>
+            <label className={s.allCheck}>
+              <input type="checkbox" checked={allOn} onChange={(e) => setSelected(e.target.checked ? new Set(v.people.map((p) => p.id)) : new Set())} />
+              Tümünü seç
+            </label>
+            <SortBar sorter={sorter} keys={[
+              { key: "name", label: "Ad" },
+              { key: "email", label: "E-posta" },
+              { key: "seen", label: "Son görülme" },
+              { key: "scopes", label: "Kapsam sayısı" },
+            ]} />
+          </div>
           <ul className={`${s.surface} ${s.adminList}`}>
-            {v.people.map((p) => (
+            {sorter.rows.map((p) => (
               <PersonRow key={p.id} p={p} v={v} roleById={roleById} checked={selected.has(p.id)}
                 onCheck={(on) => setSelected((prev) => {
                   const next = new Set(prev);
@@ -115,6 +141,8 @@ function AddUser() {
   const toast = useToast();
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
+  // Ad, e-postadan once-doldurulur; kisi adi elle yazarsa bir daha ezilmez.
+  const [nameTouched, setNameTouched] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   return (
     <form
@@ -128,6 +156,7 @@ function AddUser() {
             toast({ text: `${name} eklendi.`, error: false });
             setEmail("");
             setName("");
+            setNameTouched(false);
           },
           onError: (x) => setErr(errorText(x)),
         });
@@ -137,12 +166,20 @@ function AddUser() {
       <div className={ui.grid2}>
         <label className={ui.field}>
           <span>E-posta<Req /></span>
-          <input className={ui.input} type="email" value={email} onChange={(e) => setEmail(e.target.value)} required
+          <input className={ui.input} type="email" value={email} required
+            onChange={(e) => {
+              setEmail(e.target.value);
+              if (!nameTouched) setName(nameFromEmail(e.target.value));
+            }}
             placeholder="ad@ornek.com" autoComplete="off" spellCheck={false} />
         </label>
         <label className={ui.field}>
           <span>Ad<Req /></span>
-          <input className={ui.input} value={name} onChange={(e) => setName(e.target.value)} required maxLength={200} />
+          <input className={ui.input} value={name} required maxLength={200}
+            onChange={(e) => {
+              setName(e.target.value);
+              setNameTouched(true);
+            }} />
         </label>
       </div>
       <p className={s.dim}>Eklenen kişi bu e-postanın Google hesabıyla girer. Listede olmayan e-posta giremez. Kişiye davet postası (telefona kurulum + bildirim anlatımı) otomatik hazırlanır.</p>
@@ -173,9 +210,11 @@ function BulkBar({ v, selected, onClear }: { v: AdminView; selected: Set<string>
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   const people = v.people.filter((p) => selected.has(p.id));
+  // Her kisi icin ayri istek; basarisizlar adlariyla bildirilir, secim kalir.
   const apply = async (label: string, op: (p: AdminPerson) => UserOp | null) => {
     setBusy(true);
-    let ok = 0, failed = 0;
+    let ok = 0;
+    const failedNames: string[] = [];
     for (const p of people) {
       const o = op(p);
       if (o === null) continue;
@@ -183,19 +222,26 @@ function BulkBar({ v, selected, onClear }: { v: AdminView; selected: Set<string>
         await m.mutateAsync(adminOps.user(p.id, o));
         ok += 1;
       } catch {
-        failed += 1;
+        failedNames.push(p.name);
       }
     }
     setBusy(false);
-    toast({ text: `${label}: ${ok} kişi tamam${failed > 0 ? `, ${failed} kişide yapılamadı` : ""}.`, error: failed > 0 });
+    const failed = failedNames.length > 0;
+    toast({ text: `${label}: ${ok} kişi tamam${failed ? `; yapılamayan: ${failedNames.join(", ")}` : ""}.`, error: failed });
   };
+  const roleOptions = v.roles.map((r) => ({ value: r.id, label: r.name }));
+  const scopeOptions = v.scopes.map((k) => ({ value: k, label: scopeLabel(k) }));
   return (
     <div className={s.bulkBar} role="region" aria-label="Toplu işlemler">
       <b>{people.length} kişi seçili</b>
-      <Grant label="Rol ver" empty="Rol yok." options={v.roles.map((r) => ({ value: r.id, label: r.name }))}
+      <Grant label="Rol ver" empty="Rol yok." options={roleOptions}
         onPick={(id) => void apply("Rol verildi", (p) => (p.role_ids.includes(id) ? null : { op: "grant_role", value: id }))} />
-      <Grant label="Rol al" empty="Rol yok." options={v.roles.map((r) => ({ value: r.id, label: r.name }))}
+      <Grant label="Rol al" empty="Rol yok." options={roleOptions}
         onPick={(id) => void apply("Rol alındı", (p) => (p.role_ids.includes(id) ? { op: "revoke_role", value: id } : null))} />
+      <Grant label="Kapsam ver" empty="Kapsam yok." options={scopeOptions}
+        onPick={(k) => void apply("Kapsam verildi", (p) => (p.scopes.some((x) => x.name === k && x.direct) ? null : { op: "grant_scope", value: k }))} />
+      <Grant label="Kapsam al" empty="Kapsam yok." options={scopeOptions}
+        onPick={(k) => void apply("Kapsam alındı", (p) => (p.scopes.some((x) => x.name === k && x.direct) ? { op: "revoke_scope", value: k } : null))} />
       <Button size="sm" disabled={busy}
         onClick={() => void apply("Hesap kapatıldı", (p) => (p.is_active ? { op: "active", value: false } : null))}>Hesapları kapat</Button>
       <Button size="sm" disabled={busy}
@@ -274,7 +320,7 @@ function PersonRow({ p, v, roleById, checked, onCheck }: {
   };
 
   return (
-    <li className={s.person}>
+    <li className={`${s.person} ${s.userRow}`}>
       <div className={s.personHead}>
         <input type="checkbox" checked={checked} onChange={(e) => onCheck(e.target.checked)}
           aria-label={`${p.name} seç`} />
@@ -282,12 +328,12 @@ function PersonRow({ p, v, roleById, checked, onCheck }: {
           ? <EditableAvatar user={L.me} size={32} />
           : <AdminAvatar user={L.user(p.id) ?? { ...L.me, id: p.id, name: p.name, color: p.color, avatar_id: null }} size={32}
               busy={m.isPending} onPick={(a) => run({ op: "avatar", value: a })} />}
-        <div>
-          <b>{p.name}</b> <span className={s.dim}>{p.email}</span>
-          <div className={s.dim}>
-            {p.last_seen_at === null ? "hiç girmedi" : `son görülme ${ago(p.last_seen_at)}`}
-          </div>
-          <div className={s.dim}>{notifySummary(p)}</div>
+        <div className={s.userIdent}>
+          <b>{p.name}</b>
+          <span className={s.userMeta}>
+            <span>{p.email}</span>
+            <span>{p.last_seen_at === null ? "hiç girmedi" : `son görülme ${ago(p.last_seen_at)}`}</span>
+          </span>
         </div>
         {p.is_admin && <Tag tone="info">Yönetici</Tag>}
         {!p.is_active && <Tag tone="critical">Kapalı</Tag>}
@@ -304,7 +350,7 @@ function PersonRow({ p, v, roleById, checked, onCheck }: {
           <span className={s.dim}>Yönetici bütün kapsamlara sahip.</span>
         ) : (
           visibleScopes.map((k) => (
-            <span key={k} className={s.chip} title={SCOPE[k] ?? k}>{k}</span>
+            <span key={k} className={s.chip} title={SCOPE[k] ?? k}>{scopeLabel(k)}</span>
           ))
         )}
         {!p.is_admin && held.length === 0 && visibleScopes.length === 0 && <span className={s.dim}>Kapsam yok.</span>}
@@ -313,6 +359,7 @@ function PersonRow({ p, v, roleById, checked, onCheck }: {
       <details className={s.personEdit}>
         <summary>Düzenle</summary>
 
+        <span className={s.dim}>{notifySummary(p)}</span>
         <div className={s.adminRow}>
           <span className={s.adminKey}>Ad</span>
           {canName ? (
@@ -328,13 +375,13 @@ function PersonRow({ p, v, roleById, checked, onCheck }: {
           <div className={s.chips}>
             {cur.scopes.filter((k) => !roleScopes.has(k)).map((k) => (
               <span key={k} className={s.chip} title={SCOPE[k] ?? k}>
-                {k}
-                <button type="button" className={s.chipX} aria-label={`${k} kapsamını kaldır`}
+                {scopeLabel(k)}
+                <button type="button" className={s.chipX} aria-label={`${scopeLabel(k)} kapsamını kaldır`}
                   onClick={() => edit((d) => ({ ...d, scopes: d.scopes.filter((x) => x !== k) }))}><Icon name="x" size={12} /></button>
               </span>
             ))}
             <Grant label="Kapsam ver" empty="Verilecek kapsam yok."
-              options={v.scopes.filter((k) => !cur.scopes.includes(k) && !roleScopes.has(k)).map((k) => ({ value: k, label: k, desc: SCOPE[k] ?? "" }))}
+              options={v.scopes.filter((k) => !cur.scopes.includes(k) && !roleScopes.has(k)).map((k) => ({ value: k, label: scopeLabel(k), desc: SCOPE[k] ?? "" }))}
               onPick={(k) => edit((d) => ({ ...d, scopes: [...d.scopes, k] }))} />
           </div>
         </div>
@@ -344,9 +391,9 @@ function PersonRow({ p, v, roleById, checked, onCheck }: {
             <span className={s.adminKey}>Rolde de olan doğrudan kapsam</span>
             <div className={s.chips}>
               {cur.scopes.filter((k) => roleScopes.has(k)).map((k) => (
-                <span key={k} className={s.chip}>
-                  {k}
-                  <button type="button" className={s.chipX} aria-label={`${k} doğrudan kapsamını al`}
+                <span key={k} className={s.chip} title={SCOPE[k] ?? k}>
+                  {scopeLabel(k)}
+                  <button type="button" className={s.chipX} aria-label={`${scopeLabel(k)} doğrudan kapsamını al`}
                     onClick={() => edit((d) => ({ ...d, scopes: d.scopes.filter((x) => x !== k) }))}><Icon name="x" size={12} /></button>
                 </span>
               ))}
@@ -452,7 +499,7 @@ function Roles({ v }: { v: AdminView }) {
               </div>
               <div className={s.chips}>
                 {r.scopes.length === 0 ? <span className={s.dim}>Kapsam yok.</span> : r.scopes.map((k) => (
-                  <span key={k} className={s.chip} title={SCOPE[k] ?? k}>{k}</span>
+                  <span key={k} className={s.chip} title={SCOPE[k] ?? k}>{scopeLabel(k)}</span>
                 ))}
                 {r.node_ids.map((id) => (
                   <span key={id} className={s.chip} title="Dal izni">{L.path(id).join(" › ")}</span>
@@ -531,7 +578,7 @@ function RoleForm({ v, role, members }: { v: AdminView; role: AdminRole | null; 
                 return next;
               })} />
               <span>
-                {k}
+                {scopeLabel(k)}
                 {SCOPE[k] !== undefined && <small>{SCOPE[k]}</small>}
               </span>
             </label>
