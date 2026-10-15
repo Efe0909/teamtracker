@@ -152,7 +152,8 @@ struct ActionOut {
     id: Uuid,
     title: String,
     status: ActionStatus,
-    owner_id: Option<Uuid>,
+    /// Atananlar (birden fazla olabilir); bos = havuzda.
+    owner_ids: Vec<Uuid>,
     due_date: Option<NaiveDate>,
     created_at: DateTime<Utc>,
     resolved_at: Option<DateTime<Utc>>,
@@ -194,9 +195,12 @@ pub(crate) async fn detail_of(st: &AppState, me: &User, rec: Record) -> Result<D
         });
     }
     let actions = sqlx::query_as(
-        "select id, title, status, owner_id, due_date, created_at, resolved_at, closing_note
-           from actions where record_id = $1
-          order by (status in ('closed','cancelled')), created_at")
+        "select a.id, a.title, a.status,
+                array(select x.user_id from action_assignees x where x.action_id = a.id
+                       order by x.added_at, x.user_id) as owner_ids,
+                a.due_date, a.created_at, a.resolved_at, a.closing_note
+           from actions a where a.record_id = $1
+          order by (a.status in ('closed','cancelled')), a.created_at")
         .bind(rec.id).fetch_all(&st.pool).await?;
     let participants = sqlx::query_scalar(
         "select user_id from record_participants where record_id = $1 order by added_at")
@@ -242,17 +246,49 @@ pub(crate) async fn may_set_owner(st: &AppState, me: &User, rec: &Record, to: Op
     Ok(access.on(&common::tree(st), rec.unit_id, scope::NodeScope::Edit))
 }
 
-/// Eylemin sorumlusu kayda katilimci olur (spec/75 K1): eylemi kapatabilsin,
+/// Eylemin atananlari kayda katilimci olur (spec/75 K1): eylemi kapatabilsin,
 /// gizli kayitta bildirimle sohbeti okuyup ucta 403 almasin (A3). IDEMPOTENT.
-async fn add_action_owner(
-    tx: &mut sqlx::Transaction<'_, Postgres>, record_id: Uuid, owner: Option<Uuid>, by: Uuid,
+async fn add_action_owners(
+    tx: &mut sqlx::Transaction<'_, Postgres>, record_id: Uuid, owners: &[Uuid], by: Uuid,
 ) -> Result<()> {
-    if let Some(u) = owner {
-        sqlx::query(
-            "insert into record_participants (record_id, user_id, added_by) values ($1, $2, $3)
-             on conflict do nothing")
-            .bind(record_id).bind(u).bind(by).execute(&mut **tx).await?;
+    sqlx::query(
+        "insert into record_participants (record_id, user_id, added_by)
+         select $1, u, $3 from unnest($2::uuid[]) as u
+         on conflict do nothing")
+        .bind(record_id).bind(owners).bind(by).execute(&mut **tx).await?;
+    Ok(())
+}
+
+/// Atananlar kumesi: tekrarsiz, hepsi aktif kullanici (yoksa `unknown_user`). Sira korunur.
+async fn check_owners(pool: &PgPool, ids: Vec<Uuid>) -> Result<Vec<Uuid>> {
+    let mut out: Vec<Uuid> = Vec::with_capacity(ids.len());
+    for id in ids {
+        if !out.contains(&id) {
+            out.push(id);
+        }
     }
+    if out.len() > 20 {
+        return Err(AppError::BadRequest("too_many_owners"));
+    }
+    let n: i64 = sqlx::query_scalar("select count(*) from users where id = any($1) and is_active")
+        .bind(&out).fetch_one(pool).await?;
+    if n as usize != out.len() {
+        return Err(AppError::BadRequest("unknown_user"));
+    }
+    Ok(out)
+}
+
+/// Eylemin atananlarini degistirir (sira: gelen sira); eskileri siler.
+async fn set_action_owners(
+    tx: &mut sqlx::Transaction<'_, Postgres>, action: Uuid, owners: &[Uuid], by: Uuid,
+) -> Result<()> {
+    sqlx::query("delete from action_assignees where action_id = $1 and user_id <> all($2)")
+        .bind(action).bind(owners).execute(&mut **tx).await?;
+    sqlx::query(
+        "insert into action_assignees (action_id, user_id, added_by)
+         select $1, u, $3 from unnest($2::uuid[]) as u
+         on conflict do nothing")
+        .bind(action).bind(owners).bind(by).execute(&mut **tx).await?;
     Ok(())
 }
 
@@ -674,8 +710,9 @@ fn bind_value<'q>(q: PgQuery<'q>, field: &str, v: &serde_json::Value) -> Result<
 #[derive(Deserialize)]
 pub struct NewAction {
     title: String,
+    /// Birden fazla kisi atanabilir; bos = havuzda.
     #[serde(default)]
-    owner_id: Option<Uuid>,
+    owner_ids: Vec<Uuid>,
     #[serde(default)]
     due_date: Option<NaiveDate>,
 }
@@ -688,19 +725,20 @@ pub async fn add_action(
     require_edit(&st, &me, &rec).await?;
     let title = common::text(Some(b.title), TITLE_MAX, "invalid_title")?
         .ok_or(AppError::BadRequest("invalid_title"))?;
-    check_user(&st.pool, b.owner_id).await?;
+    let owners = check_owners(&st.pool, b.owner_ids).await?;
     if b.due_date.is_some() && !common::has_scope(&st, &me, "edit_deadline").await? {
         return Err(AppError::Forbidden);
     }
     let mut tx = st.pool.begin().await?;
-    sqlx::query(
-        "insert into actions (record_id, title, owner_id, created_by, due_date)
-         values ($1, $2, $3, $4, $5)")
-        .bind(rec.id).bind(&title).bind(b.owner_id).bind(me.id).bind(b.due_date)
-        .execute(&mut *tx).await?;
-    add_action_owner(&mut tx, rec.id, b.owner_id, me.id).await?;
+    let action: Uuid = sqlx::query_scalar(
+        "insert into actions (record_id, title, created_by, due_date)
+         values ($1, $2, $3, $4) returning id")
+        .bind(rec.id).bind(&title).bind(me.id).bind(b.due_date)
+        .fetch_one(&mut *tx).await?;
+    set_action_owners(&mut tx, action, &owners, me.id).await?;
+    add_action_owners(&mut tx, rec.id, &owners, me.id).await?;
     log(&mut tx, rec.chat_id, me.id, "action_added", &title, None,
-        change(serde_json::Value::Null, b.owner_id)).await?;
+        change(serde_json::Value::Null, &owners)).await?;
     touch(&mut tx, rec.id).await?;
     tx.commit().await?;
     let rec = load(&st.pool, rec.id).await?;
@@ -711,7 +749,7 @@ pub async fn add_action(
 #[serde(tag = "field", content = "value", rename_all = "snake_case")]
 pub enum ActionPatch {
     Status(ActionStatus),
-    OwnerId(Option<Uuid>),
+    OwnerIds(Vec<Uuid>),
     DueDate(Option<NaiveDate>),
     Title(String),
 }
@@ -733,7 +771,7 @@ struct ActionRow {
     record_id: Uuid,
     title: String,
     status: ActionStatus,
-    owner_id: Option<Uuid>,
+    owner_ids: Vec<Uuid>,
     due_date: Option<NaiveDate>,
 }
 
@@ -742,7 +780,11 @@ pub async fn patch_action(
     Body(body): Body<ActionPatchBody>,
 ) -> Result<Json<Detail>> {
     let a: ActionRow = sqlx::query_as(
-        "select id, record_id, title, status, owner_id, due_date from actions where id = $1")
+        "select a.id, a.record_id, a.title, a.status,
+                array(select x.user_id from action_assignees x where x.action_id = a.id
+                       order by x.added_at, x.user_id) as owner_ids,
+                a.due_date
+           from actions a where a.id = $1")
         .bind(common::id(&raw)?).fetch_optional(&st.pool).await?.ok_or(AppError::NotFound)?;
     let rec = load(&st.pool, a.record_id).await?;
     require_edit(&st, &me, &rec).await?;
@@ -778,12 +820,15 @@ pub async fn patch_action(
             log_override(&mut tx, rec.chat_id, me.id, &a.title, "closing_note", reasons).await?;
             ("status", serde_json::to_value(a.status), serde_json::to_value(v))
         }
-        ActionPatch::OwnerId(v) => {
-            check_user(&st.pool, v).await?;
-            sqlx::query("update actions set owner_id = $2 where id = $1")
-                .bind(a.id).bind(v).execute(&mut *tx).await?;
-            add_action_owner(&mut tx, rec.id, v, me.id).await?;
-            ("owner_id", serde_json::to_value(a.owner_id), serde_json::to_value(v))
+        ActionPatch::OwnerIds(v) => {
+            let v = check_owners(&st.pool, v).await?;
+            set_action_owners(&mut tx, a.id, &v, me.id).await?;
+            add_action_owners(&mut tx, rec.id, &v, me.id).await?;
+            // Sira anlamsiz: ayni kume degisiklik sayilmaz (kayit akisina yazilmaz).
+            let (mut from, mut to) = (a.owner_ids.clone(), v);
+            from.sort();
+            to.sort();
+            ("owner_ids", serde_json::to_value(from), serde_json::to_value(to))
         }
         ActionPatch::DueDate(v) => {
             if !common::has_scope(&st, &me, "edit_deadline").await? {
@@ -837,7 +882,8 @@ pub async fn my_actions(
     Ok(Json(sqlx::query_as(
         "select a.id, a.title, a.status, a.due_date, a.record_id, r.title as record_title
            from actions a join records r on r.id = a.record_id
-          where a.owner_id = $1 and a.status in ('open','in_progress')
+          where exists(select 1 from action_assignees x where x.action_id = a.id and x.user_id = $1)
+            and a.status in ('open','in_progress')
           order by a.due_date nulls last, a.created_at")
         .bind(me.id).fetch_all(&st.pool).await?))
 }

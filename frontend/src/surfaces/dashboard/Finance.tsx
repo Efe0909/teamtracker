@@ -1,6 +1,5 @@
-// Maliye (spec/81 §10): yan gezinme + bolumler. Gormek "maliye" yetkisi ister
-// (§4); digerleri yalniz "Fatura ekle" ve "Faturalarim"i gorur. Butce, analiz
-// ve sablonlar sonraki adim (PR #76 yapilacaklari).
+// Maliye (spec/81 §10): ustte gruplu sekmeler + bolumler. Gormek "maliye" yetkisi
+// ister (§4); digerleri yalniz "Fatura ekle" ve "Faturalarim"i gorur.
 
 import { useEffect, useState } from "react";
 import { errorText } from "../../api/client";
@@ -14,10 +13,14 @@ import { money } from "../../lib/money";
 import { navigate } from "../../lib/router";
 import { Button, cx, Link, Loading, ui, useToast } from "../../ui/ui";
 import d from "./dashboard.module.css";
+import { FinanceAnalysis } from "./FinanceAnalysis";
+import { FinanceBudget } from "./FinanceBudget";
 import { FinanceClaims } from "./FinanceClaims";
 import { FinanceInvoices, InvoiceDetail } from "./FinanceInvoices";
 import { FinanceLedger } from "./FinanceLedger";
 import { FinanceMaterials, FinanceVendors, FinanceWall } from "./FinancePurchasing";
+import { FinanceRecurring } from "./FinanceRecurring";
+import { FinanceTemplates } from "./FinanceTemplates";
 import s from "./fin.module.css";
 import { href, type FinanceSection } from "./routes";
 
@@ -60,7 +63,8 @@ export function formatDay(iso: string | null): string {
 const TITLES: Record<FinanceSection, string> = {
   home: "Genel", invoices: "Fatura onayı", new: "Fatura ekle", edit: "Faturayı düzelt", mine: "Faturalarım",
   claims: "SEB iadeleri", ledger: "Kulüp kasası", materials: "Malzemeler", wall: "Satın alım duvarı",
-  vendors: "Tedarikçiler",
+  vendors: "Tedarikçiler", budget: "Dönem bütçesi", analysis: "Analiz", recurring: "Tekrarlayan giderler",
+  templates: "Mail şablonları",
 };
 
 export function Finance({ section, id }: { section: FinanceSection; id: string | null }) {
@@ -88,6 +92,10 @@ export function Finance({ section, id }: { section: FinanceSection; id: string |
         {effective === "materials" && <FinanceMaterials />}
         {effective === "wall" && <FinanceWall />}
         {effective === "vendors" && <FinanceVendors id={id} />}
+        {effective === "budget" && <FinanceBudget />}
+        {effective === "analysis" && <FinanceAnalysis />}
+        {effective === "recurring" && <FinanceRecurring />}
+        {effective === "templates" && <FinanceTemplates id={id} />}
         {effective === "mine" && <Mine id={id} />}
         {effective === "new" && <NewInvoice />}
         {effective === "edit" && id !== null && <EditInvoice id={id} />}
@@ -103,11 +111,17 @@ const NAV_GROUPS: { label: string; viewerOnly: boolean; items: { section: Financ
     { section: "invoices", label: "Fatura onayı" },
     { section: "claims", label: "SEB iadeleri" },
     { section: "ledger", label: "Kulüp kasası" },
+    { section: "budget", label: "Dönem bütçesi" },
+    { section: "analysis", label: "Analiz" },
   ] },
   { label: "Satın alım", viewerOnly: true, items: [
     { section: "materials", label: "Malzemeler" },
     { section: "wall", label: "Satın alım duvarı" },
     { section: "vendors", label: "Tedarikçiler" },
+  ] },
+  { label: "Kayıtlar", viewerOnly: true, items: [
+    { section: "recurring", label: "Tekrarlayan giderler" },
+    { section: "templates", label: "Mail şablonları" },
   ] },
   { label: "Gönder", viewerOnly: false, items: [
     { section: "new", label: "Fatura ekle" },

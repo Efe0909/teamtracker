@@ -27,9 +27,9 @@
 | `81-maliye.md` | Maliye: iki para (SEB alacağı + kulüp kasası), fatura formu ve onayı (fatura yalnız kaleme bağlı, bölünmüş), SEB iade dosyaları, değişmez kasa defteri (ters kayıt), dönem/kategori/etkinlik bütçesi, malzemeler, etkinlikten bağımsız 3 sütunlu duvar, tedarikçiler, mail şablonları, kur sabitleme — **tasarım** (göç 028) |
 | `82-profil.md` | global profil ve ayarlar sayfası (pencere yerine): profilim, hesap numaralarım (IBAN), bildirimler, görünüm, gizlilik ve veri — **tasarım** (göç 027) |
 | `83-belge-ekleri.md` | ekler: PDF/OOXML/metin aileleri, makro ve eski Office reddi, amaç başına sınır (varsayılan 10 MB), indirme sunumu, fatura/kasa eklerinin kilidi — **tasarım** (göç 026) |
-| `84-birlestirme.md` | serbest metin mükerrerleri: normalize anahtar, aday (sözcük kümesi + trigram + embedding), yumuşak ve geri alınabilir birleştirme, günlük — **tasarım** (göç 029) |
-| `85-embedding.md` | `embeddings` LLM profil türü (OpenRouter, OpenAI uyumlu), pgvector açılışta, eskime denetimli dizinleme, karma anlamsal arama; spec/79 değişmezleri — **tasarım** (göç 031) |
-| `86-baglantilar-graf.md` | `@[ad](record:id)` / `@[ad](event:id)` bağlantıları, `links` tablosu, geri bağlantılar, Obsidian tarzı graf (kayıt + etkinlik + ağaç) — **tasarım** (göç 030) |
+| `84-birlestirme.md` | serbest metin mükerrerleri: normalize anahtar, aday (sözcük kümesi + trigram + embedding), yumuşak ve geri alınabilir birleştirme, günlük — **tasarım** (göç 030; tedarikçi dolgusu uygulandı) |
+| `85-embedding.md` | `embeddings` LLM profil türü (OpenRouter, OpenAI uyumlu), pgvector açılışta, eskime denetimli dizinleme, karma anlamsal arama; spec/79 değişmezleri — **tasarım** (göç 032) |
+| `86-baglantilar-graf.md` | `@[ad](record:id)` / `@[ad](event:id)` bağlantıları, `links` tablosu, geri bağlantılar, Obsidian tarzı graf (kayıt + etkinlik + ağaç) — **tasarım** (göç 031) |
 | `60-kaynak-uyarlama.md` | kaynak panoların çözümlemesi: veri hattı, ekran ekran uyarlama, alınmayacaklar |
 | `61-arastirma-sentezi.md` | IWS ve ekip araçları kaynak taraması — bizim ölçeğe uyan/uymayan pratikler |
 | `referans/` | kaynak arayüz dosyaları (`spec/referans/layout-a.html`) |

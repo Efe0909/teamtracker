@@ -34,6 +34,7 @@ mod ratelimit;
 mod realtime;
 mod state;
 mod webpush;
+mod xlsx;
 
 use std::net::SocketAddr;
 
@@ -56,6 +57,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     db::migrate(&pool).await?;
     // LLM: her uc turune bir profil, her goreve bir satir (yoksa; manifestin modeliyle).
     llm::ensure_defaults(&pool, &cfg).await?;
+    // Bagi olmayan teklifler tedarikciye baglanir (idempotent).
+    match api::purchasing::backfill_vendors(&pool).await {
+        Ok(0) => {}
+        Ok(n) => tracing::info!("tedarikci: {n} teklif baglandi"),
+        Err(e) => tracing::error!("tedarikci geri doldurma: {e:?}"),
+    }
     if let Some(path) = &cfg.bootstrap_admins_file {
         bootstrap::admins(&pool, path).await;
     }

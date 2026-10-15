@@ -143,7 +143,10 @@ create table merge_dismissals (
 
 ## 6. Bugünkü serbest metnin dolgusu (tedarikçiler)
 
-Göç 029 + açılışta bir kez çalışan dolgu (`merge::backfill_vendors`):
+Göç 030 (029 eylem atananlarına gitti) + açılışta çalışan dolgu. Dolgu **uygulandı**:
+`api::purchasing::backfill_vendors` (her açılışta, idempotent); aynı bul-ya-da-aç
+(`purchasing::ensure_vendor`) tedarikçi/teklif yazarken de kullanılır. Telefon ya da e-posta
+gibi görünen `contact` tedarikçi sayılmaz (harf yok, `@` var ya da çoğu rakam). Özgün tasarım:
 1. `material_providers.name` (boş değilse) her farklı `name_key` için bir `vendors` satırı
    (ad: en sık yazılış), teklif `vendor_id` ile bağlanır.
 2. `name` boş, `contact` telefon değil bağlantıysa: alan adı (ör. `canva.com`) anahtar olur

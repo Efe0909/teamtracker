@@ -1169,15 +1169,44 @@ fn apply(mut m: Material, b: MaterialPatch) -> Result<Material> {
     Ok(m)
 }
 
-/// Kalemin etkinligi; etkinligi olmayan (sahipsiz) kalem bu uclardan duzenlenmez.
-async fn material_event(pool: &PgPool, id: Uuid) -> Result<Uuid> {
-    event_of(pool, "select event_id from event_materials where material_id = $1", id).await
+/// Kalem yazma uclarinin cevabi: etkinlik kalemi icin etkinlik ayrintisi (widget'in
+/// bekledigi sekil); etkinliksiz kalem icin kalemin kendisi. Silinince `deleted`.
+#[derive(Serialize)]
+#[serde(untagged)]
+pub enum MatReply {
+    Event(Box<Detail>),
+    Standalone(Box<Material>),
+    Deleted { deleted: bool },
+}
+
+/// Kalemin etkinligi: `None` etkinliksiz (Maliye duvari) kalem; kalem yoksa 404.
+async fn material_event(pool: &PgPool, id: Uuid) -> Result<Option<Uuid>> {
+    let row: Option<(Option<Uuid>,)> = sqlx::query_as(
+        "select (select event_id from event_materials where material_id = m.id) from materials m where m.id = $1")
+        .bind(id).fetch_optional(pool).await?;
+    row.map(|r| r.0).ok_or(AppError::NotFound)
+}
+
+/// Tek kalem + teklifleri + kademeler (etkinlik ayrintisi ve Maliye ayni satiri okur).
+pub(crate) async fn material_one(pool: &PgPool, id: Uuid) -> Result<Material> {
+    let mut m: Vec<Material> = sqlx::query_as(concat!("select ", material_cols!(), " from materials m where m.id = $1"))
+        .bind(id).fetch_all(pool).await?;
+    attach_providers(pool, &mut m).await?;
+    fill_levels(pool, &mut m).await?;
+    m.pop().ok_or(AppError::NotFound)
+}
+
+async fn mat_reply(st: &AppState, me: &User, material: Uuid, event: Option<Uuid>) -> Result<Json<MatReply>> {
+    Ok(Json(match event {
+        Some(e) => MatReply::Event(Box::new(reply(st, me, e).await?.0)),
+        None => MatReply::Standalone(Box::new(material_one(&st.pool, material).await?)),
+    }))
 }
 
 pub async fn patch_material(
     State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>,
     Body(b): Body<MaterialPatch>,
-) -> Result<Json<Detail>> {
+) -> Result<Json<MatReply>> {
     let id = common::id(&raw)?;
     let event = material_event(&st.pool, id).await?;
     require_scope(&st, &me, "manage_purchases").await?;
@@ -1207,18 +1236,21 @@ pub async fn patch_material(
         .bind(m.budget).bind(m.overage_ln)
         .execute(&mut *tx).await?;
     tx.commit().await?;
-    reply(&st, &me, event).await
+    mat_reply(&st, &me, id, event).await
 }
 
 pub async fn delete_material(
     State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>,
-) -> Result<Json<Detail>> {
+) -> Result<Json<MatReply>> {
     let id = common::id(&raw)?;
     let event = material_event(&st.pool, id).await?;
     require_scope(&st, &me, "manage_purchases").await?;
     require_unpurchased(&st.pool, id).await?;
     sqlx::query("delete from materials where id = $1").bind(id).execute(&st.pool).await?;
-    reply(&st, &me, event).await
+    match event {
+        Some(e) => Ok(Json(MatReply::Event(Box::new(reply(&st, &me, e).await?.0)))),
+        None => Ok(Json(MatReply::Deleted { deleted: true })),
+    }
 }
 
 #[derive(Deserialize)]
@@ -1235,7 +1267,7 @@ pub struct NewProvider {
 pub async fn add_provider(
     State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>,
     Body(b): Body<NewProvider>,
-) -> Result<Json<Detail>> {
+) -> Result<Json<MatReply>> {
     let id = common::id(&raw)?;
     let event = material_event(&st.pool, id).await?;
     require_scope(&st, &me, "manage_purchases").await?;
@@ -1247,20 +1279,26 @@ pub async fn add_provider(
     }
     let name = common::text(b.name, TITLE_MAX, "invalid_name")?;
     let mut tx = st.pool.begin().await?;
+    // Tedarikci: etiket/ad bul-ya-da-ac ile baglanir (Maliye > Tedarikciler).
+    let vendor = match super::purchasing::offer_label(name.as_deref(), &contact) {
+        Some(l) => super::purchasing::ensure_vendor(&mut tx, l, Some(me.id)).await?,
+        None => None,
+    };
     // Para numeric'te: float yalniz tasima, kayitta kurusa yuvarlanir.
     sqlx::query(
-        "insert into material_providers (material_id, contact, name, price, arrival_date)
-         values ($1, $2, $3, round($4::numeric, 2), $5)")
-        .bind(id).bind(contact).bind(name).bind(b.price).bind(b.arrival_date).execute(&mut *tx).await?;
+        "insert into material_providers (material_id, contact, name, price, arrival_date, vendor_id)
+         values ($1, $2, $3, round($4::numeric, 2), $5, $6)")
+        .bind(id).bind(contact).bind(name).bind(b.price).bind(b.arrival_date).bind(vendor)
+        .execute(&mut *tx).await?;
     sqlx::query("update materials set updated_at = now() where id = $1").bind(id).execute(&mut *tx).await?;
     refresh_overage(&mut tx, id).await?;
     tx.commit().await?;
-    reply(&st, &me, event).await
+    mat_reply(&st, &me, id, event).await
 }
 
 pub async fn delete_provider(
     State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>,
-) -> Result<Json<Detail>> {
+) -> Result<Json<MatReply>> {
     let id = common::id(&raw)?;
     let (material, event) = provider_owner(&st.pool, id).await?;
     require_scope(&st, &me, "manage_purchases").await?;
@@ -1270,14 +1308,14 @@ pub async fn delete_provider(
     sqlx::query("update materials set updated_at = now() where id = $1").bind(material).execute(&mut *tx).await?;
     refresh_overage(&mut tx, material).await?;
     tx.commit().await?;
-    reply(&st, &me, event).await
+    mat_reply(&st, &me, material, event).await
 }
 
-/// Teklifin (kalemi, etkinligi); etkinligi olmayan kalemin teklifi bu uclardan degismez.
-async fn provider_owner(pool: &PgPool, id: Uuid) -> Result<(Uuid, Uuid)> {
+/// Teklifin (kalemi, etkinligi); etkinlik `None` ise kalem etkinliksizdir (Maliye duvari).
+async fn provider_owner(pool: &PgPool, id: Uuid) -> Result<(Uuid, Option<Uuid>)> {
     sqlx::query_as(
-        "select p.material_id, em.event_id from material_providers p
-           join event_materials em on em.material_id = p.material_id where p.id = $1")
+        "select p.material_id, (select em.event_id from event_materials em where em.material_id = p.material_id)
+           from material_providers p where p.id = $1")
         .bind(id).fetch_optional(pool).await?.ok_or(AppError::NotFound)
 }
 
@@ -1297,7 +1335,7 @@ pub struct ProviderPatch {
 pub async fn patch_provider(
     State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>,
     Body(b): Body<ProviderPatch>,
-) -> Result<Json<Detail>> {
+) -> Result<Json<MatReply>> {
     let id = common::id(&raw)?;
     let (material, event) = provider_owner(&st.pool, id).await?;
     require_scope(&st, &me, "manage_purchases").await?;
@@ -1314,6 +1352,7 @@ pub async fn patch_provider(
         Some(n) => Some(common::text(n, TITLE_MAX, "invalid_name")?),
         None => None,
     };
+    let relabel = contact.is_some() || name.is_some();
     let mut tx = st.pool.begin().await?;
     sqlx::query(
         "update material_providers set
@@ -1327,10 +1366,21 @@ pub async fn patch_provider(
         .bind(b.price.is_some()).bind(b.price.flatten())
         .bind(b.arrival_date.is_some()).bind(b.arrival_date.flatten())
         .execute(&mut *tx).await?;
+    if relabel {
+        // Etiket degisti: tedarikci bagi yeniden kurulur.
+        let (n, c): (Option<String>, String) = sqlx::query_as("select name, contact from material_providers where id = $1")
+            .bind(id).fetch_one(&mut *tx).await?;
+        let vendor = match super::purchasing::offer_label(n.as_deref(), &c) {
+            Some(l) => super::purchasing::ensure_vendor(&mut tx, l, Some(me.id)).await?,
+            None => None,
+        };
+        sqlx::query("update material_providers set vendor_id = $2 where id = $1")
+            .bind(id).bind(vendor).execute(&mut *tx).await?;
+    }
     sqlx::query("update materials set updated_at = now() where id = $1").bind(material).execute(&mut *tx).await?;
     refresh_overage(&mut tx, material).await?;
     tx.commit().await?;
-    reply(&st, &me, event).await
+    mat_reply(&st, &me, material, event).await
 }
 
 #[derive(Deserialize)]
@@ -1357,11 +1407,7 @@ pub async fn set_purchased(
                 updated_at = now()
           where id = $1")
         .bind(id).bind(b.purchased).bind(me.id).execute(&st.pool).await?;
-    let mut m: Vec<Material> = sqlx::query_as(concat!("select ", material_cols!(), " from materials m where m.id = $1"))
-        .bind(id).fetch_all(&st.pool).await?;
-    attach_providers(&st.pool, &mut m).await?;
-    fill_levels(&st.pool, &mut m).await?;
-    Ok(Json(m.pop().ok_or(AppError::NotFound)?))
+    Ok(Json(material_one(&st.pool, id).await?))
 }
 
 // --- satin alim Excel'i (assets/satin-alimlar.xlsx) -------------------------------

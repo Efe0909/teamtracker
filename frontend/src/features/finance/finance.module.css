@@ -139,6 +139,59 @@
 .itemAmount {
   text-align: right;
 }
+.itemTools {
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+}
+.itemTools .itemAmount {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+/* kalem arama: sonuclar etkinlige gore gruplu */
+.itemSearch {
+  display: grid;
+  gap: var(--s-2);
+}
+.results {
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--panel);
+}
+.results > .dim {
+  margin: 0;
+  padding: 8px var(--s-3);
+}
+.resHead {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 6px var(--s-3);
+  background: var(--panel2);
+  position: sticky;
+  top: 0;
+}
+.resItem {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s-3);
+  width: 100%;
+  padding: 8px var(--s-3);
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.resItem:hover,
+.resItem:focus-visible {
+  background: var(--acc-bg);
+  outline: none;
+}
 .sum {
   display: flex;
   justify-content: space-between;

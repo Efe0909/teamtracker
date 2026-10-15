@@ -117,10 +117,16 @@ update records set pillar_id = 'b3ee4ed6-ec9c-52ff-8cd4-326d0d6e31dc' where id =
 update records set pillar_id = 'b3ee4ed6-ec9c-52ff-8cd4-326d0d6e31dc' where id = '2e1b1635-e910-5381-94c7-6779396b5de0';
 
 -- === eylemler ===
-insert into actions (record_id,title,owner_id,created_by,status,due_date,created_at) values ('556094c3-7ade-5964-988d-a848ac5778ef','CFO vekalet onayını IT üzerinden tamamlat','7a995bfb-9114-538d-b999-14fa104f12a6','4f5c8d98-3962-5a7d-b38f-c4a7b023d676','open',date '2026-09-22',timestamptz '2026-09-09T04:31:03.408452+00:00');
-insert into actions (record_id,title,owner_id,created_by,status,due_date,created_at) values ('556094c3-7ade-5964-988d-a848ac5778ef','Tedarikçiden fiyat kilidi uzatması iste','075deca4-2769-59ea-ace4-039eed00ca23','4f5c8d98-3962-5a7d-b38f-c4a7b023d676','in_progress',date '2026-09-19',timestamptz '2026-09-10T04:31:03.408454+00:00');
-insert into actions (record_id,title,owner_id,created_by,status,due_date,created_at) values ('2e1b1635-e910-5381-94c7-6779396b5de0','Teklifleri tek şablona geçir','075deca4-2769-59ea-ace4-039eed00ca23','075deca4-2769-59ea-ace4-039eed00ca23','closed',null,timestamptz '2026-09-14T04:31:03.408454+00:00');
-insert into actions (record_id,title,owner_id,created_by,status,due_date,created_at) values ('9305276f-2d38-518a-adb9-ef4cbca5051b','Alternatif kargo firmalarından süre al',null,'075deca4-2769-59ea-ace4-039eed00ca23','open',date '2026-09-24',timestamptz '2026-09-18T04:31:03.408455+00:00');
+insert into actions (record_id,title,created_by,status,due_date,created_at) values ('556094c3-7ade-5964-988d-a848ac5778ef','CFO vekalet onayını IT üzerinden tamamlat','4f5c8d98-3962-5a7d-b38f-c4a7b023d676','open',date '2026-09-22',timestamptz '2026-09-09T04:31:03.408452+00:00');
+insert into actions (record_id,title,created_by,status,due_date,created_at) values ('556094c3-7ade-5964-988d-a848ac5778ef','Tedarikçiden fiyat kilidi uzatması iste','4f5c8d98-3962-5a7d-b38f-c4a7b023d676','in_progress',date '2026-09-19',timestamptz '2026-09-10T04:31:03.408454+00:00');
+insert into actions (record_id,title,created_by,status,due_date,created_at) values ('2e1b1635-e910-5381-94c7-6779396b5de0','Teklifleri tek şablona geçir','075deca4-2769-59ea-ace4-039eed00ca23','closed',null,timestamptz '2026-09-14T04:31:03.408454+00:00');
+insert into actions (record_id,title,created_by,status,due_date,created_at) values ('9305276f-2d38-518a-adb9-ef4cbca5051b','Alternatif kargo firmalarından süre al','075deca4-2769-59ea-ace4-039eed00ca23','open',date '2026-09-24',timestamptz '2026-09-18T04:31:03.408455+00:00');
+-- atananlar (birden fazla kisi olabilir; sonuncusu havuzda)
+insert into action_assignees (action_id, user_id)
+select a.id, v.u::uuid from actions a join (values
+  ('CFO vekalet onayını IT üzerinden tamamlat', '7a995bfb-9114-538d-b999-14fa104f12a6'),
+  ('Tedarikçiden fiyat kilidi uzatması iste', '075deca4-2769-59ea-ace4-039eed00ca23'),
+  ('Teklifleri tek şablona geçir', '075deca4-2769-59ea-ace4-039eed00ca23')) as v(t, u) on v.t = a.title;
 
 -- === sohbet ve gunluk ===
 -- events BOLUNDU: konusma -> messages, denetim -> activity (spec §5, §6).
@@ -139,3 +145,14 @@ insert into messages (chat_id,author_id,body,created_at) values ('3673b099-afa3-
 insert into messages (chat_id,author_id,body,created_at) values ('3673b099-afa3-5af3-bedb-d9834935206f','075deca4-2769-59ea-ace4-039eed00ca23','Fiyat kilidi için tedarikçiyle konuştum, bir hafta daha var.',timestamptz '2026-09-19T00:31:03.408464+00:00');
 insert into messages (chat_id,author_id,body,created_at) values ('19a11e32-eeac-511e-bb5a-3bced961cd5a','075deca4-2769-59ea-ace4-039eed00ca23','Alternatif kargo tekliflerini bugün topluyorum, akşam buraya bırakırım.',timestamptz '2026-09-19T22:31:03.408464+00:00');
 insert into messages (chat_id,author_id,body,created_at) values ('83bcd37e-650a-5353-9e33-67d5cebd01e4','4f5c8d98-3962-5a7d-b38f-c4a7b023d676','Afiş taslakları hazır; ölçüler için Efe''den dönüş bekliyorum.',timestamptz '2026-09-17T04:31:03.408465+00:00');
+
+-- === maliye: etkinliksiz kalem + teklifler (acilistaki tedarikci geri doldurmasini dener) ===
+delete from materials where name = 'Koli bandı';
+with m as (
+  insert into materials (name, state, category_id, needed_by)
+  values ('Koli bandı', 3, (select id from nodes where node_type = 'category' order by sort_order limit 1), current_date + 5)
+  returning id)
+insert into material_providers (material_id, contact, name, price)
+  select id, 'Matbaa Ekin', null, 120 from m
+  union all select id, '0212 555 01 42', 'Kesimhane Ltd', 90 from m
+  union all select id, '0532 000 00 00', null, 80 from m;

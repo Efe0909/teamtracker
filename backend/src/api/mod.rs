@@ -8,6 +8,7 @@ mod admin;
 mod attachments;
 mod auth;
 mod bank_accounts;
+mod budget;
 mod cards;
 mod chats;
 mod common;
@@ -21,10 +22,12 @@ mod nodes;
 mod notify;
 mod otf;
 mod profile;
-mod purchasing;
+pub mod purchasing;
 mod quality;
+mod recurring;
 mod records;
 mod teams;
+mod templates;
 
 use axum::{
     extract::{DefaultBodyLimit, State},
@@ -119,17 +122,29 @@ pub fn router() -> Router<AppState> {
         .route("/api/finance/invoices/{id}", get(finance::get).put(finance::edit))
         .route("/api/finance/invoices/{id}/decision", post(finance::decide))
         .route("/api/finance/invoices/{id}/claim", put(finance::move_claim))
+        .route("/api/finance/claim-slots", get(finance::claim_slots))
         .route("/api/finance/claims", get(finance::claims).post(finance::create_claim))
         .route("/api/finance/claims/{id}", get(finance::claim).patch(finance::patch_claim))
+        .route("/api/finance/claims/{id}/xlsx", get(finance::claim_xlsx))
         .route("/api/finance/ledger", get(finance::ledger).post(finance::add_entry))
         .route("/api/finance/ledger/{id}/reverse", post(finance::reverse_entry))
         .route("/api/finance/ledger/checks", post(finance::add_check))
         .route("/api/finance/payouts", post(finance::payout))
         .route("/api/finance/materials", get(purchasing::materials).post(purchasing::create_material))
-        .route("/api/finance/materials/{id}", patch(purchasing::patch_material))
+        .route("/api/finance/materials/{id}", get(purchasing::material).patch(purchasing::patch_material))
         .route("/api/finance/wall", get(purchasing::wall))
         .route("/api/finance/vendors", get(purchasing::vendors).post(purchasing::create_vendor))
         .route("/api/finance/vendors/{id}", get(purchasing::vendor).patch(purchasing::patch_vendor))
+        .route("/api/finance/periods", get(budget::periods).post(budget::create_period))
+        .route("/api/finance/periods/{id}", patch(budget::patch_period).delete(budget::delete_period))
+        .route("/api/finance/budget", get(budget::budget).put(budget::put_line))
+        .route("/api/finance/budget.xlsx", get(budget::budget_xlsx))
+        .route("/api/finance/recurring", get(recurring::list).post(recurring::create))
+        .route("/api/finance/recurring/{id}", patch(recurring::patch).delete(recurring::delete))
+        .route("/api/finance/templates", get(templates::list).post(templates::create))
+        .route("/api/finance/templates/{id}", put(templates::replace).delete(templates::delete))
+        .route("/api/finance/analysis", get(budget::analysis))
+        .route("/api/finance/analysis.xlsx", get(budget::analysis_xlsx))
         .route("/api/chats/{id}/prefs", put(notify::set_chat))
         .route("/api/push/vapid", get(notify::vapid))
         .route("/api/push/subscriptions", post(notify::subscribe).delete(notify::unsubscribe))

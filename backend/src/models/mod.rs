@@ -36,7 +36,6 @@
 //!
 //! Ikisi de `String` kalir.
 
-pub mod action;
 pub mod activity;
 pub mod enums;
 pub mod record;
