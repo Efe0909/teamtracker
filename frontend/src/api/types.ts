@@ -16,7 +16,11 @@ export type Priority = "critical" | "high" | "medium" | "low";
 /** Hangi turun nerede olabilecegini kok semasi soyler (Rust refdata.rs, spec/74). */
 export type NodeType =
   | "cell" | "machine" | "task" | "step" | "operational" | "generic"
-  | "option" | "checkpoint" | "widget" | "location" | "outcome";
+  | "option" | "checkpoint" | "widget" | "location" | "outcome"
+  // Maliye > Butce Kategorileri (spec/81 §3.1)
+  | "category";
+/** Butce kategorisinin parasi: SEB iade eder ya da kulup kasasi oder. */
+export type Ledger = "seb" | "general";
 /** Cocuklara izin: leaf = cocuk yok; list = butun cocuklar ayni turde; tree = serbest. */
 export type Shape = "leaf" | "list" | "tree";
 /** Gocle dogan kok ve bolumlerin sabit anahtarlari: kod bunlari adla degil bununla bulur.
@@ -89,7 +93,11 @@ export interface MetaNode {
   root_key: RootKey | null;
   shape: Shape;
   /** checkpoint: {offset_days}, widget: {widget}, slot: {slot: "steps"|"widgets"}. */
-  attrs: { offset_days?: number; widget?: WidgetType; slot?: "steps" | "widgets" };
+  attrs: {
+    offset_days?: number; widget?: WidgetType; slot?: "steps" | "widgets"; ledger?: Ledger;
+    /** Maliye koku: satin alim duvarinin varsayilan araliklari (spec/81 §7.2). */
+    wall_ahead_days?: number; wall_back_days?: number;
+  };
 }
 
 export interface Meta {
@@ -105,7 +113,7 @@ export interface Meta {
   /** sort_order, sonra ad; pasifler de gelir. */
   pillars: MetaPillar[];
   nodes: MetaNode[];
-  external_off?: ("decision" | "resend" | "push" | "suggest")[];
+  external_off?: ("decision" | "resend" | "push" | "suggest" | "fx")[];
   /** Manifest (backend/manifest.json): uygulama surumu ve gelistirici e-postasi. */
   version?: string;
   contact_email?: string;
@@ -1128,4 +1136,165 @@ export interface LlmFilter {
   model: string;
   user: string;
   status: "" | "ok" | "error" | "limit";
+}
+
+// --- maliye (spec/81) ---------------------------------------------------------
+
+export type InvoiceStatus = "pending" | "changes_requested" | "approved" | "rejected" | "withdrawn" | "cancelled";
+export type ClaimStatus = "draft" | "sent" | "office_approved" | "paid";
+export type Funding = "seb" | "general";
+
+/** Fatura gonderimi: tutarlar faturanin biriminde; kalem tutarlarinin toplami = `total`. */
+export interface InvoiceIn {
+  purchased_on: IsoDate;
+  currency: string;
+  total: number;
+  fx_rate?: number;
+  fx_on?: IsoDate;
+  fx_source?: "tcmb" | "manual";
+  paid_by: "member" | "club";
+  payee_account_id?: Uuid;
+  note?: string;
+  items: { material_id: Uuid; amount: number }[];
+  attachment_ids: Uuid[];
+}
+
+export interface InvoiceView {
+  id: Uuid;
+  submitted_by: Uuid;
+  purchased_on: IsoDate;
+  currency: string;
+  total: number;
+  fx_rate: number | null;
+  fx_on: IsoDate | null;
+  fx_source: "tcmb" | "manual" | null;
+  total_try: number;
+  paid_by: "member" | "club";
+  payee: { id: Uuid; label: string; holder_name: string; iban: string | null; iban_last4: string } | null;
+  vendor: { id: Uuid; name: string } | null;
+  note: string | null;
+  status: InvoiceStatus;
+  claim_id: Uuid | null;
+  created_at: string;
+  updated_at: string;
+  items: {
+    material_id: Uuid; name: string; amount: number; funding: Funding | null;
+    event_id: Uuid | null; event_title: string | null; event_date: IsoDate | null;
+    category_id: Uuid | null; budget: number | null; purchased: boolean;
+  }[];
+  /** Kalemlerden turetilen etkinlikler (D-3). */
+  events: { id: Uuid; title: string; date: IsoDate | null }[];
+  attachments: Attachment[];
+  reviews: { action: string; note: string | null; by_user: Uuid | null; at: string }[];
+  can_review: boolean;
+  can_edit: boolean;
+}
+
+export interface InvoiceRow {
+  id: Uuid;
+  submitted_by: Uuid;
+  purchased_on: IsoDate;
+  currency: string;
+  total: number;
+  total_try: number;
+  paid_by: "member" | "club";
+  status: InvoiceStatus;
+  claim_id: Uuid | null;
+  created_at: string;
+  item_count: number;
+  first_item: string | null;
+  event_titles: string[];
+  attachment_count: number;
+}
+
+export interface Purchasable {
+  id: Uuid;
+  name: string;
+  qty: number;
+  price: number | null;
+  category_id: Uuid | null;
+  purchased: boolean;
+  event_id: Uuid | null;
+  event_title: string | null;
+  event_date: IsoDate | null;
+}
+
+export interface ClaimRow {
+  id: Uuid;
+  kind: "monthly" | "event";
+  month: IsoDate | null;
+  event_id: Uuid | null;
+  event_title: string | null;
+  status: ClaimStatus;
+  sent_at: string | null;
+  approved_at: string | null;
+  paid_at: string | null;
+  received_amount: number | null;
+  invoice_count: number;
+  seb_total: number;
+  people: number;
+}
+
+export interface ClaimDetail {
+  claim: ClaimRow;
+  invoices: InvoiceRow[];
+  /** `user_id: null` = kulup kasasindan odenmis kisim. */
+  people: { user_id: Uuid | null; amount: number; invoices: number }[];
+}
+
+export type LedgerKind = "income" | "expense" | "purchase" | "seb_refund" | "member_payout" | "reversal" | "opening";
+
+export interface LedgerEntry {
+  id: Uuid;
+  occurred_on: IsoDate;
+  amount: number;
+  kind: LedgerKind;
+  description: string;
+  category_id: Uuid | null;
+  event_id: Uuid | null;
+  invoice_id: Uuid | null;
+  payee_user_id: Uuid | null;
+  reverses_id: Uuid | null;
+  reversed: boolean;
+  balance: number;
+  created_by: Uuid | null;
+  created_at: string;
+}
+
+export interface LedgerCheck {
+  checked_on: IsoDate;
+  bank_balance: number;
+  /** Defter − banka; 0 = tutuyor. */
+  diff: number;
+}
+
+export interface LedgerView {
+  balance: number;
+  month_in: number;
+  month_out: number;
+  last_check: LedgerCheck | null;
+  entries: LedgerEntry[];
+  can_write: boolean;
+}
+
+export interface FinanceSummary {
+  cash_balance: number;
+  last_check: LedgerCheck | null;
+  seb_receivable: number;
+  claims_waiting: number;
+  unclaimed: number;
+  member_debts: { user_id: Uuid; outstanding: number; payable: number }[];
+  pending_invoices: number;
+  oldest_pending: string | null;
+  upcoming: {
+    kind: "material" | "recurring"; id: Uuid; label: string; event?: string | null;
+    due: IsoDate | null; amount: number | null; currency?: string;
+  }[];
+}
+
+export interface FxQuote {
+  currency: string;
+  on: IsoDate;
+  rate: number;
+  source: "tcmb";
 }

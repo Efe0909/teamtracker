@@ -1,0 +1,205 @@
+/* Maliye ortak parcalari (spec/81): fatura formu ve ayrintisi. Ham renk YOK — yalniz token. */
+
+.form {
+  max-width: 720px;
+}
+.readonly {
+  color: var(--dim);
+}
+.dim {
+  color: var(--dim);
+  font-size: var(--fs-sm);
+}
+.num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.grow {
+  flex: 1 1 0;
+}
+.link {
+  color: var(--acc-strong);
+  font-size: var(--fs-sm);
+}
+
+/* dosyalar */
+.drop {
+  display: grid;
+  gap: var(--s-2);
+  padding: var(--s-3);
+  border: 1.5px dashed var(--line-strong);
+  border-radius: var(--r-md);
+  background: var(--panel2);
+}
+.file {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 6px var(--s-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--panel);
+  font-size: var(--fs-sm);
+}
+.fileName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.x {
+  border: 0;
+  background: none;
+  color: var(--dim);
+  cursor: pointer;
+  padding: 2px;
+}
+
+/* tutar ve kur */
+.amountRow {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr) 90px;
+  gap: var(--s-2);
+}
+.rate {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-2) var(--s-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--panel2);
+  font-size: var(--fs-sm);
+}
+.rateManual {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+.rateManual input {
+  width: 110px;
+}
+.pinTag {
+  padding: 1px 6px;
+  border-radius: var(--r-sm);
+  background: var(--acc-bg);
+  color: var(--acc-strong);
+  font-size: var(--fs-xs);
+}
+
+/* kalem gruplari */
+.evPick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  align-items: center;
+}
+.group {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--panel);
+  overflow: hidden;
+}
+.groupHead {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  padding: 6px var(--s-3);
+  background: var(--panel2);
+}
+.groupHead b {
+  font-weight: 600;
+}
+.group > .dim {
+  margin: 0;
+  padding: 8px var(--s-3);
+}
+.itemRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 130px;
+  gap: var(--s-3);
+  align-items: center;
+  padding: 8px var(--s-3);
+  border-top: 1px solid var(--line);
+}
+.itemLabel {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-width: 0;
+  cursor: pointer;
+}
+.itemLabel input {
+  accent-color: var(--acc-fill);
+  margin: 0;
+}
+.itemAmount {
+  text-align: right;
+}
+.sum {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--s-3);
+  padding: 8px var(--s-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--panel2);
+  font-size: var(--fs-sm);
+}
+.sumOk .num {
+  color: var(--ok-text);
+}
+.sumWarn .num {
+  color: var(--warn-text);
+}
+
+/* odeme secimi */
+.choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+.choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: var(--panel);
+  cursor: pointer;
+}
+.choice input {
+  accent-color: var(--acc-fill);
+  margin: 0;
+}
+.choiceOn {
+  border-color: var(--acc);
+  background: var(--acc-bg);
+  color: var(--acc-strong);
+}
+.notice {
+  margin: 0;
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-md);
+  background: var(--warn-bg);
+  color: var(--warn-text);
+  font-size: var(--fs-sm);
+}
+.notice a {
+  color: inherit;
+  font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  .amountRow {
+    grid-template-columns: 1fr 1fr;
+  }
+  .itemRow {
+    grid-template-columns: 1fr;
+  }
+}

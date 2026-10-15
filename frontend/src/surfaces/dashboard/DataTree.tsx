@@ -16,7 +16,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { errorText } from "../../api/client";
 import { useCreateNode, useDeleteNode, useNodeTree, usePatchNode } from "../../api/hooks";
-import type { MetaTeam, NewNode, NodePatch, NodeType, Shape, TreeNode, TreeView, Uuid, WidgetType } from "../../api/types";
+import type { Ledger, MetaTeam, NewNode, NodePatch, NodeType, Shape, TreeNode, TreeView, Uuid, WidgetType } from "../../api/types";
 import { NODE_TYPE } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
 import { Icon } from "../../ui/icons";
@@ -55,13 +55,18 @@ function offsetText(days: number): string {
 /** Satirda okunacak ayar: checkpoint gun farki. (Widget'in adi zaten katalog adi: tekrarlanmaz.) */
 function attrText(n: TreeNode): string | null {
   if (n.node_type === "checkpoint" && n.attrs.offset_days !== undefined) return offsetText(n.attrs.offset_days);
+  if (n.node_type === "category" && n.attrs.ledger !== undefined) return LEDGER[n.attrs.ledger];
   return null;
 }
 
+/** Butce kategorisinin parasi nereden (spec/81 D-15). */
+const LEDGER: Record<Ledger, string> = { seb: "SEB bütçesi", general: "Kulüp kasası" };
+
 /** Formdaki ayar alanlarindan attrs; ayarsiz tur icin undefined. */
-function attrsFor(type: NodeType, offset: string, widget: TemplateWidget): TreeNode["attrs"] | undefined {
+function attrsFor(type: NodeType, offset: string, widget: TemplateWidget, ledger: Ledger): TreeNode["attrs"] | undefined {
   if (type === "checkpoint") return { offset_days: Number(offset) };
   if (type === "widget") return { widget };
+  if (type === "category") return { ledger };
   return undefined;
 }
 
@@ -324,7 +329,19 @@ function AttrsFields(props: {
   setOffset: (v: string) => void;
   widget: TemplateWidget;
   setWidget: (v: TemplateWidget) => void;
+  ledger: Ledger;
+  setLedger: (v: Ledger) => void;
 }) {
+  if (props.type === "category") {
+    return (
+      <div className={ui.field}>
+        <span>Parası nereden<Req /></span>
+        <Picker label="Kaynak" value={props.ledger} onChange={props.setLedger}
+          options={(["seb", "general"] as const).map((l) => ({ value: l, label: LEDGER[l] }))} />
+        <span className={ui.fieldHint}>SEB bütçesi: okul iade eder. Kulüp kasası: kulübün kendi parası.</span>
+      </div>
+    );
+  }
   if (props.type === "checkpoint") {
     return (
       <label className={ui.field}>
@@ -360,6 +377,7 @@ function AddForm(props: { parent: TreeNode; onClose: (added: boolean) => void })
   const [desc, setDesc] = useState("");
   const [offset, setOffset] = useState("-7");
   const [widget, setWidget] = useState<TemplateWidget>("otf");
+  const [ledger, setLedger] = useState<Ledger>("seb");
   const [err, setErr] = useState<string | null>(null);
   const nameLabel = fixed ? `${TYPE_LABEL[type]} adı` : "Alt düğüm adı";
   // Widget'in adi koddan (katalog): sorulmaz.
@@ -382,7 +400,7 @@ function AddForm(props: { parent: TreeNode; onClose: (added: boolean) => void })
           body.node_type = type;
           body.shape = shape;
         }
-        const attrs = attrsFor(type, offset, widget);
+        const attrs = attrsFor(type, offset, widget, ledger);
         if (attrs !== undefined) body.attrs = attrs;
         m.mutate(body, { onSuccess: () => props.onClose(true), onError: (x) => setErr(errorText(x)) });
       }}
@@ -411,7 +429,8 @@ function AddForm(props: { parent: TreeNode; onClose: (added: boolean) => void })
               options={(["tree", "list", "leaf"] as const).map((x) => ({ value: x, label: SHAPE[x] }))} />
           </div>
         )}
-        <AttrsFields type={type} offset={offset} setOffset={setOffset} widget={widget} setWidget={setWidget} />
+        <AttrsFields type={type} offset={offset} setOffset={setOffset} widget={widget} setWidget={setWidget}
+          ledger={ledger} setLedger={setLedger} />
       </div>
       <div className={ui.field}>
         <span>Açıklama</span>
@@ -445,6 +464,7 @@ function EditForm(props: { node: TreeNode; tree: TreeView; byId: ReadonlyMap<Uui
   const [widget, setWidget] = useState<TemplateWidget>(
     initialWidget !== undefined && initialWidget !== "record" ? initialWidget : "otf",
   );
+  const [ledger, setLedger] = useState<Ledger>(node.attrs.ledger ?? "seb");
   const [err, setErr] = useState<string | null>(null);
   const onError = (x: unknown) => setErr(errorText(x));
 
@@ -481,7 +501,7 @@ function EditForm(props: { node: TreeNode; tree: TreeView; byId: ReadonlyMap<Uui
       if (type !== node.node_type) p.node_type = type;
       if (shape !== node.shape) p.shape = shape;
       if (parent !== "" && parent !== node.parent_id) p.parent_id = parent;
-      const a = attrsFor(type, offset, widget);
+      const a = attrsFor(type, offset, widget, ledger);
       if (a !== undefined && JSON.stringify(a) !== JSON.stringify(node.attrs)) p.attrs = a;
     }
     if (Object.keys(p).length === 0) {
@@ -543,7 +563,8 @@ function EditForm(props: { node: TreeNode; tree: TreeView; byId: ReadonlyMap<Uui
           </div>
         )}
         {!locked && (
-          <AttrsFields type={type} offset={offset} setOffset={setOffset} widget={widget} setWidget={setWidget} />
+          <AttrsFields type={type} offset={offset} setOffset={setOffset} widget={widget} setWidget={setWidget}
+            ledger={ledger} setLedger={setLedger} />
         )}
       </div>
       {!locked && (

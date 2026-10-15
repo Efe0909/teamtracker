@@ -40,6 +40,37 @@ export type ApiErrorCode =
   | "corrupt_image"
   | "corrupt_file"
   | "invalid_account_label"
+  | "invoice_split_mismatch"
+  | "material_not_approved"
+  | "account_required"
+  | "invoice_items_required"
+  | "attachment_required"
+  | "duplicate_item"
+  | "invalid_currency"
+  | "invalid_fx"
+  | "fx_rate_required"
+  | "fx_service_off"
+  | "fx_unknown_currency"
+  | "invalid_paid_by"
+  | "invalid_vendor"
+  | "invalid_amount"
+  | "invalid_note"
+  | "note_required"
+  | "invalid_action"
+  | "invoice_locked"
+  | "claim_locked"
+  | "claim_empty"
+  | "claim_exists"
+  | "invalid_claim"
+  | "invalid_event"
+  | "invalid_status"
+  | "invalid_category"
+  | "opening_exists"
+  | "already_reversed"
+  | "attachment_locked"
+  | "review_purchases_required"
+  | "manage_ledger_required"
+  | "invalid_user_id"
   | "invalid_holder"
   | "invalid_iban"
   | "too_many_accounts"
@@ -184,6 +215,37 @@ export const ERRORS = {
   corrupt_image: "Görsel bozuk ya da okunamıyor.",
   corrupt_file: "Dosya bozuk görünüyor.",
   invalid_account_label: "Hesap adı 1-60 karakter olmalı (ör. “Ziraat”).",
+  invoice_split_mismatch: "Kalemlere dağıtılan tutarların toplamı faturanın tutarına eşit olmalı.",
+  material_not_approved: "Yalnız onaylanmış (ve kulüpte olmayan) kalemler faturaya bağlanabilir.",
+  account_required: "İade edilecek hesabı seç. Hesabın yoksa Profil › Hesap numaralarım'dan ekle.",
+  invoice_items_required: "Faturayı en az bir kaleme bağla.",
+  attachment_required: "Fatura ya da fişin en az bir dosyasını ekle.",
+  duplicate_item: "Aynı kalem faturada iki kez olamaz.",
+  invalid_currency: "Para birimi geçersiz.",
+  invalid_fx: "Kur bilgisi geçersiz.",
+  fx_rate_required: "Dövizli faturada kur gerekli.",
+  fx_service_off: "Kur servisine şu an ulaşılamıyor; kuru elle gir.",
+  fx_unknown_currency: "TCMB bu para birimi için kur yayınlamıyor; kuru elle gir.",
+  invalid_paid_by: "Ödemeyi kimin yaptığını seç.",
+  invalid_vendor: "Tedarikçi bulunamadı.",
+  invalid_amount: "Tutar geçersiz (en fazla iki ondalık).",
+  invalid_note: "Not en fazla 2000 karakter olabilir.",
+  note_required: "Bu karar için bir not yaz; gönderen neyi düzelteceğini bilsin.",
+  invalid_action: "İşlem tanınmadı.",
+  invoice_locked: "Fatura bu durumda değiştirilemez.",
+  claim_locked: "İade dosyası gönderilmiş; değiştirilemez.",
+  claim_empty: "Boş iade dosyası gönderilemez.",
+  claim_exists: "Bu ay ya da etkinlik için zaten bir iade dosyası var.",
+  invalid_claim: "İade dosyası bilgisi eksik.",
+  invalid_event: "Etkinlik bulunamadı.",
+  invalid_status: "Durum geçersiz.",
+  invalid_category: "Kategori bulunamadı.",
+  opening_exists: "Açılış bakiyesi zaten girilmiş.",
+  already_reversed: "Bu satırın ters kaydı zaten var.",
+  attachment_locked: "Bu belge bir faturaya ya da kasa kaydına bağlı; silinemez.",
+  review_purchases_required: "Bu işlem için “Satın alımları incele” yetkisi gerekiyor.",
+  manage_ledger_required: "Bu işlem için “Kasa defterini yönet” yetkisi gerekiyor.",
+  invalid_user_id: "Kişi bulunamadı.",
   invalid_holder: "Hesap sahibinin adını yaz.",
   invalid_iban: "IBAN geçersiz. Boşluklar sorun değil; hanelerden biri yanlış olabilir.",
   too_many_accounts: "En fazla 5 hesap numarası eklenebilir.",

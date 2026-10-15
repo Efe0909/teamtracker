@@ -30,6 +30,16 @@ import type {
   LlmStatusView,
   LlmTryOut,
   LlmUsageView,
+  ClaimDetail,
+  ClaimRow,
+  ClaimStatus,
+  FinanceSummary,
+  FxQuote,
+  InvoiceIn,
+  InvoiceRow,
+  InvoiceView,
+  LedgerView,
+  Purchasable,
   Quality,
   QualityConfig,
   QualityView,
@@ -958,4 +968,145 @@ export function useLlmConfigWrite() {
       cfg === null ? request<LlmConfigView>("DELETE", "/api/admin/llm") : request<LlmConfigView>("PUT", "/api/admin/llm", cfg),
     onSuccess: (v) => qc.setQueryData([...keys.llm, "config"], v),
   });
+}
+
+// --- maliye (spec/81) -----------------------------------------------------------
+
+const finance = ["finance"] as const;
+export const financeKeys = {
+  all: finance,
+  summary: [...finance, "summary"] as const,
+  invoices: (q: { status?: string; mine?: boolean }) => [...finance, "invoices", q] as const,
+  invoice: (id: Uuid) => [...finance, "invoice", id] as const,
+  purchasable: [...finance, "purchasable"] as const,
+  claims: [...finance, "claims"] as const,
+  claim: (id: Uuid) => [...finance, "claim", id] as const,
+  ledger: [...finance, "ledger"] as const,
+};
+
+/** Maliye yazmalari birbirini etkiler (onay -> dosya, kasa, ozet): hepsi tazelenir. */
+function afterFinance(qc: QueryClient) {
+  void qc.invalidateQueries({ queryKey: financeKeys.all });
+  void qc.invalidateQueries({ queryKey: keys.events });
+}
+
+export function useFinanceSummary() {
+  return useQuery({ queryKey: financeKeys.summary, queryFn: () => request<FinanceSummary>("GET", "/api/finance/summary") });
+}
+
+export function useInvoices(q: { status?: string; mine?: boolean }) {
+  return useQuery({
+    queryKey: financeKeys.invoices(q),
+    queryFn: () => request<InvoiceRow[]>("GET", `/api/finance/invoices${qs({ status: q.status, mine: q.mine === true ? "1" : undefined })}`),
+  });
+}
+
+export function useInvoice(id: Uuid | null) {
+  return useQuery({
+    queryKey: financeKeys.invoice(id ?? ""),
+    queryFn: () => request<InvoiceView>("GET", `/api/finance/invoices/${id ?? ""}`),
+    enabled: id !== null,
+  });
+}
+
+export function usePurchasable() {
+  return useQuery({ queryKey: financeKeys.purchasable, queryFn: () => request<Purchasable[]>("GET", "/api/finance/purchasable") });
+}
+
+/** Gonder (id yok) ya da duzelt-yeniden gonder (id). */
+export function useSaveInvoice() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { id: Uuid | null; body: InvoiceIn }) =>
+      v.id === null ? request<InvoiceView>("POST", "/api/finance/invoices", v.body)
+        : request<InvoiceView>("PUT", `/api/finance/invoices/${v.id}`, v.body),
+    onSuccess: (inv) => {
+      qc.setQueryData(financeKeys.invoice(inv.id), inv);
+      afterFinance(qc);
+    },
+  });
+}
+
+export function useInvoiceDecision() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { id: Uuid; action: "approve" | "changes" | "reject" | "cancel" | "withdraw"; note?: string }) =>
+      request<InvoiceView>("POST", `/api/finance/invoices/${v.id}/decision`, { action: v.action, note: v.note }),
+    onSuccess: (inv) => {
+      qc.setQueryData(financeKeys.invoice(inv.id), inv);
+      afterFinance(qc);
+    },
+  });
+}
+
+export function useClaims() {
+  return useQuery({ queryKey: financeKeys.claims, queryFn: () => request<ClaimRow[]>("GET", "/api/finance/claims") });
+}
+
+export function useClaim(id: Uuid | null) {
+  return useQuery({
+    queryKey: financeKeys.claim(id ?? ""),
+    queryFn: () => request<ClaimDetail>("GET", `/api/finance/claims/${id ?? ""}`),
+    enabled: id !== null,
+  });
+}
+
+export function useClaimWrite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v:
+      | { op: "create"; kind: "monthly"; month: IsoDate }
+      | { op: "create"; kind: "event"; event_id: Uuid }
+      | { op: "status"; id: Uuid; status: ClaimStatus; received_amount?: number }) => {
+      if (v.op === "status") {
+        return request<ClaimDetail>("PATCH", `/api/finance/claims/${v.id}`, { status: v.status, received_amount: v.received_amount });
+      }
+      const { op: _op, ...body } = v;
+      return request<ClaimDetail>("POST", "/api/finance/claims", body);
+    },
+    onSuccess: (d) => {
+      qc.setQueryData(financeKeys.claim(d.claim.id), d);
+      afterFinance(qc);
+    },
+  });
+}
+
+export function useLedger() {
+  return useQuery({ queryKey: financeKeys.ledger, queryFn: () => request<LedgerView>("GET", "/api/finance/ledger") });
+}
+
+export type LedgerOp =
+  | { op: "entry"; occurred_on: IsoDate; amount: number; kind: "income" | "expense" | "opening"; description: string;
+      category_id?: Uuid; event_id?: Uuid; attachment_ids?: Uuid[] }
+  | { op: "reverse"; id: Uuid; note?: string }
+  | { op: "check"; checked_on: IsoDate; bank_balance: number }
+  | { op: "payout"; user_id: Uuid; amount: number; description?: string };
+
+export function useLedgerWrite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: LedgerOp) => {
+      switch (v.op) {
+        case "entry": {
+          const { op: _op, ...body } = v;
+          return request<LedgerView>("POST", "/api/finance/ledger", body);
+        }
+        case "reverse":
+          return request<LedgerView>("POST", `/api/finance/ledger/${v.id}/reverse`, { note: v.note });
+        case "check":
+          return request<LedgerView>("POST", "/api/finance/ledger/checks", { checked_on: v.checked_on, bank_balance: v.bank_balance });
+        case "payout":
+          return request<LedgerView>("POST", "/api/finance/payouts", { user_id: v.user_id, amount: v.amount, description: v.description });
+      }
+    },
+    onSuccess: (l) => {
+      qc.setQueryData(financeKeys.ledger, l);
+      afterFinance(qc);
+    },
+  });
+}
+
+/** TCMB kuru (spec/81 §13): sorgu degil cagri — form tarih/birim degisince ister. */
+export function fetchFx(currency: string, on: IsoDate): Promise<FxQuote> {
+  return request<FxQuote>("GET", `/api/finance/fx${qs({ currency, on })}`);
 }

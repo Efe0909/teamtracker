@@ -23,6 +23,7 @@ import s from "./dashboard.module.css";
 import { DataTree } from "./DataTree";
 import { EventPage } from "./EventPage";
 import { Events } from "./Events";
+import { Finance } from "./Finance";
 import { Home } from "./Home";
 import { Notifications } from "./Notifications";
 import { People } from "./People";
@@ -86,6 +87,8 @@ function Page({ route }: { route: Route }) {
   switch (route.name) {
     case "home":
       return <Home />;
+    case "finance":
+      return <Finance section={route.section} id={route.id} />;
     case "profile":
       return (
         <div className={s.page}>
@@ -150,6 +153,7 @@ const NAV: NavItem[] = [
   { route: { name: "home" }, icon: "home", label: "Panolar", match: ["home"] },
   { route: { name: "tasks", query: {} }, icon: "tasks", label: "Görevler", match: ["tasks", "record"] },
   { route: { name: "events", query: {} }, icon: "calendar", label: "Etkinlikler", match: ["events", "event"] },
+  { route: { name: "finance", section: "home", id: null }, icon: "wallet", label: "Maliye", match: ["finance"] },
   { route: { name: "teams" }, icon: "teams", label: "Takımlar", match: ["teams"] },
   { route: { name: "notifications" }, icon: "bell", label: "Bildirimler", match: ["notifications"] },
   { route: { name: "people" }, icon: "user", label: "Ekip", match: ["people"] },
