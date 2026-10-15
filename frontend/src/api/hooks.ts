@@ -131,7 +131,8 @@ export interface RecordQuery {
   search?: string;
   quick?: string;
   sort?: string;
-  done?: "true" | "false";
+  /** "true" kapalilar, "false" acik olanlar (URL'den gelir: string). */
+  done?: string;
   /** Yalniz benim sabitlediklerim. */
   pinned?: "true";
 }

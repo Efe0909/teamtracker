@@ -33,7 +33,7 @@ export type FinanceSection =
   | "home" | "invoices" | "new" | "edit" | "mine" | "claims" | "ledger" | "materials" | "wall" | "vendors";
 
 export const QUERY_KEYS = [
-  "kind", "status", "priority", "team", "person", "node", "pillar", "search", "quick",
+  "kind", "status", "done", "priority", "team", "person", "node", "pillar", "search", "quick",
 ] as const satisfies readonly (keyof RecordQuery)[];
 
 /** Etkinlik listesi filtreleri — gorevlerdeki gibi URL'de (KNOW-234). */
