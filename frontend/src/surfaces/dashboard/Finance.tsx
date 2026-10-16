@@ -1,9 +1,9 @@
-// Maliye (spec/81 §10): ustte gruplu sekmeler + bolumler. Gormek "maliye" yetkisi
+// Maliye (spec/81 §10): Yonetim'le ortak bolum sekmeleri. Gormek "maliye" yetkisi
 // ister (§4); digerleri yalniz "Fatura ekle" ve "Faturalarim"i gorur.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { errorText } from "../../api/client";
-import { useFinanceSummary, useInvoices, useLedgerWrite } from "../../api/hooks";
+import { useFinanceSummary, useInvoices, useLedgerWrite, usePeriods } from "../../api/hooks";
 import type { ClaimStatus, InvoiceStatus } from "../../api/types";
 import { InvoiceForm } from "../../features/finance/InvoiceForm";
 import { profileHref } from "../../features/profile/tabs";
@@ -11,13 +11,17 @@ import type { Lookup } from "../../lib/lookup";
 import { useLookup } from "../../lib/lookup";
 import { money } from "../../lib/money";
 import { navigate } from "../../lib/router";
-import { Button, cx, Link, Loading, ui, useToast } from "../../ui/ui";
+import { Icon } from "../../ui/icons";
+import { PaginatedList } from "../../ui/PaginatedList";
+import { Button, cx, Link, Loading, Picker, Segmented, ui, useToast } from "../../ui/ui";
 import d from "./dashboard.module.css";
 import { FinanceAnalysis } from "./FinanceAnalysis";
 import { FinanceBudget } from "./FinanceBudget";
 import { FinanceClaims } from "./FinanceClaims";
 import { FinanceInvoices, InvoiceDetail } from "./FinanceInvoices";
 import { FinanceLedger } from "./FinanceLedger";
+import { FinancePeriodContext } from "./FinancePeriod";
+import p from "./financePages.module.css";
 import { FinanceMaterials, FinanceVendors, FinanceWall } from "./FinancePurchasing";
 import { FinanceRecurring } from "./FinanceRecurring";
 import { FinanceTemplates } from "./FinanceTemplates";
@@ -70,17 +74,35 @@ const TITLES: Record<FinanceSection, string> = {
 export function Finance({ section, id }: { section: FinanceSection; id: string | null }) {
   const L = useLookup();
   const viewer = isFinanceViewer(L);
+  const periods = usePeriods(viewer);
+  const [periodId, setPeriodId] = useState<string | null>(null);
+  const day = new Date().toLocaleDateString("en-CA");
+  const currentPeriod = periods.data?.find((p) => p.from <= day && p.to >= day) ?? periods.data?.[0] ?? null;
+  const period = periodId === "all" ? null : periods.data?.find((p) => p.id === periodId) ?? currentPeriod;
   // Maliye disi: Genel yerine Faturalarim.
   const effective: FinanceSection = !viewer && !["new", "edit", "mine"].includes(section) ? "mine" : section;
   useEffect(() => {
     document.title = `${TITLES[effective]} · Maliye — EkipTakip`;
   }, [effective]);
   return (
+    <FinancePeriodContext value={period}>
     <div className={d.page}>
       <div className={d.pageHead}>
         <div className={d.pageTitle}>
-          <h1>Maliye</h1>
-          <p className={d.pageSub}>{TITLES[effective]}</p>
+          <h1>{effective === "home" ? "Maliye" : TITLES[effective]}</h1>
+        </div>
+        <div className={p.pageActions}>
+        {viewer && ["claims", "ledger", "templates"].includes(effective) && (
+          <Picker className={p.periodPicker} label="Dönem" value={period?.id ?? "all"} onChange={(value) => {
+            setPeriodId(value);
+            if (effective === "claims" && id !== null) navigate(fin("claims"));
+          }} options={[{ value: "all", label: "Tüm dönemler" }, ...(periods.data ?? []).map((p) => ({ value: p.id, label: p.name }))]} />
+        )}
+        {effective !== "new" && (
+          <Link href={fin("new")} className={cx(ui.btn, ui["v-primary"], ui["z-sm"])}>
+            <Icon name="plus" size={15} />Fatura ekle
+          </Link>
+        )}
         </div>
       </div>
       <FinanceNav section={effective} viewer={viewer} />
@@ -101,53 +123,27 @@ export function Finance({ section, id }: { section: FinanceSection; id: string |
         {effective === "edit" && id !== null && <EditInvoice id={id} />}
       </div>
     </div>
+    </FinancePeriodContext>
   );
 }
 
-/** Bolum gezinmesi. Yeni bolum icin yalniz bu diziye satir eklenir. */
-const NAV_GROUPS: { label: string; viewerOnly: boolean; items: { section: FinanceSection; label: string }[] }[] = [
-  { label: "Takip", viewerOnly: true, items: [
-    { section: "home", label: "Genel" },
-    { section: "invoices", label: "Fatura onayı" },
-    { section: "claims", label: "SEB iadeleri" },
-    { section: "ledger", label: "Kulüp kasası" },
-    { section: "budget", label: "Dönem bütçesi" },
-    { section: "analysis", label: "Analiz" },
-  ] },
-  { label: "Satın alım", viewerOnly: true, items: [
-    { section: "materials", label: "Malzemeler" },
-    { section: "wall", label: "Satın alım duvarı" },
-    { section: "vendors", label: "Tedarikçiler" },
-  ] },
-  { label: "Kayıtlar", viewerOnly: true, items: [
-    { section: "recurring", label: "Tekrarlayan giderler" },
-    { section: "templates", label: "Mail şablonları" },
-  ] },
-  { label: "Gönder", viewerOnly: false, items: [
-    { section: "new", label: "Fatura ekle" },
-    { section: "mine", label: "Faturalarım" },
-  ] },
-];
+const SECTIONS: FinanceSection[] = ["home", "invoices", "claims", "ledger", "budget", "analysis",
+  "materials", "wall", "vendors", "recurring", "templates", "mine"];
 
 function FinanceNav({ section, viewer }: { section: FinanceSection; viewer: boolean }) {
   const pending = useInvoices({ status: "pending" });
+  const sections: FinanceSection[] = viewer ? SECTIONS : ["mine"];
+  const active = section === "edit" ? viewer ? "invoices" : "mine" : section;
+  const nav = useRef<HTMLElement>(null);
+  useEffect(() => {
+    nav.current?.querySelector<HTMLElement>('[aria-selected="true"]')?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+  }, [active]);
   return (
-    <nav className={s.subnav} aria-label="Maliye bölümleri">
-      {NAV_GROUPS.filter((g) => viewer || !g.viewerOnly).map((g) => (
-        <div key={g.label} className={s.subGroup}>
-          <span className={s.subGrp}>{g.label}</span>
-          {g.items.map((it) => {
-            const count = it.section === "invoices" ? pending.data?.length : undefined;
-            return (
-              <Link key={it.section} href={fin(it.section)} className={s.navItem}
-                aria-current={section === it.section || (it.section === "invoices" && section === "edit") ? "page" : undefined}>
-                <span>{it.label}</span>
-                {count !== undefined && count > 0 && <span className={s.count}>{count}</span>}
-              </Link>
-            );
-          })}
-        </div>
-      ))}
+    <nav ref={nav} className={s.subnav} aria-label="Maliye bölümleri">
+      <Segmented label="Maliye bölümü" value={active} onChange={(next) => navigate(fin(next))}
+        options={sections.map((value) => ({ value, label: TITLES[value],
+          ...(value === "invoices" && (pending.data?.length ?? 0) > 0 ? { count: pending.data?.length ?? 0 } : {}),
+        }))} />
     </nav>
   );
 }
@@ -199,10 +195,8 @@ function Home() {
       <div className={s.cols}>
         <div className={s.panel}>
           <div className={s.ph}><h2>Yaklaşan ödemeler</h2><span className={s.sub}>önümüzdeki 30 gün</span></div>
-          <div className={s.list}>
-            {v.upcoming.length === 0 && v.member_debts.every((x) => x.payable <= 0) && (
-              <div className={s.empty}>Önümüzdeki 30 günde ödeme görünmüyor.</div>
-            )}
+          <PaginatedList label="Yaklaşan ödemeler" className={s.list}
+            empty={<div className={s.empty}>Önümüzdeki 30 günde ödeme görünmüyor.</div>}>
             {v.member_debts.filter((x) => x.payable > 0).map((x) => (
               <div key={x.user_id} className={cx(s.row, s.rDue)}>
                 <span className={s.date}>şimdi</span>
@@ -222,12 +216,12 @@ function Home() {
                 <span className={s.num}>{u.amount === null ? "—" : money(u.amount, u.currency ?? "TRY")}</span>
               </div>
             ))}
-          </div>
+          </PaginatedList>
         </div>
 
         <div className={s.panel}>
           <div className={s.ph}><h2>Bekleyen işler</h2></div>
-          <div className={s.list}>
+          <PaginatedList label="Bekleyen işler" className={s.list}>
             <Link href={fin("invoices")} className={cx(s.row, s.rInv)}>
               <span className={s.t}>
                 <b>{v.pending_invoices === 0 ? "Onay bekleyen fatura yok" : `${v.pending_invoices} fatura onay bekliyor`}</b>
@@ -250,14 +244,14 @@ function Home() {
                 <span />
               </Link>
             )}
-          </div>
+          </PaginatedList>
         </div>
       </div>
 
       {v.member_debts.length > 0 && (
         <div id="member-debts" className={s.panel}>
           <div className={s.ph}><h2>Üyelere borç</h2><span className={s.sub}>onaylı, üyenin ödediği faturalar − yapılan ödemeler</span></div>
-          <div className={s.list}>
+          <PaginatedList label="Üyelere borç" className={s.list}>
             {v.member_debts.map((x) => (
               <div key={x.user_id} className={cx(s.row, s.rPerson)}>
                 <span className={s.t}>
@@ -276,7 +270,7 @@ function Home() {
                 ) : <span />}
               </div>
             ))}
-          </div>
+          </PaginatedList>
         </div>
       )}
     </>
@@ -328,6 +322,7 @@ function NewInvoice() {
       <div className={s.ph}><h2>Fatura ekle</h2><span className={s.sub}>herkes gönderebilir · yönetici onaylar</span></div>
       <div className={s.pb}>
         <InvoiceForm
+          initialMaterialId={new URLSearchParams(location.search).get("material")}
           accountsHref={profileHref("accounts", fin("new"))}
           eventHref={(eventId) => `/events/${eventId}?focus=supplies&return=${encodeURIComponent(fin("new"))}`}
           onDone={(inv) => {

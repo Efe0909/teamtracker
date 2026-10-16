@@ -1251,10 +1251,11 @@ export function useVendorWrite() {
 
 // --- butce, analiz, tekrarlayan giderler, mail sablonlari (spec/81 §8-§12) ----------------
 
-export function usePeriods() {
+export function usePeriods(enabled = true) {
   return useQuery({
     queryKey: [...financeKeys.all, "periods"] as const,
     queryFn: () => request<FinancePeriod[]>("GET", "/api/finance/periods"),
+    enabled,
   });
 }
 

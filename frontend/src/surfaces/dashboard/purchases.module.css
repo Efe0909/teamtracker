@@ -214,6 +214,9 @@
 .addForm:focus-within {
   background: var(--tint);
 }
+.addFormTop {
+  margin-top: 0;
+}
 .addForm input {
   flex: 1;
   min-width: 0;

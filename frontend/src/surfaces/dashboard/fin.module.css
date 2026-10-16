@@ -1,51 +1,10 @@
 /* Maliye sayfasi (spec/81 §10): ust sekme cubugu + bolum. Eskizin dili; ham renk YOK. */
 
-/* bolum cubugu: gruplar yan yana, sarar; grup etiketi tiklanabilir gorunmez */
+/* Yonetim ile ayni Segmented; tasan sekmeler bilesenin icinde yatay kayar. */
 .subnav {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s-2) var(--s-4);
   max-width: 100%;
-}
-.subGroup {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 2px;
-}
-.subGroup + .subGroup {
-  padding-left: var(--s-4);
-  border-left: 1px solid var(--line);
-}
-.subGrp {
-  padding-right: var(--s-2);
-  color: var(--dim);
-  font-size: var(--fs-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  cursor: default;
-  user-select: none;
-}
-.navItem {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s-2);
-  padding: 6px var(--s-2);
-  border-radius: var(--r-sm);
-  color: var(--dim);
-  text-decoration: none;
-  white-space: nowrap;
-}
-.navItem:hover {
-  background: var(--tint);
-  color: var(--txt);
-}
-.navItem[aria-current="page"] {
-  background: var(--acc-bg);
-  color: var(--acc-strong);
-  font-weight: 500;
+  min-width: 0;
+  margin-bottom: var(--s-4);
 }
 .count {
   padding: 0 6px;
@@ -91,6 +50,24 @@
   display: grid;
   gap: var(--s-3);
   padding: var(--s-4);
+}
+.invoiceDocuments {
+  display: grid;
+  gap: var(--s-2);
+  min-width: 0;
+}
+.invoiceDocuments h3 {
+  margin: 0;
+  font-weight: 500;
+}
+.missingDocument {
+  margin: 0;
+  padding: var(--s-3);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--r-md);
+  color: var(--dim);
+  background: var(--panel2);
+  font-size: var(--fs-sm);
 }
 .cols {
   display: grid;

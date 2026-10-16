@@ -20,8 +20,10 @@ import { MATERIAL_STAGE, MATERIAL_TYPE } from "./eventModel";
 import { fin, INVOICE_STATUS, StatusTag } from "./Finance";
 import s from "./fin.module.css";
 import { MaterialDetail } from "./MaterialDetail";
+import { MaterialInspector } from "./MaterialInspector";
 import type { Run } from "./purchaseParts";
 import p from "./purchases.module.css";
+import f from "./financePages.module.css";
 import { href } from "./routes";
 
 const LEDGER: Record<Ledger, { label: string; tone: string }> = {
@@ -138,6 +140,7 @@ export function FinanceMaterials() {
   const [picked, setPicked] = useState<ReadonlySet<Uuid>>(new Set());
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
   const [detail, setDetail] = useState<Uuid | null>(null);
+  const [editing, setEditing] = useState<Uuid | null>(null);
   const dates = rangeDates(range, custom);
   const list = useMaterialsQueue({
     queue,
@@ -150,6 +153,7 @@ export function FinanceMaterials() {
   const w = usePurchaseWrite();
   const selectable = queue === "review" && canBuy;
   const rows = list.data?.rows ?? [];
+  const selectedId = rows.find((row) => row.id === detail)?.id ?? rows[0]?.id ?? null;
   const sum = rows.reduce((a, m) => a + (m.owned ? 0 : m.price ?? 0), 0);
   const groups = groupRows(rows);
 
@@ -188,6 +192,7 @@ export function FinanceMaterials() {
     const due = m.event_date ?? m.needed_by;
     return (
       <div key={m.id} role="button" tabIndex={0} aria-label={`${m.name}, ayrıntıyı aç`}
+        aria-pressed={m.id === selectedId}
         className={cx(s.row, s.clickRow, selectable ? s.rMatSel : s.rMat, nested && s.nested)}
         onClick={(e) => { if (!(e.target as HTMLElement).closest("a, input, button")) setDetail(m.id); }}
         onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); setDetail(m.id); } }}>
@@ -257,6 +262,7 @@ export function FinanceMaterials() {
   };
 
   return (
+    <div className={f.materialsLayout}>
     <div className={s.panel}>
       <div className={s.ph}>
         <h2>Malzemeler</h2>
@@ -316,7 +322,10 @@ export function FinanceMaterials() {
       {queue === "review" && !canBuy && (
         <p className={cx(s.sub, s.foot)}>Satın alındı işaretlemek için “Satın alımları incele” yetkisi gerekir.</p>
       )}
-      {detail !== null && <MaterialDetailHost id={detail} onClose={() => setDetail(null)} />}
+    </div>
+    {selectedId === null ? <aside className={s.panel} aria-label="Malzeme ayrıntısı"><div className={s.empty}>Ayrıntı için bir kalem seç.</div></aside>
+      : <MaterialInspector key={selectedId} id={selectedId} onEdit={() => setEditing(selectedId)} />}
+    {editing !== null && <MaterialDetailHost id={editing} onClose={() => setEditing(null)} />}
     </div>
   );
 }
@@ -584,7 +593,7 @@ function NewItem({ cats }: { cats: MetaNode[] }) {
     });
   };
   return (
-    <form className={open ? s.addCard : p.addForm} onSubmit={(e) => { e.preventDefault(); submit(); }}>
+    <form className={open ? s.addCard : cx(p.addForm, p.addFormTop)} onSubmit={(e) => { e.preventDefault(); submit(); }}>
       <input className={open ? ui.input : undefined} value={name} onChange={(e) => setName(e.target.value)}
         placeholder="Kalem ekle" aria-label="Yeni kalem" maxLength={200} autoComplete="off" />
       {open && (

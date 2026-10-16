@@ -5,8 +5,8 @@ import { useState } from "react";
 import { errorText } from "../../api/client";
 import { useInvoice, useInvoiceDecision, useInvoices } from "../../api/hooks";
 import type { InvoiceStatus, InvoiceView } from "../../api/types";
+import { InvoiceAttachments } from "../../features/finance/InvoiceAttachments";
 import { InvoiceForm } from "../../features/finance/InvoiceForm";
-import { Attachments } from "../../features/media/Media";
 import { profileHref } from "../../features/profile/tabs";
 import { useLookup } from "../../lib/lookup";
 import { money } from "../../lib/money";
@@ -46,7 +46,7 @@ export function FinanceInvoices({ id }: { id: string | null }) {
                   <span>
                     {formatDay(r.purchased_on)}
                     {r.event_titles.length > 0 ? ` · ${r.event_titles.join(", ")}` : ""}
-                    {` · ${r.attachment_count} belge`}
+                    {` · ${r.attachment_count === 0 ? "Belge yok" : `${r.attachment_count} belge`}`}
                     {r.paid_by === "club" ? " · kasadan" : ""}
                   </span>
                 </span>
@@ -127,7 +127,11 @@ export function InvoiceDetail({ id, editing = false }: { id: string; editing?: b
         <StatusTag {...INVOICE_STATUS[v.status]} />
       </div>
       <div className={s.pb}>
-        <Attachments items={v.attachments} />
+        <section className={s.invoiceDocuments} aria-label="Fatura / fiş">
+          <h3 className={s.sub}>Fatura / fiş</h3>
+          {v.attachments.length === 0 ? <p className={s.missingDocument}>Bu faturaya fatura veya fiş dosyası eklenmemiş.</p>
+            : <InvoiceAttachments files={v.attachments} />}
+        </section>
         <div>
           <div className={s.sub} style={{ marginBottom: 6 }}>Bağlı kalemler</div>
           <div className={s.items}>

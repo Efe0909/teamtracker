@@ -8,8 +8,11 @@ import { useLedger, useLedgerWrite } from "../../api/hooks";
 import type { LedgerKind } from "../../api/types";
 import { useLookup } from "../../lib/lookup";
 import { money, parseAmount } from "../../lib/money";
-import { Button, cx, Loading, Picker, ui, useToast } from "../../ui/ui";
+import { Icon } from "../../ui/icons";
+import { Button, cx, Loading, Menu, MenuItem, Picker, ui, useToast } from "../../ui/ui";
 import { formatDay, StatusTag } from "./Finance";
+import { inFinancePeriod, useFinancePeriod } from "./FinancePeriod";
+import p from "./financePages.module.css";
 import s from "./fin.module.css";
 
 const KIND: Record<LedgerKind, { label: string; tone: string }> = {
@@ -38,12 +41,22 @@ export function FinanceLedger() {
   const [amount, setAmount] = useState("");
   const [desc, setDesc] = useState("");
   const [category, setCategory] = useState("");
+  const [month, setMonth] = useState(todayIso().slice(0, 7));
+  const period = useFinancePeriod();
   const fail = (e: unknown) => toast({ text: errorText(e), error: true });
   if (q.error !== null) return <p role="alert">{errorText(q.error)}</p>;
   if (q.data === undefined) return <Loading />;
   const v = q.data;
   const categories = L.meta.nodes.filter((n) => n.node_type === "category" && n.is_active);
   const hasOpening = v.entries.some((e) => e.kind === "opening");
+  const periodEntries = v.entries.filter((e) => inFinancePeriod(e.occurred_on, period));
+  const months = [...new Set(periodEntries.map((e) => e.occurred_on.slice(0, 7)))].sort().reverse();
+  const activeMonth = month === "all" || months.includes(month) ? month : months[0] ?? "all";
+  const entries = periodEntries.filter((e) => activeMonth === "all" || e.occurred_on.startsWith(activeMonth));
+  const currentMonth = activeMonth === todayIso().slice(0, 7);
+  const incoming = currentMonth ? v.month_in : entries.reduce((sum, e) => sum + Math.max(0, e.amount), 0);
+  const outgoing = currentMonth ? v.month_out : entries.reduce((sum, e) => sum + Math.min(0, e.amount), 0);
+  const monthLabel = (value: string) => new Date(`${value}-01T12:00:00`).toLocaleDateString("tr-TR", { month: "long", year: "numeric" });
 
   const submitEntry = () => {
     const a = parseAmount(amount);
@@ -72,22 +85,22 @@ export function FinanceLedger() {
   return (
     <>
       <div className={s.panel}>
-        <div className={s.pos}>
-          <div>
-            <span className={s.lbl}><span className={cx(s.dot, s.dotOk)} />Defter bakiyesi</span>
+        <div className={cx(s.pos, p.ledgerSummary)}>
+          <div className={s.tile}>
+            <span className={s.lbl}><span className={cx(s.dot, s.dotAcc)} />Defter bakiyesi</span>
             <span className={s.val}>{money(v.balance)}</span>
             <span className={s.meta}>
               {v.last_check === null ? "Mutabakat yapılmadı"
                 : `Son mutabakat ${formatDay(v.last_check.checked_on)} · ${v.last_check.diff === 0 ? "banka ile aynı" : `fark ${money(v.last_check.diff)}`}`}
             </span>
           </div>
-          <div>
-            <span className={s.lbl}>Bu ay giren</span>
-            <span className={cx(s.val, s.in)}>{money(v.month_in)}</span>
+          <div className={s.tile}>
+            <span className={s.lbl}>{currentMonth ? "Bu ay giren" : activeMonth === "all" ? "Görünen girişler" : "Seçili ayda giren"}</span>
+            <span className={cx(s.val, s.in)}>{incoming > 0 ? "+" : ""}{money(incoming)}</span>
           </div>
-          <div>
-            <span className={s.lbl}>Bu ay çıkan</span>
-            <span className={s.val}>{money(v.month_out)}</span>
+          <div className={s.tile}>
+            <span className={s.lbl}>{currentMonth ? "Bu ay çıkan" : activeMonth === "all" ? "Görünen çıkışlar" : "Seçili ayda çıkan"}</span>
+            <span className={s.val}>{money(outgoing)}</span>
           </div>
         </div>
       </div>
@@ -95,11 +108,12 @@ export function FinanceLedger() {
       <div className={s.panel}>
         <div className={s.ph}>
           <h2>Defter</h2>
-          <span className={s.sub}>son 500 satır</span>
+          <Picker look="bare" label="Defter ayı" value={activeMonth} onChange={setMonth}
+            options={[{ value: "all", label: "Tüm hareketler" }, ...months.map((value) => ({ value, label: monthLabel(value) }))]} />
           <span className={s.grow} />
           {v.can_write && (
             <>
-              <Button size="sm" onClick={() => { setForm("check"); setAmount(""); setOn(todayIso()); }}>Banka bakiyesini gir</Button>
+              <Button size="sm" variant="ghost" onClick={() => { setForm("check"); setAmount(""); setOn(todayIso()); }}>Mutabakat yap</Button>
               <Button size="sm" variant="primary" onClick={() => { setForm("entry"); setKind(hasOpening ? "income" : "opening"); setOn(todayIso()); }}>
                 Satır ekle
               </Button>
@@ -147,43 +161,53 @@ export function FinanceLedger() {
             </div>
           </form>
         )}
-        <div className={cx(s.thead, s.rLed)}>
-          <span>Tarih</span><span>Açıklama</span><span>Tür</span><span className={s.num}>Tutar</span><span className={s.num}>Bakiye</span><span />
-        </div>
-        {v.entries.length === 0 ? (
-          <div className={s.empty}>Defter boş. İlk satır bankadaki açılış bakiyesi olmalı.</div>
-        ) : (
-          <div className={s.list}>
-            {v.entries.map((e) => (
-              <div key={e.id} className={cx(s.row, s.rLed)}>
-                <span className={s.date}>{formatDay(e.occurred_on)}</span>
-                <span className={s.t}>
-                  <b className={e.reversed ? s.struck : undefined}>{e.description}</b>
-                  <span>
+        <div className={p.tableScroll}>
+          <table className={p.ledgerTable}>
+            <caption className={s.srOnly}>Kulüp kasası hareketleri ve her hareketten sonraki bakiye</caption>
+            <thead><tr>
+              <th scope="col">Tarih</th><th scope="col">Açıklama</th><th scope="col">Kategori</th>
+              <th scope="col">Tutar</th><th scope="col">Bakiye</th><th scope="col"><span className={s.srOnly}>İşlemler</span></th>
+            </tr></thead>
+            <tbody>
+            {entries.length === 0 && <tr><td colSpan={6} className={s.empty}>
+              {v.entries.length === 0 ? "Defter boş. İlk satır bankadaki açılış bakiyesi olmalı." : "Seçili dönemde hareket yok."}
+            </td></tr>}
+            {entries.map((e) => (
+              <tr key={e.id}>
+                <td className={s.date}>{formatDay(e.occurred_on)}</td>
+                <td>
+                  <b className={cx(p.entryTitle, e.reversed && s.struck)}>{e.description}</b>
+                  <span className={p.entryNote}>
+                    {e.invoice_id !== null ? "Faturaya bağlı · " : e.event_id !== null ? "Etkinliğe bağlı · " : ""}
                     {e.payee_user_id !== null && `${L.user(e.payee_user_id)?.name ?? "?"} · `}
                     {e.category_id !== null && `${L.meta.nodes.find((n) => n.id === e.category_id)?.name ?? ""} · `}
                     {L.user(e.created_by ?? "")?.name ?? ""}
                   </span>
-                </span>
-                <span><StatusTag {...KIND[e.kind]} /></span>
-                <span className={cx(s.num, e.amount > 0 && s.in, e.reversed && s.struck)}>{e.amount > 0 ? "+" : ""}{money(e.amount)}</span>
-                <span className={s.num}>{money(e.balance)}</span>
+                </td>
+                <td><StatusTag {...KIND[e.kind]} /></td>
+                <td className={cx(s.num, e.amount > 0 && s.in, e.reversed && s.struck)}>{e.amount > 0 ? "+" : ""}{money(e.amount)}</td>
+                <td className={s.num}>{money(e.balance)}</td>
+                <td>
                 {v.can_write && !e.reversed && e.kind !== "reversal" ? (
-                  <Button size="sm" variant="ghost" disabled={w.isPending} title="Satır silinmez; karşıt kayıtla düzeltilir"
-                    onClick={() => {
+                  <Menu align="end" trigger={<Button size="sm" variant="ghost" disabled={w.isPending}
+                    aria-label={`${e.description} — işlemler`}><Icon name="more" size={16} /></Button>}>
+                    <MenuItem icon="restore" onSelect={() => {
                       const note = window.prompt("Ters kayıt nedeni (isteğe bağlı):", "");
                       if (note === null) return;
                       w.mutate({ op: "reverse", id: e.id, ...(note.trim() !== "" ? { note: note.trim() } : {}) }, {
                         onSuccess: () => toast({ text: "Ters kayıt yazıldı", error: false }), onError: fail,
                       });
-                    }}>Ters kayıt</Button>
-                ) : <span />}
-              </div>
+                    }}>Ters kayıt oluştur</MenuItem>
+                  </Menu>
+                ) : null}
+                </td>
+              </tr>
             ))}
-          </div>
-        )}
+            </tbody>
+          </table>
+        </div>
       </div>
-      <p className={s.sub}>Satırlar bankadan elle girilir. Satır silinmez ya da düzenlenmez; yanlış satır ters kayıtla düzeltilir.</p>
+      <p className={s.sub}>Satırlar bankadan elle girilir. Satır silinmez; yanlış ters kayıtla düzeltilir. Son 500 hareket gösterilir.</p>
     </>
   );
 }

@@ -3,7 +3,7 @@
 // toplami faturanin tutarina esit olmali (bolunmus fatura, D-4). Iki yuzde ayni
 // bilesen; yuze ozgu adresler (`hrefs`) disaridan gelir.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { errorText, upload } from "../../api/client";
 import { fetchFx, useBankAccounts, usePurchasable, useSaveInvoice } from "../../api/hooks";
 import type { Attachment, InvoiceIn, InvoiceView, IsoDate, Purchasable, Uuid } from "../../api/types";
@@ -13,6 +13,7 @@ import { cents, money, parseAmount, parseRate } from "../../lib/money";
 import { onLinkClick } from "../../lib/router";
 import { Icon } from "../../ui/icons";
 import { Button, cx, Loading, Picker, Req, ui } from "../../ui/ui";
+import { InvoiceAttachments } from "./InvoiceAttachments";
 import s from "./finance.module.css";
 
 const NONE = "none";
@@ -65,8 +66,20 @@ function readDraft(): Draft | null {
   }
 }
 
+/** Teklif TL toplamidir; adetle tekrar carpilmaz, dovizli tutara da aynen yazilmaz. */
+function suggestedAmount(draft: Draft, material: Purchasable): string {
+  if (draft.currency === "TRY" && material.price !== null && material.price > 0) {
+    return material.price.toFixed(2).replace(".", ",");
+  }
+  const total = parseAmount(draft.total);
+  const used = Object.values(draft.picked).reduce((sum, value) => sum + cents(parseAmount(value) ?? 0), 0);
+  const rest = total === null ? 0 : cents(total) - used;
+  return rest > 0 ? (rest / 100).toFixed(2).replace(".", ",") : "";
+}
+
 export function InvoiceForm(props: {
   initial?: InvoiceView;
+  initialMaterialId?: Uuid | null;
   onDone: (inv: InvoiceView) => void;
   /** Hesap yoksa gidilecek yer; `ret` bu formun adresi. */
   accountsHref: string;
@@ -78,13 +91,36 @@ export function InvoiceForm(props: {
   const q = usePurchasable();
   const acc = useBankAccounts();
   const save = useSaveInvoice();
-  const [d, setD] = useState<Draft>(() => (props.initial !== undefined ? fromInvoice(props.initial) : readDraft() ?? emptyDraft()));
+  const [d, setD] = useState<Draft>(() => props.initial !== undefined ? fromInvoice(props.initial) : readDraft() ?? emptyDraft());
+  const prefilledMaterial = useRef<Uuid | null>(null);
   const [uploading, setUploading] = useState(0);
   const [err, setErr] = useState<string | null>(null);
   const [fxNote, setFxNote] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [catalogOpen, setCatalogOpen] = useState(props.initialMaterialId == null);
+  const [collapsedGroups, setCollapsedGroups] = useState<ReadonlySet<string>>(new Set());
+  const catalogId = useId();
   const file = useRef<HTMLInputElement>(null);
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setD((x) => ({ ...x, [k]: v }));
+
+  // Baglanti yalniz kimligi tasir; teklif gelince bos alanlari bir kez doldur.
+  // Sorgu yenilenmesi, kullanicinin tutarini ya da kalemi cikarmasini geri almaz.
+  useEffect(() => {
+    const id = props.initialMaterialId;
+    if (props.initial !== undefined || id == null || prefilledMaterial.current === id) return;
+    const material = q.data?.find((item) => item.id === id);
+    if (material === undefined) return;
+    prefilledMaterial.current = id;
+    setD((draft) => {
+      const entered = draft.picked[id];
+      const amount = entered !== undefined && entered.trim() !== "" ? entered : suggestedAmount(draft, material);
+      const picked = { ...draft.picked, [id]: amount };
+      const amounts = Object.values(picked).map(parseAmount);
+      const total = draft.total.trim() !== "" || amounts.some((value) => value === null || value <= 0)
+        ? draft.total : (amounts.reduce<number>((sum, value) => sum + cents(value ?? 0), 0) / 100).toFixed(2).replace(".", ",");
+      return { ...draft, picked, total };
+    });
+  }, [q.data, props.initial, props.initialMaterialId]);
 
   // Varsayilan hesap: hesaplar gelince bir kez.
   useEffect(() => {
@@ -148,12 +184,7 @@ export function InvoiceForm(props: {
   // Kalem eklenince tutar onerisi: TL faturada kartin fiyati, degilse (ya da fiyat yoksa)
   // dagitilmamis kalan. Kullanici her zaman degistirebilir.
   const add = (p: Purchasable) => setD((x) => {
-    const left = parseAmount(x.total);
-    const used = Object.values(x.picked).reduce((a, v) => a + cents(parseAmount(v) ?? 0), 0);
-    const rest = left === null ? 0 : cents(left) - used;
-    const guess = x.currency === "TRY" && p.price !== null && p.price > 0 ? String(p.price).replace(".", ",")
-      : rest > 0 ? (rest / 100).toFixed(2).replace(".", ",") : "";
-    return { ...x, picked: { ...x.picked, [p.id]: guess } };
+    return { ...x, picked: { ...x.picked, [p.id]: suggestedAmount(x, p) } };
   });
   const remove = (id: Uuid) => setD((x) => {
     const picked = { ...x.picked };
@@ -216,9 +247,10 @@ export function InvoiceForm(props: {
   const accept = L.meta.upload_limits?.invoice?.accept;
 
   return (
-    <form className={cx(ui.formStack, s.form)} onSubmit={(e) => { e.preventDefault(); submit(); }}>
-      {err !== null && <p className={ui.error} role="alert">{err}</p>}
+    <form className={s.form} onSubmit={(e) => { e.preventDefault(); submit(); }}>
+      {err !== null && <p className={cx(ui.error, s.formError)} role="alert">{err}</p>}
 
+      <section className={s.mainColumn} aria-label="Fatura bilgileri">
       <div className={ui.field}>
         <span>Alan kişi</span>
         <span className={s.readonly}>{L.me.name}</span>
@@ -227,15 +259,6 @@ export function InvoiceForm(props: {
       <div className={ui.field}>
         <span>Fatura / fiş<Req /></span>
         <div className={s.drop}>
-          {d.files.map((f) => (
-            <div key={f.id} className={s.file}>
-              <Icon name="file" size={14} />
-              <span className={s.fileName}>{f.original_name ?? "dosya"}</span>
-              <span className={s.dim}>{formatBytes(f.byte_size)}</span>
-              <button type="button" className={s.x} aria-label={`${f.original_name ?? "dosya"} çıkar`}
-                onClick={() => set("files", d.files.filter((x) => x.id !== f.id))}><Icon name="x" size={12} /></button>
-            </div>
-          ))}
           <div>
             <input ref={file} type="file" hidden multiple accept={accept} onChange={(e) => {
               addFiles([...(e.target.files ?? [])]);
@@ -244,6 +267,7 @@ export function InvoiceForm(props: {
             <Button type="button" onClick={() => file.current?.click()} disabled={uploading > 0}>
               <Icon name="attach" size={16} /> {uploading > 0 ? "Yükleniyor…" : "Dosya ekle"}
             </Button>
+            {d.files.length > 0 && <span className={s.uploadCount}>{d.files.length} dosya eklendi</span>}
           </div>
           <span className={ui.fieldHint}>
             Fotoğraf, PDF, Excel ya da CSV. Dosya başına en fazla {formatBytes(L.meta.upload_limits?.invoice?.max_bytes ?? 10 * 1024 * 1024)}.
@@ -322,32 +346,51 @@ export function InvoiceForm(props: {
             })}
           </div>
         )}
-        <div className={s.itemSearch}>
-          <input className={ui.input} type="search" value={search} onChange={(e) => setSearch(e.target.value)}
+        <div className={s.catalog}>
+          <button type="button" className={s.catalogToggle} aria-expanded={catalogOpen} aria-controls={catalogId}
+            onClick={() => setCatalogOpen(!catalogOpen)}>
+            <Icon name={catalogOpen ? "down" : "chevron"} size={15} />
+            {pickedIds.length > 0 ? "Başka kalem ekle" : "Kalem seç"}
+            <span className={s.dim}>{(q.data ?? []).filter((item) => d.picked[item.id] === undefined).length} kalem</span>
+          </button>
+          {catalogOpen && <div id={catalogId} className={s.itemSearch}>
+          <input className={ui.input} type="search" value={search} onChange={(e) => { setSearch(e.target.value); setCollapsedGroups(new Set()); }}
             placeholder="Kalem ya da etkinlik ara, listeden seç" aria-label="Kalem ara" autoComplete="off" />
-          <div className={s.results} role="listbox" aria-label="Seçilebilir kalemler">
+          <div className={s.results} role="group" aria-label="Seçilebilir kalemler">
             {results.length === 0 && (
               <p className={s.dim}>{search.trim() === "" ? "Seçilecek onaylı kalem kalmadı." : "Eşleşen onaylı kalem yok."}</p>
             )}
-            {results.map(([g, items]) => (
+            {results.map(([g, items]) => {
+              const title = g === NONE ? "Etkinliksiz" : items[0]?.event_title ?? "Etkinlik";
+              const open = !collapsedGroups.has(g);
+              const groupId = `${catalogId}-${g}`;
+              return (
               <div key={g}>
                 <div className={s.resHead}>
-                  <b>{g === NONE ? "Etkinliksiz" : items[0]?.event_title ?? "Etkinlik"}</b>
-                  <span className={s.grow} />
+                  <button type="button" className={s.groupToggle} aria-expanded={open} aria-controls={groupId}
+                    onClick={() => setCollapsedGroups((current) => {
+                      const next = new Set(current);
+                      if (open) next.add(g); else next.delete(g);
+                      return next;
+                    })}>
+                    <Icon name={open ? "down" : "chevron"} size={14} /><b>{title}</b><span className={s.dim}>{items.length}</span>
+                  </button>
                   {g !== NONE && props.eventHref !== undefined && (
                     <a className={s.link} href={props.eventHref(g)}
                       onClick={(e) => { keepDraft(); onLinkClick(e, props.eventHref?.(g) ?? "/"); }}>Listede yok, kalem ekle</a>
                   )}
                 </div>
-                {items.map((p) => (
+                {open && <div id={groupId} role="listbox" aria-label={`${title} kalemleri`}>{items.map((p) => (
                   <button key={p.id} type="button" role="option" aria-selected={false} className={s.resItem} onClick={() => add(p)}>
                     <span>{p.name}<span className={s.dim}>{p.qty > 1 ? ` · ${p.qty} adet` : ""}{p.purchased ? " · satın alındı" : ""}</span></span>
                     <span className={cx(s.num, s.dim)}>{p.price !== null && p.price > 0 ? money(p.price) : ""}</span>
                   </button>
-                ))}
+                ))}</div>}
               </div>
-            ))}
+              );
+            })}
           </div>
+          </div>}
         </div>
         <div className={cx(s.sum, diff === 0 && pickedIds.length > 0 ? s.sumOk : s.sumWarn)} aria-live="polite">
           <span>
@@ -365,7 +408,13 @@ export function InvoiceForm(props: {
           {" "}Fatura yalnız kaleme bağlanır; kalemin sayfasında da bu fatura görünür.
         </span>
       </div>
+      </section>
 
+      <aside className={s.sideColumn} aria-label="Önizleme ve ödeme">
+      <div className={ui.field}>
+        <span>Önizleme</span>
+        <InvoiceAttachments files={d.files} onRemove={(id) => set("files", d.files.filter((item) => item.id !== id))} />
+      </div>
       <div className={ui.field}>
         <span>Ödemeyi kim yaptı?</span>
         <div className={s.choices}>
@@ -407,6 +456,7 @@ export function InvoiceForm(props: {
           {props.initial !== undefined ? "Düzeltip yeniden gönder" : "Onaya gönder"}
         </Button>
       </div>
+      </aside>
     </form>
   );
 }

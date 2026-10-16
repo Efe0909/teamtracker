@@ -33,3 +33,9 @@ it("HTML izinli listeye indirgenir: betik, stil, olay ve javascript: atilir", ()
   expect(out).toContain("<b>dünya</b>");
   expect(out).toContain("href=\"https://example.com\"");
 });
+
+it("overrides the template currency for the rendered message", () => {
+  const source = "{{total:para(birim=GBP)}}";
+  expect(fill(source, "md", { total: "1250,50" }, {})).toBe("1.250,50 GBP");
+  expect(fill(source, "md", { total: "1250,50" }, {}, { total: "EUR" })).toBe("1.250,50 EUR");
+});
