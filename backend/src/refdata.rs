@@ -23,6 +23,31 @@ pub const EVENT_MANAGEMENT: &str = "event_management";
 pub const EVENT_TYPES: &str = "event_types";
 pub const EVENT_LOCATIONS: &str = "event_locations";
 pub const EVENT_OUTCOMES: &str = "event_outcomes";
+/// Maliye koku (spec/81 §3.1): attrs'inda duvarin varsayilan tarih araliklari.
+pub const FINANCE: &str = "finance";
+pub const BUDGET_CATEGORIES: &str = "budget_categories";
+
+/// Butce kategorisinin parasi nereden: SEB iade eder ya da kulup kasasi oder.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Ledger {
+    Seb,
+    General,
+}
+
+impl Ledger {
+    pub fn key(self) -> &'static str {
+        match self {
+            Ledger::Seb => "seb",
+            Ledger::General => "general",
+        }
+    }
+}
+
+/// Kategori dugumunun `attrs.ledger`'i; yoksa ya da bozuksa None.
+pub fn ledger_of(attrs: &Value) -> Option<Ledger> {
+    attrs.get("ledger").cloned().and_then(|v| serde_json::from_value(v).ok())
+}
 
 /// Varsayilan kural (Efe, 2026-10-02): hazirlik etkinlikten en gec bu kadar
 /// gun once biter. Daha gec checkpoint REDDEDILMEZ, uyari isareti alir.
@@ -53,6 +78,8 @@ pub fn editor(section_key: Option<&str>) -> Editor {
         Some(EVENT_TYPES) => Editor::Scope("manage_event_types"),
         Some(EVENT_LOCATIONS) => Editor::Scope("manage_event_locations"),
         Some(EVENT_OUTCOMES) => Editor::Scope("manage_event_outcomes"),
+        Some(FINANCE) => Editor::Admin,
+        Some(BUDGET_CATEGORIES) => Editor::Scope("manage_budgets"),
         _ => Editor::Branch,
     }
 }
@@ -97,6 +124,7 @@ pub fn child_rule(tree: &TreeIndex, parent: &Node) -> ChildRule {
         },
         Some(EVENT_LOCATIONS) if parent.key.is_some() => ChildRule::Fixed(NodeType::Location, Shape::Leaf),
         Some(EVENT_OUTCOMES) if parent.key.is_some() => ChildRule::Fixed(NodeType::Outcome, Shape::Leaf),
+        Some(BUDGET_CATEGORIES) if parent.key.is_some() => ChildRule::Fixed(NodeType::Category, Shape::Leaf),
         _ => ChildRule::Closed,
     }
 }
@@ -159,6 +187,14 @@ pub fn validate_attrs(t: NodeType, attrs: &Value) -> Result<Value, &'static str>
             }
             Ok(json!({ "widget": w }))
         }
+        // Kategori: `ledger` ZORUNLU ve kontrollu (spec/81 D-15).
+        NodeType::Category => {
+            if obj.keys().any(|k| k != "ledger") {
+                return Err("invalid_attrs");
+            }
+            let l = ledger_of(attrs).ok_or("invalid_attrs")?;
+            Ok(json!({ "ledger": l.key() }))
+        }
         _ if obj.is_empty() => Ok(json!({})),
         _ => Err("invalid_attrs"),
     }
@@ -188,6 +224,7 @@ pub fn warnings(tree: &TreeIndex, n: &Node) -> Vec<&'static str> {
                 w.push("unknown_widget");
             }
         }
+        NodeType::Category if ledger_of(&n.attrs).is_none() => w.push("invalid_attrs"),
         NodeType::Operational if n.key.is_none()
             && !OPTION_SLOTS.iter().any(|(_, s)| slot(n) == Some(s)) => w.push("unknown_slot"),
         _ => {}
@@ -313,5 +350,24 @@ mod tests {
         assert!(validate_attrs(NodeType::Widget, &json!({"widget": "record"})).is_err());
         assert!(validate_attrs(NodeType::Cell, &json!({})).is_ok());
         assert!(validate_attrs(NodeType::Cell, &json!({"a": 1})).is_err());
+        assert_eq!(validate_attrs(NodeType::Category, &json!({"ledger": "seb"})).ok(), Some(json!({"ledger": "seb"})));
+        assert!(validate_attrs(NodeType::Category, &json!({})).is_err(), "kategorinin kaynagi zorunlu");
+        assert!(validate_attrs(NodeType::Category, &json!({"ledger": "kasa"})).is_err());
+    }
+
+    #[test]
+    fn finance_categories() {
+        let t = TreeIndex::build(vec![
+            row(30, None, NodeType::Operational, Shape::List, Some(FINANCE), json!({})),
+            row(31, Some(30), NodeType::Operational, Shape::List, Some(BUDGET_CATEGORIES), json!({})),
+            row(32, Some(31), NodeType::Category, Shape::Leaf, None, json!({"ledger": "general"})),
+        ]);
+        let g = |id| t.get(u(id)).cloned().unwrap_or_else(|| panic!("yok {id}"));
+        assert_eq!(child_rule(&t, &g(31)), ChildRule::Fixed(NodeType::Category, Shape::Leaf));
+        assert_eq!(child_rule(&t, &g(30)), ChildRule::Closed);
+        assert_eq!(editor(t.root_key(u(32))), Editor::Scope("manage_budgets"));
+        assert_eq!(editor(t.root_key(u(30))), Editor::Admin);
+        assert_eq!(ledger_of(&g(32).attrs), Some(Ledger::General));
+        assert!(warnings(&t, &g(32)).is_empty());
     }
 }

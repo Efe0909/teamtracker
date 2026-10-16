@@ -174,9 +174,10 @@ impl Filters {
                   .push(" and r.status <> 'closed'))");
             }
             "my_actions" => {
-                qb.push(" and r.id in (select record_id from actions where owner_id = ")
+                qb.push(" and r.id in (select a.record_id from actions a \
+                         join action_assignees x on x.action_id = a.id where x.user_id = ")
                   .push_bind(user.id)
-                  .push(" and status in ('open','in_progress'))");
+                  .push(" and a.status in ('open','in_progress'))");
             }
             // GECIKEN: kaydin KENDISI degil, acik bir EYLEMININ son tarihi
             // gecmis olsa da dusmeli.
@@ -193,9 +194,10 @@ impl Filters {
                   .push(" or r.created_by = ").push_bind(user.id)
                   .push(" or r.id in (select record_id from record_participants where user_id = ")
                   .push_bind(user.id)
-                  .push(") or r.id in (select record_id from actions where owner_id = ")
+                  .push(") or r.id in (select a.record_id from actions a \
+                         join action_assignees x on x.action_id = a.id where x.user_id = ")
                   .push_bind(user.id)
-                  .push(" and status in ('open','in_progress')))");
+                  .push(" and a.status in ('open','in_progress')))");
             }
             _ => {}
         }

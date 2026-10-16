@@ -54,6 +54,7 @@ export const NODE_TYPE: Record<NodeType, string> = {
   widget: "Widget",
   location: "Yer",
   outcome: "Kazanım",
+  category: "Kategori",
 };
 
 /** Kapsam anahtari -> ne yapmaya izin verdigi (Python `SCOPES` degerleri).
@@ -78,7 +79,8 @@ export const SCOPE: Readonly<Partial<Record<string, string>>> = {
   manage_budgets: "Bütçe yaz — kalem bütçesini gir ya da sil (satın alım yetkisine ek)",
   use_generative_ai: "Yapay zekâ özelliklerini kullan — malzeme önerisi gibi üretken özellikler (metin dış servise gider)",
   manage_llm: "Veri işleme ve LLM'i yönet — model, limit, istem, maliyet, çağrı geçmişi, temizleme kuralları",
-  review_purchases: "Satın alımları incele — kalemi “satın alındı” olarak işaretle (maliye)",
+  review_purchases: "Satın alımları incele — faturayı onayla, kalemi “satın alındı” işaretle, SEB iade dosyalarını yürüt (maliye)",
+  manage_ledger: "Kasa defterini yönet — kulüp kasasına satır ve ters kayıt gir, üyeye iade öde, SEB iadesini kasaya al",
 };
 
 /** Secim listelerinin sirasi (Record anahtar sirasi garanti degil). */

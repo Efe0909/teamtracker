@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { EditorSelection, EditorState } from "@codemirror/state";
-import { analyze, delimiters, fileProvider, safeHref, touches, type Construct } from "./markdown";
+import { analyze, delimiters, fileProvider, formatWikiLink, safeHref, touches, type Construct } from "./markdown";
 import { renderLines } from "./markdownLines";
 import { formatsAt, markdownLanguage, toggleCodeBlock, toggleInline, toggleLines } from "./markdownCommands";
 
@@ -8,6 +8,25 @@ const kinds = (source: string) => analyze(source).map((c) => c.kind);
 const find = <K extends Construct["kind"]>(source: string, kind: K) =>
   analyze(source).find((c): c is Extract<Construct, { kind: K }> => c.kind === kind);
 const visibleText = (source: string) => renderLines(source).map((l) => l.segments.map((s) => s.text).join("")).join("\n");
+
+it("parses record wiki links with literal titles and exact source ranges", () => {
+  const source = "Önce [[Tedarikçi teklifleri karşılaştırılamıyor]] sonra";
+  const link = find(source, "wikiLink");
+  expect(link).toMatchObject({ from: 5, title: "Tedarikçi teklifleri karşılaştırılamıyor" });
+  expect(link === undefined ? "" : source.slice(link.alias.from, link.alias.to)).toBe(link?.title);
+  expect(visibleText(source)).toBe("Önce Tedarikçi teklifleri karşılaştırılamıyor sonra");
+  expect(renderLines("[[**literal** @selin]]")[0]?.segments).toEqual([
+    { text: "**literal** @selin", styles: ["link"], wikiTitle: "**literal** @selin" },
+  ]);
+  const title = "Bütçe [2026] \\ inceleme";
+  expect(find(formatWikiLink(title), "wikiLink")?.title).toBe(title);
+});
+
+it("leaves incomplete, escaped and code-contained wiki links inactive", () => {
+  for (const source of ["[[", "[[yarım]", "[[]]", "[[  ]]", "[[iki\nsatır]]", "\\[[kaçış]]", "`[[kod]]`", "```\n[[kod]]\n```", "[ad](https://example.com/[[x]])"]) {
+    expect(analyze(source).filter((part) => part.kind === "wikiLink"), source).toEqual([]);
+  }
+});
 
 function stateOf(doc: string, anchor = doc.length, head = anchor): EditorState {
   return EditorState.create({ doc, selection: EditorSelection.single(anchor, head), extensions: [markdownLanguage] });

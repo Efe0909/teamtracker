@@ -23,22 +23,48 @@ import { NewRecordForm } from "../../features/record/NewRecordForm";
 import s from "./dashboard.module.css";
 import { href } from "./routes";
 
-const QUICK = [
-  { value: "all", label: "Hepsi" },
+type Key = keyof RecordQuery;
+
+/** Hazir sureler: yalniz "Hizli" cipini doldurur (sunucudaki `quick` degerleri). */
+const QUICK_OPTIONS: Option<string>[] = [
   { value: "week", label: "Bu hafta" },
   { value: "my_actions", label: "Açık eylemim" },
   { value: "overdue", label: "Geciken" },
   { value: "unassigned", label: "Atanmamış" },
-] as const;
+];
 
-type Key = keyof RecordQuery;
+/** Cip durumu: presetler bu anahtarlari doldurur; etkin preset = tum cipler eslesiyor. */
+const CHIP_KEYS = ["status", "done", "person", "priority", "node", "team", "kind", "pillar", "quick"] as const;
+type ChipState = Partial<Record<(typeof CHIP_KEYS)[number], string>>;
+
+/** Presetler yalniz cip degerlerini yazar; kendi gizli sorgusu yok. Kapali kayitlar varsayilan olarak gizli. */
+const PRESETS: { value: string; label: string; filters: ChipState }[] = [
+  { value: "all", label: "Hepsi", filters: { done: "false" } },
+  { value: "mine", label: "Bana atanmış", filters: { done: "false", person: "me" } },
+  { value: "week", label: "Bu hafta", filters: { done: "false", quick: "week" } },
+  { value: "my_actions", label: "Açık eylemim", filters: { done: "false", quick: "my_actions" } },
+  { value: "overdue", label: "Geciken", filters: { done: "false", quick: "overdue" } },
+  { value: "unassigned", label: "Atanmamış", filters: { done: "false", quick: "unassigned" } },
+];
+
+/** URL'deki cip durumu. Durum ve done yoksa kapali kayitlar gizli (done=false). */
+function chipState(q: RecordQuery): ChipState {
+  const st: ChipState = {};
+  for (const k of CHIP_KEYS) {
+    const v = q[k];
+    if (v !== undefined && v !== "") st[k] = v;
+  }
+  if (q.status === undefined && q.done === undefined) st.done = "false";
+  return st;
+}
 
 export function Tasks({ query }: { query: RecordQuery }) {
   const L = useLookup();
   const [creating, setCreating] = useState(false);
   // Arama kutusu yerel; yazmayi 300ms bekleyip URL'e yazar.
   const [search, setSearch] = useState(query.search ?? "");
-  const rows = useRecords(query);
+  // Durum ve done yoksa kapali kayitlar sunucuda da dusulur (varsayilan gorunum).
+  const rows = useRecords(query.status === undefined && query.done === undefined ? { ...query, done: "false" } : query);
 
   useEffect(() => {
     document.title = "Görevler — EkipTakip";
@@ -61,7 +87,17 @@ export function Tasks({ query }: { query: RecordQuery }) {
 
   const data = rows.data ?? [];
   const open = data.filter((r) => !isDone(r.status)).length;
-  const any = Object.keys(query).some((k) => k !== "quick");
+  const any = Object.keys(query).length > 0;
+  const state = chipState(query);
+  const activePreset = PRESETS.find((p) => CHIP_KEYS.every((k) => state[k] === p.filters[k]))?.value ?? "";
+  // Preset: once tum cipleri siler, sonra presetin cipleri yazilir.
+  function applyPreset(value: string) {
+    const p = PRESETS.find((x) => x.value === value);
+    if (p === undefined) return;
+    const patch: { [K in Key]?: string | undefined } = {};
+    for (const k of CHIP_KEYS) patch[k] = p.filters[k];
+    set(patch);
+  }
 
   // Filtre cipi: bos deger "Hepsi"; secim varsa cip dolu ve degeri gosterir.
   const chip = (k: Key, label: string, options: Option<string>[]) => {
@@ -103,8 +139,8 @@ export function Tasks({ query }: { query: RecordQuery }) {
       </div>
 
       <div className={s.toolbar}>
-        <Segmented label="Hızlı filtre" options={[...QUICK]} value={(query.quick ?? "all") as (typeof QUICK)[number]["value"]}
-          onChange={(v) => set({ quick: v === "all" ? undefined : v })} />
+        <Segmented label="Hazır süzgeçler" options={PRESETS.map((p) => ({ value: p.value, label: p.label }))} value={activePreset}
+          onChange={applyPreset} />
         <label className={s.search}>
           <Icon name="search" size={15} />
           <span className="visually-hidden">Ara</span>
@@ -115,7 +151,17 @@ export function Tasks({ query }: { query: RecordQuery }) {
 
       <div className={s.filters}>
         <Icon name="filter" size={15} />
-        {chip("status", "Durum", STATUS_ORDER.map((v) => ({ value: v, label: STATUS[v], render: <Status status={v} /> })))}
+        {/* Durum: varsayilan "Kapalı hariç" (done=false); kapali kayitlari yalniz "Kapalı" secilince gorulur. */}
+        <Picker
+          look="chip"
+          label="Durum"
+          active
+          value={query.status ?? (query.done === "true" ? "closed" : "active")}
+          options={[{ value: "active", label: "Kapalı hariç" }, ...STATUS_ORDER.map((v) => ({ value: v, label: STATUS[v], render: <Status status={v} /> }))]}
+          onChange={(x) => set(x === "active" ? { status: undefined, done: "false" } : { status: x, done: undefined })}
+        >
+          Durum: <b>{query.status !== undefined ? STATUS[query.status as keyof typeof STATUS] : query.done === "true" ? "Kapalı" : "Kapalı hariç"}</b>
+        </Picker>
         {chip("person", "Sorumlu", [
           { value: "me", label: "Ben" },
           { value: "none", label: "Sorumlusuz" },
@@ -128,6 +174,7 @@ export function Tasks({ query }: { query: RecordQuery }) {
         {query.node !== undefined && <IconButton icon="x" label="Konu süzgecini kaldır" onClick={() => set({ node: undefined })} />}
         {chip("team", "Takım", L.plainTeams.map((t) => ({ value: t.id, label: t.name, render: <TeamName team={t} /> })))}
         {chip("kind", "Tür", [{ value: "issue", label: KIND.issue }, { value: "task", label: KIND.task }])}
+        {chip("quick", "Hızlı", QUICK_OPTIONS)}
         {L.pillars.length > 0 &&
           chip("pillar", "Pillar", [{ value: "none", label: "Pillar yok" }, ...L.pillars.map((n) => ({ value: n.id, label: n.name }))])}
         {any && (

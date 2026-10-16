@@ -8,6 +8,7 @@ export type Segment = {
   styles: Style[];
   href?: string;
   provider?: Provider;
+  wikiTitle?: string;
   /** Boş adlı bağlantıda kaynaktan türetilen metin (hedef ya da genel "Dosya"). */
   fallback?: boolean;
 };
@@ -15,7 +16,7 @@ export type LineKind = "h1" | "h2" | "h3" | "quote" | "list" | "rule" | "code";
 export type RenderedLine = { kind?: LineKind; segments: Segment[] };
 
 type Block = Extract<Construct, { kind: "heading" | "quote" | "list" }>;
-type Inline = Extract<Construct, { kind: "strong" | "em" | "code" | "link" | "url" | "mention" }>;
+type Inline = Extract<Construct, { kind: "strong" | "em" | "code" | "link" | "wikiLink" | "url" | "mention" }>;
 
 export function renderLines(source: string): RenderedLine[] {
   const constructs = analyze(source);
@@ -43,12 +44,13 @@ export function renderLines(source: string): RenderedLine[] {
       if (c.to < ls || c.from > le) continue;
       if (c.kind === "strong" || c.kind === "em" || c.kind === "code") { hidden.push(...c.marks); inline.push(c); }
       else if (c.kind === "link") { hidden.push(...(c.alias.from === c.alias.to ? [{ from: c.from, to: c.to }] : c.marks)); inline.push(c); }
+      else if (c.kind === "wikiLink") { hidden.push(...c.marks); inline.push(c); }
       else if (c.kind === "url" || c.kind === "mention") inline.push(c);
     }
     if (block !== undefined && block.kind !== "rule") hidden.push(...block.marks);
 
     const cuts = new Set<number>([ls, le]);
-    for (const r of [...hidden, ...inline, ...inline.flatMap((c) => c.kind === "link" ? [c.alias] : [])]) {
+    for (const r of [...hidden, ...inline, ...inline.flatMap((c) => c.kind === "link" || c.kind === "wikiLink" ? [c.alias] : [])]) {
       if (r.from > ls && r.from < le) cuts.add(r.from);
       if (r.to > ls && r.to < le) cuts.add(r.to);
     }
@@ -66,7 +68,13 @@ export function renderLines(source: string): RenderedLine[] {
       if (hidden.some((r) => r.from <= from && r.to >= to)) continue;
       const segment: Segment = { text: source.slice(from, to), styles: [] };
       for (const c of inline) {
-        if (c.kind === "link") {
+        if (c.kind === "wikiLink") {
+          if (c.alias.from <= from && c.alias.to >= to) {
+            segment.styles.push("link");
+            segment.wikiTitle = c.title;
+            segment.text = c.title;
+          }
+        } else if (c.kind === "link") {
           if (c.alias.from <= from && c.alias.to >= to && c.alias.from !== c.alias.to) {
             segment.styles.push("link");
             if (c.href) segment.href = c.href;

@@ -118,9 +118,11 @@ biliyor. Yeni bağ tabloları (`invoice_attachments`, `ledger_attachments`)
 için tek kaynak: `media::OWNER_TABLES` sabiti; iki sorgu da ondan üretilir ve birim testi
 listeyi göçteki `references attachments` sayısıyla karşılaştırır.
 
-Bağ, ekin **amacıyla** uyumlu olmalı: `invoice` amaçlı ek sohbete bağlanmaz, `chat` amaçlı
-ek faturaya bağlanmaz (`invalid_attachment`). Böylece bir kişi 5 MB'lık avatar sınırını
-`chat` amacıyla yükleyip profile takarak aşamaz.
+Bağ, ekin **amacıyla** uyumlu olmalı: mesaj ve kart yalnız `chat` amaçlı eki alır
+(`invalid_attachment`); `invoice`/`ledger` bağları yalnız kendi amacını alır. Profil fotoğrafı
+ve takım kapağı amaca değil **içeriğe** bakar: görsel olmalı ve o amacın sınırını aşmamalı
+(`invalid_avatar` / `invalid_banner`). Böylece eski istemci (amaçsız yükleme) çalışmaya devam
+eder, 5 MB'lık profil sınırı da `chat` amacıyla yükleyip takılarak aşılamaz.
 
 ### 4.2 Silme
 

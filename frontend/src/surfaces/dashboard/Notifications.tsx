@@ -1,15 +1,14 @@
 // Bildirimler: mobildeki liste (surfaces/app/pages.tsx NotificationsPage) ile ayni
-// veri ve ayni "gordum" mantigi; masaustu satir diliyle. Ayarlar yan menudeki
-// kisi menusuyle ayni NotifySettings penceresi.
+// veri ve ayni "gordum" mantigi; masaustu satir diliyle. Ayarlar profil
+// sayfasinin Bildirimler bolumunde (spec/82 P3).
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { useMarkSeen, useNotifications } from "../../api/hooks";
-import { NotifySettings } from "../../features/profile/NotifySettings";
 import { describe } from "../../lib/activity";
 import { ago } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
 import { mentionsMe } from "../../lib/mentions";
-import { Button, cx, Empty, Link, Loading, Tag, Who } from "../../ui/ui";
+import { cx, Empty, Link, Loading, Tag, ui, Who } from "../../ui/ui";
 import s from "./dashboard.module.css";
 import { href } from "./routes";
 
@@ -17,7 +16,6 @@ export function Notifications() {
   const L = useLookup();
   const q = useNotifications();
   const seen = useMarkSeen();
-  const [settings, setSettings] = useState(false);
   useEffect(() => {
     document.title = "Bildirimler — EkipTakip";
   }, []);
@@ -40,9 +38,10 @@ export function Notifications() {
           <h1>Bildirimler</h1>
           <p className={s.pageSub}>Kayıtlarında ve takımlarında olan hareketler.</p>
         </div>
-        <Button onClick={() => setSettings(true)}>Bildirim ayarları</Button>
+        <Link className={`${ui.btn} ${ui["z-md"]}`} href={href({ name: "profile", tab: "notifications", ret: null })}>
+          Bildirim ayarları
+        </Link>
       </div>
-      <NotifySettings open={settings} onClose={() => setSettings(false)} />
       {q.error !== null ? (
         <p role="alert">Bildirimler yüklenemedi.</p>
       ) : q.data === undefined ? (

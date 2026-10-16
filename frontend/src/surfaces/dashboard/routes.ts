@@ -4,6 +4,7 @@
 
 import type { RecordQuery } from "../../api/hooks";
 import type { Uuid } from "../../api/types";
+import { profileHref, profileTab, safeReturn, type ProfileTab } from "../../features/profile/tabs";
 
 export type Route =
   | { name: "home" }
@@ -22,10 +23,18 @@ export type Route =
   // Yonetim > Veri isleme ve LLM: profil ve gorev ayrintisi tam sayfa (KNOW-112).
   | { name: "llmProfile"; id: Uuid }
   | { name: "llmTask"; feature: string }
+  // Profil ve ayarlar (spec/82): bolum ve donus adresi URL'de.
+  | { name: "profile"; tab: ProfileTab; ret: string | null }
+  // Maliye (spec/81 §10): bolum + (fatura/dosya) kimligi; `edit` faturayi duzeltir.
+  | { name: "finance"; section: FinanceSection; id: string | null }
   | { name: "notFound" };
 
+export type FinanceSection =
+  | "home" | "invoices" | "new" | "edit" | "mine" | "claims" | "ledger" | "materials" | "wall" | "vendors"
+  | "budget" | "analysis" | "recurring" | "templates";
+
 export const QUERY_KEYS = [
-  "kind", "status", "priority", "team", "person", "node", "pillar", "search", "quick",
+  "kind", "status", "done", "priority", "team", "person", "node", "pillar", "search", "quick",
 ] as const satisfies readonly (keyof RecordQuery)[];
 
 /** Etkinlik listesi filtreleri — gorevlerdeki gibi URL'de (KNOW-234). */
@@ -67,6 +76,31 @@ export function parse(url: URL): Route {
   if (a === "outcome-tree" && seg.length === 1) return { name: "tree" };
   if (a === "notifications" && seg.length === 1) return { name: "notifications" };
   if (a === "admin" && seg.length === 1) return { name: "admin" };
+  if (a === "finance") {
+    const f = (section: FinanceSection, id: string | null = null): Route => ({ name: "finance", section, id });
+    if (seg.length === 1) return f("home");
+    if (b === "invoices" && seg.length === 2) return f("invoices");
+    if (b === "invoices" && seg[2] === "new" && seg.length === 3) return f("new");
+    if (b === "invoices" && seg[2] !== undefined && seg[3] === "edit" && seg.length === 4) return f("edit", seg[2]);
+    if (b === "invoices" && seg[2] !== undefined && seg.length === 3) return f("invoices", seg[2]);
+    if (b === "mine" && seg.length === 2) return f("mine");
+    if (b === "mine" && seg[2] !== undefined && seg.length === 3) return f("mine", seg[2]);
+    if (b === "claims" && seg.length === 2) return f("claims");
+    if (b === "claims" && seg[2] !== undefined && seg.length === 3) return f("claims", seg[2]);
+    if (b === "ledger" && seg.length === 2) return f("ledger");
+    if (b === "materials" && seg.length === 2) return f("materials");
+    if (b === "wall" && seg.length === 2) return f("wall");
+    if (b === "vendors" && seg.length === 2) return f("vendors");
+    if (b === "vendors" && seg[2] !== undefined && seg.length === 3) return f("vendors", seg[2]);
+    if (b === "budget" && seg.length === 2) return f("budget");
+    if (b === "analysis" && seg.length === 2) return f("analysis");
+    if (b === "recurring" && seg.length === 2) return f("recurring");
+    if (b === "templates" && seg.length === 2) return f("templates");
+    if (b === "templates" && seg[2] !== undefined && seg.length === 3) return f("templates", seg[2]);
+  }
+  if (a === "profile" && seg.length === 1) {
+    return { name: "profile", tab: profileTab(url.searchParams.get("tab")), ret: safeReturn(url.searchParams.get("return")) };
+  }
   const [, , c, d] = seg;
   if (a === "admin" && b === "llm" && c === "profiles" && d !== undefined && seg.length === 4) return { name: "llmProfile", id: d };
   if (a === "admin" && b === "llm" && c === "tasks" && d !== undefined && seg.length === 4) return { name: "llmTask", feature: d };
@@ -107,5 +141,29 @@ export function href(r: Route): string {
       return `/admin/llm/profiles/${r.id}`;
     case "llmTask":
       return `/admin/llm/tasks/${r.feature}`;
+    case "profile":
+      return profileHref(r.tab, r.ret);
+    case "finance":
+      switch (r.section) {
+        case "home":
+          return "/finance";
+        case "new":
+          return "/finance/invoices/new";
+        case "edit":
+          return `/finance/invoices/${r.id ?? ""}/edit`;
+        case "invoices":
+        case "mine":
+        case "claims":
+        case "vendors":
+        case "templates":
+          return r.id === null ? `/finance/${r.section}` : `/finance/${r.section}/${r.id}`;
+        case "ledger":
+        case "materials":
+        case "wall":
+        case "budget":
+        case "analysis":
+        case "recurring":
+          return `/finance/${r.section}`;
+      }
   }
 }

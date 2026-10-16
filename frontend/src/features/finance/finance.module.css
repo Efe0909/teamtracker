@@ -1,0 +1,409 @@
+/* Maliye ortak parcalari (spec/81): fatura formu ve ayrintisi. Ham renk YOK — yalniz token. */
+
+.form {
+  display: grid;
+  grid-template-columns: minmax(0, 1.65fr) minmax(300px, 1fr);
+  align-items: start;
+  gap: var(--s-6);
+  width: 100%;
+}
+.mainColumn,
+.sideColumn {
+  display: grid;
+  gap: var(--s-4);
+  min-width: 0;
+}
+.sideColumn {
+  padding-left: var(--s-6);
+  border-left: 1px solid var(--line);
+}
+.formError {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+.readonly {
+  color: var(--dim);
+}
+.dim {
+  color: var(--dim);
+  font-size: var(--fs-sm);
+}
+.num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.grow {
+  flex: 1 1 0;
+}
+.link {
+  color: var(--acc-strong);
+  font-size: var(--fs-sm);
+}
+
+/* dosyalar */
+.drop {
+  display: grid;
+  gap: var(--s-2);
+  padding: var(--s-3);
+  border: 1.5px dashed var(--line-strong);
+  border-radius: var(--r-md);
+  background: var(--panel2);
+}
+.uploadCount {
+  margin-left: var(--s-3);
+  color: var(--dim);
+  font-size: var(--fs-sm);
+}
+.previews {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-3);
+  min-width: 0;
+}
+.previewCard {
+  width: 250px;
+  max-width: 100%;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--panel);
+}
+.previewStage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: 1;
+  overflow: hidden;
+  background: var(--panel2);
+  text-decoration: none;
+}
+.previewStage > * {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.previewStage img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.previewCaption {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px var(--s-2);
+  padding: var(--s-2) var(--s-3);
+  border-top: 1px solid var(--line);
+}
+.previewCaption .fileName {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--txt);
+  font-size: var(--fs-sm);
+}
+.previewCaption .fileName span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.previewCaption .fileName svg {
+  flex: none;
+}
+.previewCaption > .dim {
+  grid-column: 1 / -1;
+}
+.previewEmpty {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: var(--s-3);
+  width: 250px;
+  max-width: 100%;
+  min-height: 160px;
+  padding: var(--s-4);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--r-md);
+  color: var(--dim);
+  background: var(--panel2);
+  font-size: var(--fs-sm);
+  text-align: center;
+}
+.file {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 6px var(--s-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--panel);
+  font-size: var(--fs-sm);
+}
+.fileName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.x {
+  border: 0;
+  background: none;
+  color: var(--dim);
+  cursor: pointer;
+  padding: 2px;
+}
+
+/* tutar ve kur */
+.amountRow {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr) 90px;
+  gap: var(--s-2);
+}
+.rate {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-2) var(--s-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--panel2);
+  font-size: var(--fs-sm);
+}
+.rateManual {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+.rateManual input {
+  width: 110px;
+}
+.pinTag {
+  padding: 1px 6px;
+  border-radius: var(--r-sm);
+  background: var(--acc-bg);
+  color: var(--acc-strong);
+  font-size: var(--fs-xs);
+}
+
+/* kalem gruplari */
+.evPick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  align-items: center;
+}
+.group {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--panel);
+  overflow: hidden;
+}
+.groupHead {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  padding: 6px var(--s-3);
+  background: var(--panel2);
+}
+.groupHead b {
+  font-weight: 600;
+}
+.group > .dim {
+  margin: 0;
+  padding: 8px var(--s-3);
+}
+.itemRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 130px;
+  gap: var(--s-3);
+  align-items: center;
+  padding: 8px var(--s-3);
+  border-top: 1px solid var(--line);
+}
+.itemLabel {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-width: 0;
+  cursor: pointer;
+}
+.itemLabel input {
+  accent-color: var(--acc-fill);
+  margin: 0;
+}
+.itemAmount {
+  text-align: right;
+}
+.itemTools {
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+}
+.itemTools .itemAmount {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+/* kalem arama: sonuclar etkinlige gore gruplu */
+.itemSearch {
+  display: grid;
+  gap: var(--s-2);
+}
+.catalog {
+  display: grid;
+  gap: var(--s-2);
+  min-width: 0;
+}
+.catalogToggle,
+.groupToggle {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--txt);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.catalogToggle {
+  width: 100%;
+  padding: var(--s-2) 0;
+  color: var(--acc-strong);
+}
+.catalogToggle .dim {
+  margin-left: auto;
+}
+.groupToggle {
+  flex: 1;
+  min-width: 0;
+}
+.groupToggle:focus-visible,
+.catalogToggle:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: 3px;
+}
+.results {
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--panel);
+}
+.results > .dim {
+  margin: 0;
+  padding: 8px var(--s-3);
+}
+.resHead {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 6px var(--s-3);
+  background: var(--panel2);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+.resItem {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s-3);
+  width: 100%;
+  padding: 8px var(--s-3);
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.resItem:hover,
+.resItem:focus-visible {
+  background: var(--acc-bg);
+  outline: none;
+}
+.sum {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--s-3);
+  padding: 8px var(--s-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--panel2);
+  font-size: var(--fs-sm);
+}
+.sumOk .num {
+  color: var(--ok-text);
+}
+.sumWarn .num {
+  color: var(--warn-text);
+}
+
+/* odeme secimi */
+.choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+.choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: var(--panel);
+  cursor: pointer;
+}
+.choice input {
+  accent-color: var(--acc-fill);
+  margin: 0;
+}
+.choiceOn {
+  border-color: var(--acc);
+  background: var(--acc-bg);
+  color: var(--acc-strong);
+}
+.notice {
+  margin: 0;
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-md);
+  background: var(--warn-bg);
+  color: var(--warn-text);
+  font-size: var(--fs-sm);
+}
+.notice a {
+  color: inherit;
+  font-weight: 600;
+}
+
+@media (max-width: 1100px) {
+  .form {
+    grid-template-columns: 1fr;
+  }
+  .sideColumn {
+    padding-top: var(--s-4);
+    padding-left: 0;
+    border-top: 1px solid var(--line);
+    border-left: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .amountRow {
+    grid-template-columns: 1fr 1fr;
+  }
+  .itemRow {
+    grid-template-columns: 1fr;
+  }
+}

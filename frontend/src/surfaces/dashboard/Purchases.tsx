@@ -17,7 +17,6 @@ import {
   BOARD_COLUMNS, columnOf, dropState, etaOf, isLate, MATERIAL_STAGE, MATERIAL_TYPE, money, priceOf, purchaseHealth,
   purchaseTotals, type PurchaseHealth,
 } from "./eventModel";
-import d from "./dashboard.module.css";
 import { MaterialDetail } from "./MaterialDetail";
 import { PrioMark, type Run } from "./purchaseParts";
 import s from "./purchases.module.css";
@@ -142,7 +141,7 @@ export function Purchases({ eventId, eventDate, items, onRemove }: {
   const lane = items.filter((m) => m.has_sponsor && !m.owned);
 
   return (
-    <div className={cx(r.card, r.cardHover, d.evWide)}>
+    <div className={cx(r.card, r.cardHover)}>
       <div className={r.cardHead}>
         <Icon name="box" size={18} />
         <b>Satın alımlar</b>

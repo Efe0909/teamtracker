@@ -615,6 +615,29 @@ Yeni hata kodları (`api/errors.ts`): `invoice_split_mismatch`, `material_not_ap
 
 Her adım: `cargo clippy --all-targets`, `npm run build`, `npm test`, `backend/tools/local_test.sh`.
 
+## 14.1 Uygulama notları (geri bildirim turu, Ekim 2026)
+
+- **Tedarikçi bul-ya-da-aç**: `purchasing::ensure_vendor`; teklif yazılırken (`events.rs`,
+  `create_material`) ve açılışta (`backfill_vendors`) çalışır. Telefon/e-posta tedarikçi olmaz.
+- **Malzemeler**: durum (kuyruk) sade filtre çipi; hazır ayarlar yalnız görünen çipleri doldurur
+  (gizli sorgu yok). Tarih aralığı `from`/`to` (etkinlik günü, yoksa gerektiği gün). Aynı
+  normalize adlı kalemler tek satırda (`group_key`), "n etkinlik" yazar. Ayrıntı:
+  `GET /api/finance/materials/{id}`; etkinliksiz kalem de `/api/materials/..` uçlarıyla düzenlenir
+  (cevap: etkinlikli kalemde etkinlik ayrıntısı, etkinliksizde kalemin kendisi).
+- **Duvar**: kart başına ileri/geri düğmesi yok (sürükle-bırak); karta tıklayınca ayrıntı.
+- **Fatura ekle**: etkinlik seç + ekle yerine tek aranabilir kalem listesi (etkinliğe göre gruplu,
+  "Etkinliksiz"); tutar kartın fiyatından önerilir, kalan canlı gösterilir.
+- **SEB iadeleri**: `GET /api/finance/claim-slots` — SEB fonlu faturası olan her ay ve etkinlik,
+  dosya açılmamışsa "Dosya açılmadı"; tıklayınca dosya açılır. Etkinlik dosyası açılırken etkinliğin
+  SEB fonlu onaylı faturaları (dosyasız ya da taslak aylık dosyadakiler) dosyaya taşınır.
+- **Eylem atananları** (göç 029): `action_assignees`; `actions.owner_id` kalktı. API: `owner_ids`.
+  Her atanan kayda katılımcı olur (K1 değişmedi).
+- **Bütçe/analiz/Excel**: `api/budget.rs` (`/api/finance/periods|budget|analysis` + `.xlsx`),
+  şablonsuz tek sayfa Excel: `xlsx.rs`. Tekrarlayan giderler `api/recurring.rs`, mail şablonları
+  `api/templates.rs` (çizim istemcide, `FinanceTemplates.tsx`). Mobil: `/invoice/new`, `/invoices`.
+- Henüz yok: şablonun iade dosyasından bağlam doldurması (`kulup_adi`, `toplam`, …), iade dosyası
+  Excel'i (`claims/{id}.xlsx`), Genel'de dönem bütçesi şeridi.
+
 ## 15. Alınmayanlar
 
 - **Banka entegrasyonu / ekstre içe aktarma**: interview'de "bankadan manuel takip".

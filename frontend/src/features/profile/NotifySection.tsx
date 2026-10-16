@@ -1,5 +1,6 @@
-// Bildirim varsayilanlari: kademe + sessiz saat. Sohbet basina ozel secim
-// sohbetin kendi zil menusunden (`features/chat/ChatBell.tsx`).
+// Bildirim varsayilanlari (spec/82 §3.3): kademe + sessiz saat + bu cihaz.
+// Profil sayfasinin "Bildirimler" bolumu. Sohbet basina ozel secim sohbetin
+// kendi zil menusunden (`features/chat/ChatBell.tsx`).
 
 import { useEffect, useState } from "react";
 import { errorText } from "../../api/client";
@@ -8,12 +9,12 @@ import type { NotifyLevel } from "../../api/types";
 import { NOTIFY } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
 import { disablePush, enablePush, pushState, type PushState } from "../../lib/push";
-import { Button, Choices, Dialog, ui, useToast } from "../../ui/ui";
+import { Button, Choices, ui, useToast } from "../../ui/ui";
 
 const HOURS = Array.from({ length: 24 }, (_, h) => h);
 const hh = (h: number) => `${String(h).padStart(2, "0")}:00`;
 
-export function NotifySettings({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function NotifySection() {
   const q = useNotifyPrefs();
   const L = useLookup();
   const m = usePatchNotifyPrefs();
@@ -23,8 +24,8 @@ export function NotifySettings({ open, onClose }: { open: boolean; onClose: () =
   const [device, setDevice] = useState<PushState>("unsupported");
   const [busy, setBusy] = useState(false);
   useEffect(() => {
-    if (open) void pushState().then(setDevice);
-  }, [open]);
+    void pushState().then(setDevice);
+  }, []);
   const toggleDevice = () => {
     setBusy(true);
     (device === "on" ? disablePush() : enablePush())
@@ -43,8 +44,8 @@ export function NotifySettings({ open, onClose }: { open: boolean; onClose: () =
   };
   const quiet = p !== undefined && p.quiet_start !== null && p.quiet_end !== null;
   return (
-    <Dialog open={open} onClose={onClose} title="Bildirimler"
-      hint="Varsayılan seçimin. Bir sohbette farklı istersen, o sohbetin zil simgesinden ayrıca seç.">
+    <>
+      <p className={ui.fieldHint}>Varsayılan seçimin. Bir sohbette farklı istersen, o sohbetin zil simgesinden ayrıca seç.</p>
       {p === undefined ? null : (
         <div className={ui.formStack}>
           <Choices<NotifyLevel> current={p.level} busy={m.isPending}
@@ -89,6 +90,6 @@ export function NotifySettings({ open, onClose }: { open: boolean; onClose: () =
           </fieldset>
         </div>
       )}
-    </Dialog>
+    </>
   );
 }

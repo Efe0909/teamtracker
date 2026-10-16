@@ -48,7 +48,7 @@ Cevap: `data[i].embedding` (float dizisi, `index` sırasıyla), `usage.prompt_to
   Dene kanıtlar.
 - Manifest tohumu: `embed_model` (ör. `openai/text-embedding-3-small`); yoksa profil
   oluşturulmaz ve görevler kapalı başlar.
-- `llm_profiles.endpoint` kontrolü göç 031'de `('chat','decisions','embeddings')` olur
+- `llm_profiles.endpoint` kontrolü göç 032'de `('chat','decisions','embeddings')` olur
   (bu yalnız kontrol değişikliği; eklentiden bağımsız, göçte kalabilir).
 
 ## 3. Depo (`semantic::ensure`, açılışta)

@@ -248,13 +248,15 @@ export function Dialog(props: {
   hint?: string;
   wide?: boolean;
   fullScreen?: boolean;
+  onCloseAutoFocus?: (event: Event) => void;
   children: ReactNode;
 }) {
   return (
     <RD.Root open={props.open} onOpenChange={(o) => !o && props.onClose()}>
       <RD.Portal>
         <RD.Overlay className={s.overlay} />
-        <RD.Content className={cx(s.dialog, props.wide === true && s.wide, props.fullScreen === true && s.fullScreen)} aria-describedby={undefined}>
+        <RD.Content className={cx(s.dialog, props.wide === true && s.wide, props.fullScreen === true && s.fullScreen)} aria-describedby={undefined}
+          aria-labelledby="dlg-title" {...(props.onCloseAutoFocus === undefined ? {} : { onCloseAutoFocus: props.onCloseAutoFocus })}>
           <div className={s.dhead}>
             <RD.Title id="dlg-title">{props.title}</RD.Title>
             <RD.Close asChild>

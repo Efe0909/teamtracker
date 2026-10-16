@@ -8,10 +8,11 @@ import { ACTION_STATUS, ACTION_STATUS_ORDER, ago, formatDay, isDone } from "../.
 import { useLookup } from "../../lib/lookup";
 import { useStored } from "../../lib/stored";
 import { Icon } from "../../ui/icons";
-import { Avatar, Button, cx, Dialog, IconButton, KindTag, Picker, Popover, PriorityTag, Status, ui, useToast, Who, type Option } from "../../ui/ui";
+import { Avatar, Button, cx, Dialog, IconButton, KindTag, Picker, Popover, PriorityTag, Status, ui, useToast, Who } from "../../ui/ui";
 import { DueField } from "./fields";
 import { QualityNote } from "./QualityNote";
 import { InlineDescription } from "./InlineDescription";
+import { PeoplePicker } from "../../ui/PeoplePicker";
 import { MarkdownField, MarkdownText } from "../../ui/MarkdownField";
 import s from "./record.module.css";
 
@@ -122,7 +123,8 @@ export function BallLine({ d }: { d: RecordDetail }) {
   const L = useLookup();
   const [open, setOpen] = useState(false);
   const openActs = d.actions.filter((a) => !isDone(a.status));
-  const owners = [...new Set(openActs.map((a) => a.owner_id))];
+  // Havuzdaki (kimse atanmamis) eylem `null` olarak sayilir; cok atananli eylemde herkes ayri.
+  const owners: (string | null)[] = [...new Set(openActs.flatMap((a) => (a.owner_ids.length === 0 ? [null] : a.owner_ids)))];
   if (isDone(d.record.status)) return null;
   // Son guncellemeler: eylemlerin ve kaydin en yeni hareketleri (yeniden eskiye).
   const updates = [
@@ -305,11 +307,6 @@ export function ActionList({ d }: { d: RecordDetail }) {
     });
   };
 
-  const owners: Option<string | null>[] = [
-    { value: null, label: "Havuzda", render: <span className={s.muted}>Havuzda</span> },
-    ...L.meta.users.map((u) => ({ value: u.id as string | null, label: u.name, render: <Who user={u} /> })),
-  ];
-
   const row = (a: Action) => (
     <li key={a.id} className={cx(s.action, isDone(a.status) && s.actionDone)}>
       <Picker look="bare" label={`${a.title} — durum`} disabled={ro} value={a.status}
@@ -321,9 +318,10 @@ export function ActionList({ d }: { d: RecordDetail }) {
       </Picker>
       <span className={s.actionTitle}>{a.title}{a.closing_note && <small className={s.muted}> · <MarkdownText value={a.closing_note} /></small>}</span>
       <span className={s.actionMeta}>
-        {!ro && !isDone(a.status) && a.owner_id === null && (
-          // Havuzdaki eylemi tek dokunusla ustlen (spec/17 etki 8).
-          <Button size="sm" onClick={() => change(a, { field: "owner_id", value: L.me.id }, { field: "owner_id", value: null }, "Eylemi üstlendin")}>
+        {!ro && !isDone(a.status) && !a.owner_ids.includes(L.me.id) && (
+          // Eylemi tek dokunusla ustlen (spec/17 etki 8): mevcut atananlara eklenir.
+          <Button size="sm" onClick={() => change(a, { field: "owner_ids", value: [...a.owner_ids, L.me.id] },
+            { field: "owner_ids", value: a.owner_ids }, "Eylemi üstlendin")}>
             Üstlen
           </Button>
         )}
@@ -331,10 +329,8 @@ export function ActionList({ d }: { d: RecordDetail }) {
           <DueField look="bare" value={a.due_date} done={isDone(a.status)} disabled={ro}
             onSave={(v) => change(a, { field: "due_date", value: v }, { field: "due_date", value: a.due_date }, "Tarih değişti")} />
         ) : null}
-        <Picker look="bare" label={`${a.title} — sahip`} disabled={ro} value={a.owner_id} options={owners} align="end"
-          onChange={(v) => change(a, { field: "owner_id", value: v }, { field: "owner_id", value: a.owner_id }, "Sahip değişti")}>
-          <Who user={L.user(a.owner_id)} empty="Havuzda" />
-        </Picker>
+        <PeoplePicker label={`${a.title} — sahipler`} users={L.meta.users} currentUserId={L.me.id} value={a.owner_ids} disabled={ro}
+          onChange={(v) => change(a, { field: "owner_ids", value: v }, { field: "owner_ids", value: a.owner_ids }, "Sahipler değişti")} />
         {!ro && !isDone(a.status) && (
           <IconButton icon="check" label={`${a.title} — bitti`}
             onClick={() => { setClosingAction(a); setClosingNote(""); }} />
@@ -407,7 +403,7 @@ function AddAction({ d, onDone }: { d: RecordDetail; onDone?: () => void }) {
   const m = useAddAction(d.record.id);
   const toast = useToast();
   const [title, setTitle] = useState("");
-  const [owner, setOwner] = useState<string | null>(null);
+  const [owners, setOwners] = useState<string[]>([]);
   const [due, setDue] = useState<string | null>(null);
   return (
     <form
@@ -415,7 +411,7 @@ function AddAction({ d, onDone }: { d: RecordDetail; onDone?: () => void }) {
       onSubmit={(e) => {
         e.preventDefault();
         m.mutate(
-          { title, owner_id: owner, due_date: due },
+          { title, owner_ids: owners, due_date: due },
           {
             onSuccess: () => {
               setTitle("");
@@ -431,14 +427,7 @@ function AddAction({ d, onDone }: { d: RecordDetail; onDone?: () => void }) {
       <input className={s.addInput} placeholder="Yeni eylem ekle…" value={title} onChange={(e) => setTitle(e.target.value)}
         required maxLength={200} aria-label="Eylem başlığı" />
       {d.access.can_edit_deadline && <DueField look="bare" value={due} onSave={setDue} />}
-      <Picker look="bare" label="Eylemin sahibi" value={owner} align="end"
-        options={[
-          { value: null, label: "Havuzda", render: <span className={s.muted}>Havuzda</span> },
-          ...L.meta.users.map((u) => ({ value: u.id as string | null, label: u.name, render: <Who user={u} /> })),
-        ]}
-        onChange={setOwner}>
-        <Who user={L.user(owner)} empty="Havuzda" />
-      </Picker>
+      <PeoplePicker label="Eylemin sahipleri" users={L.meta.users} currentUserId={L.me.id} value={owners} onChange={setOwners} />
       <Button type="submit" variant="primary" size="sm" aria-busy={m.isPending} disabled={m.isPending || title.trim() === ""}>
         {m.isPending ? "Ekleniyor…" : "Ekle"}
       </Button>

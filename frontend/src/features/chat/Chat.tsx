@@ -283,7 +283,7 @@ function Composer(props: { chatId: Uuid; reply: FeedItem | null; onClearReply: (
         <div className={s.pending}>
           {pending.map((p) => (
             <span key={p.id} className={s.pendingItem}>
-              <Icon name="image" size={14} /> {p.name}
+              <Icon name="attach" size={14} /> {p.name}
               <button type="button" className={s.replyBtn} aria-label={`${p.name} çıkar`}
                 onClick={() => setPending((xs) => xs.filter((x) => x.id !== p.id))}>
                 <Icon name="x" size={12} />
@@ -294,7 +294,8 @@ function Composer(props: { chatId: Uuid; reply: FeedItem | null; onClearReply: (
         </div>
       )}
       <div className={s.compRow}>
-        <ImagePicker onFiles={addFiles} busy={pending.length + uploading >= ATTACH_MAX} />
+        <ImagePicker onFiles={addFiles} busy={pending.length + uploading >= ATTACH_MAX}
+          accept={L.meta.upload_limits?.chat?.accept} icon="attach" title="Dosya ekle" />
         <textarea
           ref={box}
           rows={1}

@@ -91,7 +91,8 @@ pub async fn list(State(st): State<AppState>, CurrentUser(me): CurrentUser) -> R
             where r.owner_id = $1 or r.created_by = $1
                or exists(select 1 from record_participants p
                           where p.record_id = r.id and p.user_id = $1)
-               or exists(select 1 from actions a where a.record_id = r.id and a.owner_id = $1)
+               or exists(select 1 from actions a join action_assignees x on x.action_id = a.id
+                          where a.record_id = r.id and x.user_id = $1)
                or r.team_id in (select team_id from team_members where user_id = $1)
            union all
            select t.chat_id, null, t.id, t.name
@@ -248,7 +249,8 @@ async fn fanout_inner(st: &AppState, chat: Uuid, author: Uuid, body: &str) -> Re
                   select r.owner_id where r.owner_id is not null
                   union select r.created_by
                   union select user_id from record_participants where record_id = r.id
-                  union select owner_id from actions where record_id = r.id and owner_id is not null
+                  union select x.user_id from actions a join action_assignees x on x.action_id = a.id
+                         where a.record_id = r.id
                   union select user_id from team_members where team_id = r.team_id)
            from records r where r.chat_id = $1")
         .bind(chat).fetch_optional(&st.pool).await?;

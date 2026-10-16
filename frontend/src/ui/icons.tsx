@@ -59,6 +59,8 @@ import {
   Info,
   Copy,
   Download,
+  FileText,
+  Paperclip,
   User,
   Wallet,
   Users,
@@ -132,6 +134,9 @@ const ICONS = {
   send: Send,
   // yapay zeka onerisi (ayri bir gorsel dil: silik kart, kıvılcım)
   sparkles: Sparkles,
+  // ekler: dosya ekle ve belge cipi (spec/83)
+  attach: Paperclip,
+  file: FileText,
 } satisfies Record<string, LucideIcon>;
 
 export type IconName = keyof typeof ICONS;

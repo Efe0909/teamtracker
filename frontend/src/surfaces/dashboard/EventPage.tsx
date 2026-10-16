@@ -20,9 +20,11 @@ import r from "../../features/record/record.module.css";
 import { ago, formatDay, isDone, parseDay, PRIORITY, PRIORITY_ORDER, toIsoDay } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
 import { handle } from "../../lib/mentions";
-import { navigate } from "../../lib/router";
+import { safeReturn } from "../../features/profile/tabs";
+import { navigate, useLocation } from "../../lib/router";
 import { useStored } from "../../lib/stored";
 import { DateField } from "../../ui/DateField";
+import { FocusRing } from "../../ui/FocusRing";
 import { Icon, type IconName } from "../../ui/icons";
 import {
   Avatar, Button, cx, Dialog, Due, IconButton, KindTag, Link, Loading, Menu, MenuItem, MenuLabel, MenuSep, Picker, Popover,
@@ -80,6 +82,10 @@ function EventView({ e }: { e: EventDetail }) {
   // Etkinligin kendi kaydi da "bagli" sayilir: widget olarak eklenemez.
   const linked = new Set([...e.widgets.flatMap((w) => (w.record_id === null ? [] : [w.record_id])), e.record_id]);
   const count = e.widgets.length + pending.length;
+  // Fatura formundan "Listede yok" ile gelindi (spec/81 D-6): satin alimlar vurgulu, donus seridi.
+  const here = useLocation();
+  const focus = here.searchParams.get("focus");
+  const ret = safeReturn(here.searchParams.get("return"));
 
   return (
     <div className={s.recordPage}>
@@ -93,6 +99,12 @@ function EventView({ e }: { e: EventDetail }) {
       <div className={s.recordBody}>
         <div className={s.recordMain}>
           <div className={s.recordInner}>
+            {ret !== null && (
+              <p className={s.returnStrip} role="status">
+                Fatura formundan geldin. Eksik kalemi satın alımlara ekle; faturaya dönünce listede görünür.{" "}
+                <Link href={ret}>Faturaya dön</Link>
+              </p>
+            )}
             <Requests e={e} />
             <Head e={e} />
             {/* Kayit sayfasiyla ayni blok: ozellikler + "top kimde" (ikiz kaydin eylemlerinden). */}
@@ -139,8 +151,12 @@ function EventView({ e }: { e: EventDetail }) {
                       return <Otf key={w.id} eventId={e.id} event={e} canEdit={e.can_edit}
                         onRemove={canStructure && e.can_edit ? drop : undefined} />;
                     }
-                    return <Purchases key={w.id} eventId={e.id} eventDate={e.date} items={e.materials}
-                      onRemove={canStructure && e.can_edit ? drop : undefined} />;
+                    return (
+                      <FocusRing key={w.id} active={focus === "supplies"} className={s.evWide}>
+                        <Purchases eventId={e.id} eventDate={e.date} items={e.materials}
+                          onRemove={canStructure && e.can_edit ? drop : undefined} />
+                      </FocusRing>
+                    );
                   })}
                   {pending.map((tid) => (
                     <PendingRecord key={tid} linked={linked} onPick={(rid) => link(rid, tid)}
@@ -480,7 +496,8 @@ function LinkedRecord({ id, onRemove }: { id: Uuid; onRemove: (() => void) | und
               <Status status={a.status} action />
               <span className={s.evActTitle}>{a.title}</span>
               <Due date={a.due_date} done={isDone(a.status)} />
-              <Avatar user={L.user(a.owner_id)} size={20} />
+              {a.owner_ids.length === 0 ? <Avatar user={undefined} size={20} />
+                : a.owner_ids.slice(0, 3).map((o) => <Avatar key={o} user={L.user(o)} size={20} />)}
             </li>
           ))}
         </ul>

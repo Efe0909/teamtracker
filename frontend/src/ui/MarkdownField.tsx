@@ -1,23 +1,28 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { EditorState, Transaction } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
-import { Bold, Code, Heading1, Heading2, Heading3, Italic, Link, List, ListOrdered, Minus, Quote, SquareCode, type LucideIcon } from "lucide-react";
+import { Bold, Code, Heading1, Heading2, Heading3, Italic, Link, List, ListOrdered, ListTodo, Minus, Quote, SquareCode, type LucideIcon } from "lucide-react";
 import type { MetaUser } from "../api/types";
 import { handle } from "../lib/mentions";
 import { useLookup } from "../lib/lookup";
 import { commands, formatLink, linkEditFor, markdownExtensions, type LinkEdit } from "./MarkdownEditor";
-import { safeHref } from "./markdown";
+import { analyze, formatWikiLink, safeHref } from "./markdown";
+import { MarkdownLinksContext } from "./MarkdownLinks";
 import { renderLines, type RenderedLine, type Segment } from "./markdownLines";
 import { formatsAt, type Formats } from "./markdownCommands";
 import s from "./markdown.module.css";
 
 const NO_FORMATS: Formats = { strong: false, em: false, code: false, link: false, quote: false, bullet: false, ordered: false, fence: false, heading: 0 };
 
-function segment(part: Segment, i: number, users: MetaUser[], linkTextOnly: boolean): ReactNode {
+function segment(part: Segment, i: number, users: MetaUser[], linkTextOnly: boolean, links: React.ContextType<typeof MarkdownLinksContext>): ReactNode {
   const classes = part.styles.map((style) => style === "code" ? s.inlineCode : s[style]);
   if (part.provider) classes.push(s.file);
   if (part.fallback) classes.push(s.fallback);
   const className = classes.join(" ") || undefined;
+  if (part.wikiTitle !== undefined) {
+    return linkTextOnly || links === null ? <span key={i} className={className}>{part.text}</span>
+      : <links.Link key={i} title={part.wikiTitle} className={className}>{part.text}</links.Link>;
+  }
   if (part.styles.includes("link")) {
     return linkTextOnly || part.href === undefined
       ? <span key={i} className={className} title={part.href}>{part.text}</span>
@@ -29,12 +34,13 @@ function segment(part: Segment, i: number, users: MetaUser[], linkTextOnly: bool
 
 export function MarkdownText({ value, className, linkTextOnly = false }: { value: string; className?: string; linkTextOnly?: boolean }) {
   const L = useLookup();
+  const links = useContext(MarkdownLinksContext);
   const lines = useMemo(() => renderLines(value), [value]);
   const flat = lines.length === 1 && lines[0]?.kind === undefined;
   // Liste işareti editördeki gibi sabit genişlikli kutu: sarılan satırlar metne hizalanır.
   const body = (line: RenderedLine) => line.segments.map((part, i) => line.kind === "list" && i === 0
     ? <span key={i} className={part.text === "• " ? s.bullet : s.listMark}>{part.text}</span>
-    : segment(part, i, L.meta.users, linkTextOnly));
+    : segment(part, i, L.meta.users, linkTextOnly, links));
   return (
     <span className={`${s.rendered} ${flat ? "" : s.block} ${className ?? ""}`}>
       {flat ? body(lines[0] ?? { segments: [] }) : lines.map((line, i) => (
@@ -53,12 +59,14 @@ export function MarkdownField({ value, onChange, label, placeholder, rows = 4 }:
   value: string; onChange: (value: string) => void; label: string; placeholder?: string; rows?: number;
 }) {
   const L = useLookup();
+  const links = useContext(MarkdownLinksContext);
   const mount = useRef<HTMLDivElement>(null);
   const editor = useRef<EditorView | null>(null);
   const syncing = useRef(false);
   const [caret, setCaret] = useState(0);
   const [formats, setFormats] = useState<Formats>(NO_FORMATS);
   const [linkEdit, setLinkEdit] = useState<LinkEdit | null>(null);
+  const [wikiEdit, setWikiEdit] = useState<{ from: number; to: number; query: string } | null>(null);
   const latest = useRef({ value, onChange, L });
   latest.current = { value, onChange, L };
   const partial = useMemo(() => /(?:^|\s)@([\p{L}\p{N}_.-]*)$/u.exec(value.slice(0, caret))?.[1], [caret, value]);
@@ -83,6 +91,7 @@ export function MarkdownField({ value, onChange, label, placeholder, rows = 4 }:
       doc: latest.current.value,
       extensions: markdownExtensions({
         label, ...(placeholder === undefined ? {} : { placeholder }),
+        wikiHref: links?.hrefOf,
         onChange: (source) => { if (!syncing.current) latest.current.onChange(source); setLinkEdit(null); },
         onSelection: setCaret,
         onFormats: setFormats,
@@ -103,7 +112,7 @@ export function MarkdownField({ value, onChange, label, placeholder, rows = 4 }:
     editor.current = view;
     setFormats(formatsAt(view.state));
     return () => { editor.current = null; view.destroy(); };
-  }, [label, placeholder]);
+  }, [label, placeholder, links?.hrefOf]);
 
   useEffect(() => {
     const view = editor.current;
@@ -139,6 +148,14 @@ export function MarkdownField({ value, onChange, label, placeholder, rows = 4 }:
     ],
     [
       { label: "Bağlantı", hint: "Bağlantı · ⌘/Ctrl+K · Düzenle: çift tık", icon: Link, pressed: (f) => f.link, run: (view) => setLinkEdit(linkEditFor(view.state)) },
+      ...(links === null ? [] : [{ label: "Görev bağla", hint: "Görev bağla · [[Kayıt adı]]", icon: ListTodo, pressed: () => wikiEdit !== null,
+        run: (view: EditorView) => {
+          const { from, to, head } = view.state.selection.main;
+          const existing = analyze(view.state.doc.toString()).find((part) => part.kind === "wikiLink" && part.from <= head && head <= part.to);
+          setLinkEdit(null);
+          setWikiEdit(existing?.kind === "wikiLink" ? { from: existing.from, to: existing.to, query: existing.title }
+            : { from, to, query: view.state.sliceDoc(from, to) });
+        } }]),
       { label: "Alıntı", hint: "Alıntı", icon: Quote, pressed: (f) => f.quote, run: commands.lines("quote") },
       { label: "Madde işaretli liste", hint: "Madde işaretli liste", icon: List, pressed: (f) => f.bullet, run: commands.lines("bullet") },
       { label: "Numaralı liste", hint: "Numaralı liste", icon: ListOrdered, pressed: (f) => f.ordered, run: commands.lines("ordered") },
@@ -162,6 +179,17 @@ export function MarkdownField({ value, onChange, label, placeholder, rows = 4 }:
           </span>
         ))}
       </div>
+      {wikiEdit !== null && links !== null && <links.Picker query={wikiEdit.query}
+        onClose={() => { setWikiEdit(null); editor.current?.focus(); }}
+        onPick={(title) => {
+          const view = editor.current;
+          if (view === null) return;
+          const insert = formatWikiLink(title);
+          view.dispatch({ changes: { from: wikiEdit.from, to: wikiEdit.to, insert },
+            selection: { anchor: wikiEdit.from + insert.length }, annotations: Transaction.userEvent.of("input.link") });
+          setWikiEdit(null);
+          view.focus();
+        }} />}
       {linkEdit !== null && <div className={s.linkEditor} role="group" aria-label="Bağlantıyı düzenle" onKeyDown={(e) => {
         if (e.key === "Escape") { e.preventDefault(); setLinkEdit(null); editor.current?.focus(); }
         if (e.key === "Enter") { e.preventDefault(); applyLink(); }

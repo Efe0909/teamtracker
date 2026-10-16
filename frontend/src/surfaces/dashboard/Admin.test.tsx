@@ -70,9 +70,9 @@ it("kullanıcı özetinde rollerden gelen kapsamları tekrar göstermez", async 
     </QueryClientProvider>,
   );
   await screen.findByText("Tester");
-  const summary = screen.getAllByText("manage_teams")[0]?.parentElement;
+  const summary = screen.getAllByText("Takım kur, üye ekle ve çıkar")[0]?.parentElement;
   expect(summary).not.toBeNull();
-  expect(within(summary as HTMLElement).queryByText("edit_nodes")).toBeNull();
+  expect(within(summary as HTMLElement).queryByText("Yapıyı düzenle")).toBeNull();
 });
 
 it("özet satırında rolü gösterir; değişiklik yokken Kaydet pasif", async () => {

@@ -1,0 +1,52 @@
+/* Coklu kisi secici. Ham renk YOK — yalniz token. */
+
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  max-width: 100%;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: var(--r-md);
+  background: none;
+  color: var(--txt);
+  font: inherit;
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+.trigger:hover:not(:disabled) {
+  background: var(--panel2);
+}
+.trigger:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: 1px;
+}
+.trigger:disabled {
+  cursor: default;
+}
+.stack {
+  display: inline-flex;
+}
+.stack > * + * {
+  margin-left: -6px;
+}
+.names {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.none {
+  color: var(--dim);
+}
+.panel {
+  width: 250px;
+}
+.option {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  text-align: left;
+}

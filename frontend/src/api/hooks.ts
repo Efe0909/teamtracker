@@ -10,6 +10,7 @@ import { useRealtimeUp, useTopic, type RealtimeEvent } from "./realtime";
 import type {
   ActionPatch,
   AdminView,
+  BankAccount,
   LlmCallDetail,
   LlmCallsView,
   LlmConfig,
@@ -29,6 +30,33 @@ import type {
   LlmStatusView,
   LlmTryOut,
   LlmUsageView,
+  ClaimDetail,
+  ClaimRow,
+  ClaimSlot,
+  ClaimStatus,
+  FinanceSummary,
+  FxQuote,
+  InvoiceIn,
+  InvoiceRow,
+  InvoiceView,
+  Ledger,
+  LedgerView,
+  MaterialType,
+  Analysis,
+  AnalysisGroup,
+  BudgetView,
+  FinancePeriod,
+  MailTemplate,
+  RecurringExpense,
+  MatFull,
+  MatList,
+  MatQueue,
+  MatRow,
+  Purchasable,
+  VendorDetail,
+  VendorIn,
+  VendorRow,
+  Wall,
   Quality,
   QualityConfig,
   QualityView,
@@ -86,6 +114,7 @@ export const keys = {
   team: (id: Uuid) => ["team", id] as const,
   notifications: ["notifications"] as const,
   notifyPrefs: ["notify-prefs"] as const,
+  bankAccounts: ["bank-accounts"] as const,
   adminActivity: ["admin", "activity"] as const,
   myActions: ["my-actions"] as const,
   nodes: ["nodes"] as const,
@@ -110,7 +139,8 @@ export interface RecordQuery {
   search?: string;
   quick?: string;
   sort?: string;
-  done?: "true" | "false";
+  /** "true" kapalilar, "false" acik olanlar (URL'den gelir: string). */
+  done?: string;
   /** Yalniz benim sabitlediklerim. */
   pinned?: "true";
 }
@@ -705,6 +735,40 @@ export function useMarkSeen() {
   });
 }
 
+/** Hesap numaralarim (spec/82 §4). Her yazma guncel listeyi doner; `meta`
+ *  tazelenir (`has_bank_account` fatura formunu yonlendirir). */
+export function useBankAccounts() {
+  return useQuery({ queryKey: keys.bankAccounts, queryFn: () => request<BankAccount[]>("GET", "/api/me/bank-accounts") });
+}
+
+export type BankAccountOp =
+  | { op: "add"; label: string; holder_name: string; iban: string }
+  | { op: "edit"; id: Uuid; label?: string; holder_name?: string; is_default?: true }
+  | { op: "delete"; id: Uuid };
+
+export function useBankAccountWrite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (o: BankAccountOp) => {
+      switch (o.op) {
+        case "add":
+          return request<BankAccount[]>("POST", "/api/me/bank-accounts",
+            { label: o.label, holder_name: o.holder_name, iban: o.iban });
+        case "edit": {
+          const { op: _op, id, ...body } = o;
+          return request<BankAccount[]>("PATCH", `/api/me/bank-accounts/${id}`, body);
+        }
+        case "delete":
+          return request<BankAccount[]>("DELETE", `/api/me/bank-accounts/${o.id}`);
+      }
+    },
+    onSuccess: (list) => {
+      qc.setQueryData(keys.bankAccounts, list);
+      void qc.invalidateQueries({ queryKey: keys.meta });
+    },
+  });
+}
+
 export function useNotifyPrefs() {
   return useQuery({ queryKey: keys.notifyPrefs, queryFn: () => request<NotifyPrefs>("GET", "/api/me/notifications") });
 }
@@ -922,4 +986,374 @@ export function useLlmConfigWrite() {
       cfg === null ? request<LlmConfigView>("DELETE", "/api/admin/llm") : request<LlmConfigView>("PUT", "/api/admin/llm", cfg),
     onSuccess: (v) => qc.setQueryData([...keys.llm, "config"], v),
   });
+}
+
+// --- maliye (spec/81) -----------------------------------------------------------
+
+const finance = ["finance"] as const;
+export const financeKeys = {
+  all: finance,
+  summary: [...finance, "summary"] as const,
+  invoices: (q: { status?: string; mine?: boolean }) => [...finance, "invoices", q] as const,
+  invoice: (id: Uuid) => [...finance, "invoice", id] as const,
+  purchasable: [...finance, "purchasable"] as const,
+  claims: [...finance, "claims"] as const,
+  claim: (id: Uuid) => [...finance, "claim", id] as const,
+  ledger: [...finance, "ledger"] as const,
+};
+
+/** Maliye yazmalari birbirini etkiler (onay -> dosya, kasa, ozet): hepsi tazelenir. */
+function afterFinance(qc: QueryClient) {
+  void qc.invalidateQueries({ queryKey: financeKeys.all });
+  void qc.invalidateQueries({ queryKey: keys.events });
+}
+
+export function useFinanceSummary() {
+  return useQuery({ queryKey: financeKeys.summary, queryFn: () => request<FinanceSummary>("GET", "/api/finance/summary") });
+}
+
+export function useInvoices(q: { status?: string; mine?: boolean }) {
+  return useQuery({
+    queryKey: financeKeys.invoices(q),
+    queryFn: () => request<InvoiceRow[]>("GET", `/api/finance/invoices${qs({ status: q.status, mine: q.mine === true ? "1" : undefined })}`),
+  });
+}
+
+export function useInvoice(id: Uuid | null) {
+  return useQuery({
+    queryKey: financeKeys.invoice(id ?? ""),
+    queryFn: () => request<InvoiceView>("GET", `/api/finance/invoices/${id ?? ""}`),
+    enabled: id !== null,
+  });
+}
+
+export function usePurchasable() {
+  return useQuery({ queryKey: financeKeys.purchasable, queryFn: () => request<Purchasable[]>("GET", "/api/finance/purchasable") });
+}
+
+/** Gonder (id yok) ya da duzelt-yeniden gonder (id). */
+export function useSaveInvoice() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { id: Uuid | null; body: InvoiceIn }) =>
+      v.id === null ? request<InvoiceView>("POST", "/api/finance/invoices", v.body)
+        : request<InvoiceView>("PUT", `/api/finance/invoices/${v.id}`, v.body),
+    onSuccess: (inv) => {
+      qc.setQueryData(financeKeys.invoice(inv.id), inv);
+      afterFinance(qc);
+    },
+  });
+}
+
+export function useInvoiceDecision() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { id: Uuid; action: "approve" | "changes" | "reject" | "cancel" | "withdraw"; note?: string }) =>
+      request<InvoiceView>("POST", `/api/finance/invoices/${v.id}/decision`, { action: v.action, note: v.note }),
+    onSuccess: (inv) => {
+      qc.setQueryData(financeKeys.invoice(inv.id), inv);
+      afterFinance(qc);
+    },
+  });
+}
+
+export function useClaims() {
+  return useQuery({ queryKey: financeKeys.claims, queryFn: () => request<ClaimRow[]>("GET", "/api/finance/claims") });
+}
+
+/** Her ay + her SEB fonlu etkinlik; dosya acilmamis satirlar dahil. */
+export function useClaimSlots() {
+  return useQuery({
+    queryKey: [...financeKeys.all, "claim-slots"] as const,
+    queryFn: () => request<ClaimSlot[]>("GET", "/api/finance/claim-slots"),
+  });
+}
+
+export function useClaim(id: Uuid | null) {
+  return useQuery({
+    queryKey: financeKeys.claim(id ?? ""),
+    queryFn: () => request<ClaimDetail>("GET", `/api/finance/claims/${id ?? ""}`),
+    enabled: id !== null,
+  });
+}
+
+export function useClaimWrite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v:
+      | { op: "create"; kind: "monthly"; month: IsoDate }
+      | { op: "create"; kind: "event"; event_id: Uuid }
+      | { op: "status"; id: Uuid; status: ClaimStatus; received_amount?: number }) => {
+      if (v.op === "status") {
+        return request<ClaimDetail>("PATCH", `/api/finance/claims/${v.id}`, { status: v.status, received_amount: v.received_amount });
+      }
+      const { op: _op, ...body } = v;
+      return request<ClaimDetail>("POST", "/api/finance/claims", body);
+    },
+    onSuccess: (d) => {
+      qc.setQueryData(financeKeys.claim(d.claim.id), d);
+      afterFinance(qc);
+    },
+  });
+}
+
+export function useLedger() {
+  return useQuery({ queryKey: financeKeys.ledger, queryFn: () => request<LedgerView>("GET", "/api/finance/ledger") });
+}
+
+export type LedgerOp =
+  | { op: "entry"; occurred_on: IsoDate; amount: number; kind: "income" | "expense" | "opening"; description: string;
+      category_id?: Uuid; event_id?: Uuid; attachment_ids?: Uuid[] }
+  | { op: "reverse"; id: Uuid; note?: string }
+  | { op: "check"; checked_on: IsoDate; bank_balance: number }
+  | { op: "payout"; user_id: Uuid; amount: number; description?: string };
+
+export function useLedgerWrite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: LedgerOp) => {
+      switch (v.op) {
+        case "entry": {
+          const { op: _op, ...body } = v;
+          return request<LedgerView>("POST", "/api/finance/ledger", body);
+        }
+        case "reverse":
+          return request<LedgerView>("POST", `/api/finance/ledger/${v.id}/reverse`, { note: v.note });
+        case "check":
+          return request<LedgerView>("POST", "/api/finance/ledger/checks", { checked_on: v.checked_on, bank_balance: v.bank_balance });
+        case "payout":
+          return request<LedgerView>("POST", "/api/finance/payouts", { user_id: v.user_id, amount: v.amount, description: v.description });
+      }
+    },
+    onSuccess: (l) => {
+      qc.setQueryData(financeKeys.ledger, l);
+      afterFinance(qc);
+    },
+  });
+}
+
+export interface MatFilter {
+  queue: MatQueue;
+  event?: string;
+  kind?: string;
+  category?: Uuid;
+  q?: string;
+  /** Etkinlik gunu ya da gerektigi gun araligi (iki uc dahil). */
+  from?: IsoDate;
+  to?: IsoDate;
+}
+
+/** Tek kalem ayrintisi (etkinlikli ya da etkinliksiz). */
+export function useMaterialFull(id: Uuid | null) {
+  return useQuery({
+    queryKey: [...financeKeys.all, "material", id ?? ""] as const,
+    queryFn: () => request<MatFull>("GET", `/api/finance/materials/${id ?? ""}`),
+    enabled: id !== null,
+  });
+}
+
+/** Maliye ayrintisinin yazma kapisi: ayni `eventOps` yollari (etkinliksiz kalemde de calisir);
+ *  cevap sekline bakilmaz, ilgili sorgular yenilenir. */
+export function useMaterialRun() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (op: EventOp) => request<unknown>(op.method, op.path, op.body),
+    onSuccess: () => {
+      afterFinance(qc);
+      void qc.invalidateQueries({ queryKey: ["event"] });
+    },
+  });
+}
+
+export function useMaterialsQueue(f: MatFilter) {
+  return useQuery({
+    queryKey: [...financeKeys.all, "materials", f] as const,
+    queryFn: () => request<MatList>("GET", `/api/finance/materials${qs({ ...f })}`),
+    placeholderData: (prev) => prev,
+  });
+}
+
+export interface WallFilter {
+  ahead?: number;
+  back?: number;
+  ledger?: Ledger;
+  category?: Uuid;
+  q?: string;
+  limit_prep?: number;
+  limit_tobuy?: number;
+  limit_bought?: number;
+}
+
+export function useWall(f: WallFilter) {
+  return useQuery({
+    queryKey: [...financeKeys.all, "wall", f] as const,
+    queryFn: () => request<Wall>("GET", `/api/finance/wall${qs({
+      ...f, ahead: f.ahead?.toString(), back: f.back?.toString(), limit_prep: f.limit_prep?.toString(),
+      limit_tobuy: f.limit_tobuy?.toString(), limit_bought: f.limit_bought?.toString(),
+    })}`),
+    placeholderData: (prev) => prev,
+  });
+}
+
+export type PurchaseOp =
+  | { op: "create"; name: string; category_id: Uuid; needed_by?: IsoDate; qty?: number; kind?: MaterialType;
+      offer?: { vendor_id?: Uuid; name?: string; price?: number } }
+  | { op: "patch"; id: Uuid; state?: number; needed_by?: IsoDate | null; category_id?: Uuid }
+  | { op: "purchased"; id: Uuid; purchased: boolean };
+
+export function usePurchaseWrite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: PurchaseOp): Promise<unknown> => {
+      switch (v.op) {
+        case "create": {
+          const { op: _op, ...body } = v;
+          return request<MatRow>("POST", "/api/finance/materials", body);
+        }
+        case "patch": {
+          const { op: _op, id, ...body } = v;
+          return request<MatRow>("PATCH", `/api/finance/materials/${id}`, body);
+        }
+        case "purchased":
+          return request<unknown>("PATCH", `/api/materials/${v.id}/purchased`, { purchased: v.purchased });
+      }
+    },
+    onSuccess: () => afterFinance(qc),
+  });
+}
+
+export function useVendors(q: string) {
+  return useQuery({
+    queryKey: [...financeKeys.all, "vendors", q] as const,
+    queryFn: () => request<VendorRow[]>("GET", `/api/finance/vendors${qs({ q: q.trim() === "" ? undefined : q })}`),
+    placeholderData: (prev) => prev,
+  });
+}
+
+export function useVendor(id: Uuid | null) {
+  return useQuery({
+    queryKey: [...financeKeys.all, "vendor", id ?? ""] as const,
+    queryFn: () => request<VendorDetail>("GET", `/api/finance/vendors/${id ?? ""}`),
+    enabled: id !== null,
+  });
+}
+
+export function useVendorWrite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { id: null; body: VendorIn } | { id: Uuid; body: Partial<VendorIn> }) =>
+      v.id === null
+        ? request<{ vendor: VendorRow; existing: boolean }>("POST", "/api/finance/vendors", v.body)
+        : request<VendorRow>("PATCH", `/api/finance/vendors/${v.id}`, v.body).then((vendor) => ({ vendor, existing: false })),
+    onSuccess: () => afterFinance(qc),
+  });
+}
+
+// --- butce, analiz, tekrarlayan giderler, mail sablonlari (spec/81 §8-§12) ----------------
+
+export function usePeriods(enabled = true) {
+  return useQuery({
+    queryKey: [...financeKeys.all, "periods"] as const,
+    queryFn: () => request<FinancePeriod[]>("GET", "/api/finance/periods"),
+    enabled,
+  });
+}
+
+export function usePeriodWrite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v:
+      | { op: "create"; name: string; from: IsoDate; to: IsoDate }
+      | { op: "update"; id: Uuid; name: string; from: IsoDate; to: IsoDate }
+      | { op: "delete"; id: Uuid }) => {
+      switch (v.op) {
+        case "create": return request<FinancePeriod>("POST", "/api/finance/periods", { name: v.name, from: v.from, to: v.to });
+        case "update": return request<FinancePeriod>("PATCH", `/api/finance/periods/${v.id}`, { name: v.name, from: v.from, to: v.to });
+        case "delete": return request<unknown>("DELETE", `/api/finance/periods/${v.id}`);
+      }
+    },
+    onSuccess: () => afterFinance(qc),
+  });
+}
+
+/** `period` bossa sunucu bugunu iceren (yoksa en yeni) donemi secer. */
+export function useBudget(period: Uuid | null) {
+  return useQuery({
+    queryKey: [...financeKeys.all, "budget", period ?? ""] as const,
+    queryFn: () => request<BudgetView>("GET", `/api/finance/budget${qs({ period: period ?? undefined })}`),
+    placeholderData: (prev) => prev,
+  });
+}
+
+/** Tek satir yaz; `amount: null` satiri siler. Cevap donemin guncel gorunumudur. */
+export function useBudgetLine() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { period_id: Uuid; category_id: Uuid; event_id?: Uuid | null; amount: number | null; note?: string }) =>
+      request<BudgetView>("PUT", "/api/finance/budget", v),
+    onSuccess: (view, v) => {
+      qc.setQueryData([...financeKeys.all, "budget", v.period_id], view);
+      void qc.invalidateQueries({ queryKey: financeKeys.all });
+    },
+  });
+}
+
+export function useAnalysis(group: AnalysisGroup, from: IsoDate | null, to: IsoDate | null) {
+  return useQuery({
+    queryKey: [...financeKeys.all, "analysis", group, from ?? "", to ?? ""] as const,
+    queryFn: () => request<Analysis>("GET", `/api/finance/analysis${qs({ group, from: from ?? undefined, to: to ?? undefined })}`),
+    placeholderData: (prev) => prev,
+  });
+}
+
+export function useRecurring() {
+  return useQuery({
+    queryKey: [...financeKeys.all, "recurring"] as const,
+    queryFn: () => request<RecurringExpense[]>("GET", "/api/finance/recurring"),
+  });
+}
+
+export function useRecurringWrite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v:
+      | { op: "create"; name: string; amount: number; currency?: string; every: "month" | "year"; next_on: IsoDate; category_id?: Uuid | null }
+      | { op: "update"; id: Uuid; patch: Partial<Pick<RecurringExpense, "name" | "amount" | "every" | "next_on" | "is_active" | "category_id">> }
+      | { op: "delete"; id: Uuid }) => {
+      switch (v.op) {
+        case "create": { const { op: _o, ...body } = v; return request<RecurringExpense>("POST", "/api/finance/recurring", body); }
+        case "update": return request<RecurringExpense>("PATCH", `/api/finance/recurring/${v.id}`, v.patch);
+        case "delete": return request<unknown>("DELETE", `/api/finance/recurring/${v.id}`);
+      }
+    },
+    onSuccess: () => afterFinance(qc),
+  });
+}
+
+export function useTemplates() {
+  return useQuery({
+    queryKey: [...financeKeys.all, "templates"] as const,
+    queryFn: () => request<MailTemplate[]>("GET", "/api/finance/templates"),
+  });
+}
+
+export function useTemplateWrite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v:
+      | { op: "save"; id: Uuid | null; name: string; format: "html" | "md"; body: string }
+      | { op: "delete"; id: Uuid }) => {
+      if (v.op === "delete") return request<unknown>("DELETE", `/api/finance/templates/${v.id}`);
+      const body = { name: v.name, format: v.format, body: v.body };
+      return v.id === null
+        ? request<MailTemplate>("POST", "/api/finance/templates", body)
+        : request<MailTemplate>("PUT", `/api/finance/templates/${v.id}`, body);
+    },
+    onSuccess: () => afterFinance(qc),
+  });
+}
+
+/** TCMB kuru (spec/81 §13): sorgu degil cagri — form tarih/birim degisince ister. */
+export function fetchFx(currency: string, on: IsoDate): Promise<FxQuote> {
+  return request<FxQuote>("GET", `/api/finance/fx${qs({ currency, on })}`);
 }

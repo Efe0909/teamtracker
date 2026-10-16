@@ -66,6 +66,16 @@ DATABASE_URL=postgresql://ekiptakip:ekiptakip@127.0.0.1:5432/ekiptakip_alpha02 \
 docker exec -i ekiptakip-db psql -U ekiptakip -d ekiptakip_alpha02 < seed.sql   # VERİYİ SİLER
 ```
 
+Tohum Maliye ekranları için bugüne göre tarihli örnekler içerir: etkinlikli/etkinliksiz
+malzemeler, alternatif teklifler ve bütçe aşımları; bütün fatura ve iade durumları;
+SEB/genel karma fatura, döviz, kısmi tahsilat ve üye ödemesi; ters kayıt ve mutabakat
+farkı; dönem bütçeleri, tekrarlayan giderler ve mail şablonları. Zeynep'in dört Maliye
+yetkisi, Mert'in satın alım yetkisi vardır; Selin admin'dir. IBAN ve kur değerleri
+sentetiktir. Fatura örnekleri dosya eki içermez; önizleme için formdan belge yüklenir.
+Yeniden yükleme Maliye tablolarını da sıfırlar; işlem hata verirse tümü geri alınır.
+Sabit API sözleşmesi testleri `psql -v seed_finance=false` ile küçük tohumu kullanır.
+Tohumdan sonra API'yi yeniden başlat (ağaç indeksi ve tedarikçi bağları açılışta kurulur).
+
 Yerelde `OPENROUTER_API_KEY` yoksa kalite denetimi ve malzeme önerisi kapalıdır (yalnız
 uzunluk kuralı); denemek için anahtarı ortama ver. Gerçek anahtar olmadan LLM yolunu
 (kayıt, maliyet, limit, Yönetim › Veri işleme ve LLM ekranı) görmek için sahte OpenRouter:

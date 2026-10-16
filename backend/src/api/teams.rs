@@ -69,12 +69,15 @@ async fn wall(
     Ok(())
 }
 
-/// Banner'i yaz; ek yoksa ya da silinmisse 400 (`invalid_banner`).
+/// Banner'i yaz; ek yoksa, silinmisse, gorsel degilse ya da kapak sinirini
+/// asiyorsa 400 (`invalid_banner`; spec/83 §4.1).
 async fn set_banner(tx: &mut Tx<'_>, team: Uuid, banner: Option<Uuid>) -> Result<()> {
     if let Some(a) = banner {
         let ok: bool = sqlx::query_scalar(
-            "select exists(select 1 from attachments where id = $1 and deleted_at is null)")
-            .bind(a).fetch_one(&mut **tx).await?;
+            "select exists(select 1 from attachments where id = $1 and deleted_at is null
+                                                        and kind = 'image' and byte_size <= $2)")
+            .bind(a).bind(crate::media::Purpose::Banner.max_bytes() as i64)
+            .fetch_one(&mut **tx).await?;
         if !ok {
             return Err(AppError::BadRequest("invalid_banner"));
         }

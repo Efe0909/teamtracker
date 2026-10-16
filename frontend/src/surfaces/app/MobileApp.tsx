@@ -4,8 +4,9 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { errorText, upload } from "../../api/client";
 import { useInbox, useMyActions, useNotifications, useSendMessage } from "../../api/hooks";
 import type { Attachment } from "../../api/types";
-import { NotifySettings } from "../../features/profile/NotifySettings";
-import { ProfileDialog } from "../../features/profile/ProfileDialog";
+import { ProfilePage, useProfileGate } from "../../features/profile/ProfilePage";
+import { RecordMarkdownProvider } from "../../features/record/MarkdownRecords";
+import type { ProfileTab } from "../../features/profile/tabs";
 import { useLookup } from "../../lib/lookup";
 import { navigate, useLocation } from "../../lib/router";
 import { setTheme, useTheme, type Theme } from "../../lib/theme";
@@ -14,17 +15,30 @@ import { Avatar, Button, cx, Dialog, Empty, Link, Loading, Menu, MenuItem, MenuL
 import { ErrorScreen } from "../errors/ErrorScreen";
 import { signOut } from "../Session";
 import s from "./app.module.css";
+import { InvoiceNewPage, InvoicesPage } from "./Invoices";
 import { ActionsPage, ChatsPage, NewPage, NotificationsPage, SearchPage, TeamsListPage } from "./pages";
 import { RecordPage, TeamPage } from "./RecordPage";
 import { href, parse, type Route } from "./routes";
 
+const profileTo = (tab: ProfileTab) => href({ name: "profile", tab, ret: null });
+const goProfileInfo = () => navigate(profileTo("info"), { replace: true });
+const recordHref = (id: string) => href({ name: "record", id });
+const recordSearchHref = (title: string) => href({ name: "search", q: title });
+
 export default function MobileApp() {
   const route = parse(useLocation());
-  return <div className={s.app}><Page route={route} /><Tabs route={route} /></div>;
+  useProfileGate(route.name === "profile", goProfileInfo);
+  return <RecordMarkdownProvider recordHref={recordHref} searchHref={recordSearchHref}>
+    <div className={s.app}><Page route={route} /><Tabs route={route} /></div>
+  </RecordMarkdownProvider>;
 }
 
 function Page({ route }: { route: Route }) {
   switch (route.name) {
+    case "profile": return <>
+      <TopBar title="Profil ve ayarlar" back />
+      <div className={s.pad}><ProfilePage tab={route.tab} ret={route.ret} hrefOf={profileTo} /></div>
+    </>;
     case "actions": return <ActionsPage />;
     case "teams": return <TeamsListPage />;
     case "chats": return <ChatsPage />;
@@ -33,6 +47,8 @@ function Page({ route }: { route: Route }) {
     case "record": return <RecordPage key={route.id} id={route.id} />;
     case "team": return <TeamPage key={route.id} id={route.id} />;
     case "new": return <NewPage />;
+    case "invoiceNew": return <InvoiceNewPage />;
+    case "invoices": return <InvoicesPage />;
     case "notFound": return <><TopBar title="Bulunamadı" /><ErrorScreen code="not_found" /></>;
   }
 }
@@ -46,20 +62,18 @@ const THEME_OPTS: { value: Theme; label: string; icon: IconName }[] = [
 function MobileUserMenu() {
   const L = useLookup();
   const theme = useTheme();
-  const [profileOpen, setProfileOpen] = useState(!L.meta.me.profile_complete);
-  const [notifyOpen, setNotifyOpen] = useState(false);
-  return <>
+  return (
     <Menu align="end" side="bottom" trigger={<button type="button" className={ui.iconBtn} aria-label="Hesap menüsü"><Avatar user={L.me} size={30} /></button>}>
       <MenuLabel>{L.me.name}</MenuLabel>
-      <MenuItem icon="user" onSelect={() => setProfileOpen(true)}>Profilim</MenuItem>
-      <MenuItem icon="bell" onSelect={() => setNotifyOpen(true)}>Bildirimler</MenuItem>
+      <MenuItem icon="user" onSelect={() => navigate(profileTo("info"))}>Profil ve ayarlar</MenuItem>
+      <MenuItem icon="bell" onSelect={() => navigate(profileTo("notifications"))}>Bildirim ayarları</MenuItem>
+      <MenuItem icon="wallet" onSelect={() => navigate(href({ name: "invoiceNew" }))}>Fatura ekle</MenuItem>
+      <MenuItem icon="wallet" onSelect={() => navigate(href({ name: "invoices" }))}>Faturalarım</MenuItem>
       <MenuSep /><MenuLabel>Tema</MenuLabel>
       <MenuRadio value={theme} onChange={setTheme} options={THEME_OPTS} />
       <MenuSep /><MenuItem icon="logout" onSelect={() => void signOut()}>Çıkış yap</MenuItem>
     </Menu>
-    <NotifySettings open={notifyOpen} onClose={() => setNotifyOpen(false)} />
-    <ProfileDialog open={profileOpen} onClose={() => setProfileOpen(false)} />
-  </>;
+  );
 }
 
 /** Ust cubuk. Gecmis yoksa geri dugmesi ana listeyi acar. */

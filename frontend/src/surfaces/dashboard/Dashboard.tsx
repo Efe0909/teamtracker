@@ -5,11 +5,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useNotifications } from "../../api/hooks";
-import { NotifySettings } from "../../features/profile/NotifySettings";
-import { ProfileDialog } from "../../features/profile/ProfileDialog";
+import { ProfilePage, useProfileGate } from "../../features/profile/ProfilePage";
+import { RecordMarkdownProvider } from "../../features/record/MarkdownRecords";
+import type { ProfileTab } from "../../features/profile/tabs";
 import { useLookup } from "../../lib/lookup";
 import { mergeOrder, moveTo } from "../../lib/order";
-import { useLocation } from "../../lib/router";
+import { navigate, useLocation } from "../../lib/router";
 import { useStored } from "../../lib/stored";
 import { setTheme, useTheme, type Theme } from "../../lib/theme";
 import { Icon, type IconName } from "../../ui/icons";
@@ -23,6 +24,7 @@ import s from "./dashboard.module.css";
 import { DataTree } from "./DataTree";
 import { EventPage } from "./EventPage";
 import { Events } from "./Events";
+import { Finance } from "./Finance";
 import { Home } from "./Home";
 import { Notifications } from "./Notifications";
 import { People } from "./People";
@@ -33,6 +35,9 @@ import { href, parse, type Route } from "./routes";
 import { Tasks } from "./Tasks";
 import { TeamPage, Teams } from "./Teams";
 
+const recordHref = (id: string) => href({ name: "record", id });
+const recordSearchHref = (title: string) => href({ name: "tasks", query: { search: title } });
+
 export default function Dashboard() {
   const route = parse(useLocation());
   const [drawer, setDrawer] = useState(false);
@@ -42,6 +47,7 @@ export default function Dashboard() {
 
   // Gezinince cekmece kapanir.
   useEffect(() => setDrawer(false), [route.name, "id" in route ? route.id : ""]);
+  useProfileGate(route.name === "profile", goProfileInfo);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
@@ -54,6 +60,7 @@ export default function Dashboard() {
   }, []);
 
   return (
+    <RecordMarkdownProvider recordHref={recordHref} searchHref={recordSearchHref}>
     <div className={s.shell} data-drawer={drawer} data-folded={folded}>
       <a className={s.skip} href="#main">İçeriğe geç</a>
       <Sidebar route={route} onSearch={() => setPalette(true)} onFold={() => setFolded(true)} />
@@ -75,13 +82,28 @@ export default function Dashboard() {
       </div>
       <Palette open={palette} onOpenChange={setPalette} />
     </div>
+    </RecordMarkdownProvider>
   );
 }
+
+const profileTo = (tab: ProfileTab) => href({ name: "profile", tab, ret: null });
+const goProfileInfo = () => navigate(profileTo("info"), { replace: true });
 
 function Page({ route }: { route: Route }) {
   switch (route.name) {
     case "home":
       return <Home />;
+    case "finance":
+      return <Finance section={route.section} id={route.id} />;
+    case "profile":
+      return (
+        <div className={s.page}>
+          <div className={s.pageHead}>
+            <div className={s.pageTitle}><h1>Profil ve ayarlar</h1></div>
+          </div>
+          <ProfilePage tab={route.tab} ret={route.ret} hrefOf={profileTo} />
+        </div>
+      );
     case "tasks":
       return <Tasks query={route.query} />;
     case "record":
@@ -137,6 +159,7 @@ const NAV: NavItem[] = [
   { route: { name: "home" }, icon: "home", label: "Panolar", match: ["home"] },
   { route: { name: "tasks", query: {} }, icon: "tasks", label: "Görevler", match: ["tasks", "record"] },
   { route: { name: "events", query: {} }, icon: "calendar", label: "Etkinlikler", match: ["events", "event"] },
+  { route: { name: "finance", section: "home", id: null }, icon: "wallet", label: "Maliye", match: ["finance"] },
   { route: { name: "teams" }, icon: "teams", label: "Takımlar", match: ["teams"] },
   { route: { name: "notifications" }, icon: "bell", label: "Bildirimler", match: ["notifications"] },
   { route: { name: "people" }, icon: "user", label: "Ekip", match: ["people"] },
@@ -160,8 +183,6 @@ function Sidebar({ route, onSearch, onFold }: { route: Route; onSearch: () => vo
   const admin = L.can("manage_users") || L.can("manage_llm");
   const mine = new Set(L.meta.me.team_ids);
   const teams = [...L.plainTeams].sort((a, b) => Number(mine.has(b.id)) - Number(mine.has(a.id)) || a.name.localeCompare(b.name, "tr"));
-  const [profileOpen, setProfileOpen] = useState(!L.meta.me.profile_complete);
-  const [notifyOpen, setNotifyOpen] = useState(false);
   const [teamsOpen, setTeamsOpen] = useStored("nav.teams.open", true);
   const current = route.name === "team" || route.name === "pillar" ? route.id : null;
 
@@ -321,11 +342,11 @@ function Sidebar({ route, onSearch, onFold }: { route: Route; onSearch: () => vo
           </button>
         }
       >
-        <MenuItem icon="user" onSelect={() => setProfileOpen(true)}>
-          Profilim
+        <MenuItem icon="user" onSelect={() => navigate(profileTo("info"))}>
+          Profil ve ayarlar
         </MenuItem>
-        <MenuItem icon="bell" onSelect={() => setNotifyOpen(true)}>
-          Bildirimler
+        <MenuItem icon="bell" onSelect={() => navigate(profileTo("notifications"))}>
+          Bildirim ayarları
         </MenuItem>
         <MenuSep />
         <MenuLabel>Tema</MenuLabel>
@@ -335,8 +356,6 @@ function Sidebar({ route, onSearch, onFold }: { route: Route; onSearch: () => vo
           Çıkış yap
         </MenuItem>
       </Menu>
-      <NotifySettings open={notifyOpen} onClose={() => setNotifyOpen(false)} />
-      <ProfileDialog open={profileOpen} onClose={() => setProfileOpen(false)} />
     </nav>
   );
 }

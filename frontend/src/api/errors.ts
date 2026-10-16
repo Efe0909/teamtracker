@@ -17,6 +17,7 @@ export type ApiErrorCode =
   | "invalid_pillar"
   | "invalid_reply"
   | "unknown_user"
+  | "too_many_owners"
   | "unknown_team"
   | "open_actions"
   | "stale_field"
@@ -38,6 +39,52 @@ export type ApiErrorCode =
   | "file_too_big"
   | "bad_file_type"
   | "corrupt_image"
+  | "corrupt_file"
+  | "invalid_account_label"
+  | "invoice_split_mismatch"
+  | "material_not_approved"
+  | "account_required"
+  | "invoice_items_required"
+  | "attachment_required"
+  | "duplicate_item"
+  | "invalid_currency"
+  | "invalid_fx"
+  | "fx_rate_required"
+  | "fx_service_off"
+  | "fx_unknown_currency"
+  | "invalid_paid_by"
+  | "invalid_vendor"
+  | "invalid_amount"
+  | "invalid_note"
+  | "note_required"
+  | "invalid_action"
+  | "invoice_locked"
+  | "claim_locked"
+  | "claim_empty"
+  | "claim_exists"
+  | "invalid_claim"
+  | "invalid_event"
+  | "invalid_status"
+  | "invalid_category"
+  | "opening_exists"
+  | "already_reversed"
+  | "attachment_locked"
+  | "review_purchases_required"
+  | "manage_ledger_required"
+  | "manage_purchases_required"
+  | "category_required"
+  | "event_material"
+  | "vendor_merged"
+  | "vendor_exists"
+  | "invalid_user_id"
+  | "invalid_holder"
+  | "invalid_iban"
+  | "too_many_accounts"
+  | "invalid_default"
+  | "macro_not_allowed"
+  | "legacy_office_not_allowed"
+  | "bad_text_encoding"
+  | "invalid_purpose"
   | "storage_offline"
   | "invalid_attachment"
   | "invalid_card_type"
@@ -78,6 +125,12 @@ export type ApiErrorCode =
   | "invalid_price"
   | "invalid_budget"
   | "xlsx_template"
+  | "xlsx_failed"
+  | "invalid_period"
+  | "period_overlap"
+  | "invalid_every"
+  | "invalid_format"
+  | "template_exists"
   | "invalid_qty"
   | "invalid_provider"
   | "no_sponsor"
@@ -151,6 +204,7 @@ export const ERRORS = {
   invalid_pillar: "Seçilen pillar geçersiz.",
   invalid_reply: "Yanıtlanan mesaj bu sohbette değil.",
   unknown_user: "Seçilen kişi bulunamadı ya da hesabı kapalı.",
+  too_many_owners: "Bir eyleme en fazla 20 kişi atanabilir.",
   unknown_team: "Seçilen takım bulunamadı.",
   open_actions: "Kayıt, açık eylemleri varken kapanmaz. Önce eylemleri kapat.",
   bad_origin: "Canlı bağlantı bu adresten kurulamaz. Sayfayı uygulamanın kendi adresinden aç.",
@@ -169,11 +223,57 @@ export const ERRORS = {
   unknown_role: "Seçilen rol bulunamadı.",
   role_exists: "Bu adla bir rol zaten var.",
   empty_file: "Dosya boş.",
-  file_too_big: "Dosya çok büyük. En fazla 10 MB.",
-  bad_file_type: "Yalnız JPEG, PNG, WebP ve GIF yüklenebilir.",
+  file_too_big: "Dosya bu alan için çok büyük.",
+  bad_file_type: "Bu dosya türü burada yüklenemez.",
   corrupt_image: "Görsel bozuk ya da okunamıyor.",
-  storage_offline: "Depolama diski şu an erişilemiyor. Metin mesajları çalışıyor; görseli sonra dene.",
-  invalid_attachment: "Bu görsel iliştirilemez (başkasının ya da zaten kullanılmış).",
+  corrupt_file: "Dosya bozuk görünüyor.",
+  invalid_account_label: "Hesap adı 1-60 karakter olmalı (ör. “Ziraat”).",
+  invoice_split_mismatch: "Kalemlere dağıtılan tutarların toplamı faturanın tutarına eşit olmalı.",
+  material_not_approved: "Yalnız onaylanmış (ve kulüpte olmayan) kalemler faturaya bağlanabilir.",
+  account_required: "İade edilecek hesabı seç. Hesabın yoksa Profil › Hesap numaralarım'dan ekle.",
+  invoice_items_required: "Faturayı en az bir kaleme bağla.",
+  attachment_required: "Fatura ya da fişin en az bir dosyasını ekle.",
+  duplicate_item: "Aynı kalem faturada iki kez olamaz.",
+  invalid_currency: "Para birimi geçersiz.",
+  invalid_fx: "Kur bilgisi geçersiz.",
+  fx_rate_required: "Dövizli faturada kur gerekli.",
+  fx_service_off: "Kur servisine şu an ulaşılamıyor; kuru elle gir.",
+  fx_unknown_currency: "TCMB bu para birimi için kur yayınlamıyor; kuru elle gir.",
+  invalid_paid_by: "Ödemeyi kimin yaptığını seç.",
+  invalid_vendor: "Tedarikçi bulunamadı.",
+  invalid_amount: "Tutar geçersiz (en fazla iki ondalık).",
+  invalid_note: "Not en fazla 2000 karakter olabilir.",
+  note_required: "Bu karar için bir not yaz; gönderen neyi düzelteceğini bilsin.",
+  invalid_action: "İşlem tanınmadı.",
+  invoice_locked: "Fatura bu durumda değiştirilemez.",
+  claim_locked: "İade dosyası gönderilmiş; değiştirilemez.",
+  claim_empty: "Boş iade dosyası gönderilemez.",
+  claim_exists: "Bu ay ya da etkinlik için zaten bir iade dosyası var.",
+  invalid_claim: "İade dosyası bilgisi eksik.",
+  invalid_event: "Etkinlik bulunamadı.",
+  invalid_status: "Durum geçersiz.",
+  invalid_category: "Kategori bulunamadı.",
+  opening_exists: "Açılış bakiyesi zaten girilmiş.",
+  already_reversed: "Bu satırın ters kaydı zaten var.",
+  attachment_locked: "Bu belge bir faturaya ya da kasa kaydına bağlı; silinemez.",
+  review_purchases_required: "Bu işlem için “Satın alımları incele” yetkisi gerekiyor.",
+  manage_ledger_required: "Bu işlem için “Kasa defterini yönet” yetkisi gerekiyor.",
+  manage_purchases_required: "Bu işlem için “Satın alımları yönet” yetkisi gerekiyor.",
+  category_required: "Etkinlikten bağımsız kalem için bir bütçe kategorisi seç.",
+  event_material: "Bu kalem bir etkinliğe bağlı; tedariği etkinlik sayfasındaki satın alımlarda yönetilir.",
+  vendor_merged: "Bu tedarikçi başka bir kayıtla birleştirilmiş. Birleşen kaydı düzenle.",
+  vendor_exists: "Bu adla bir tedarikçi zaten var.",
+  invalid_user_id: "Kişi bulunamadı.",
+  invalid_holder: "Hesap sahibinin adını yaz.",
+  invalid_iban: "IBAN geçersiz. Boşluklar sorun değil; hanelerden biri yanlış olabilir.",
+  too_many_accounts: "En fazla 5 hesap numarası eklenebilir.",
+  invalid_default: "Varsayılan hesap kaldırılamaz; başka bir hesabı varsayılan yap.",
+  macro_not_allowed: "Makro içeren belge yüklenemez; makrosuz kaydedip tekrar dene.",
+  legacy_office_not_allowed: "Eski Office biçimi desteklenmiyor; .docx, .xlsx ya da .pptx olarak kaydet.",
+  bad_text_encoding: "Metin dosyası UTF-8 olmalı.",
+  invalid_purpose: "Yükleme türü tanınmadı.",
+  storage_offline: "Depolama diski şu an erişilemiyor. Metin mesajları çalışıyor; dosyayı sonra dene.",
+  invalid_attachment: "Bu dosya iliştirilemez (başkasının ya da zaten kullanılmış).",
   invalid_card_type: "Bu kart türü bu işlemi desteklemiyor.",
   invalid_when: "Tarih ve saat geçersiz.",
   invalid_link: "Bağlantı http:// ya da https:// ile başlamalı.",
@@ -212,6 +312,12 @@ export const ERRORS = {
   invalid_price: "Fiyat geçersiz.",
   invalid_budget: "Bütçe 0'dan büyük olmalı; boş bırakmak bütçeyi siler.",
   xlsx_template: "Excel dosyası hazırlanamadı. Sunucu kaydı bakılmalı.",
+  xlsx_failed: "Excel dosyası hazırlanamadı. Sunucu kaydı bakılmalı.",
+  invalid_period: "Dönemin sonu başlangıcından önce olamaz (en fazla 800 gün).",
+  period_overlap: "Bu tarihler başka bir dönemle çakışıyor ya da bu ad kullanılıyor.",
+  invalid_every: "Tekrar aylık ya da yıllık olmalı.",
+  invalid_format: "Şablon .html ya da .md olmalı.",
+  template_exists: "Bu adla başka bir şablon var.",
   invalid_qty: "Adet 1 ile 1.000.000 arasında olmalı.",
   invalid_provider: "Seçilen teklif bu kaleme ait değil. Sayfayı yenile.",
   no_sponsor: "Önce kalemi sponsordan iste.",

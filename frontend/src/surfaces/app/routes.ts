@@ -2,6 +2,7 @@
 // oneki yok).
 
 import type { Uuid } from "../../api/types";
+import { profileHref, profileTab, safeReturn, type ProfileTab } from "../../features/profile/tabs";
 
 export type Route =
   | { name: "actions" }
@@ -12,6 +13,9 @@ export type Route =
   | { name: "record"; id: Uuid }
   | { name: "team"; id: Uuid }
   | { name: "new" }
+  | { name: "invoiceNew" }
+  | { name: "invoices" }
+  | { name: "profile"; tab: ProfileTab; ret: string | null }
   | { name: "notFound" };
 
 export function parse(url: URL): Route {
@@ -25,10 +29,15 @@ export function parse(url: URL): Route {
     if (a === "chats") return { name: "chats" };
     if (a === "notifications") return { name: "notifications" };
     if (a === "new") return { name: "new" };
+    if (a === "invoices") return { name: "invoices" };
+    if (a === "profile") {
+      return { name: "profile", tab: profileTab(url.searchParams.get("tab")), ret: safeReturn(url.searchParams.get("return")) };
+    }
   }
   if (seg.length === 2 && b !== undefined) {
     if (a === "record") return { name: "record", id: b };
     if (a === "team") return { name: "team", id: b };
+    if (a === "invoice" && b === "new") return { name: "invoiceNew" };
   }
   return { name: "notFound" };
 }
@@ -51,6 +60,12 @@ export function href(r: Route): string {
       return `/team/${r.id}`;
     case "new":
       return "/new";
+    case "invoiceNew":
+      return "/invoice/new";
+    case "invoices":
+      return "/invoices";
+    case "profile":
+      return profileHref(r.tab, r.ret);
     case "notFound":
       return "/";
   }

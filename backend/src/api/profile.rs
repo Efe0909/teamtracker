@@ -9,12 +9,19 @@
 //! `edit_user_names` kapsamiyla — kendi ya da baskasinin adi. Kapsam yoksa
 //! ad herkes icin salt okunur.
 
-use axum::{extract::{Path, State}, http::StatusCode};
+use axum::{
+    extract::{Path, State},
+    http::{header, StatusCode},
+    response::{IntoResponse, Response},
+    Json,
+};
+use chrono::{DateTime, Utc};
 use serde::Deserialize;
+use serde_json::json;
 use uuid::Uuid;
 
 use crate::{
-    api::common::{self, Body},
+    api::{bank_accounts, common::{self, Body}},
     auth::CurrentUser,
     error::{AppError, Result},
     state::AppState,
@@ -120,11 +127,13 @@ pub async fn patch(
     }
     let avatar = match p.avatar_id {
         Some(Some(a)) => {
-            // Yalniz kendi yukledigi, silinmemis ek.
+            // Yalniz kendi yukledigi, silinmemis, profil sinirindaki gorsel (spec/83 §4.1).
             let ok: bool = sqlx::query_scalar(
                 "select exists(select 1 from attachments
-                                where id = $1 and uploader_id = $2 and deleted_at is null)")
-                .bind(a).bind(me.id).fetch_one(&mut *tx).await?;
+                                where id = $1 and uploader_id = $2 and deleted_at is null
+                                  and kind = 'image' and byte_size <= $3)")
+                .bind(a).bind(me.id).bind(crate::media::Purpose::Avatar.max_bytes() as i64)
+                .fetch_one(&mut *tx).await?;
             if !ok {
                 return Err(AppError::BadRequest("invalid_avatar"));
             }
@@ -140,4 +149,50 @@ pub async fn patch(
         .execute(&mut *tx).await?;
     tx.commit().await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// `GET /api/me/export` — kisinin KENDI verisi, JSON indirme (spec/82 §3.5).
+/// Ek dosyalari yok (kimlikleriyle listelenmez bile: mesaj metni yeter).
+pub async fn export(State(st): State<AppState>, CurrentUser(me): CurrentUser) -> Result<Response> {
+    #[derive(sqlx::FromRow, serde::Serialize)]
+    struct Profile {
+        email: String,
+        name: String,
+        nickname: Option<String>,
+        phone: Option<String>,
+        birth_day: Option<i16>,
+        birth_month: Option<i16>,
+        birth_year: Option<i16>,
+        notify_level: String,
+        created_at: DateTime<Utc>,
+        last_login_at: Option<DateTime<Utc>>,
+    }
+    let profile: Profile = sqlx::query_as(
+        "select email, name, nickname, phone, birth_day, birth_month, birth_year, notify_level,
+                created_at, last_login_at
+           from users where id = $1")
+        .bind(me.id).fetch_one(&st.pool).await?;
+    let teams: Vec<String> = sqlx::query_scalar(
+        "select t.name from team_members m join teams t on t.id = m.team_id where m.user_id = $1 order by t.name")
+        .bind(me.id).fetch_all(&st.pool).await?;
+    let records: Vec<(Uuid, String, Option<String>, DateTime<Utc>)> = sqlx::query_as(
+        "select id, title, description, created_at from records where created_by = $1 order by created_at")
+        .bind(me.id).fetch_all(&st.pool).await?;
+    let messages: Vec<(Uuid, String, DateTime<Utc>)> = sqlx::query_as(
+        "select chat_id, body, created_at from messages where author_id = $1 order by created_at")
+        .bind(me.id).fetch_all(&st.pool).await?;
+    let body = json!({
+        "exported_at": Utc::now(),
+        "profile": profile,
+        "teams": teams,
+        "bank_accounts": bank_accounts::list_of(&st, me.id).await?,
+        "records": records.into_iter().map(|(id, title, description, created_at)|
+            json!({ "id": id, "title": title, "description": description, "created_at": created_at })).collect::<Vec<_>>(),
+        "messages": messages.into_iter().map(|(chat_id, body, created_at)|
+            json!({ "chat_id": chat_id, "body": body, "created_at": created_at })).collect::<Vec<_>>(),
+    });
+    Ok((
+        [(header::CONTENT_DISPOSITION, "attachment; filename=\"ekiptakip-verilerim.json\"")],
+        Json(body),
+    ).into_response())
 }
