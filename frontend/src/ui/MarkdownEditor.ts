@@ -1,4 +1,4 @@
-import { EditorState, StateEffect, StateField, Transaction, type Extension, type Range as DecoRange } from "@codemirror/state";
+import { EditorState, Facet, StateEffect, StateField, Transaction, type Extension, type Range as DecoRange } from "@codemirror/state";
 import { Decoration, EditorView, WidgetType, drawSelection, keymap, placeholder, type DecorationSet } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { deleteMarkupBackward, insertNewlineContinueMarkupCommand } from "@codemirror/lang-markdown";
@@ -42,6 +42,7 @@ export function linkEditFor(state: EditorState): LinkEdit {
 // akış seçimi bozmasın diye açılma bırakılana kadar dondurulur.
 const setFocus = StateEffect.define<boolean>();
 const setPointer = StateEffect.define<boolean>();
+const wikiHref = Facet.define<(title: string) => string, ((title: string) => string) | undefined>({ combine: (values) => values[0] });
 const interaction = StateField.define<{ focus: boolean; pointer: boolean }>({
   create: () => ({ focus: false, pointer: false }),
   update(value, tr) {
@@ -117,6 +118,15 @@ function build(state: EditorState): DecorationSet {
         attributes["title"] = `${c.href ?? ""} · Düzenle: çift tık / ⌘K · Aç: ⌘/Ctrl+tık`;
         mark(`${s.link} ${c.provider ? s.file : ""}`, c.alias.from, c.alias.to, { tagName: c.href === undefined ? "span" : "a", attributes });
         if (empty) for (const r of c.marks) mark(s.syntax, r.from, r.to); else delimiter();
+        break;
+      }
+      case "wikiLink": {
+        const href = state.facet(wikiHref)?.(c.title);
+        const attributes: Record<string, string> = { "data-wiki-title": c.title,
+          title: `${c.title} · Aç: ⌘/Ctrl+tık` };
+        if (href !== undefined) attributes["href"] = href;
+        mark(s.link, c.alias.from, c.alias.to, { tagName: href === undefined ? "span" : "a", attributes });
+        delimiter();
         break;
       }
       case "url": {
@@ -263,9 +273,11 @@ export function markdownExtensions(options: {
   onFormats: (formats: Formats) => void;
   onEditLink: (link: LinkEdit) => void;
   completeMention: () => boolean;
+  wikiHref?: ((title: string) => string) | undefined;
 }): Extension[] {
   return [
     history(), markdownLanguage, interaction, markdownDecorations, EditorView.lineWrapping,
+    ...(options.wikiHref === undefined ? [] : [wikiHref.of(options.wikiHref)]),
     // Tarayıcının yerel imleci boş satırda satır-içi widget (placeholder) yüzünden yukarı
     // kayabiliyor; imleci CM kendisi çizer (coordsAtPos ile, tüm tarayıcılarda aynı).
     drawSelection({ cursorBlinkRate: 1000 }),

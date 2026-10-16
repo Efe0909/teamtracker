@@ -5,6 +5,7 @@ import { errorText, upload } from "../../api/client";
 import { useInbox, useMyActions, useNotifications, useSendMessage } from "../../api/hooks";
 import type { Attachment } from "../../api/types";
 import { ProfilePage, useProfileGate } from "../../features/profile/ProfilePage";
+import { RecordMarkdownProvider } from "../../features/record/MarkdownRecords";
 import type { ProfileTab } from "../../features/profile/tabs";
 import { useLookup } from "../../lib/lookup";
 import { navigate, useLocation } from "../../lib/router";
@@ -21,11 +22,15 @@ import { href, parse, type Route } from "./routes";
 
 const profileTo = (tab: ProfileTab) => href({ name: "profile", tab, ret: null });
 const goProfileInfo = () => navigate(profileTo("info"), { replace: true });
+const recordHref = (id: string) => href({ name: "record", id });
+const recordSearchHref = (title: string) => href({ name: "search", q: title });
 
 export default function MobileApp() {
   const route = parse(useLocation());
   useProfileGate(route.name === "profile", goProfileInfo);
-  return <div className={s.app}><Page route={route} /><Tabs route={route} /></div>;
+  return <RecordMarkdownProvider recordHref={recordHref} searchHref={recordSearchHref}>
+    <div className={s.app}><Page route={route} /><Tabs route={route} /></div>
+  </RecordMarkdownProvider>;
 }
 
 function Page({ route }: { route: Route }) {

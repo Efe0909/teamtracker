@@ -6,6 +6,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNotifications } from "../../api/hooks";
 import { ProfilePage, useProfileGate } from "../../features/profile/ProfilePage";
+import { RecordMarkdownProvider } from "../../features/record/MarkdownRecords";
 import type { ProfileTab } from "../../features/profile/tabs";
 import { useLookup } from "../../lib/lookup";
 import { mergeOrder, moveTo } from "../../lib/order";
@@ -34,6 +35,9 @@ import { href, parse, type Route } from "./routes";
 import { Tasks } from "./Tasks";
 import { TeamPage, Teams } from "./Teams";
 
+const recordHref = (id: string) => href({ name: "record", id });
+const recordSearchHref = (title: string) => href({ name: "tasks", query: { search: title } });
+
 export default function Dashboard() {
   const route = parse(useLocation());
   const [drawer, setDrawer] = useState(false);
@@ -56,6 +60,7 @@ export default function Dashboard() {
   }, []);
 
   return (
+    <RecordMarkdownProvider recordHref={recordHref} searchHref={recordSearchHref}>
     <div className={s.shell} data-drawer={drawer} data-folded={folded}>
       <a className={s.skip} href="#main">İçeriğe geç</a>
       <Sidebar route={route} onSearch={() => setPalette(true)} onFold={() => setFolded(true)} />
@@ -77,6 +82,7 @@ export default function Dashboard() {
       </div>
       <Palette open={palette} onOpenChange={setPalette} />
     </div>
+    </RecordMarkdownProvider>
   );
 }
 

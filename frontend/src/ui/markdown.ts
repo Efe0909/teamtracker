@@ -10,6 +10,7 @@ export type Provider = "drive" | "sharepoint";
 export type Construct =
   | { kind: "strong" | "em" | "code"; from: number; to: number; marks: [Range, Range] }
   | { kind: "link"; from: number; to: number; marks: [Range, Range]; alias: Range; destination: Range; href?: string; provider?: Provider }
+  | { kind: "wikiLink"; from: number; to: number; marks: [Range, Range]; alias: Range; title: string }
   | { kind: "url"; from: number; to: number; href?: string }
   | { kind: "mention"; from: number; to: number }
   // Blok yapılar: `from` satır başı. `marks` satır başındaki işaret (+ ardındaki boşluk).
@@ -53,8 +54,35 @@ const equalsRule: MarkdownConfig = {
   }],
 };
 
+export function formatWikiLink(title: string): string {
+  return `[[${title.replace(/\\|\[|\]/g, "\\$&").replace(/\r?\n/g, " ")}]]`;
+}
+
+// Cift koseli baglanti Lezer'in parcasi: kodda, kacislanmis metinde ve baska
+// baglantinin icinde calismaz; kaynak ve imlec konumlari birebir korunur.
+const wikiLinks: MarkdownConfig = {
+  defineNodes: ["WikiLink", "WikiLinkMark"],
+  parseInline: [{
+    name: "WikiLink", before: "Link",
+    parse(cx, next, pos) {
+      if (next !== 91 || cx.char(pos + 1) !== 91 || cx.hasOpenLink) return -1;
+      for (let end = pos + 2; end < Math.min(cx.end, pos + 610); end++) {
+        const ch = cx.char(end);
+        if (ch === 10 || ch === 13) return -1;
+        if (ch === 92) { end++; continue; }
+        if (ch !== 93 || cx.char(end + 1) !== 93) continue;
+        if (cx.slice(pos + 2, end).trim() === "") return -1;
+        return cx.addElement(cx.elt("WikiLink", pos, end + 2, [
+          cx.elt("WikiLinkMark", pos, pos + 2), cx.elt("WikiLinkMark", end, end + 2),
+        ]));
+      }
+      return -1;
+    },
+  }],
+};
+
 // Editör (lang-markdown) ve salt okunur çizim aynı gramer yapılandırmasını kullanır.
-export const markdownExtensions: MarkdownExtension[] = [Autolink, equalsRule, { remove: ["SetextHeading"] }];
+export const markdownExtensions: MarkdownExtension[] = [Autolink, equalsRule, wikiLinks, { remove: ["SetextHeading"] }];
 export const markdownParser = parser.configure(markdownExtensions);
 
 const MENTION = /(?<![\p{L}\p{N}_.-])@[\p{L}\p{N}_.-]+/gu;
@@ -81,6 +109,14 @@ export function analyzeTree(tree: Tree, source: string): Construct[] {
     enter(ref) {
       const node = ref.node;
       switch (ref.name) {
+        case "WikiLink": {
+          const alias = { from: node.from + 2, to: node.to - 2 };
+          out.push({ kind: "wikiLink", from: node.from, to: node.to, alias,
+            title: source.slice(alias.from, alias.to).replace(/\\([\\\[\]])/g, "$1").trim(),
+            marks: [{ from: node.from, to: alias.from }, { from: alias.to, to: node.to }] });
+          skip.push({ from: node.from, to: node.to });
+          return false;
+        }
         case "StrongEmphasis":
         case "Emphasis":
         case "InlineCode": {
@@ -203,7 +239,7 @@ export function delimiters(c: Construct): Range[] {
   switch (c.kind) {
     case "strong": case "em": case "code":
       return c.marks[0].to === c.marks[1].from ? [] : [...c.marks];
-    case "link":
+    case "link": case "wikiLink":
       return c.alias.from === c.alias.to ? [] : [...c.marks];
     case "heading": case "quote": case "list":
       return [...c.marks];
