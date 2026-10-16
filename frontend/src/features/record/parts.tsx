@@ -329,7 +329,7 @@ export function ActionList({ d }: { d: RecordDetail }) {
           <DueField look="bare" value={a.due_date} done={isDone(a.status)} disabled={ro}
             onSave={(v) => change(a, { field: "due_date", value: v }, { field: "due_date", value: a.due_date }, "Tarih değişti")} />
         ) : null}
-        <PeoplePicker label={`${a.title} — sahipler`} users={L.meta.users} value={a.owner_ids} disabled={ro}
+        <PeoplePicker label={`${a.title} — sahipler`} users={L.meta.users} currentUserId={L.me.id} value={a.owner_ids} disabled={ro}
           onChange={(v) => change(a, { field: "owner_ids", value: v }, { field: "owner_ids", value: a.owner_ids }, "Sahipler değişti")} />
         {!ro && !isDone(a.status) && (
           <IconButton icon="check" label={`${a.title} — bitti`}
@@ -427,7 +427,7 @@ function AddAction({ d, onDone }: { d: RecordDetail; onDone?: () => void }) {
       <input className={s.addInput} placeholder="Yeni eylem ekle…" value={title} onChange={(e) => setTitle(e.target.value)}
         required maxLength={200} aria-label="Eylem başlığı" />
       {d.access.can_edit_deadline && <DueField look="bare" value={due} onSave={setDue} />}
-      <PeoplePicker label="Eylemin sahipleri" users={L.meta.users} value={owners} onChange={setOwners} />
+      <PeoplePicker label="Eylemin sahipleri" users={L.meta.users} currentUserId={L.me.id} value={owners} onChange={setOwners} />
       <Button type="submit" variant="primary" size="sm" aria-busy={m.isPending} disabled={m.isPending || title.trim() === ""}>
         {m.isPending ? "Ekleniyor…" : "Ekle"}
       </Button>
