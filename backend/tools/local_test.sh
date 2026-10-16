@@ -20,7 +20,8 @@ start() {
   echo "acilmadi: $port"; tail "$S/app-$port.log"
 }
 start 18099 EKIPTAKIP_AUTH=sahte
-docker exec -i ekiptakip-db psql -U ekiptakip -d "$ID" -q -v ON_ERROR_STOP=1 <seed.sql >/dev/null
+# Sabit sayimlar icin Maliye demosu kapali; normal gelistirme tohumu daha zengin.
+docker exec -i ekiptakip-db psql -U ekiptakip -d "$ID" -q -v ON_ERROR_STOP=1 -v seed_finance=false <seed.sql >/dev/null
 # Agac acilista kurulur: tohumdan sonra yeniden baslat (KNOW-310).
 kill $(cat "$S/pids"); : >"$S/pids"; sleep 0.5
 start 18099 EKIPTAKIP_AUTH=sahte

@@ -59,7 +59,7 @@ start() { # port, ek ortam...
 # kurulur (KNOW-179): tohumdan once acilan surec bos agac tutar — yeniden baslat.
 start 18099 EKIPTAKIP_AUTH=sahte
 sudo -u ekiptakip env PGOPTIONS=--client-min-messages=warning \
-  psql -v ON_ERROR_STOP=1 -q -d "$ID" -f "$D/seed.sql"
+  psql -v ON_ERROR_STOP=1 -v seed_finance=false -q -d "$ID" -f "$D/seed.sql"
 sudo pkill -f "$D/ekiptakip" && sleep 0.5
 start 18099 EKIPTAKIP_AUTH=sahte
 start 18100 GOOGLE_CLIENT_ID=test-client GOOGLE_CLIENT_SECRET=test-secret
