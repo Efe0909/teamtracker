@@ -19,6 +19,7 @@ use uuid::Uuid;
 
 use super::finance::{need, need_viewer, today};
 use crate::{
+    db::budget as db,
     domain::common,
     error::{AppError, Result},
     finance::cents,
@@ -26,18 +27,9 @@ use crate::{
     xlsx::{self, Cell},
 };
 
-/// Kart fiyati: sponsor secili ise 0, secili teklif, yoksa en dusuk (spec/73 `priceOf`).
-macro_rules! card_price {
-    () => {
-        "(case when m.sponsor_chosen then 0
-               else coalesce((select p.price from material_providers p where p.id = m.chosen_provider_id),
-                             (select min(p.price) from material_providers p where p.material_id = m.id)) end)"
-    };
-}
-
 // --- donemler ------------------------------------------------------------------------
 
-#[derive(Serialize, sqlx::FromRow)]
+#[derive(Serialize)]
 pub struct Period {
     id: Uuid,
     name: String,
@@ -47,15 +39,15 @@ pub struct Period {
     to: NaiveDate,
 }
 
-macro_rules! period_select {
-    () => {
-        "select id, name, lower(span) as \"from\", (upper(span) - 1) as \"to\" from finance_periods "
-    };
+impl From<db::PeriodRow> for Period {
+    fn from(r: db::PeriodRow) -> Self {
+        Self { id: r.id, name: r.name, from: r.from, to: r.to }
+    }
 }
 
 pub(crate) async fn periods(st: &AppState, me: &crate::models::user::User) -> Result<Vec<Period>> {
     need_viewer(st, me).await?;
-    Ok(sqlx::query_as(concat!(period_select!(), "order by lower(span) desc")).fetch_all(&st.pool).await?)
+    Ok(db::list_periods(&st.pool).await?.into_iter().map(Period::from).collect())
 }
 
 #[derive(Deserialize)]
@@ -77,37 +69,28 @@ fn check_period(name: &str, from: NaiveDate, to: NaiveDate) -> Result<String> {
 }
 
 async fn period_one(st: &AppState, id: Uuid) -> Result<Period> {
-    sqlx::query_as(concat!(period_select!(), "where id = $1"))
-        .bind(id).fetch_optional(&st.pool).await?.ok_or(AppError::NotFound)
+    db::find_period(&st.pool, id).await?.map(Period::from).ok_or(AppError::NotFound)
 }
 
 pub(crate) async fn create_period(st: &AppState, me: &crate::models::user::User, b: PeriodIn) -> Result<Period> {
     need(st, me, "manage_budgets").await?;
     let name = check_period(&b.name, b.from, b.to)?;
-    let clash: bool = sqlx::query_scalar(
-        "select exists(select 1 from finance_periods where span && daterange($1, $2 + 1, '[)') or name = $3)")
-        .bind(b.from).bind(b.to).bind(&name).fetch_one(&st.pool).await?;
+    let clash = db::has_period_overlap(&st.pool, b.from, b.to, &name).await?;
     if clash {
         return Err(AppError::Conflict("period_overlap"));
     }
-    let id: Uuid = sqlx::query_scalar(
-        "insert into finance_periods (name, span) values ($1, daterange($2, $3 + 1, '[)')) returning id")
-        .bind(&name).bind(b.from).bind(b.to).fetch_one(&st.pool).await?;
+    let id = db::insert_period(&st.pool, &name, b.from, b.to).await?;
     period_one(st, id).await
 }
 
 pub(crate) async fn patch_period(st: &AppState, me: &crate::models::user::User, id: Uuid, b: PeriodIn) -> Result<Period> {
     need(st, me, "manage_budgets").await?;
     let name = check_period(&b.name, b.from, b.to)?;
-    let clash: bool = sqlx::query_scalar(
-        "select exists(select 1 from finance_periods
-                        where id <> $4 and (span && daterange($1, $2 + 1, '[)') or name = $3))")
-        .bind(b.from).bind(b.to).bind(&name).bind(id).fetch_one(&st.pool).await?;
+    let clash = db::has_other_period_overlap(&st.pool, b.from, b.to, &name, id).await?;
     if clash {
         return Err(AppError::Conflict("period_overlap"));
     }
-    let n = sqlx::query("update finance_periods set name = $2, span = daterange($3, $4 + 1, '[)') where id = $1")
-        .bind(id).bind(&name).bind(b.from).bind(b.to).execute(&st.pool).await?.rows_affected();
+    let n = db::update_period(&st.pool, id, &name, b.from, b.to).await?;
     if n == 0 {
         return Err(AppError::NotFound);
     }
@@ -116,8 +99,7 @@ pub(crate) async fn patch_period(st: &AppState, me: &crate::models::user::User, 
 
 pub(crate) async fn delete_period(st: &AppState, me: &crate::models::user::User, id: Uuid) -> Result<serde_json::Value> {
     need(st, me, "manage_budgets").await?;
-    let n = sqlx::query("delete from finance_periods where id = $1")
-        .bind(id).execute(&st.pool).await?.rows_affected();
+    let n = db::delete_period(&st.pool, id).await?;
     if n == 0 {
         return Err(AppError::NotFound);
     }
@@ -156,47 +138,22 @@ type Key = (Option<Uuid>, Option<Uuid>);
 
 async fn budget_rows(st: &AppState, period: Uuid) -> Result<Vec<BudgetRow>> {
     let mut by: HashMap<Key, BudgetRow> = HashMap::new();
-    type Line = (Option<Uuid>, Option<Uuid>, f64, Option<String>);
-    let lines: Vec<Line> = sqlx::query_as(
-        "select category_id, event_id, amount::float8, note from budget_lines where period_id = $1")
-        .bind(period).fetch_all(&st.pool).await?;
-    for (c, e, amount, note) in lines {
+    let lines = db::list_lines(&st.pool, period).await?;
+    for db::LineRow { category_id: c, event_id: e, amount, note } in lines {
         let r = by.entry((c, e)).or_default();
         r.category_id = c;
         r.event_id = e;
         r.planned = amount;
         r.note = note;
     }
-    let spent: Vec<(Option<Uuid>, Option<Uuid>, f64)> = sqlx::query_as(
-        "with sp as (select lower(span) as lo, upper(span) as hi from finance_periods where id = $1)
-         select category_id, event_id, sum(amt)::float8 from (
-           select m.category_id, em.event_id, round(ii.amount * coalesce(i.fx_rate, 1), 2) as amt
-             from invoice_items ii join invoices i on i.id = ii.invoice_id and i.status = 'approved'
-             join materials m on m.id = ii.material_id
-             left join event_materials em on em.material_id = m.id, sp
-            where i.purchased_on >= sp.lo and i.purchased_on < sp.hi
-           union all
-           select l.category_id, l.event_id, -l.amount
-             from ledger_entries l, sp
-            where l.kind = 'expense' and l.occurred_on >= sp.lo and l.occurred_on < sp.hi) t
-          group by 1, 2")
-        .bind(period).fetch_all(&st.pool).await?;
+    let spent = db::list_spent(&st.pool, period).await?;
     for (c, e, v) in spent {
         let r = by.entry((c, e)).or_default();
         r.category_id = c;
         r.event_id = e;
         r.spent = v;
     }
-    let committed: Vec<(Option<Uuid>, Option<Uuid>, f64)> = sqlx::query_as(concat!(
-        "with sp as (select lower(span) as lo, upper(span) as hi from finance_periods where id = $1)
-         select m.category_id, em.event_id, sum(", card_price!(), ")::float8
-           from materials m
-           left join event_materials em on em.material_id = m.id
-           left join events e on e.id = em.event_id, sp
-          where m.state = 3 and not m.owned and not m.purchased
-            and coalesce(e.date, m.needed_by) >= sp.lo and coalesce(e.date, m.needed_by) < sp.hi
-          group by 1, 2"))
-        .bind(period).fetch_all(&st.pool).await?;
+    let committed = db::list_committed(&st.pool, period).await?;
     for (c, e, v) in committed {
         let r = by.entry((c, e)).or_default();
         r.category_id = c;
@@ -204,8 +161,7 @@ async fn budget_rows(st: &AppState, period: Uuid) -> Result<Vec<BudgetRow>> {
         r.committed = v;
     }
     let events: Vec<Uuid> = by.keys().filter_map(|(_, e)| *e).collect();
-    let titles: Vec<(Uuid, String)> = sqlx::query_as("select id, title from events where id = any($1)")
-        .bind(&events).fetch_all(&st.pool).await?;
+    let titles = db::list_event_titles(&st.pool, &events).await?;
     let titles: HashMap<Uuid, String> = titles.into_iter().collect();
     let mut rows: Vec<BudgetRow> = by.into_values().collect();
     for r in &mut rows {
@@ -221,9 +177,7 @@ pub(crate) async fn budget(st: &AppState, me: &crate::models::user::User, q: Bud
     // Donem verilmediyse bugunu iceren, yoksa en yeni donem.
     let id: Option<Uuid> = match q.period {
         Some(p) => Some(p),
-        None => sqlx::query_scalar(
-            "select id from finance_periods order by (span @> $1::date) desc, lower(span) desc limit 1")
-            .bind(today()).fetch_optional(&st.pool).await?,
+        None => db::find_current_period(&st.pool, today()).await?,
     };
     let Some(id) = id else {
         return Ok(BudgetView { period: None, rows: Vec::new(), can_write });
@@ -248,38 +202,29 @@ pub struct LineIn {
 /// Tek satir yaz/sil; cevap donemin guncel gorunumu.
 pub(crate) async fn put_line(st: &AppState, me: &crate::models::user::User, b: LineIn) -> Result<BudgetView> {
     need(st, me, "manage_budgets").await?;
-    let cat: bool = sqlx::query_scalar("select exists(select 1 from nodes where id = $1 and node_type = 'category')")
-        .bind(b.category_id).fetch_one(&st.pool).await?;
+    let cat = db::has_category(&st.pool, b.category_id).await?;
     if !cat {
         return Err(AppError::BadRequest("invalid_category"));
     }
-    let exists: bool = sqlx::query_scalar("select exists(select 1 from finance_periods where id = $1)")
-        .bind(b.period_id).fetch_one(&st.pool).await?;
+    let exists = db::has_period(&st.pool, b.period_id).await?;
     if !exists {
         return Err(AppError::NotFound);
     }
     if let Some(e) = b.event_id {
-        let ok: bool = sqlx::query_scalar("select exists(select 1 from events where id = $1)")
-            .bind(e).fetch_one(&st.pool).await?;
+        let ok = db::has_event(&st.pool, e).await?;
         if !ok {
             return Err(AppError::BadRequest("invalid_event"));
         }
     }
     match b.amount {
         None => {
-            sqlx::query("delete from budget_lines where period_id = $1 and category_id = $2 and event_id is not distinct from $3")
-                .bind(b.period_id).bind(b.category_id).bind(b.event_id).execute(&st.pool).await?;
+            db::delete_line(&st.pool, b.period_id, b.category_id, b.event_id).await?;
         }
         Some(v) => {
             // 0 gecerli (bilerek sifir pay); digerleri kurus kuralina uyar.
             let c = if v.abs() < 0.005 { 0 } else { cents(v).ok_or(AppError::BadRequest("invalid_amount"))? };
             let note = common::text(b.note, 500, "invalid_note")?;
-            sqlx::query(
-                "insert into budget_lines (period_id, category_id, event_id, amount, note)
-                 values ($1, $2, $3, $4::bigint::numeric / 100, $5)
-                 on conflict (period_id, category_id, event_id) do update set amount = excluded.amount, note = excluded.note")
-                .bind(b.period_id).bind(b.category_id).bind(b.event_id).bind(c).bind(note)
-                .execute(&st.pool).await?;
+            db::upsert_line(&st.pool, b.period_id, b.category_id, b.event_id, c, note.as_deref()).await?;
         }
     }
     let period = period_one(st, b.period_id).await?;
@@ -325,38 +270,11 @@ pub struct Analysis {
 
 const GROUPS: [&str; 4] = ["month", "period", "event", "category"];
 
-/// Etiket ifadesi: `d` = tarih, `e` = etkinlik basligi, `c` = kategori adi, `p` = donem adi.
-macro_rules! label {
-    ($g:literal, $d:literal) => {
-        concat!("(case ", $g, " when 'month' then to_char(", $d, ", 'YYYY-MM')
-                              when 'period' then coalesce(p.name, 'Dönem dışı')
-                              when 'event' then coalesce(e.title, 'Etkinliksiz')
-                              else coalesce(c.name, 'Kategorisiz') end)")
-    };
-}
-
 async fn analysis_rows(st: &AppState, group: &str, from: NaiveDate, to: NaiveDate) -> Result<Vec<AnalysisRow>> {
     let mut by: BTreeMap<String, AnalysisRow> = BTreeMap::new();
     // Harcanan / talep / yatan: onayli fatura kalemleri, fatura gunune gore.
-    let spent: Vec<(String, f64, f64, f64, f64)> = sqlx::query_as(concat!(
-        "select ", label!("$3", "i.purchased_on"), " as label,
-                coalesce(sum(round(ii.amount * coalesce(i.fx_rate, 1), 2)) filter (where ii.funding = 'seb'), 0)::float8,
-                coalesce(sum(round(ii.amount * coalesce(i.fx_rate, 1), 2)) filter (where ii.funding = 'general'), 0)::float8,
-                coalesce(sum(round(ii.amount * coalesce(i.fx_rate, 1), 2))
-                         filter (where ii.funding = 'seb' and k.status in ('sent','office_approved','paid')), 0)::float8,
-                coalesce(sum(round(ii.amount * coalesce(i.fx_rate, 1), 2))
-                         filter (where ii.funding = 'seb' and k.status = 'paid'), 0)::float8
-           from invoice_items ii join invoices i on i.id = ii.invoice_id and i.status = 'approved'
-           join materials m on m.id = ii.material_id
-           left join nodes c on c.id = m.category_id
-           left join event_materials em on em.material_id = m.id
-           left join events e on e.id = em.event_id
-           left join finance_periods p on p.span @> i.purchased_on
-           left join reimbursement_claims k on k.id = i.claim_id
-          where i.purchased_on >= $1 and i.purchased_on <= $2
-          group by 1"))
-        .bind(from).bind(to).bind(group).fetch_all(&st.pool).await?;
-    for (label, seb, general, claimed, received) in spent {
+    let spent = db::list_analysis_spent(&st.pool, group, from, to).await?;
+    for db::AnalysisSpentRow { label, seb, general, claimed, received } in spent {
         let r = by.entry(label.clone()).or_default();
         r.label = label;
         r.spent_seb = seb;
@@ -365,46 +283,20 @@ async fn analysis_rows(st: &AppState, group: &str, from: NaiveDate, to: NaiveDat
         r.received = received;
     }
     // Kasadan kategorili gider (defterde `expense`): kasa harcamasi sayilir.
-    let ledger_out: Vec<(String, f64)> = sqlx::query_as(concat!(
-        "select ", label!("$3", "l.occurred_on"), " as label, (-sum(l.amount))::float8
-           from ledger_entries l
-           left join nodes c on c.id = l.category_id
-           left join events e on e.id = l.event_id
-           left join finance_periods p on p.span @> l.occurred_on
-          where l.kind = 'expense' and l.occurred_on >= $1 and l.occurred_on <= $2
-          group by 1"))
-        .bind(from).bind(to).bind(group).fetch_all(&st.pool).await?;
+    let ledger_out = db::list_analysis_expenses(&st.pool, group, from, to).await?;
     for (label, v) in ledger_out {
         let r = by.entry(label.clone()).or_default();
         r.label = label;
         r.spent_general += v;
     }
-    let income: Vec<(String, f64)> = sqlx::query_as(concat!(
-        "select ", label!("$3", "l.occurred_on"), " as label, sum(l.amount)::float8
-           from ledger_entries l
-           left join nodes c on c.id = l.category_id
-           left join events e on e.id = l.event_id
-           left join finance_periods p on p.span @> l.occurred_on
-          where l.kind = 'income' and l.occurred_on >= $1 and l.occurred_on <= $2
-          group by 1"))
-        .bind(from).bind(to).bind(group).fetch_all(&st.pool).await?;
+    let income = db::list_analysis_income(&st.pool, group, from, to).await?;
     for (label, v) in income {
         let r = by.entry(label.clone()).or_default();
         r.label = label;
         r.income = v;
     }
     // Taahhut: onayli ama alinmamis kalemler, etkinlik gunu (yoksa gerektigi gun).
-    let committed: Vec<(String, f64)> = sqlx::query_as(concat!(
-        "select ", label!("$3", "coalesce(e.date, m.needed_by)"), " as label, sum(", card_price!(), ")::float8
-           from materials m
-           left join nodes c on c.id = m.category_id
-           left join event_materials em on em.material_id = m.id
-           left join events e on e.id = em.event_id
-           left join finance_periods p on p.span @> coalesce(e.date, m.needed_by)
-          where m.state = 3 and not m.owned and not m.purchased
-            and coalesce(e.date, m.needed_by) >= $1 and coalesce(e.date, m.needed_by) <= $2
-          group by 1"))
-        .bind(from).bind(to).bind(group).fetch_all(&st.pool).await?;
+    let committed = db::list_analysis_committed(&st.pool, group, from, to).await?;
     for (label, v) in committed {
         let r = by.entry(label.clone()).or_default();
         r.label = label;
@@ -412,15 +304,7 @@ async fn analysis_rows(st: &AppState, group: &str, from: NaiveDate, to: NaiveDat
     }
     // Planlanan: donemi aralikla kesisen butce satirlari; ay kirilimi yok.
     if group != "month" {
-        let planned: Vec<(String, f64)> = sqlx::query_as(
-            "select (case $3 when 'period' then p.name when 'event' then coalesce(e.title, 'Etkinliksiz')
-                             else coalesce(c.name, 'Kategorisiz') end) as label, sum(b.amount)::float8
-               from budget_lines b join finance_periods p on p.id = b.period_id
-               left join nodes c on c.id = b.category_id
-               left join events e on e.id = b.event_id
-              where p.span && daterange($1, $2 + 1, '[)')
-              group by 1")
-            .bind(from).bind(to).bind(group).fetch_all(&st.pool).await?;
+        let planned = db::list_analysis_planned(&st.pool, group, from, to).await?;
         for (label, v) in planned {
             let r = by.entry(label.clone()).or_default();
             r.label = label;
@@ -476,14 +360,11 @@ pub(crate) async fn budget_xlsx(st: &AppState, me: &crate::models::user::User, q
     need_viewer(st, me).await?;
     let id: Uuid = match q.period {
         Some(p) => p,
-        None => sqlx::query_scalar("select id from finance_periods order by (span @> $1::date) desc, lower(span) desc limit 1")
-            .bind(today()).fetch_optional(&st.pool).await?.ok_or(AppError::NotFound)?,
+        None => db::find_export_period(&st.pool, today()).await?.ok_or(AppError::NotFound)?,
     };
     let period = period_one(st, id).await?;
     let rows = budget_rows(st, id).await?;
-    let cats: Vec<(Uuid, String, Option<String>)> = sqlx::query_as(
-        "select id, name, attrs->>'ledger' from nodes where node_type = 'category'")
-        .fetch_all(&st.pool).await?;
+    let cats = db::list_categories(&st.pool).await?;
     let cat = |c: Option<Uuid>| c.and_then(|c| cats.iter().find(|x| x.0 == c));
     let head = ["Dönem", "Kaynak", "Kategori", "Etkinlik", "Planlanan", "Harcanan", "Taahhüt", "Not"];
     let data: Vec<Vec<Cell>> = rows.iter().map(|r| {
