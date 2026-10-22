@@ -9,13 +9,14 @@ use uuid::Uuid;
 
 use super::finance::{need, need_viewer};
 use crate::{
+    db::recurring as db,
     domain::common,
     error::{AppError, Result},
     finance::cents,
     state::AppState,
 };
 
-#[derive(Serialize, sqlx::FromRow)]
+#[derive(Serialize)]
 pub struct Recurring {
     id: Uuid,
     name: String,
@@ -27,17 +28,16 @@ pub struct Recurring {
     is_active: bool,
 }
 
-macro_rules! recurring_select {
-    () => {
-        "select id, name, amount::float8 as amount, currency::text as currency, every, next_on, category_id, is_active
-           from recurring_expenses "
-    };
+impl From<db::RecurringRow> for Recurring {
+    fn from(r: db::RecurringRow) -> Self {
+        Self { id: r.id, name: r.name, amount: r.amount, currency: r.currency, every: r.every,
+            next_on: r.next_on, category_id: r.category_id, is_active: r.is_active }
+    }
 }
 
 pub(crate) async fn list(st: &AppState, me: &crate::models::user::User) -> Result<Vec<Recurring>> {
     need_viewer(st, me).await?;
-    Ok(sqlx::query_as(concat!(recurring_select!(), "order by is_active desc, next_on, name"))
-        .fetch_all(&st.pool).await?)
+    Ok(db::list_recurring(&st.pool).await?.into_iter().map(Recurring::from).collect())
 }
 
 #[derive(Deserialize)]
@@ -64,8 +64,7 @@ async fn check(st: &AppState, b: &RecurringIn) -> Result<(String, i64, String)> 
         Some(_) => return Err(AppError::BadRequest("invalid_currency")),
     };
     if let Some(c) = b.category_id {
-        let ok: bool = sqlx::query_scalar("select exists(select 1 from nodes where id = $1 and node_type = 'category')")
-            .bind(c).fetch_one(&st.pool).await?;
+        let ok = db::has_category(&st.pool, c).await?;
         if !ok {
             return Err(AppError::BadRequest("invalid_category"));
         }
@@ -76,17 +75,12 @@ async fn check(st: &AppState, b: &RecurringIn) -> Result<(String, i64, String)> 
 pub(crate) async fn create(st: &AppState, me: &crate::models::user::User, b: RecurringIn) -> Result<Recurring> {
     need(st, me, "manage_ledger").await?;
     let (name, amount, currency) = check(st, &b).await?;
-    let id: Uuid = sqlx::query_scalar(
-        "insert into recurring_expenses (name, amount, currency, every, next_on, category_id)
-         values ($1, $2::bigint::numeric / 100, $3, $4, $5, $6) returning id")
-        .bind(&name).bind(amount).bind(&currency).bind(&b.every).bind(b.next_on).bind(b.category_id)
-        .fetch_one(&st.pool).await?;
+    let id = db::insert_recurring(&st.pool, &name, amount, &currency, &b.every, b.next_on, b.category_id).await?;
     one(st, id).await
 }
 
 async fn one(st: &AppState, id: Uuid) -> Result<Recurring> {
-    sqlx::query_as(concat!(recurring_select!(), "where id = $1"))
-        .bind(id).fetch_optional(&st.pool).await?.ok_or(AppError::NotFound)
+    db::find_recurring(&st.pool, id).await?.map(Recurring::from).ok_or(AppError::NotFound)
 }
 
 #[derive(Deserialize)]
@@ -118,18 +112,14 @@ pub(crate) async fn patch(st: &AppState, me: &crate::models::user::User, id: Uui
         category_id: b.category_id.unwrap_or(cur.category_id),
     };
     let (name, amount, _) = check(st, &merged).await?;
-    sqlx::query(
-        "update recurring_expenses set name = $2, amount = $3::bigint::numeric / 100, every = $4, next_on = $5,
-                category_id = $6, is_active = $7 where id = $1")
-        .bind(id).bind(&name).bind(amount).bind(&merged.every).bind(merged.next_on).bind(merged.category_id)
-        .bind(b.is_active.unwrap_or(cur.is_active)).execute(&st.pool).await?;
+    db::update_recurring(&st.pool, id, &name, amount, &merged.every, merged.next_on, merged.category_id,
+        b.is_active.unwrap_or(cur.is_active)).await?;
     one(st, id).await
 }
 
 pub(crate) async fn delete(st: &AppState, me: &crate::models::user::User, id: Uuid) -> Result<serde_json::Value> {
     need(st, me, "manage_ledger").await?;
-    let n = sqlx::query("delete from recurring_expenses where id = $1")
-        .bind(id).execute(&st.pool).await?.rows_affected();
+    let n = db::delete_recurring(&st.pool, id).await?;
     if n == 0 {
         return Err(AppError::NotFound);
     }
