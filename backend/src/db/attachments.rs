@@ -2,7 +2,7 @@
 
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
-use crate::media;
+use crate::db::media;
 
 #[derive(sqlx::FromRow)]
 pub(crate) struct Row {
