@@ -15,6 +15,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::{
+    db::otf::{self as db_otf, EventInfo},
     domain::common,
     domain::events,
     error::{AppError, Result},
@@ -31,7 +32,7 @@ const WEEKDAYS: [&str; 7] = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "C
 /// Kulup duyurusu: OTF etkinlikten en gec bu kadar IS GUNU once iletilir.
 const DEADLINE_WORKDAYS: u32 = 3;
 
-#[derive(Serialize, Deserialize, sqlx::FromRow, Default)]
+#[derive(Serialize, Deserialize, Default)]
 pub struct Fields {
     #[serde(default)]
     purpose: Option<String>,
@@ -58,7 +59,7 @@ pub struct Fields {
     other_notes: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, sqlx::FromRow)]
+#[derive(Serialize, Deserialize)]
 pub struct Item {
     item: String,
     #[serde(default)]
@@ -114,14 +115,14 @@ pub struct OutcomeOption {
     is_active: bool,
 }
 
-#[derive(Serialize, sqlx::FromRow)]
+#[derive(Serialize)]
 pub struct Source {
     event_id: Uuid,
     title: String,
     updated_at: chrono::DateTime<chrono::Utc>,
 }
 
-#[derive(Serialize, sqlx::FromRow)]
+#[derive(Serialize)]
 pub struct Review {
     /// Kaynak etkinlik silindiyse null.
     copied_from: Option<Uuid>,
@@ -133,21 +134,16 @@ pub struct Review {
 }
 
 async fn load_review(pool: &PgPool, id: Uuid) -> Result<Option<Review>> {
-    Ok(sqlx::query_as(
-        "select o.copied_from, e.title as copied_title, o.needs_review, o.edited
-           from event_otf o left join events e on e.id = o.copied_from
-          where o.event_id = $1 and (o.copied_from is not null or o.needs_review)")
-        .bind(id).fetch_optional(pool).await?)
+    Ok(db_otf::find_review(pool, id).await?.map(|r| Review {
+        copied_from: r.copied_from, copied_title: r.copied_title, needs_review: r.needs_review, edited: r.edited,
+    }))
 }
 
 /// En son kaydedilmis, gozden gecirilmis (kopya bekleyen degil) baska form.
 async fn source_of(pool: &PgPool, id: Uuid) -> Result<Option<Source>> {
-    Ok(sqlx::query_as(
-        "select o.event_id, e.title, o.updated_at
-           from event_otf o join events e on e.id = o.event_id
-          where o.event_id <> $1 and not o.needs_review
-          order by o.updated_at desc limit 1")
-        .bind(id).fetch_optional(pool).await?)
+    Ok(db_otf::find_source(pool, id).await?.map(|r| Source {
+        event_id: r.event_id, title: r.title, updated_at: r.updated_at,
+    }))
 }
 
 /// Formun icerigi (alanlar + kutular + sorumlular), karsilastirma icin.
@@ -159,40 +155,24 @@ async fn snapshot(pool: &PgPool, id: Uuid) -> Result<serde_json::Value> {
     Ok(serde_json::json!([load_fields(pool, id).await?, items, load_contacts(pool, id).await?, outcomes]))
 }
 
-#[derive(sqlx::FromRow)]
-struct EventInfo {
-    title: String,
-    date: Option<NaiveDate>,
-    start_time: Option<String>,
-    place: Option<String>,
-    attendees: Option<i32>,
-}
-
 async fn event_info(pool: &PgPool, id: Uuid) -> Result<EventInfo> {
-    sqlx::query_as(
-        // Yer: listeden secildiyse dugum adi, yoksa metin (spec/74 §5b).
-        "select e.title, e.date, to_char(e.start_time, 'HH24:MI') as start_time,
-                coalesce(n.name, e.place) as place, e.attendees
-           from events e left join nodes n on n.id = e.location_id where e.id = $1")
-        .bind(id).fetch_optional(pool).await?.ok_or(AppError::NotFound)
+    db_otf::find_event_info(pool, id).await?.ok_or(AppError::NotFound)
 }
 
 async fn load_fields(pool: &PgPool, id: Uuid) -> Result<Fields> {
-    Ok(sqlx::query_as(
-        "select purpose, to_char(end_time, 'HH24:MI') as end_time, advisor, age_group, outcomes,
-                layout_notes, av_notes, tech_notes, host_notes, care_notes, other_notes
-           from event_otf where event_id = $1")
-        .bind(id).fetch_optional(pool).await?.unwrap_or_default())
+    Ok(db_otf::find_fields(pool, id).await?.map(|r| Fields {
+        purpose: r.purpose, end_time: r.end_time, advisor: r.advisor, age_group: r.age_group,
+        outcomes: r.outcomes, layout_notes: r.layout_notes, av_notes: r.av_notes, tech_notes: r.tech_notes,
+        host_notes: r.host_notes, care_notes: r.care_notes, other_notes: r.other_notes,
+    }).unwrap_or_default())
 }
 
 async fn load_items(pool: &PgPool, id: Uuid) -> Result<Vec<Item>> {
-    Ok(sqlx::query_as("select item, quantity from event_otf_items where event_id = $1")
-        .bind(id).fetch_all(pool).await?)
+    Ok(db_otf::list_items(pool, id).await?.into_iter().map(|r| Item { item: r.item, quantity: r.quantity }).collect())
 }
 
 async fn load_contacts(pool: &PgPool, id: Uuid) -> Result<Vec<Uuid>> {
-    Ok(sqlx::query_scalar("select user_id from event_otf_contacts where event_id = $1 order by position")
-        .bind(id).fetch_all(pool).await?)
+    Ok(db_otf::list_contacts(pool, id).await?)
 }
 
 /// Formdaki "KAZANIMLAR" alani: secilen kazanim adlari satir satir, ardindan
@@ -204,8 +184,7 @@ fn outcomes_text(picked: &[String], free: Option<&str>) -> String {
 
 /// Secili kazanim id'leri (sirasiz; sira icin `in_tree_order`).
 async fn load_outcome_ids(pool: &PgPool, id: Uuid) -> Result<Vec<Uuid>> {
-    Ok(sqlx::query_scalar("select outcome_id from event_otf_outcomes where event_id = $1")
-        .bind(id).fetch_all(pool).await?)
+    Ok(db_otf::list_outcome_ids(pool, id).await?)
 }
 
 fn in_tree_order(st: &AppState, mut ids: Vec<Uuid>) -> Vec<Uuid> {
@@ -226,8 +205,7 @@ async fn outcome_options(st: &AppState, selected: &[Uuid]) -> Result<Vec<Outcome
             .collect()
     };
     let described: std::collections::HashMap<Uuid, Option<String>> =
-        sqlx::query_as("select id, description from nodes where id = any($1)")
-            .bind(&ids).fetch_all(&st.pool).await?.into_iter().collect();
+        db_otf::list_descriptions(&st.pool, &ids).await?.into_iter().collect();
     let tree = common::tree(st);
     Ok(ids.into_iter().filter_map(|i| tree.get(i).map(|n| OutcomeOption {
         id: i, name: n.name.clone(), is_active: n.is_active,
@@ -339,33 +317,13 @@ pub(crate) async fn autofill(st: &AppState, me: &crate::models::user::User, id: 
     events::editable(st, me, id).await?;
     let src = source_of(&st.pool, id).await?.ok_or(AppError::Conflict("otf_no_source"))?.event_id;
     let mut tx = st.pool.begin().await?;
-    sqlx::query(
-        "insert into event_otf (event_id, purpose, end_time, advisor, age_group, outcomes,
-                                layout_notes, av_notes, tech_notes, host_notes, care_notes, other_notes,
-                                copied_from, needs_review, edited)
-         select $1, purpose, end_time, advisor, age_group, outcomes,
-                layout_notes, av_notes, tech_notes, host_notes, care_notes, other_notes, $2, true, false
-           from event_otf where event_id = $2
-         on conflict (event_id) do update set
-           purpose = excluded.purpose, end_time = excluded.end_time, advisor = excluded.advisor,
-           age_group = excluded.age_group, outcomes = excluded.outcomes,
-           layout_notes = excluded.layout_notes, av_notes = excluded.av_notes,
-           tech_notes = excluded.tech_notes, host_notes = excluded.host_notes,
-           care_notes = excluded.care_notes, other_notes = excluded.other_notes,
-           copied_from = excluded.copied_from, needs_review = true, edited = false, updated_at = now()")
-        .bind(id).bind(src).execute(&mut *tx).await?;
-    sqlx::query("delete from event_otf_items where event_id = $1").bind(id).execute(&mut *tx).await?;
-    sqlx::query("insert into event_otf_items (event_id, item, quantity)
-                 select $1, item, quantity from event_otf_items where event_id = $2")
-        .bind(id).bind(src).execute(&mut *tx).await?;
-    sqlx::query("delete from event_otf_contacts where event_id = $1").bind(id).execute(&mut *tx).await?;
-    sqlx::query("insert into event_otf_contacts (event_id, user_id, position)
-                 select $1, user_id, position from event_otf_contacts where event_id = $2")
-        .bind(id).bind(src).execute(&mut *tx).await?;
-    sqlx::query("delete from event_otf_outcomes where event_id = $1").bind(id).execute(&mut *tx).await?;
-    sqlx::query("insert into event_otf_outcomes (event_id, outcome_id)
-                 select $1, outcome_id from event_otf_outcomes where event_id = $2")
-        .bind(id).bind(src).execute(&mut *tx).await?;
+    db_otf::copy_fields(&mut *tx, id, src).await?;
+    db_otf::delete_items(&mut *tx, id).await?;
+    db_otf::copy_items(&mut *tx, id, src).await?;
+    db_otf::delete_contacts(&mut *tx, id).await?;
+    db_otf::copy_contacts(&mut *tx, id, src).await?;
+    db_otf::delete_outcomes(&mut *tx, id).await?;
+    db_otf::copy_outcomes(&mut *tx, id, src).await?;
     tx.commit().await?;
     reply(st, id).await
 }
@@ -401,38 +359,20 @@ pub(crate) async fn put(st: &AppState, me: &crate::models::user::User, id: Uuid,
 
     let before = snapshot(&st.pool, id).await?;
     let mut tx = st.pool.begin().await?;
-    sqlx::query(
-        "insert into event_otf (event_id, purpose, end_time, advisor, age_group, outcomes,
-                                layout_notes, av_notes, tech_notes, host_notes, care_notes, other_notes)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-         on conflict (event_id) do update set
-           purpose = excluded.purpose, end_time = excluded.end_time, advisor = excluded.advisor,
-           age_group = excluded.age_group, outcomes = excluded.outcomes,
-           layout_notes = excluded.layout_notes, av_notes = excluded.av_notes,
-           tech_notes = excluded.tech_notes, host_notes = excluded.host_notes,
-           care_notes = excluded.care_notes, other_notes = excluded.other_notes, updated_at = now()")
-        .bind(id).bind(text(f.purpose)?).bind(end_time).bind(short(f.advisor)?).bind(short(f.age_group)?)
-        .bind(text(f.outcomes)?).bind(text(f.layout_notes)?).bind(text(f.av_notes)?)
-        .bind(text(f.tech_notes)?).bind(text(f.host_notes)?).bind(text(f.care_notes)?)
-        .bind(text(f.other_notes)?)
-        .execute(&mut *tx).await?;
-    sqlx::query("delete from event_otf_items where event_id = $1").bind(id).execute(&mut *tx).await?;
+    db_otf::upsert_fields(&mut *tx, id, text(f.purpose)?, end_time, short(f.advisor)?, short(f.age_group)?,
+        text(f.outcomes)?, text(f.layout_notes)?, text(f.av_notes)?, text(f.tech_notes)?, text(f.host_notes)?,
+        text(f.care_notes)?, text(f.other_notes)?).await?;
+    db_otf::delete_items(&mut *tx, id).await?;
     for it in &b.items {
-        sqlx::query("insert into event_otf_items (event_id, item, quantity) values ($1, $2, $3)
-                     on conflict do nothing")
-            .bind(id).bind(&it.item).bind(it.quantity).execute(&mut *tx).await?;
+        db_otf::insert_item(&mut *tx, id, &it.item, it.quantity).await?;
     }
-    sqlx::query("delete from event_otf_contacts where event_id = $1").bind(id).execute(&mut *tx).await?;
+    db_otf::delete_contacts(&mut *tx, id).await?;
     for (i, c) in b.contacts.iter().enumerate() {
-        sqlx::query("insert into event_otf_contacts (event_id, user_id, position) values ($1, $2, $3)
-                     on conflict do nothing")
-            .bind(id).bind(c).bind(i as i16).execute(&mut *tx).await?;
+        db_otf::insert_contact(&mut *tx, id, *c, i as i16).await?;
     }
-    sqlx::query("delete from event_otf_outcomes where event_id = $1").bind(id).execute(&mut *tx).await?;
+    db_otf::delete_outcomes(&mut *tx, id).await?;
     for o in &b.outcome_ids {
-        sqlx::query("insert into event_otf_outcomes (event_id, outcome_id) values ($1, $2)
-                     on conflict do nothing")
-            .bind(id).bind(o).execute(&mut *tx).await?;
+        db_otf::insert_outcome(&mut *tx, id, *o).await?;
     }
     tx.commit().await?;
 
@@ -444,16 +384,9 @@ pub(crate) async fn put(st: &AppState, me: &crate::models::user::User, id: Uuid,
         if b.reviewed && !edited {
             return Err(AppError::Conflict("otf_review_needs_edit"));
         }
-        sqlx::query("update event_otf set edited = $2, needs_review = not $3 where event_id = $1")
-            .bind(id).bind(edited).bind(b.reviewed).execute(&st.pool).await?;
+        db_otf::set_review(&st.pool, id, edited, b.reviewed).await?;
     }
     reply(st, id).await
-}
-
-#[derive(sqlx::FromRow)]
-struct Contact {
-    name: String,
-    phone: Option<String>,
 }
 
 /// Doldurulmus .docx. Okuma etkinlik gibi: herkese acik, ikiz gizliyse uyeye (A4).
@@ -471,10 +404,7 @@ pub(crate) async fn docx(st: &AppState, me: &crate::models::user::User, id: Uuid
     }
     let f = load_fields(&st.pool, id).await?;
     let items = load_items(&st.pool, id).await?;
-    let contacts: Vec<Contact> = sqlx::query_as(
-        "select u.name, u.phone from event_otf_contacts c join users u on u.id = c.user_id
-          where c.event_id = $1 order by c.position")
-        .bind(id).fetch_all(&st.pool).await?;
+    let contacts = db_otf::list_contact_details(&st.pool, id).await?;
 
     // Kazanimlar: listeden secilenlerin ADLARI (agac sirasinda), sonra serbest metin.
     let picked_outcomes: Vec<String> = {

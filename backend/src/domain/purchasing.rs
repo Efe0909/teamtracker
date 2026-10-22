@@ -14,6 +14,7 @@ use uuid::Uuid;
 
 use crate::domain::finance::{need, need_viewer, today};
 use crate::{
+    db::purchasing as db_purchasing,
     domain::common,
     error::{AppError, Result},
     finance::cents,
@@ -28,7 +29,7 @@ const WALL_PAGE_MAX: i64 = 500;
 
 /// Kalem satiri: kart fiyati (secili teklif / sponsor / en dusuk), tedarikci,
 /// gelis, etkinlik, kategori, onayli faturasi var mi.
-#[derive(Serialize, sqlx::FromRow)]
+#[derive(Serialize)]
 pub struct MatRow {
     id: Uuid,
     name: String,
@@ -55,36 +56,20 @@ pub struct MatRow {
     created_at: DateTime<Utc>,
     purchased_at: Option<DateTime<Utc>>,
     /// Ayni adli kalemleri tek satirda toplamak icin normalize anahtari (Kind::Plain).
-    #[sqlx(skip)]
     group_key: String,
 }
 
-/// Ortak FROM: secili ve en ucuz teklif yanal birlesimle (tek sorgu, N+1 yok).
-macro_rules! mat_select {
-    () => {
-        "select m.id, m.name, m.qty, m.type as kind, m.priority, m.state, m.owned, m.purchased, m.delivered,
-                m.sponsor_chosen,
-                (case when m.sponsor_chosen then 0 else coalesce(cp.price, mp.price) end)::float8 as price,
-                m.budget::float8 as budget,
-                case when m.sponsor_chosen then m.sponsor_date else coalesce(cp.arrival_date, mp.arrival_date) end as eta,
-                case when m.sponsor_chosen then 'Sponsor' else coalesce(cp.who, mp.who) end as supplier,
-                (select count(*) from material_providers p where p.material_id = m.id) as offer_count,
-                e.id as event_id, e.title as event_title, e.date as event_date, m.category_id, m.needed_by,
-                exists(select 1 from invoice_items ii join invoices i on i.id = ii.invoice_id
-                        where ii.material_id = m.id and i.status = 'approved') as invoiced,
-                m.created_by, m.created_at, m.purchased_at
-           from materials m
-           left join event_materials em on em.material_id = m.id
-           left join events e on e.id = em.event_id
-           left join lateral (
-             select p.price, p.arrival_date, coalesce(v.name, p.name, p.contact) as who
-               from material_providers p left join vendors v on v.id = p.vendor_id
-              where p.id = m.chosen_provider_id) cp on true
-           left join lateral (
-             select p.price, p.arrival_date, coalesce(v.name, p.name, p.contact) as who
-               from material_providers p left join vendors v on v.id = p.vendor_id
-              where p.material_id = m.id and p.price is not null order by p.price limit 1) mp on true "
-    };
+impl From<db_purchasing::MatRow> for MatRow {
+    fn from(r: db_purchasing::MatRow) -> Self {
+        Self {
+            id: r.id, name: r.name, qty: r.qty, kind: r.kind, priority: r.priority, state: r.state,
+            owned: r.owned, purchased: r.purchased, delivered: r.delivered, sponsor_chosen: r.sponsor_chosen,
+            price: r.price, budget: r.budget, eta: r.eta, supplier: r.supplier, offer_count: r.offer_count,
+            event_id: r.event_id, event_title: r.event_title, event_date: r.event_date, category_id: r.category_id,
+            needed_by: r.needed_by, invoiced: r.invoiced, created_by: r.created_by, created_at: r.created_at,
+            purchased_at: r.purchased_at, group_key: String::new(),
+        }
+    }
 }
 
 // --- Malzemeler (kuyruklar) ---------------------------------------------------------
@@ -115,30 +100,6 @@ pub struct MatList {
     counts: HashMap<&'static str, i64>,
 }
 
-/// Kuyruklar (spec/81 §7.1). Kosul tek yerde, liste ve sayim ayni ifadeyi kullanir.
-macro_rules! queue_where {
-    () => {
-        "(($1 = 'review' and m.state = 3 and not m.owned and not m.purchased)
-          or ($1 = 'ship' and m.purchased and not m.delivered)
-          or ($1 = 'invoice' and m.purchased and not exists(select 1 from invoice_items ii join invoices i on i.id = ii.invoice_id
-                                                             where ii.material_id = m.id and i.status = 'approved'))
-          or ($1 = 'open' and m.state < 3 and not m.owned)
-          or $1 = 'all')"
-    };
-}
-
-macro_rules! filter_where {
-    () => {
-        "($2::uuid is null or e.id = $2) and (not $3 or em.material_id is null)
-         and ($4::text is null or m.type = $4) and ($5::uuid is null or m.category_id = $5)
-         and ($6::text is null or m.name ilike '%' || $6 || '%'
-              or exists(select 1 from material_providers p left join vendors v on v.id = p.vendor_id
-                         where p.material_id = m.id and coalesce(v.name, p.name, p.contact) ilike '%' || $6 || '%'))
-         and ($7::date is null or coalesce(e.date, m.needed_by) >= $7)
-         and ($8::date is null or coalesce(e.date, m.needed_by) <= $8)"
-    };
-}
-
 const QUEUES: [&str; 5] = ["review", "ship", "invoice", "open", "all"];
 
 pub(crate) async fn materials(st: &AppState, me: &User, q: MatQuery) -> Result<MatList> {
@@ -147,20 +108,15 @@ pub(crate) async fn materials(st: &AppState, me: &User, q: MatQuery) -> Result<M
     let none = q.event.as_deref() == Some("none");
     let event: Option<Uuid> = q.event.as_deref().filter(|e| *e != "none").and_then(|e| e.parse().ok());
     let search = q.q.map(|s| s.trim().replace(['%', '_'], "")).filter(|s| !s.is_empty());
-    let mut rows: Vec<MatRow> = sqlx::query_as(concat!(mat_select!(), "where ", queue_where!(), " and ", filter_where!(),
-        " order by coalesce(e.date, m.needed_by) nulls last, e.title, m.name limit 500"))
-        .bind(&queue).bind(event).bind(none).bind(&q.kind).bind(q.category).bind(&search).bind(q.from).bind(q.to)
-        .fetch_all(&st.pool).await?;
+    let mut rows: Vec<MatRow> = db_purchasing::list_materials(&st.pool, &queue, event, none, q.kind.as_deref(),
+        q.category, search.as_deref(), q.from, q.to).await?.into_iter().map(MatRow::from).collect();
     for r in &mut rows {
         r.group_key = normalize::key(Kind::Plain, &r.name);
     }
     let mut counts = HashMap::new();
     for k in QUEUES {
-        let n: i64 = sqlx::query_scalar(concat!(
-            "select count(*) from materials m left join event_materials em on em.material_id = m.id
-               left join events e on e.id = em.event_id where ", queue_where!(), " and ", filter_where!()))
-            .bind(k).bind(event).bind(none).bind(&q.kind).bind(q.category).bind(&search).bind(q.from).bind(q.to)
-            .fetch_one(&st.pool).await?;
+        let n = db_purchasing::count_materials(&st.pool, k, event, none, q.kind.as_deref(),
+            q.category, search.as_deref(), q.from, q.to).await?;
         counts.insert(k, n);
     }
     Ok(MatList { rows, counts })
@@ -213,8 +169,7 @@ pub struct Wall {
 
 /// Kokteki varsayilan araliklar (spec/81 §7.2); yoksa 30 gun.
 async fn wall_defaults(st: &AppState) -> Result<(i64, i64)> {
-    let attrs: Option<Value> = sqlx::query_scalar("select attrs from nodes where key = 'finance'")
-        .fetch_optional(&st.pool).await?;
+    let attrs = db_purchasing::find_wall_attrs(&st.pool).await?;
     let get = |k: &str| attrs.as_ref().and_then(|a| a.get(k)).and_then(Value::as_i64).unwrap_or(30);
     Ok((get("wall_ahead_days"), get("wall_back_days")))
 }
@@ -227,15 +182,8 @@ pub(crate) async fn wall(st: &AppState, me: &User, q: WallQuery) -> Result<Wall>
     let back = q.back.unwrap_or(db).clamp(0, 3650);
     let search = q.q.map(|s| s.trim().replace(['%', '_'], "")).filter(|s| !s.is_empty());
     let ledger = q.ledger.filter(|l| l == "seb" || l == "general");
-    let rows: Vec<MatRow> = sqlx::query_as(concat!(mat_select!(),
-        "left join nodes cat on cat.id = m.category_id
-          where em.material_id is null and not m.owned
-            and ($1::text is null or m.type = $1) and ($2::uuid is null or m.category_id = $2)
-            and ($3::text is null or cat.attrs->>'ledger' = $3)
-            and ($4::text is null or m.name ilike '%' || $4 || '%')
-          order by m.created_at desc limit 5000"))
-        .bind(&q.kind).bind(q.category).bind(&ledger).bind(&search)
-        .fetch_all(&st.pool).await?;
+    let rows: Vec<MatRow> = db_purchasing::list_wall_materials(&st.pool, q.kind.as_deref(), q.category,
+        ledger.as_deref(), search.as_deref()).await?.into_iter().map(MatRow::from).collect();
     let day = today();
     let now = Utc::now();
     let (mut prep, mut tobuy, mut bought) = (Vec::new(), Vec::new(), Vec::new());
@@ -311,8 +259,7 @@ pub(crate) async fn create_material(st: &AppState, me: &User, b: NewMaterial) ->
     need(st, me, "manage_purchases").await?;
     let name = common::text(Some(b.name), NAME_MAX, "invalid_name")?.ok_or(AppError::BadRequest("invalid_name"))?;
     let notes = common::text(b.notes, NOTE_MAX, "invalid_note")?;
-    let cat: bool = sqlx::query_scalar("select exists(select 1 from nodes where id = $1 and node_type = 'category' and is_active)")
-        .bind(b.category_id).fetch_one(&st.pool).await?;
+    let cat = db_purchasing::active_category_exists(&st.pool, b.category_id).await?;
     if !cat {
         return Err(AppError::BadRequest("category_required"));
     }
@@ -326,19 +273,14 @@ pub(crate) async fn create_material(st: &AppState, me: &User, b: NewMaterial) ->
         Some(_) => return Err(AppError::BadRequest("invalid_type")),
     };
     let mut tx = st.pool.begin().await?;
-    let id: Uuid = sqlx::query_scalar(
-        "insert into materials (name, type, qty, notes, category_id, needed_by, created_by)
-         values ($1, $2, $3, $4, $5, $6, $7) returning id")
-        .bind(&name).bind(kind).bind(qty).bind(&notes).bind(b.category_id).bind(b.needed_by).bind(me.id)
-        .fetch_one(&mut *tx).await?;
+    let id = db_purchasing::insert_material(&mut *tx, &name, kind, qty, notes.as_deref(), b.category_id, b.needed_by, me.id).await?;
     if let Some(o) = b.offer {
         let price = match o.price {
             Some(p) => Some(cents(p).ok_or(AppError::BadRequest("invalid_price"))?),
             None => None,
         };
         let vendor_name: Option<String> = match o.vendor_id {
-            Some(v) => Some(sqlx::query_scalar("select name from vendors where id = $1 and merged_into is null")
-                .bind(v).fetch_optional(&mut *tx).await?.ok_or(AppError::BadRequest("invalid_vendor"))?),
+            Some(v) => Some(db_purchasing::find_vendor_name(&mut *tx, v).await?.ok_or(AppError::BadRequest("invalid_vendor"))?),
             None => None,
         };
         let label = common::text(o.name, NAME_MAX, "invalid_name")?.or(vendor_name);
@@ -348,12 +290,8 @@ pub(crate) async fn create_material(st: &AppState, me: &User, b: NewMaterial) ->
                 Some(v) => Some(v),
                 None => ensure_vendor(&mut tx, &label, Some(me.id)).await?,
             };
-            let pid: Uuid = sqlx::query_scalar(
-                "insert into material_providers (material_id, contact, name, price, vendor_id)
-                 values ($1, $2, $2, $3::bigint::numeric / 100, $4) returning id")
-                .bind(id).bind(&label).bind(price).bind(vendor).fetch_one(&mut *tx).await?;
-            sqlx::query("update materials set chosen_provider_id = $2, state = 2 where id = $1")
-                .bind(id).bind(pid).execute(&mut *tx).await?;
+            let pid = db_purchasing::insert_provider(&mut *tx, id, &label, price, vendor).await?;
+            db_purchasing::set_chosen_provider(&mut *tx, id, pid).await?;
         }
     }
     tx.commit().await?;
@@ -361,11 +299,10 @@ pub(crate) async fn create_material(st: &AppState, me: &User, b: NewMaterial) ->
 }
 
 async fn one(st: &AppState, id: Uuid) -> Result<MatRow> {
-    sqlx::query_as(concat!(mat_select!(), "where m.id = $1"))
-        .bind(id).fetch_optional(&st.pool).await?.ok_or(AppError::NotFound)
+    db_purchasing::find_material(&st.pool, id).await?.map(MatRow::from).ok_or(AppError::NotFound)
 }
 
-#[derive(Serialize, sqlx::FromRow)]
+#[derive(Serialize)]
 struct MatInvoice {
     id: Uuid,
     purchased_on: NaiveDate,
@@ -391,11 +328,9 @@ pub(crate) async fn material(st: &AppState, me: &User, id: Uuid) -> Result<MatFu
     need_viewer(st, me).await?;
     let row = one(st, id).await?;
     let material = crate::domain::events::material_one(&st.pool, id).await?;
-    let invoices: Vec<MatInvoice> = sqlx::query_as(
-        "select i.id, i.purchased_on, i.status, ii.amount::float8 as amount
-           from invoice_items ii join invoices i on i.id = ii.invoice_id
-          where ii.material_id = $1 order by i.purchased_on desc, i.created_at desc")
-        .bind(id).fetch_all(&st.pool).await?;
+    let invoices = db_purchasing::list_material_invoices(&st.pool, id).await?.into_iter().map(|r| MatInvoice {
+        id: r.id, purchased_on: r.purchased_on, status: r.status, amount: r.amount,
+    }).collect();
     Ok(MatFull {
         material,
         event_id: row.event_id, event_title: row.event_title, event_date: row.event_date,
@@ -418,10 +353,7 @@ pub struct MaterialPatch {
 pub(crate) async fn patch_material(st: &AppState, me: &User, id: Uuid, b: MaterialPatch) -> Result<MatRow> {
     need(st, me, "manage_purchases").await?;
     let mut tx = st.pool.begin().await?;
-    let row: Option<(bool, bool)> = sqlx::query_as(
-        "select m.purchased, exists(select 1 from event_materials em where em.material_id = m.id)
-           from materials m where m.id = $1 for update")
-        .bind(id).fetch_optional(&mut *tx).await?;
+    let row = db_purchasing::lock_material(&mut *tx, id).await?;
     let (purchased, has_event) = row.ok_or(AppError::NotFound)?;
     if has_event {
         return Err(AppError::Conflict("event_material"));
@@ -433,23 +365,17 @@ pub(crate) async fn patch_material(st: &AppState, me: &User, id: Uuid, b: Materi
         if purchased && s < 3 {
             return Err(AppError::Conflict("purchased_locked"));
         }
-        sqlx::query(
-            "update materials set state = $2, delivered = case when $2 < 3 then false else delivered end,
-                    updated_at = now() where id = $1")
-            .bind(id).bind(s).execute(&mut *tx).await?;
+        db_purchasing::set_material_state(&mut *tx, id, s).await?;
     }
     if let Some(n) = b.needed_by {
-        sqlx::query("update materials set needed_by = $2, updated_at = now() where id = $1")
-            .bind(id).bind(n).execute(&mut *tx).await?;
+        db_purchasing::set_needed_by(&mut *tx, id, n).await?;
     }
     if let Some(c) = b.category_id {
-        let ok: bool = sqlx::query_scalar("select exists(select 1 from nodes where id = $1 and node_type = 'category')")
-            .bind(c).fetch_one(&mut *tx).await?;
+        let ok = db_purchasing::category_exists(&mut *tx, c).await?;
         if !ok {
             return Err(AppError::BadRequest("invalid_category"));
         }
-        sqlx::query("update materials set category_id = $2, updated_at = now() where id = $1")
-            .bind(id).bind(c).execute(&mut *tx).await?;
+        db_purchasing::set_category(&mut *tx, id, c).await?;
     }
     tx.commit().await?;
     one(st, id).await
@@ -465,11 +391,7 @@ pub(crate) async fn ensure_vendor(conn: &mut sqlx::PgConnection, label: &str, by
     if key.is_empty() || label.chars().count() > NAME_MAX {
         return Ok(None);
     }
-    let id = sqlx::query_scalar(
-        "insert into vendors (name, name_key, created_by) values ($1, $2, $3)
-         on conflict (name_key) where merged_into is null do update set name_key = excluded.name_key
-         returning id")
-        .bind(label).bind(&key).bind(by).fetch_one(conn).await?;
+    let id = db_purchasing::upsert_vendor(conn, label, &key, by).await?;
     Ok(Some(id))
 }
 
@@ -487,15 +409,13 @@ pub(crate) fn offer_label<'a>(name: Option<&'a str>, contact: &'a str) -> Option
 
 /// Acilista, bagi olmayan tekliflere tedarikci acar/baglar. Tekrar kosmasi guvenli.
 pub(crate) async fn backfill_vendors(pool: &sqlx::PgPool) -> Result<u64> {
-    let rows: Vec<(Uuid, Option<String>, String)> = sqlx::query_as(
-        "select id, name, contact from material_providers where vendor_id is null").fetch_all(pool).await?;
+    let rows = db_purchasing::list_unlinked_providers(pool).await?;
     let mut linked = 0;
     let mut conn = pool.acquire().await?;
     for (id, name, contact) in rows {
         let Some(label) = offer_label(name.as_deref(), &contact) else { continue };
         if let Some(v) = ensure_vendor(&mut conn, label, None).await? {
-            sqlx::query("update material_providers set vendor_id = $2 where id = $1")
-                .bind(id).bind(v).execute(&mut *conn).await?;
+            db_purchasing::set_provider_vendor(&mut *conn, id, v).await?;
             linked += 1;
         }
     }
@@ -504,7 +424,7 @@ pub(crate) async fn backfill_vendors(pool: &sqlx::PgPool) -> Result<u64> {
 
 // --- Tedarikciler -----------------------------------------------------------------
 
-#[derive(Serialize, sqlx::FromRow)]
+#[derive(Serialize)]
 pub struct VendorRow {
     id: Uuid,
     name: String,
@@ -522,18 +442,14 @@ pub struct VendorRow {
     created_at: DateTime<Utc>,
 }
 
-macro_rules! vendor_select {
-    () => {
-        "select v.id, v.name, v.contact, v.phone, v.email, v.url, v.issues_invoice, v.note,
-                (select count(*) from material_providers p where p.vendor_id = v.id) as offer_count,
-                (select count(distinct em.event_id) from material_providers p
-                   join event_materials em on em.material_id = p.material_id where p.vendor_id = v.id) as event_count,
-                coalesce((select sum(i.total_try) from invoices i where i.vendor_id = v.id and i.status = 'approved'), 0)::float8
-                  as invoice_total,
-                array(select a.name from vendors a where a.merged_into = v.id order by a.name) as aliases,
-                v.created_at
-           from vendors v "
-    };
+impl From<db_purchasing::VendorRow> for VendorRow {
+    fn from(r: db_purchasing::VendorRow) -> Self {
+        Self {
+            id: r.id, name: r.name, contact: r.contact, phone: r.phone, email: r.email, url: r.url,
+            issues_invoice: r.issues_invoice, note: r.note, offer_count: r.offer_count, event_count: r.event_count,
+            invoice_total: r.invoice_total, aliases: r.aliases, created_at: r.created_at,
+        }
+    }
 }
 
 #[derive(Deserialize)]
@@ -546,12 +462,7 @@ pub struct VendorQuery {
 pub(crate) async fn vendors(st: &AppState, me: &User, q: VendorQuery) -> Result<Vec<VendorRow>> {
     need_viewer(st, me).await?;
     let key = q.q.as_deref().map(|s| normalize::key(Kind::Plain, s)).filter(|k| !k.is_empty());
-    Ok(sqlx::query_as(concat!(vendor_select!(),
-        "where v.merged_into is null
-           and ($1::text is null or v.name_key like '%' || $1 || '%'
-                or exists(select 1 from vendors a where a.merged_into = v.id and a.name_key like '%' || $1 || '%'))
-         order by v.name"))
-        .bind(key).fetch_all(&st.pool).await?)
+    Ok(db_purchasing::list_vendors(&st.pool, key).await?.into_iter().map(VendorRow::from).collect())
 }
 
 #[derive(Deserialize)]
@@ -579,22 +490,18 @@ pub(crate) async fn create_vendor(st: &AppState, me: &User, b: VendorIn) -> Resu
     if key.is_empty() {
         return Err(AppError::BadRequest("invalid_name"));
     }
-    let existing: Option<Uuid> = sqlx::query_scalar("select id from vendors where name_key = $1 and merged_into is null")
-        .bind(&key).fetch_optional(&st.pool).await?;
+    let existing = db_purchasing::find_vendor_id(&st.pool, &key).await?;
     let (id, existing) = match existing {
         Some(id) => (id, true),
         None => {
             let mut conn = st.pool.acquire().await?;
             let id = ensure_vendor(&mut conn, &name, Some(me.id)).await?.ok_or(AppError::BadRequest("invalid_name"))?;
-            sqlx::query("update vendors set contact = $2, phone = $3, email = $4, url = $5, issues_invoice = $6, note = $7 where id = $1")
-                .bind(id)
-                .bind(common::text(b.contact, 200, "invalid_contact")?)
-                .bind(common::text(b.phone, 30, "invalid_phone")?)
-                .bind(common::text(b.email, 200, "invalid_email")?)
-                .bind(common::text(b.url, 500, "invalid_link")?)
-                .bind(b.issues_invoice)
-                .bind(common::text(b.note, NOTE_MAX, "invalid_note")?)
-                .execute(&mut *conn).await?;
+            db_purchasing::set_vendor_details(&mut *conn, id,
+                common::text(b.contact, 200, "invalid_contact")?,
+                common::text(b.phone, 30, "invalid_phone")?,
+                common::text(b.email, 200, "invalid_email")?,
+                common::text(b.url, 500, "invalid_link")?, b.issues_invoice,
+                common::text(b.note, NOTE_MAX, "invalid_note")?).await?;
             (id, false)
         }
     };
@@ -602,11 +509,10 @@ pub(crate) async fn create_vendor(st: &AppState, me: &User, b: VendorIn) -> Resu
 }
 
 async fn vendor_one(st: &AppState, id: Uuid) -> Result<VendorRow> {
-    sqlx::query_as(concat!(vendor_select!(), "where v.id = $1"))
-        .bind(id).fetch_optional(&st.pool).await?.ok_or(AppError::NotFound)
+    db_purchasing::find_vendor(&st.pool, id).await?.map(VendorRow::from).ok_or(AppError::NotFound)
 }
 
-#[derive(Serialize, sqlx::FromRow)]
+#[derive(Serialize)]
 pub struct VendorOffer {
     material_id: Uuid,
     material: String,
@@ -628,22 +534,16 @@ pub struct VendorDetail {
 
 pub(crate) async fn vendor(st: &AppState, me: &User, id: Uuid) -> Result<VendorDetail> {
     need_viewer(st, me).await?;
-    let merged_into: Option<Option<Uuid>> = sqlx::query_scalar("select merged_into from vendors where id = $1")
-        .bind(id).fetch_optional(&st.pool).await?;
+    let merged_into = db_purchasing::find_merged_into(&st.pool, id).await?;
     let merged_into = merged_into.ok_or(AppError::NotFound)?;
-    let offers: Vec<VendorOffer> = sqlx::query_as(
-        "select m.id as material_id, m.name as material, e.title as event_title, p.price::float8 as price,
-                m.chosen_provider_id = p.id as chosen, m.purchased, m.updated_at as at
-           from material_providers p join materials m on m.id = p.material_id
-           left join event_materials em on em.material_id = m.id left join events e on e.id = em.event_id
-          where p.vendor_id = $1 order by m.updated_at desc limit 200")
-        .bind(id).fetch_all(&st.pool).await?;
-    let inv: Vec<(Uuid, NaiveDate, f64, String)> = sqlx::query_as(
-        "select id, purchased_on, total_try::float8, status from invoices where vendor_id = $1 order by purchased_on desc limit 100")
-        .bind(id).fetch_all(&st.pool).await?;
+    let offers = db_purchasing::list_vendor_offers(&st.pool, id).await?.into_iter().map(|r| VendorOffer {
+        material_id: r.material_id, material: r.material, event_title: r.event_title, price: r.price,
+        chosen: r.chosen, purchased: r.purchased, at: r.at,
+    }).collect();
+    let inv = db_purchasing::list_vendor_invoices(&st.pool, id).await?;
     Ok(VendorDetail {
         vendor: vendor_one(st, id).await?, merged_into, offers,
-        invoices: inv.into_iter().map(|(id, on, t, s)| json!({ "id": id, "purchased_on": on, "total_try": t, "status": s })).collect(),
+        invoices: inv.into_iter().map(|r| json!({ "id": r.id, "purchased_on": r.purchased_on, "total_try": r.total, "status": r.status })).collect(),
     })
 }
 
@@ -668,22 +568,18 @@ pub struct VendorPatch {
 pub(crate) async fn patch_vendor(st: &AppState, me: &User, id: Uuid, b: VendorPatch) -> Result<VendorRow> {
     need(st, me, "manage_purchases").await?;
     let mut tx = st.pool.begin().await?;
-    let live: Option<bool> = sqlx::query_scalar("select merged_into is null from vendors where id = $1 for update")
-        .bind(id).fetch_optional(&mut *tx).await?;
+    let live = db_purchasing::lock_live_vendor(&mut *tx, id).await?;
     if !live.ok_or(AppError::NotFound)? {
         return Err(AppError::Conflict("vendor_merged"));
     }
     if let Some(n) = b.name {
         let name = common::text(Some(n), NAME_MAX, "invalid_name")?.ok_or(AppError::BadRequest("invalid_name"))?;
         let key = normalize::key(Kind::Vendor, &name);
-        let clash: bool = sqlx::query_scalar(
-            "select exists(select 1 from vendors where name_key = $1 and merged_into is null and id <> $2)")
-            .bind(&key).bind(id).fetch_one(&mut *tx).await?;
+        let clash = db_purchasing::vendor_key_exists(&mut *tx, &key, id).await?;
         if clash {
             return Err(AppError::Conflict("vendor_exists"));
         }
-        sqlx::query("update vendors set name = $2, name_key = $3 where id = $1")
-            .bind(id).bind(name).bind(key).execute(&mut *tx).await?;
+        db_purchasing::set_vendor_name(&mut *tx, id, name, key).await?;
     }
     let field = |v: Option<Option<String>>, max: usize, code: &'static str| -> Result<Option<Option<String>>> {
         v.map(|x| common::text(x, max, code)).transpose()
@@ -693,23 +589,7 @@ pub(crate) async fn patch_vendor(st: &AppState, me: &User, id: Uuid, b: VendorPa
     let email = field(b.email, 200, "invalid_email")?;
     let url = field(b.url, 500, "invalid_link")?;
     let note = field(b.note, NOTE_MAX, "invalid_note")?;
-    sqlx::query(
-        "update vendors set
-            contact = case when $2 then $3 else contact end,
-            phone = case when $4 then $5 else phone end,
-            email = case when $6 then $7 else email end,
-            url = case when $8 then $9 else url end,
-            issues_invoice = case when $10 then $11 else issues_invoice end,
-            note = case when $12 then $13 else note end
-          where id = $1")
-        .bind(id)
-        .bind(contact.is_some()).bind(contact.flatten())
-        .bind(phone.is_some()).bind(phone.flatten())
-        .bind(email.is_some()).bind(email.flatten())
-        .bind(url.is_some()).bind(url.flatten())
-        .bind(b.issues_invoice.is_some()).bind(b.issues_invoice.flatten())
-        .bind(note.is_some()).bind(note.flatten())
-        .execute(&mut *tx).await?;
+    db_purchasing::patch_vendor_details(&mut *tx, id, contact, phone, email, url, b.issues_invoice, note).await?;
     tx.commit().await?;
     vendor_one(st, id).await
 }

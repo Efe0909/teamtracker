@@ -22,6 +22,7 @@
 
 use super::*;
 use crate::llm::{self, Effective, Fail, Parsed, Status, Who};
+use crate::db::materials as db_materials;
 
 /// Cevabin uymasi gereken sema (spec/79 §9): yalniz `{items: [{name, description}]}`.
 /// `name` -> `materials.name`, `description` -> `materials.notes`. Adet, tur, oncelik ve
@@ -296,9 +297,7 @@ fn chat_body(e: &Effective, brief: &MaterialBrief) -> serde_json::Value {
 
 /// Etkinligin mevcut kalemleri HAM adlariyla (ozet temizlenmis adi tasir; eslesme gercek adla olmali).
 async fn existing_names(st: &AppState, event: Uuid) -> Result<Vec<String>> {
-    Ok(sqlx::query_scalar(
-        "select m.name from materials m join event_materials em on em.material_id = m.id where em.event_id = $1")
-        .bind(event).fetch_all(&st.pool).await?)
+    Ok(db_materials::list_existing_names(&st.pool, event).await?)
 }
 
 /// `POST /api/events/{id}/material-suggestions`: tek model cagrisiyla bir parti oneri.
@@ -313,10 +312,7 @@ pub(crate) async fn material_suggestions(
     let ctx = build_context(st, me, id, b.free_text.unwrap_or(cfg.free_text_allowed)).await?;
 
     let known = known_names(st).await?;
-    let mut rejected: Vec<String> = sqlx::query_scalar(
-        "select name from material_suggestions where event_id = $1 and status = 'rejected'
-          order by decided_at desc limit 50")
-        .bind(id).fetch_all(&st.pool).await?;
+    let mut rejected = db_materials::list_rejected_names(&st.pool, id).await?;
     rejected.reverse(); // eskiden yeniye: asagidaki kesme en eskileri atar
     rejected.extend(b.rejected.iter().map(|r| r.trim().to_string()));
     let skip = rejected.len().saturating_sub(REJECTED_MAX);
@@ -337,11 +333,7 @@ pub(crate) async fn material_suggestions(
         Ok(items) => {
             let names: Vec<&str> = items.iter().map(|s| s.name.as_str()).collect();
             let descs: Vec<&str> = items.iter().map(|s| s.description.as_str()).collect();
-            let ids: Vec<Uuid> = sqlx::query_scalar(
-                "insert into material_suggestions (event_id, batch_id, name, description)
-                 select $1, $2, n, d from unnest($3::text[], $4::text[]) with ordinality as t(n, d, i)
-                 order by i returning id")
-                .bind(id).bind(batch_id).bind(&names).bind(&descs).fetch_all(&st.pool).await?;
+            let ids = db_materials::insert_suggestions(&st.pool, id, batch_id, &names, &descs).await?;
             let items = ids.into_iter().zip(items).map(|(id, item)| Saved { id, item }).collect();
             Ok(SuggestOut { items, batch_id })
         }
@@ -366,18 +358,13 @@ pub(crate) async fn reject_suggestion(
 pub(crate) async fn decide(
     conn: &mut sqlx::PgConnection, event: Uuid, sid: Uuid, by: Uuid, status: &str, material: Option<Uuid>,
 ) -> Result<()> {
-    let pending: Option<bool> = sqlx::query_scalar(
-        "select status = 'pending' from material_suggestions where id = $1 and event_id = $2 for update")
-        .bind(sid).bind(event).fetch_optional(&mut *conn).await?;
+    let pending = db_materials::find_pending_suggestion(&mut *conn, event, sid).await?;
     match pending {
         None => return Err(AppError::NotFound),
         Some(false) => return Err(AppError::Conflict("suggestion_decided")),
         Some(true) => {}
     }
-    sqlx::query(
-        "update material_suggestions set status = $2, material_id = $3, decided_by = $4, decided_at = now()
-          where id = $1")
-        .bind(sid).bind(status).bind(material).bind(by).execute(&mut *conn).await?;
+    db_materials::set_suggestion_decision(&mut *conn, sid, status, material, by).await?;
     Ok(())
 }
 
