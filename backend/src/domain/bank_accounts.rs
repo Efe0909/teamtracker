@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
+    db::bank_accounts as db,
     domain::common,
     error::{AppError, Result},
     state::AppState,
@@ -19,7 +20,7 @@ const MAX_ACCOUNTS: i64 = 5;
 const LABEL_MAX: usize = 60;
 const HOLDER_MAX: usize = 200;
 
-#[derive(Serialize, sqlx::FromRow)]
+#[derive(Serialize)]
 pub(crate) struct BankAccount {
     id: Uuid,
     label: String,
@@ -28,6 +29,13 @@ pub(crate) struct BankAccount {
     iban_last4: String,
     is_default: bool,
     created_at: DateTime<Utc>,
+}
+
+impl From<db::BankAccountRow> for BankAccount {
+    fn from(r: db::BankAccountRow) -> Self {
+        Self { id: r.id, label: r.label, holder_name: r.holder_name, iban: r.iban,
+            iban_last4: r.iban_last4, is_default: r.is_default, created_at: r.created_at }
+    }
 }
 
 /// IBAN: bosluk atilir, buyuk harfe; ulke kodu + 2 kontrol hanesi + 11..30
@@ -56,11 +64,7 @@ fn mod97(s: &str) -> u32 {
 }
 
 pub(crate) async fn list_of(st: &AppState, user: Uuid) -> Result<Vec<BankAccount>> {
-    Ok(sqlx::query_as(
-        "select id, label, holder_name, iban, iban_last4, is_default, created_at
-           from bank_accounts where user_id = $1 and deleted_at is null
-          order by is_default desc, created_at")
-        .bind(user).fetch_all(&st.pool).await?)
+    Ok(db::list_accounts(&st.pool, user).await?.into_iter().map(BankAccount::from).collect())
 }
 
 pub(crate) async fn list(st: &AppState, user: Uuid) -> Result<Vec<BankAccount>> {
@@ -81,18 +85,12 @@ pub(crate) async fn create(st: &AppState, me: Uuid, b: NewAccount) -> Result<Vec
     let iban = iban(&b.iban).ok_or(AppError::BadRequest("invalid_iban"))?;
     let mut tx = st.pool.begin().await?;
     // Sayim ve ilk-hesap-varsayilan karari ayni kilit altinda.
-    sqlx::query("select 1 from users where id = $1 for update").bind(me).execute(&mut *tx).await?;
-    let n: i64 = sqlx::query_scalar(
-        "select count(*) from bank_accounts where user_id = $1 and deleted_at is null")
-        .bind(me).fetch_one(&mut *tx).await?;
+    db::lock_user(&mut *tx, me).await?;
+    let n = db::count_accounts(&mut *tx, me).await?;
     if n >= MAX_ACCOUNTS {
         return Err(AppError::BadRequest("too_many_accounts"));
     }
-    sqlx::query(
-        "insert into bank_accounts (user_id, label, holder_name, iban, iban_last4, is_default)
-         values ($1, $2, $3, $4, right($4, 4), $5)")
-        .bind(me).bind(label).bind(holder).bind(&iban).bind(n == 0)
-        .execute(&mut *tx).await?;
+    db::insert_account(&mut *tx, me, &label, &holder, &iban, n == 0).await?;
     tx.commit().await?;
     list_of(st, me).await
 }
@@ -110,9 +108,7 @@ pub(crate) struct AccountPatch {
 
 /// Kendi, silinmemis hesabi; degilse 404 (baskasinin hesabinin varligi sizmaz).
 async fn own(tx: &mut sqlx::PgConnection, me: Uuid, id: Uuid) -> Result<bool> {
-    sqlx::query_scalar(
-        "select is_default from bank_accounts where id = $1 and user_id = $2 and deleted_at is null for update")
-        .bind(id).bind(me).fetch_optional(tx).await?.ok_or(AppError::NotFound)
+    db::find_owned_default(tx, me, id).await?.ok_or(AppError::NotFound)
 }
 
 pub(crate) async fn patch(st: &AppState, me: Uuid, id: Uuid, p: AccountPatch) -> Result<Vec<BankAccount>> {
@@ -120,17 +116,16 @@ pub(crate) async fn patch(st: &AppState, me: Uuid, id: Uuid, p: AccountPatch) ->
     own(&mut tx, me, id).await?;
     if let Some(l) = p.label {
         let l = common::text(Some(l), LABEL_MAX, "invalid_account_label")?.ok_or(AppError::BadRequest("invalid_account_label"))?;
-        sqlx::query("update bank_accounts set label = $2 where id = $1").bind(id).bind(l).execute(&mut *tx).await?;
+        db::set_label(&mut *tx, id, &l).await?;
     }
     if let Some(h) = p.holder_name {
         let h = common::text(Some(h), HOLDER_MAX, "invalid_holder")?.ok_or(AppError::BadRequest("invalid_holder"))?;
-        sqlx::query("update bank_accounts set holder_name = $2 where id = $1").bind(id).bind(h).execute(&mut *tx).await?;
+        db::set_holder(&mut *tx, id, &h).await?;
     }
     match p.is_default {
         Some(true) => {
-            sqlx::query("update bank_accounts set is_default = false where user_id = $1 and is_default")
-                .bind(me).execute(&mut *tx).await?;
-            sqlx::query("update bank_accounts set is_default = true where id = $1").bind(id).execute(&mut *tx).await?;
+            db::clear_defaults(&mut *tx, me).await?;
+            db::set_default(&mut *tx, id).await?;
         }
         Some(false) => return Err(AppError::BadRequest("invalid_default")),
         None => {}
@@ -144,14 +139,9 @@ pub(crate) async fn patch(st: &AppState, me: Uuid, id: Uuid, p: AccountPatch) ->
 pub(crate) async fn delete(st: &AppState, me: Uuid, id: Uuid) -> Result<Vec<BankAccount>> {
     let mut tx = st.pool.begin().await?;
     let was_default = own(&mut tx, me, id).await?;
-    sqlx::query("update bank_accounts set iban = null, deleted_at = now(), is_default = false where id = $1")
-        .bind(id).execute(&mut *tx).await?;
+    db::delete_account(&mut *tx, id).await?;
     if was_default {
-        sqlx::query(
-            "update bank_accounts set is_default = true
-              where id = (select id from bank_accounts where user_id = $1 and deleted_at is null
-                           order by created_at desc limit 1)")
-            .bind(me).execute(&mut *tx).await?;
+        db::set_latest_default(&mut *tx, me).await?;
     }
     tx.commit().await?;
     list_of(st, me).await

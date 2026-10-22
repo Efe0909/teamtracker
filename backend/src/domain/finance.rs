@@ -17,6 +17,7 @@ use sqlx::PgConnection;
 use uuid::Uuid;
 
 use crate::{
+    db::finance as db,
     domain::{attachments::{self as att, AttachView}, common},
     audit,
     config::Service,
@@ -184,23 +185,18 @@ fn shape(b: InvoiceIn, today: NaiveDate) -> Result<Valid> {
 /// DB'ye bakan kurallar: hesap kisinin, kalemler onayli, tedarikci canli, ekler bagsiz.
 async fn check_refs(tx: &mut PgConnection, me: &User, v: &mut Valid) -> Result<()> {
     if let Some(a) = v.payee {
-        let ok: bool = sqlx::query_scalar(
-            "select exists(select 1 from bank_accounts where id = $1 and user_id = $2 and deleted_at is null)")
-            .bind(a).bind(me.id).fetch_one(&mut *tx).await?;
+        let ok = db::has_payee_account(&mut *tx, a, me.id).await?;
         if !ok {
             return Err(AppError::BadRequest("account_required"));
         }
     }
     let ids: Vec<Uuid> = v.items.iter().map(|(m, _)| *m).collect();
-    let ok: i64 = sqlx::query_scalar(
-        "select count(*) from materials where id = any($1) and state = 3 and not owned")
-        .bind(&ids).fetch_one(&mut *tx).await?;
+    let ok = db::count_approved_materials(&mut *tx, &ids).await?;
     if ok as usize != ids.len() {
         return Err(AppError::BadRequest("material_not_approved"));
     }
     if let Some(vd) = v.vendor {
-        let live: bool = sqlx::query_scalar("select exists(select 1 from vendors where id = $1 and merged_into is null)")
-            .bind(vd).fetch_one(&mut *tx).await?;
+        let live = db::has_live_vendor(&mut *tx, vd).await?;
         if !live {
             return Err(AppError::BadRequest("invalid_vendor"));
         }
@@ -210,18 +206,13 @@ async fn check_refs(tx: &mut PgConnection, me: &User, v: &mut Valid) -> Result<(
 
 async fn write_body(tx: &mut PgConnection, id: Uuid, v: &Valid) -> Result<()> {
     let (ids, amounts): (Vec<Uuid>, Vec<i64>) = v.items.iter().copied().unzip();
-    sqlx::query(
-        "insert into invoice_items (invoice_id, material_id, amount)
-         select $1, m, a::numeric / 100 from unnest($2::uuid[], $3::bigint[]) as t(m, a)")
-        .bind(id).bind(&ids).bind(&amounts).execute(&mut *tx).await?;
-    sqlx::query("insert into invoice_attachments (invoice_id, attachment_id) select $1, unnest($2::uuid[])")
-        .bind(id).bind(&v.attachments).execute(&mut *tx).await?;
+    db::insert_invoice_items(&mut *tx, id, &ids, &amounts).await?;
+    db::insert_invoice_attachments(&mut *tx, id, &v.attachments).await?;
     Ok(())
 }
 
 async fn review(tx: &mut PgConnection, id: Uuid, action: &str, note: Option<&str>, by: Uuid) -> Result<()> {
-    sqlx::query("insert into invoice_reviews (invoice_id, action, note, by_user) values ($1, $2, $3, $4)")
-        .bind(id).bind(action).bind(note).bind(by).execute(&mut *tx).await?;
+    db::insert_review(&mut *tx, id, action, note, by).await?;
     Ok(())
 }
 
@@ -233,14 +224,8 @@ pub(crate) async fn submit(st: &AppState, me: &User, b: InvoiceIn) -> Result<Inv
         Some((r, on, s)) => (Some(r), Some(on), Some(s)),
         None => (None, None, None),
     };
-    let id: Uuid = sqlx::query_scalar(
-        "insert into invoices (submitted_by, purchased_on, currency, total, fx_rate, fx_on, fx_source,
-                               paid_by, payee_account_id, vendor_id, note)
-         values ($1, $2, $3, $4::bigint::numeric / 100, $5::bigint::numeric / 1000000, $6, $7, $8, $9, $10, $11)
-         returning id")
-        .bind(me.id).bind(v.purchased_on).bind(&v.currency).bind(v.total).bind(fx_rate).bind(fx_on)
-        .bind(fx_source).bind(v.paid_by).bind(v.payee).bind(v.vendor).bind(&v.note)
-        .fetch_one(&mut *tx).await?;
+    let id = db::insert_invoice(&mut *tx, me.id, v.purchased_on, &v.currency, v.total, fx_rate, fx_on,
+        fx_source, v.paid_by, v.payee, v.vendor, v.note.as_deref()).await?;
     write_body(&mut tx, id, &v).await?;
     review(&mut tx, id, "submit", None, me.id).await?;
     tx.commit().await?;
@@ -252,8 +237,7 @@ pub(crate) async fn submit(st: &AppState, me: &User, b: InvoiceIn) -> Result<Inv
 pub(crate) async fn edit(st: &AppState, me: &User, id: Uuid, b: InvoiceIn) -> Result<InvoiceView> {
     let mut v = shape(b, today())?;
     let mut tx = st.pool.begin().await?;
-    let row: Option<(Uuid, String)> = sqlx::query_as("select submitted_by, status from invoices where id = $1 for update")
-        .bind(id).fetch_optional(&mut *tx).await?;
+    let row = db::lock_invoice_owner(&mut *tx, id).await?;
     let (owner, status) = row.ok_or(AppError::NotFound)?;
     if owner != me.id {
         return Err(AppError::NotFound);
@@ -262,21 +246,15 @@ pub(crate) async fn edit(st: &AppState, me: &User, id: Uuid, b: InvoiceIn) -> Re
         return Err(AppError::Conflict("invoice_locked"));
     }
     // Eski baglar once kalkar: ayni ek yeniden secilmisse bagsiz gorunsun.
-    sqlx::query("delete from invoice_items where invoice_id = $1").bind(id).execute(&mut *tx).await?;
-    sqlx::query("delete from invoice_attachments where invoice_id = $1").bind(id).execute(&mut *tx).await?;
+    db::delete_invoice_items(&mut *tx, id).await?;
+    db::delete_invoice_attachments(&mut *tx, id).await?;
     check_refs(&mut tx, me, &mut v).await?;
     let (fx_rate, fx_on, fx_source) = match v.fx {
         Some((r, on, s)) => (Some(r), Some(on), Some(s)),
         None => (None, None, None),
     };
-    sqlx::query(
-        "update invoices set purchased_on = $2, currency = $3, total = $4::bigint::numeric / 100,
-                fx_rate = $5::bigint::numeric / 1000000, fx_on = $6, fx_source = $7, paid_by = $8,
-                payee_account_id = $9, vendor_id = $10, note = $11, status = 'pending', updated_at = now()
-          where id = $1")
-        .bind(id).bind(v.purchased_on).bind(&v.currency).bind(v.total).bind(fx_rate).bind(fx_on)
-        .bind(fx_source).bind(v.paid_by).bind(v.payee).bind(v.vendor).bind(&v.note)
-        .execute(&mut *tx).await?;
+    db::update_invoice(&mut *tx, id, v.purchased_on, &v.currency, v.total, fx_rate, fx_on,
+        fx_source, v.paid_by, v.payee, v.vendor, v.note.as_deref()).await?;
     write_body(&mut tx, id, &v).await?;
     review(&mut tx, id, "resubmit", None, me.id).await?;
     tx.commit().await?;
@@ -313,7 +291,7 @@ pub struct InvoiceView {
     can_edit: bool,
 }
 
-#[derive(Serialize, sqlx::FromRow)]
+#[derive(Serialize)]
 pub struct Payee {
     id: Uuid,
     label: String,
@@ -323,7 +301,7 @@ pub struct Payee {
     iban_last4: String,
 }
 
-#[derive(Serialize, sqlx::FromRow)]
+#[derive(Serialize)]
 pub struct ItemView {
     material_id: Uuid,
     name: String,
@@ -337,7 +315,7 @@ pub struct ItemView {
     purchased: bool,
 }
 
-#[derive(Serialize, sqlx::FromRow)]
+#[derive(Serialize)]
 pub struct ReviewView {
     action: String,
     note: Option<String>,
@@ -345,46 +323,35 @@ pub struct ReviewView {
     at: DateTime<Utc>,
 }
 
-#[derive(sqlx::FromRow)]
-struct InvoiceRow {
-    id: Uuid,
-    submitted_by: Uuid,
-    purchased_on: NaiveDate,
-    currency: String,
-    total: f64,
-    fx_rate: Option<f64>,
-    fx_on: Option<NaiveDate>,
-    fx_source: Option<String>,
-    total_try: f64,
-    paid_by: String,
-    payee_account_id: Option<Uuid>,
-    vendor_id: Option<Uuid>,
-    vendor_name: Option<String>,
-    note: Option<String>,
-    status: String,
-    claim_id: Option<Uuid>,
-    created_at: DateTime<Utc>,
-    updated_at: DateTime<Utc>,
+impl From<db::PayeeRow> for Payee {
+    fn from(r: db::PayeeRow) -> Self {
+        Self { id: r.id, label: r.label, holder_name: r.holder_name, iban: r.iban, iban_last4: r.iban_last4 }
+    }
+}
+
+impl From<db::ItemRow> for ItemView {
+    fn from(r: db::ItemRow) -> Self {
+        Self { material_id: r.material_id, name: r.name, amount: r.amount, funding: r.funding,
+            event_id: r.event_id, event_title: r.event_title, event_date: r.event_date,
+            category_id: r.category_id, budget: r.budget, purchased: r.purchased }
+    }
+}
+
+impl From<db::ReviewRow> for ReviewView {
+    fn from(r: db::ReviewRow) -> Self {
+        Self { action: r.action, note: r.note, by_user: r.by_user, at: r.at }
+    }
 }
 
 async fn view(st: &AppState, me: &User, id: Uuid) -> Result<InvoiceView> {
-    let r: InvoiceRow = sqlx::query_as(
-        "select i.id, i.submitted_by, i.purchased_on, i.currency::text as currency, i.total::float8 as total,
-                i.fx_rate::float8 as fx_rate, i.fx_on, i.fx_source, i.total_try::float8 as total_try, i.paid_by,
-                i.payee_account_id, i.vendor_id, v.name as vendor_name, i.note, i.status, i.claim_id,
-                i.created_at, i.updated_at
-           from invoices i left join vendors v on v.id = i.vendor_id
-          where i.id = $1")
-        .bind(id).fetch_optional(&st.pool).await?.ok_or(AppError::NotFound)?;
+    let r = db::find_invoice(&st.pool, id).await?.ok_or(AppError::NotFound)?;
     let viewer = is_viewer(st, me).await?;
     if r.submitted_by != me.id && !viewer {
         return Err(AppError::NotFound);
     }
     let payee = match r.payee_account_id {
         Some(a) => {
-            let p: Payee = sqlx::query_as(
-                "select id, label, holder_name, iban, iban_last4 from bank_accounts where id = $1")
-                .bind(a).fetch_one(&st.pool).await?;
+            let p = Payee::from(db::find_payee(&st.pool, a).await?);
             if r.submitted_by != me.id && p.iban.is_some() {
                 // Maliye tam IBAN'i yalniz burada gorur; kim baktigi yazilir.
                 audit::log_event(st, None, "iban_viewed", Some(me.id), None, Some(&format!("invoice {id}"))).await;
@@ -393,16 +360,7 @@ async fn view(st: &AppState, me: &User, id: Uuid) -> Result<InvoiceView> {
         }
         None => None,
     };
-    let items: Vec<ItemView> = sqlx::query_as(
-        "select ii.material_id, m.name, ii.amount::float8 as amount, ii.funding,
-                e.id as event_id, e.title as event_title, e.date as event_date,
-                m.category_id, m.budget::float8 as budget, m.purchased
-           from invoice_items ii
-           join materials m on m.id = ii.material_id
-           left join event_materials em on em.material_id = m.id
-           left join events e on e.id = em.event_id
-          where ii.invoice_id = $1 order by e.date nulls last, m.name")
-        .bind(id).fetch_all(&st.pool).await?;
+    let items: Vec<ItemView> = db::list_invoice_items(&st.pool, id).await?.into_iter().map(ItemView::from).collect();
     let mut events: Vec<Value> = Vec::new();
     for it in &items {
         if let Some(eid) = it.event_id {
@@ -411,13 +369,10 @@ async fn view(st: &AppState, me: &User, id: Uuid) -> Result<InvoiceView> {
             }
         }
     }
-    let attach_ids: Vec<Uuid> = sqlx::query_scalar(
-        "select attachment_id from invoice_attachments where invoice_id = $1").bind(id).fetch_all(&st.pool).await?;
+    let attach_ids = db::list_invoice_attachment_ids(&st.pool, id).await?;
     let mut map = att::views(&st.pool, me, &attach_ids, false).await?;
     let attachments = attach_ids.iter().filter_map(|a| map.remove(a)).collect();
-    let reviews: Vec<ReviewView> = sqlx::query_as(
-        "select action, note, by_user, at from invoice_reviews where invoice_id = $1 order by at")
-        .bind(id).fetch_all(&st.pool).await?;
+    let reviews = db::list_reviews(&st.pool, id).await?.into_iter().map(ReviewView::from).collect();
     let can_review = common::has_scope(st, me, "review_purchases").await?;
     Ok(InvoiceView {
         id: r.id, submitted_by: r.submitted_by, purchased_on: r.purchased_on, currency: r.currency,
@@ -442,7 +397,7 @@ pub struct ListQuery {
     mine: Option<String>,
 }
 
-#[derive(Serialize, sqlx::FromRow)]
+#[derive(Serialize)]
 pub struct InvoiceRowOut {
     id: Uuid,
     submitted_by: Uuid,
@@ -460,23 +415,19 @@ pub struct InvoiceRowOut {
     attachment_count: i64,
 }
 
+impl From<db::InvoiceListRow> for InvoiceRowOut {
+    fn from(r: db::InvoiceListRow) -> Self {
+        Self { id: r.id, submitted_by: r.submitted_by, purchased_on: r.purchased_on, currency: r.currency,
+            total: r.total, total_try: r.total_try, paid_by: r.paid_by, status: r.status, claim_id: r.claim_id,
+            created_at: r.created_at, item_count: r.item_count, first_item: r.first_item,
+            event_titles: r.event_titles, attachment_count: r.attachment_count }
+    }
+}
+
 /// Liste: maliye herkesinkini, digerleri yalniz kendisininkini (`mine`).
 pub(crate) async fn list(st: &AppState, me: &User, q: ListQuery) -> Result<Vec<InvoiceRowOut>> {
     let mine = q.mine.as_deref() == Some("1") || !is_viewer(st, me).await?;
-    Ok(sqlx::query_as(
-        "select i.id, i.submitted_by, i.purchased_on, i.currency::text as currency, i.total::float8 as total,
-                i.total_try::float8 as total_try, i.paid_by, i.status, i.claim_id, i.created_at,
-                (select count(*) from invoice_items x where x.invoice_id = i.id) as item_count,
-                (select m.name from invoice_items x join materials m on m.id = x.material_id
-                  where x.invoice_id = i.id order by m.name limit 1) as first_item,
-                array(select distinct e.title from invoice_items x
-                        join event_materials em on em.material_id = x.material_id
-                        join events e on e.id = em.event_id where x.invoice_id = i.id) as event_titles,
-                (select count(*) from invoice_attachments x where x.invoice_id = i.id) as attachment_count
-           from invoices i
-          where ($1::text is null or i.status = $1) and (not $2 or i.submitted_by = $3)
-          order by (i.status = 'pending') desc, i.created_at desc limit 300")
-        .bind(q.status).bind(mine).bind(me.id).fetch_all(&st.pool).await?)
+    Ok(db::list_invoices(&st.pool, q.status.as_deref(), mine, me.id).await?.into_iter().map(InvoiceRowOut::from).collect())
 }
 
 // --- fatura: karar -----------------------------------------------------------
@@ -494,10 +445,8 @@ pub struct DecisionIn {
 pub(crate) async fn decide(st: &AppState, me: &User, id: Uuid, b: DecisionIn) -> Result<InvoiceView> {
     let note = text(b.note, NOTE_MAX, "invalid_note")?;
     let mut tx = st.pool.begin().await?;
-    let row: Option<(Uuid, String, NaiveDate, String, Option<Uuid>)> = sqlx::query_as(
-        "select submitted_by, status, purchased_on, paid_by, claim_id from invoices where id = $1 for update")
-        .bind(id).fetch_optional(&mut *tx).await?;
-    let (owner, status, purchased_on, paid_by, claim) = row.ok_or(AppError::NotFound)?;
+    let row = db::lock_invoice_decision(&mut *tx, id).await?;
+    let db::InvoiceDecisionRow { submitted_by: owner, status, purchased_on, paid_by, claim_id: claim } = row.ok_or(AppError::NotFound)?;
     if b.action != "withdraw" {
         need(st, me, "review_purchases").await?;
     }
@@ -537,8 +486,7 @@ pub(crate) async fn decide(st: &AppState, me: &User, id: Uuid, b: DecisionIn) ->
         }
         _ => return Err(AppError::BadRequest("invalid_action")),
     };
-    sqlx::query("update invoices set status = $2, updated_at = now() where id = $1")
-        .bind(id).bind(next).execute(&mut *tx).await?;
+    db::set_invoice_status(&mut *tx, id, next).await?;
     review(&mut tx, id, &b.action, note.as_deref(), me.id).await?;
     tx.commit().await?;
     view(st, me, id).await
@@ -549,48 +497,26 @@ async fn approve(
     tx: &mut PgConnection, me: &User, id: Uuid, purchased_on: NaiveDate, paid_by: &str, claim: Option<Uuid>,
 ) -> Result<()> {
     // Kalem hala onayli mi (gonderimden beri geri alinmis olabilir).
-    let bad: i64 = sqlx::query_scalar(
-        "select count(*) from invoice_items ii join materials m on m.id = ii.material_id
-          where ii.invoice_id = $1 and not (m.state = 3 and not m.owned)")
-        .bind(id).fetch_one(&mut *tx).await?;
+    let bad = db::count_unapproved_items(&mut *tx, id).await?;
     if bad > 0 {
         return Err(AppError::Conflict("material_not_approved"));
     }
     // Once durum: dosya bagi (`claim_id`) yalniz onayli faturada olabilir (kisit).
-    sqlx::query("update invoices set status = 'approved' where id = $1").bind(id).execute(&mut *tx).await?;
+    db::approve_invoice(&mut *tx, id).await?;
     // 1. Fonlama donar: kategorinin ledger'i, kategori yoksa SEB (spec/81 §3.3).
-    sqlx::query(
-        "update invoice_items ii set funding = coalesce(
-           (select n.attrs->>'ledger' from materials m join nodes n on n.id = m.category_id
-             where m.id = ii.material_id), 'seb')
-          where ii.invoice_id = $1")
-        .bind(id).execute(&mut *tx).await?;
+    db::set_item_funding(&mut *tx, id).await?;
     // 2. Kalemler satin alindi (zaten alinmissa dokunulmaz).
-    sqlx::query(
-        "update materials set purchased = true, purchased_at = now(), purchased_by = $2, updated_at = now()
-          where id in (select material_id from invoice_items where invoice_id = $1) and not purchased")
-        .bind(id).bind(me.id).execute(&mut *tx).await?;
+    db::set_materials_purchased(&mut *tx, id, me.id).await?;
     // 3. Kasadan odendiyse defterde gider.
     if paid_by == "club" {
-        sqlx::query(
-            "insert into ledger_entries (occurred_on, amount, kind, description, invoice_id, created_by)
-             select $2, -i.total_try, 'purchase',
-                    left('Satın alım · ' || coalesce((select string_agg(m.name, ', ' order by m.name)
-                         from invoice_items x join materials m on m.id = x.material_id where x.invoice_id = i.id), ''), 300),
-                    i.id, $3
-               from invoices i where i.id = $1")
-            .bind(id).bind(purchased_on).bind(me.id).execute(&mut *tx).await?;
+        db::insert_purchase_entry(&mut *tx, id, purchased_on, me.id).await?;
     }
     // 4. SEB fonlu kalem varsa dosyaya: verilen taslak dosya ya da ayin dosyasi.
-    let seb: bool = sqlx::query_scalar(
-        "select exists(select 1 from invoice_items where invoice_id = $1 and funding = 'seb')")
-        .bind(id).fetch_one(&mut *tx).await?;
+    let seb = db::has_seb_items(&mut *tx, id).await?;
     if seb {
         let target = match claim {
             Some(c) => {
-                let draft: bool = sqlx::query_scalar(
-                    "select exists(select 1 from reimbursement_claims where id = $1 and status = 'draft')")
-                    .bind(c).fetch_one(&mut *tx).await?;
+                let draft = db::has_draft_claim(&mut *tx, c).await?;
                 if !draft {
                     return Err(AppError::Conflict("claim_locked"));
                 }
@@ -598,7 +524,7 @@ async fn approve(
             }
             None => monthly_claim(tx, me, purchased_on).await?,
         };
-        sqlx::query("update invoices set claim_id = $2 where id = $1").bind(id).bind(target).execute(&mut *tx).await?;
+        db::set_invoice_claim(&mut *tx, id, target).await?;
     }
     Ok(())
 }
@@ -606,41 +532,22 @@ async fn approve(
 /// Ayin dosyasi; yoksa taslak acilir. Dosya gonderilmisse None (fatura dosyasiz
 /// kalir, Genel'de "dosyasiz SEB faturasi" olarak gorunur ve elle tasinir).
 async fn monthly_claim(tx: &mut PgConnection, me: &User, day: NaiveDate) -> Result<Option<Uuid>> {
-    sqlx::query(
-        "insert into reimbursement_claims (kind, month, created_by)
-         values ('monthly', date_trunc('month', $1::date)::date, $2)
-         on conflict (month) where kind = 'monthly' do nothing")
-        .bind(day).bind(me.id).execute(&mut *tx).await?;
-    Ok(sqlx::query_scalar(
-        "select id from reimbursement_claims where kind = 'monthly' and month = date_trunc('month', $1::date)::date
-            and status = 'draft'")
-        .bind(day).fetch_optional(&mut *tx).await?)
+    db::insert_monthly_draft(&mut *tx, day, me.id).await?;
+    Ok(db::find_monthly_draft(&mut *tx, day).await?)
 }
 
 /// Iptal (spec/81 §6.3): dosyadan cikar, kasa giderinin ters kaydi, baska onayli
 /// faturasi olmayan kalemin satin alindi isareti kalkar.
 async fn cancel(tx: &mut PgConnection, me: &User, id: Uuid, claim: Option<Uuid>) -> Result<()> {
     if let Some(c) = claim {
-        let draft: bool = sqlx::query_scalar(
-            "select status = 'draft' from reimbursement_claims where id = $1").bind(c).fetch_one(&mut *tx).await?;
+        let draft = db::read_claim_draft(&mut *tx, c).await?;
         if !draft {
             return Err(AppError::Conflict("claim_locked"));
         }
     }
-    sqlx::query("update invoices set claim_id = null where id = $1").bind(id).execute(&mut *tx).await?;
-    sqlx::query(
-        "insert into ledger_entries (occurred_on, amount, kind, description, reverses_id, created_by)
-         select (now() at time zone $3)::date, -e.amount, 'reversal', left('Ters kayıt · ' || e.description, 300), e.id, $2
-           from ledger_entries e
-          where e.invoice_id = $1 and e.kind = 'purchase'
-            and not exists (select 1 from ledger_entries r where r.reverses_id = e.id)")
-        .bind(id).bind(me.id).bind(TZ).execute(&mut *tx).await?;
-    sqlx::query(
-        "update materials m set purchased = false, purchased_at = null, purchased_by = null, updated_at = now()
-          where m.id in (select material_id from invoice_items where invoice_id = $1)
-            and not exists (select 1 from invoice_items x join invoices i on i.id = x.invoice_id
-                             where x.material_id = m.id and i.status = 'approved' and i.id <> $1)")
-        .bind(id).execute(&mut *tx).await?;
+    db::clear_invoice_claim(&mut *tx, id).await?;
+    db::insert_purchase_reversals(&mut *tx, id, me.id, TZ).await?;
+    db::clear_materials_purchased(&mut *tx, id).await?;
     Ok(())
 }
 
@@ -653,28 +560,25 @@ pub struct ClaimMove {
 pub(crate) async fn move_claim(st: &AppState, me: &User, id: Uuid, b: ClaimMove) -> Result<InvoiceView> {
     need(st, me, "review_purchases").await?;
     let mut tx = st.pool.begin().await?;
-    let row: Option<(String, Option<Uuid>)> = sqlx::query_as("select status, claim_id from invoices where id = $1 for update")
-        .bind(id).fetch_optional(&mut *tx).await?;
+    let row = db::lock_invoice_claim(&mut *tx, id).await?;
     let (status, old) = row.ok_or(AppError::NotFound)?;
     if status != "approved" {
         return Err(AppError::Conflict("invoice_locked"));
     }
     for c in [old, b.claim_id].into_iter().flatten() {
-        let draft: Option<bool> = sqlx::query_scalar("select status = 'draft' from reimbursement_claims where id = $1")
-            .bind(c).fetch_optional(&mut *tx).await?;
+        let draft = db::find_claim_draft(&mut *tx, c).await?;
         if draft != Some(true) {
             return Err(AppError::Conflict("claim_locked"));
         }
     }
-    sqlx::query("update invoices set claim_id = $2, updated_at = now() where id = $1")
-        .bind(id).bind(b.claim_id).execute(&mut *tx).await?;
+    db::move_invoice_claim(&mut *tx, id, b.claim_id).await?;
     tx.commit().await?;
     view(st, me, id).await
 }
 
 // --- fatura formu: secilebilir kalemler ----------------------------------------
 
-#[derive(Serialize, sqlx::FromRow)]
+#[derive(Serialize)]
 pub struct Purchasable {
     id: Uuid,
     name: String,
@@ -687,28 +591,22 @@ pub struct Purchasable {
     event_date: Option<NaiveDate>,
 }
 
+impl From<db::PurchasableRow> for Purchasable {
+    fn from(r: db::PurchasableRow) -> Self {
+        Self { id: r.id, name: r.name, qty: r.qty, price: r.price, category_id: r.category_id,
+            purchased: r.purchased, event_id: r.event_id, event_title: r.event_title, event_date: r.event_date }
+    }
+}
+
 /// Fatura formunun kalem listesi: onayli ve elde olmayan kalemler, etkinlikle
 /// (etkinlik listesi herkese acik, spec/73) ya da etkinliksiz. Son bir yil.
 pub(crate) async fn purchasable(st: &AppState) -> Result<Vec<Purchasable>> {
-    Ok(sqlx::query_as(
-        "select m.id, m.name, m.qty,
-                (case when m.sponsor_chosen then 0
-                      else coalesce((select p.price from material_providers p where p.id = m.chosen_provider_id),
-                                    (select min(p.price) from material_providers p where p.material_id = m.id)) end)::float8 as price,
-                m.category_id, m.purchased, e.id as event_id, e.title as event_title, e.date as event_date
-           from materials m
-           left join event_materials em on em.material_id = m.id
-           left join events e on e.id = em.event_id
-          where m.state = 3 and not m.owned
-            and (e.id is null or e.date is null or e.date >= current_date - 365)
-            and (e.id is not null or m.created_at >= now() - interval '1 year')
-          order by e.date desc nulls first, e.title, m.name")
-        .fetch_all(&st.pool).await?)
+    Ok(db::list_purchasable(&st.pool).await?.into_iter().map(Purchasable::from).collect())
 }
 
 // --- SEB iade dosyalari ---------------------------------------------------------
 
-#[derive(Serialize, sqlx::FromRow)]
+#[derive(Serialize)]
 pub struct ClaimOut {
     id: Uuid,
     kind: String,
@@ -726,29 +624,21 @@ pub struct ClaimOut {
     people: i64,
 }
 
-/// Dosya satiri; `concat!` ile statik sorguya eklenir (liste ve ayrinti ayni).
-macro_rules! claim_select {
-    () => {
-        "select c.id, c.kind, c.month, c.event_id, e.title as event_title, c.status, c.sent_at, c.approved_at,
-                c.paid_at, c.received_amount::float8 as received_amount,
-                (select count(*) from invoices i where i.claim_id = c.id) as invoice_count,
-                coalesce((select sum(round(ii.amount * coalesce(i.fx_rate, 1), 2)) from invoices i
-                           join invoice_items ii on ii.invoice_id = i.id
-                          where i.claim_id = c.id and ii.funding = 'seb'), 0)::float8 as seb_total,
-                (select count(distinct i.submitted_by) from invoices i where i.claim_id = c.id and i.paid_by = 'member') as people
-           from reimbursement_claims c left join events e on e.id = c.event_id "
-    };
+impl From<db::ClaimRow> for ClaimOut {
+    fn from(r: db::ClaimRow) -> Self {
+        Self { id: r.id, kind: r.kind, month: r.month, event_id: r.event_id, event_title: r.event_title,
+            status: r.status, sent_at: r.sent_at, approved_at: r.approved_at, paid_at: r.paid_at,
+            received_amount: r.received_amount, invoice_count: r.invoice_count, seb_total: r.seb_total, people: r.people }
+    }
 }
 
 pub(crate) async fn claims(st: &AppState, me: &User) -> Result<Vec<ClaimOut>> {
     need_viewer(st, me).await?;
-    Ok(sqlx::query_as(concat!(claim_select!(),
-        "order by (c.status = 'paid'), coalesce(c.month, c.created_at::date) desc"))
-        .fetch_all(&st.pool).await?)
+    Ok(db::list_claims(&st.pool).await?.into_iter().map(ClaimOut::from).collect())
 }
 
 /// Iade listesinin satiri: dosya acilmis olsun olmasin. `claim_id` bos = "Dosya acilmadi".
-#[derive(Serialize, sqlx::FromRow)]
+#[derive(Serialize)]
 pub struct ClaimSlot {
     kind: String,
     month: Option<NaiveDate>,
@@ -761,49 +651,19 @@ pub struct ClaimSlot {
     seb_total: f64,
 }
 
+impl From<db::ClaimSlotRow> for ClaimSlot {
+    fn from(r: db::ClaimSlotRow) -> Self {
+        Self { kind: r.kind, month: r.month, event_id: r.event_id, event_title: r.event_title, event_date: r.event_date,
+            claim_id: r.claim_id, status: r.status, invoice_count: r.invoice_count, seb_total: r.seb_total }
+    }
+}
+
 /// SEB fonlu onayli faturasi olan her ay ve her etkinlik + acik dosyalar (spec/81 §3.6).
 /// Acik dosyada sayilar dosyanin kendisinden, acilmamis satirda onayli faturalardan gelir;
 /// etkinlik satiri yalniz dosyaya girebilecek (dosyasiz ya da taslak aylik dosyada) faturalari sayar.
 pub(crate) async fn claim_slots(st: &AppState, me: &User) -> Result<Vec<ClaimSlot>> {
     need_viewer(st, me).await?;
-    Ok(sqlx::query_as(
-        "select * from (
-           select 'monthly'::text as kind, coalesce(c.month, m.month) as month, null::uuid as event_id,
-                  null::text as event_title, null::date as event_date, c.id as claim_id, c.status,
-                  (case when c.id is not null then (select count(*) from invoices i where i.claim_id = c.id)
-                        else coalesce(m.n, 0) end)::bigint as invoice_count,
-                  (case when c.id is not null then
-                          coalesce((select sum(round(ii.amount * coalesce(i.fx_rate, 1), 2)) from invoices i
-                                      join invoice_items ii on ii.invoice_id = i.id
-                                     where i.claim_id = c.id and ii.funding = 'seb'), 0)
-                        else coalesce(m.seb, 0) end)::float8 as seb_total
-             from (select date_trunc('month', i.purchased_on)::date as month, count(distinct i.id) as n,
-                          sum(round(ii.amount * coalesce(i.fx_rate, 1), 2)) as seb
-                     from invoices i join invoice_items ii on ii.invoice_id = i.id
-                    where i.status = 'approved' and ii.funding = 'seb' and i.claim_id is null
-                    group by 1) m
-             full join (select * from reimbursement_claims where kind = 'monthly') c on c.month = m.month
-           union all
-           select 'event', null, e.id, e.title, e.date, c.id, c.status,
-                  (case when c.id is not null then (select count(*) from invoices i where i.claim_id = c.id)
-                        else coalesce(x.n, 0) end)::bigint,
-                  (case when c.id is not null then
-                          coalesce((select sum(round(ii.amount * coalesce(i.fx_rate, 1), 2)) from invoices i
-                                      join invoice_items ii on ii.invoice_id = i.id
-                                     where i.claim_id = c.id and ii.funding = 'seb'), 0)
-                        else coalesce(x.seb, 0) end)::float8
-             from (select em.event_id, count(distinct i.id) as n, sum(round(ii.amount * coalesce(i.fx_rate, 1), 2)) as seb
-                     from invoice_items ii join invoices i on i.id = ii.invoice_id
-                     join event_materials em on em.material_id = ii.material_id
-                    where i.status = 'approved' and ii.funding = 'seb'
-                      and (i.claim_id is null or exists (select 1 from reimbursement_claims k
-                                                          where k.id = i.claim_id and k.kind = 'monthly' and k.status = 'draft'))
-                    group by 1) x
-             full join (select * from reimbursement_claims where kind = 'event') c on c.event_id = x.event_id
-             join events e on e.id = coalesce(c.event_id, x.event_id)
-         ) t
-          order by (status = 'paid') nulls first, coalesce(month, event_date) desc nulls last")
-        .fetch_all(&st.pool).await?)
+    Ok(db::list_claim_slots(&st.pool).await?.into_iter().map(ClaimSlot::from).collect())
 }
 
 #[derive(Deserialize)]
@@ -818,20 +678,13 @@ pub struct ClaimIn {
 pub(crate) async fn create_claim(st: &AppState, me: &User, b: ClaimIn) -> Result<ClaimDetail> {
     need(st, me, "review_purchases").await?;
     let id: Option<Uuid> = match (b.kind.as_str(), b.month, b.event_id) {
-        ("monthly", Some(m), None) => sqlx::query_scalar(
-            "insert into reimbursement_claims (kind, month, created_by) values ('monthly', date_trunc('month', $1::date)::date, $2)
-             on conflict (month) where kind = 'monthly' do nothing returning id")
-            .bind(m).bind(me.id).fetch_optional(&st.pool).await?,
+        ("monthly", Some(m), None) => db::insert_monthly_claim(&st.pool, m, me.id).await?,
         ("event", None, Some(e)) => {
-            let exists: bool = sqlx::query_scalar("select exists(select 1 from events where id = $1)")
-                .bind(e).fetch_one(&st.pool).await?;
+            let exists = db::has_event(&st.pool, e).await?;
             if !exists {
                 return Err(AppError::BadRequest("invalid_event"));
             }
-            sqlx::query_scalar(
-                "insert into reimbursement_claims (kind, event_id, created_by) values ('event', $1, $2)
-                 on conflict (event_id) where kind = 'event' do nothing returning id")
-                .bind(e).bind(me.id).fetch_optional(&st.pool).await?
+            db::insert_event_claim(&st.pool, e, me.id).await?
         }
         _ => return Err(AppError::BadRequest("invalid_claim")),
     };
@@ -839,14 +692,7 @@ pub(crate) async fn create_claim(st: &AppState, me: &User, b: ClaimIn) -> Result
     if let (Some(e), "event") = (b.event_id, b.kind.as_str()) {
         // Acilista, etkinligin SEB fonlu onayli faturalari dosyaya girer: dosyasiz olanlar ve
         // taslak aylik dosyadakiler (gonderilmis dosyadakilere dokunulmaz).
-        sqlx::query(
-            "update invoices i set claim_id = $1, updated_at = now()
-              where i.status = 'approved'
-                and (i.claim_id is null or exists (select 1 from reimbursement_claims k
-                                                    where k.id = i.claim_id and k.kind = 'monthly' and k.status = 'draft'))
-                and exists (select 1 from invoice_items ii join event_materials em on em.material_id = ii.material_id
-                             where ii.invoice_id = i.id and ii.funding = 'seb' and em.event_id = $2)")
-            .bind(id).bind(e).execute(&st.pool).await?;
+        db::move_event_invoices(&st.pool, id, e).await?;
     }
     claim_detail(st, id).await
 }
@@ -860,27 +706,9 @@ pub struct ClaimDetail {
 }
 
 async fn claim_detail(st: &AppState, id: Uuid) -> Result<ClaimDetail> {
-    let claim: ClaimOut = sqlx::query_as(concat!(claim_select!(), "where c.id = $1"))
-        .bind(id).fetch_optional(&st.pool).await?.ok_or(AppError::NotFound)?;
-    let invoices: Vec<InvoiceRowOut> = sqlx::query_as(
-        "select i.id, i.submitted_by, i.purchased_on, i.currency::text as currency, i.total::float8 as total,
-                i.total_try::float8 as total_try, i.paid_by, i.status, i.claim_id, i.created_at,
-                (select count(*) from invoice_items x where x.invoice_id = i.id) as item_count,
-                (select m.name from invoice_items x join materials m on m.id = x.material_id
-                  where x.invoice_id = i.id order by m.name limit 1) as first_item,
-                array(select distinct e.title from invoice_items x
-                        join event_materials em on em.material_id = x.material_id
-                        join events e on e.id = em.event_id where x.invoice_id = i.id) as event_titles,
-                (select count(*) from invoice_attachments x where x.invoice_id = i.id) as attachment_count
-           from invoices i where i.claim_id = $1 order by i.purchased_on")
-        .bind(id).fetch_all(&st.pool).await?;
-    let rows: Vec<(Option<Uuid>, f64, i64)> = sqlx::query_as(
-        "select case when i.paid_by = 'member' then i.submitted_by end as who,
-                sum(round(ii.amount * coalesce(i.fx_rate, 1), 2))::float8, count(distinct i.id)
-           from invoices i join invoice_items ii on ii.invoice_id = i.id
-          where i.claim_id = $1 and ii.funding = 'seb'
-          group by 1 order by 1 nulls last")
-        .bind(id).fetch_all(&st.pool).await?;
+    let claim = db::find_claim(&st.pool, id).await?.map(ClaimOut::from).ok_or(AppError::NotFound)?;
+    let invoices = db::list_claim_invoices(&st.pool, id).await?.into_iter().map(InvoiceRowOut::from).collect();
+    let rows = db::list_claim_people(&st.pool, id).await?;
     let people = rows.into_iter().map(|(u, amount, n)| json!({ "user_id": u, "amount": amount, "invoices": n })).collect();
     Ok(ClaimDetail { claim, invoices, people })
 }
@@ -893,21 +721,12 @@ pub(crate) async fn claim(st: &AppState, me: &User, id: Uuid) -> Result<ClaimDet
 /// `GET /api/finance/claims/{id}/xlsx`: dosyadaki kalemlerin dokumu (SEB'e eklenecek).
 pub(crate) async fn claim_xlsx(st: &AppState, me: &User, id: Uuid) -> Result<(Vec<u8>, String)> {
     need_viewer(st, me).await?;
-    let claim: ClaimOut = sqlx::query_as(concat!(claim_select!(), "where c.id = $1"))
-        .bind(id).fetch_optional(&st.pool).await?.ok_or(AppError::NotFound)?;
-    type Item = (NaiveDate, String, String, Option<String>, Option<String>, f64);
-    let rows: Vec<Item> = sqlx::query_as(
-        "select i.purchased_on, u.name, m.name, e.title, ii.funding,
-                round(ii.amount * coalesce(i.fx_rate, 1), 2)::float8
-           from invoices i join invoice_items ii on ii.invoice_id = i.id
-           join materials m on m.id = ii.material_id
-           join users u on u.id = i.submitted_by
-           left join event_materials em on em.material_id = m.id
-           left join events e on e.id = em.event_id
-          where i.claim_id = $1 order by i.purchased_on, u.name, m.name")
-        .bind(id).fetch_all(&st.pool).await?;
+    let claim = db::find_export_claim(&st.pool, id).await?.map(ClaimOut::from).ok_or(AppError::NotFound)?;
+    let rows = db::list_claim_export_items(&st.pool, id).await?;
     let funding = |f: Option<String>| match f.as_deref() { Some("seb") => "SEB", Some("general") => "Kulüp kasası", _ => "" };
-    let data: Vec<Vec<crate::xlsx::Cell>> = rows.into_iter().map(|(on, who, item, ev, fund, amount)| vec![
+    let data: Vec<Vec<crate::xlsx::Cell>> = rows.into_iter().map(|db::ClaimExportRow {
+        purchased_on: on, user_name: who, material_name: item, event_title: ev, funding: fund, amount,
+    }| vec![
         on.format("%d.%m.%Y").to_string().into(), who.into(), item.into(), ev.unwrap_or_default().into(),
         funding(fund).into(), amount.into(),
     ]).collect();
@@ -939,18 +758,15 @@ const CLAIM_STEPS: [&str; 4] = ["draft", "sent", "office_approved", "paid"];
 pub(crate) async fn patch_claim(st: &AppState, me: &User, id: Uuid, b: ClaimPatch) -> Result<ClaimDetail> {
     need(st, me, "review_purchases").await?;
     let mut tx = st.pool.begin().await?;
-    let row: Option<(String, String, Option<NaiveDate>, Option<String>)> = sqlx::query_as(
-        "select c.status, c.kind, c.month, e.title from reimbursement_claims c
-           left join events e on e.id = c.event_id where c.id = $1 for update of c")
-        .bind(id).fetch_optional(&mut *tx).await?;
-    let (status, kind, month, title) = row.ok_or(AppError::NotFound)?;
+    let row = db::lock_claim_status(&mut *tx, id).await?;
+    let db::ClaimStatusRow { status, kind, month, title } = row.ok_or(AppError::NotFound)?;
     let from = CLAIM_STEPS.iter().position(|s| *s == status).unwrap_or(0);
     let to = CLAIM_STEPS.iter().position(|s| *s == b.status).ok_or(AppError::BadRequest("invalid_status"))?;
     if status == "paid" || (to != from + 1 && to + 1 != from) {
         return Err(AppError::Conflict("claim_locked"));
     }
     if b.status == "sent" {
-        let n: i64 = sqlx::query_scalar("select count(*) from invoices where claim_id = $1").bind(id).fetch_one(&mut *tx).await?;
+        let n = db::count_claim_invoices(&mut *tx, id).await?;
         if n == 0 {
             return Err(AppError::Conflict("claim_empty"));
         }
@@ -971,26 +787,14 @@ pub(crate) async fn patch_claim(st: &AppState, me: &User, id: Uuid, b: ClaimPatc
                 title.unwrap_or_default()
             };
             let entry: Option<Uuid> = if received > 0 {
-                Some(sqlx::query_scalar(
-                    "insert into ledger_entries (occurred_on, amount, kind, description, created_by)
-                     values ($1, $2::bigint::numeric / 100, 'seb_refund', left($3, 300), $4) returning id")
-                    .bind(on).bind(received).bind(format!("SEB iadesi · {label}")).bind(me.id)
-                    .fetch_one(&mut *tx).await?)
+                Some(db::insert_refund_entry(&mut *tx, on, received, &format!("SEB iadesi · {label}"), me.id).await?)
             } else {
                 None
             };
-            sqlx::query(
-                "update reimbursement_claims set status = 'paid', paid_at = now(),
-                        received_amount = $2::bigint::numeric / 100, ledger_entry_id = $3 where id = $1")
-                .bind(id).bind(received).bind(entry).execute(&mut *tx).await?;
+            db::set_claim_paid(&mut *tx, id, received, entry).await?;
         }
         s => {
-            sqlx::query(
-                "update reimbursement_claims set status = $2,
-                        sent_at = case when $2 = 'sent' then now() when $2 = 'draft' then null else sent_at end,
-                        approved_at = case when $2 = 'office_approved' then now() when $2 in ('draft','sent') then null else approved_at end
-                  where id = $1")
-                .bind(id).bind(s).execute(&mut *tx).await?;
+            db::set_claim_status(&mut *tx, id, s).await?;
         }
     }
     tx.commit().await?;
@@ -999,7 +803,7 @@ pub(crate) async fn patch_claim(st: &AppState, me: &User, id: Uuid, b: ClaimPatc
 
 // --- kasa defteri ----------------------------------------------------------------
 
-#[derive(Serialize, sqlx::FromRow)]
+#[derive(Serialize)]
 pub struct LedgerRow {
     id: Uuid,
     occurred_on: NaiveDate,
@@ -1017,6 +821,14 @@ pub struct LedgerRow {
     created_at: DateTime<Utc>,
 }
 
+impl From<db::LedgerRow> for LedgerRow {
+    fn from(r: db::LedgerRow) -> Self {
+        Self { id: r.id, occurred_on: r.occurred_on, amount: r.amount, kind: r.kind, description: r.description,
+            category_id: r.category_id, event_id: r.event_id, invoice_id: r.invoice_id, payee_user_id: r.payee_user_id,
+            reverses_id: r.reverses_id, reversed: r.reversed, balance: r.balance, created_by: r.created_by, created_at: r.created_at }
+    }
+}
+
 #[derive(Serialize)]
 pub struct LedgerView {
     balance: f64,
@@ -1029,27 +841,9 @@ pub struct LedgerView {
 
 pub(crate) async fn ledger(st: &AppState, me: &User) -> Result<LedgerView> {
     need_viewer(st, me).await?;
-    let entries: Vec<LedgerRow> = sqlx::query_as(
-        "select * from (
-           select e.id, e.occurred_on, e.amount::float8 as amount, e.kind, e.description, e.category_id, e.event_id,
-                  e.invoice_id, e.payee_user_id, e.reverses_id,
-                  exists(select 1 from ledger_entries r where r.reverses_id = e.id) as reversed,
-                  (sum(e.amount) over (order by e.occurred_on, e.created_at, e.id rows unbounded preceding))::float8 as balance,
-                  e.created_by, e.created_at
-             from ledger_entries e) t
-          order by occurred_on desc, created_at desc, id desc limit 500")
-        .fetch_all(&st.pool).await?;
-    let (balance, month_in, month_out): (f64, f64, f64) = sqlx::query_as(
-        "select coalesce(sum(amount), 0)::float8,
-                coalesce(sum(amount) filter (where amount > 0 and date_trunc('month', occurred_on) = date_trunc('month', $1::date)), 0)::float8,
-                coalesce(sum(amount) filter (where amount < 0 and date_trunc('month', occurred_on) = date_trunc('month', $1::date)), 0)::float8
-           from ledger_entries")
-        .bind(today()).fetch_one(&st.pool).await?;
-    let check: Option<(NaiveDate, f64, f64)> = sqlx::query_as(
-        "select c.checked_on, c.bank_balance::float8,
-                (coalesce((select sum(amount) from ledger_entries where occurred_on <= c.checked_on), 0) - c.bank_balance)::float8
-           from ledger_checks c order by c.checked_on desc, c.created_at desc limit 1")
-        .fetch_optional(&st.pool).await?;
+    let entries = db::list_ledger_entries(&st.pool).await?.into_iter().map(LedgerRow::from).collect();
+    let (balance, month_in, month_out) = db::read_ledger_totals(&st.pool, today()).await?;
+    let check = db::find_ledger_check(&st.pool).await?;
     Ok(LedgerView {
         balance, month_in, month_out,
         last_check: check.map(|(on, bank, diff)| json!({ "checked_on": on, "bank_balance": bank, "diff": diff })),
@@ -1085,8 +879,7 @@ pub(crate) async fn add_entry(st: &AppState, me: &User, b: EntryIn) -> Result<Le
     }
     let desc = text(Some(b.description), DESC_MAX, "invalid_description")?.ok_or(AppError::BadRequest("invalid_description"))?;
     if let Some(c) = b.category_id {
-        let ok: bool = sqlx::query_scalar("select exists(select 1 from nodes where id = $1 and node_type = 'category')")
-            .bind(c).fetch_one(&st.pool).await?;
+        let ok = db::has_category(&st.pool, c).await?;
         if !ok {
             return Err(AppError::BadRequest("invalid_category"));
         }
@@ -1097,20 +890,14 @@ pub(crate) async fn add_entry(st: &AppState, me: &User, b: EntryIn) -> Result<Le
     }
     let mut tx = st.pool.begin().await?;
     if b.kind == "opening" {
-        let exists: bool = sqlx::query_scalar("select exists(select 1 from ledger_entries where kind = 'opening')")
-            .fetch_one(&mut *tx).await?;
+        let exists = db::has_opening_entry(&mut *tx).await?;
         if exists {
             return Err(AppError::Conflict("opening_exists"));
         }
     }
     att::claimable_for(&mut *tx, me.id, &mut attach, Purpose::Ledger).await?;
-    let id: Uuid = sqlx::query_scalar(
-        "insert into ledger_entries (occurred_on, amount, kind, description, category_id, event_id, created_by)
-         values ($1, $2::bigint::numeric / 100, $3, $4, $5, $6, $7) returning id")
-        .bind(b.occurred_on).bind(amount).bind(&b.kind).bind(desc).bind(b.category_id).bind(b.event_id).bind(me.id)
-        .fetch_one(&mut *tx).await?;
-    sqlx::query("insert into ledger_attachments (entry_id, attachment_id) select $1, unnest($2::uuid[])")
-        .bind(id).bind(&attach).execute(&mut *tx).await?;
+    let id = db::insert_ledger_entry(&mut *tx, b.occurred_on, amount, &b.kind, &desc, b.category_id, b.event_id, me.id).await?;
+    db::insert_ledger_attachments(&mut *tx, id, &attach).await?;
     tx.commit().await?;
     ledger(st, me).await
 }
@@ -1125,10 +912,7 @@ pub(crate) async fn reverse_entry(st: &AppState, me: &User, id: Uuid, b: Reverse
     need(st, me, "manage_ledger").await?;
     let note = text(b.note, 200, "invalid_note")?;
     let mut tx = st.pool.begin().await?;
-    let row: Option<(String, String, bool)> = sqlx::query_as(
-        "select kind, description, exists(select 1 from ledger_entries r where r.reverses_id = e.id)
-           from ledger_entries e where e.id = $1 for update")
-        .bind(id).fetch_optional(&mut *tx).await?;
+    let row = db::lock_entry_reversal(&mut *tx, id).await?;
     let (kind, desc, reversed) = row.ok_or(AppError::NotFound)?;
     if kind == "reversal" || reversed {
         return Err(AppError::Conflict("already_reversed"));
@@ -1137,10 +921,7 @@ pub(crate) async fn reverse_entry(st: &AppState, me: &User, id: Uuid, b: Reverse
         Some(n) => format!("Ters kayıt · {desc} · {n}"),
         None => format!("Ters kayıt · {desc}"),
     };
-    sqlx::query(
-        "insert into ledger_entries (occurred_on, amount, kind, description, reverses_id, created_by)
-         select $2, -amount, 'reversal', left($3, 300), id, $4 from ledger_entries where id = $1")
-        .bind(id).bind(today()).bind(text).bind(me.id).execute(&mut *tx).await?;
+    db::insert_entry_reversal(&mut *tx, id, today(), &text, me.id).await?;
     tx.commit().await?;
     ledger(st, me).await
 }
@@ -1159,8 +940,7 @@ pub(crate) async fn add_check(st: &AppState, me: &User, b: CheckIn) -> Result<Le
     if b.checked_on > today() {
         return Err(AppError::BadRequest("invalid_date"));
     }
-    sqlx::query("insert into ledger_checks (checked_on, bank_balance, created_by) values ($1, $2::bigint::numeric / 100, $3)")
-        .bind(b.checked_on).bind(bal).bind(me.id).execute(&st.pool).await?;
+    db::insert_ledger_check(&st.pool, b.checked_on, bal, me.id).await?;
     ledger(st, me).await
 }
 
@@ -1178,18 +958,14 @@ pub struct PayoutIn {
 pub(crate) async fn payout(st: &AppState, me: &User, b: PayoutIn) -> Result<LedgerView> {
     need(st, me, "manage_ledger").await?;
     let amount = cents(b.amount).ok_or(AppError::BadRequest("invalid_amount"))?;
-    let name: Option<String> = sqlx::query_scalar("select name from users where id = $1")
-        .bind(b.user_id).fetch_optional(&st.pool).await?;
+    let name = db::find_user_name(&st.pool, b.user_id).await?;
     let name = name.ok_or(AppError::BadRequest("invalid_user_id"))?;
     let desc = text(b.description, DESC_MAX, "invalid_description")?.unwrap_or_else(|| format!("{name} için iade"));
     let on = b.occurred_on.unwrap_or_else(today);
     if on > today() {
         return Err(AppError::BadRequest("invalid_date"));
     }
-    sqlx::query(
-        "insert into ledger_entries (occurred_on, amount, kind, description, payee_user_id, created_by)
-         values ($1, -($2::bigint::numeric / 100), 'member_payout', $3, $4, $5)")
-        .bind(on).bind(amount).bind(desc).bind(b.user_id).bind(me.id).execute(&st.pool).await?;
+    db::insert_member_payout(&st.pool, on, amount, &desc, b.user_id, me.id).await?;
     ledger(st, me).await
 }
 
@@ -1212,80 +988,28 @@ pub struct Summary {
 pub(crate) async fn summary(st: &AppState, me: &User) -> Result<Summary> {
     need_viewer(st, me).await?;
     let p = &st.pool;
-    let cash_balance: f64 = sqlx::query_scalar("select coalesce(sum(amount), 0)::float8 from ledger_entries").fetch_one(p).await?;
-    let last_check: Option<(NaiveDate, f64, f64)> = sqlx::query_as(
-        "select c.checked_on, c.bank_balance::float8,
-                (coalesce((select sum(amount) from ledger_entries where occurred_on <= c.checked_on), 0) - c.bank_balance)::float8
-           from ledger_checks c order by c.checked_on desc, c.created_at desc limit 1")
-        .fetch_optional(p).await?;
-    let (seb_receivable, unclaimed): (f64, i64) = sqlx::query_as(
-        "select coalesce(sum(round(ii.amount * coalesce(i.fx_rate, 1), 2)), 0)::float8,
-                count(distinct i.id) filter (where i.claim_id is null)
-           from invoices i join invoice_items ii on ii.invoice_id = i.id
-           left join reimbursement_claims c on c.id = i.claim_id
-          where i.status = 'approved' and ii.funding = 'seb' and (c.id is null or c.status <> 'paid')")
-        .fetch_one(p).await?;
-    let claims_waiting: i64 = sqlx::query_scalar(
-        "select count(*) from reimbursement_claims where status in ('sent','office_approved')").fetch_one(p).await?;
+    let cash_balance = db::read_cash_balance(p).await?;
+    let last_check = db::find_summary_check(p).await?;
+    let (seb_receivable, unclaimed) = db::read_seb_receivable(p).await?;
+    let claims_waiting = db::count_waiting_claims(p).await?;
     // Uyeye borc: onayli, uye odemis faturalar - o kisiye yapilan odemeler.
     // Odenebilir kisim: genel fonlu kalemler + dosyasi odenmis SEB kalemleri.
-    let debts: Vec<(Uuid, f64, f64, f64)> = sqlx::query_as(
-        "with owed as (
-           select i.submitted_by as u,
-                  sum(round(ii.amount * coalesce(i.fx_rate, 1), 2)) as total,
-                  sum(round(ii.amount * coalesce(i.fx_rate, 1), 2))
-                    filter (where ii.funding = 'general' or c.status = 'paid') as payable
-             from invoices i join invoice_items ii on ii.invoice_id = i.id
-             left join reimbursement_claims c on c.id = i.claim_id
-            where i.status = 'approved' and i.paid_by = 'member'
-            group by 1),
-         paid as (
-           select payee_user_id as u, -sum(amount) as paid from ledger_entries
-            where kind = 'member_payout' group by 1)
-         select o.u, o.total::float8, coalesce(o.payable, 0)::float8, coalesce(p.paid, 0)::float8
-           from owed o left join paid p on p.u = o.u
-          where o.total > coalesce(p.paid, 0)
-          order by o.total - coalesce(p.paid, 0) desc")
-        .fetch_all(p).await?;
-    let member_debts = debts.into_iter().map(|(u, total, payable, paid)| json!({
+    let debts = db::list_member_debts(p).await?;
+    let member_debts = debts.into_iter().map(|db::MemberDebtRow { user_id: u, total, payable, paid }| json!({
         "user_id": u,
         "outstanding": total - paid,
         "payable": (payable - paid).max(0.0),
     })).collect();
-    let (pending_invoices, oldest_pending): (i64, Option<DateTime<Utc>>) = sqlx::query_as(
-        "select count(*), min(created_at) from invoices where status = 'pending'").fetch_one(p).await?;
+    let (pending_invoices, oldest_pending) = db::read_pending_invoices(p).await?;
     let day = today();
     let horizon = day + chrono::Duration::days(UPCOMING_DAYS);
     let mut upcoming: Vec<Value> = Vec::new();
-    #[derive(sqlx::FromRow)]
-    struct Due {
-        id: Uuid,
-        name: String,
-        due: Option<NaiveDate>,
-        price: Option<f64>,
-        title: Option<String>,
-    }
-    let mats: Vec<Due> = sqlx::query_as(
-        "select m.id, m.name, coalesce(m.needed_by, e.date) as due,
-                (case when m.sponsor_chosen then 0
-                      else coalesce((select pr.price from material_providers pr where pr.id = m.chosen_provider_id),
-                                    (select min(pr.price) from material_providers pr where pr.material_id = m.id)) end)::float8 as price,
-                e.title
-           from materials m
-           left join event_materials em on em.material_id = m.id
-           left join events e on e.id = em.event_id
-          where m.state = 3 and not m.owned and not m.purchased
-            and coalesce(m.needed_by, e.date) is not null and coalesce(m.needed_by, e.date) <= $1
-          order by 3 limit 50")
-        .bind(horizon).fetch_all(p).await?;
+    let mats = db::list_due_materials(p, horizon).await?;
     for m in mats {
         upcoming.push(json!({ "kind": "material", "id": m.id, "label": m.name, "event": m.title, "due": m.due, "amount": m.price }));
     }
-    let rec: Vec<(Uuid, String, NaiveDate, f64, String)> = sqlx::query_as(
-        "select id, name, next_on, amount::float8, currency::text from recurring_expenses
-          where is_active and next_on <= $1 order by next_on")
-        .bind(horizon).fetch_all(p).await?;
-    for (id, name, due, amount, currency) in rec {
+    let rec = db::list_due_recurring(p, horizon).await?;
+    for db::DueRecurringRow { id, name, next_on: due, amount, currency } in rec {
         upcoming.push(json!({ "kind": "recurring", "id": id, "label": name, "due": due, "amount": amount, "currency": currency }));
     }
     Ok(Summary {
@@ -1311,8 +1035,7 @@ pub(crate) async fn fx(st: &AppState, q: FxQuery) -> Result<Value> {
         return Err(AppError::BadRequest("invalid_date"));
     }
     for day in finance::lookback(q.on) {
-        let cached: Option<f64> = sqlx::query_scalar("select rate::float8 from fx_rates where day = $1 and currency = $2")
-            .bind(day).bind(&currency).fetch_optional(&st.pool).await?;
+        let cached = db::find_fx_rate(&st.pool, day, &currency).await?;
         if let Some(rate) = cached {
             return Ok(json!({ "currency": currency, "on": day, "rate": rate, "source": "tcmb" }));
         }
@@ -1331,9 +1054,7 @@ pub(crate) async fn fx(st: &AppState, q: FxQuery) -> Result<Value> {
         };
         let m = micros(rate).unwrap_or(0);
         if m > 0 {
-            sqlx::query("insert into fx_rates (day, currency, rate) values ($1, $2, $3::bigint::numeric / 1000000)
-                         on conflict do nothing")
-                .bind(day).bind(&currency).bind(m).execute(&st.pool).await?;
+            db::insert_fx_rate(&st.pool, day, &currency, m).await?;
         }
         return Ok(json!({ "currency": currency, "on": day, "rate": rate, "source": "tcmb" }));
     }

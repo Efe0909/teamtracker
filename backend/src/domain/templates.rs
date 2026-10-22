@@ -8,6 +8,7 @@ use uuid::Uuid;
 
 use super::finance::need_viewer;
 use crate::{
+    db::templates as db,
     domain::common,
     error::{AppError, Result},
     state::AppState,
@@ -15,7 +16,7 @@ use crate::{
 
 const BODY_MAX: usize = 262_144;
 
-#[derive(Serialize, sqlx::FromRow)]
+#[derive(Serialize)]
 pub struct Template {
     id: Uuid,
     name: String,
@@ -24,10 +25,15 @@ pub struct Template {
     updated_at: DateTime<Utc>,
 }
 
+impl From<db::TemplateRow> for Template {
+    fn from(r: db::TemplateRow) -> Self {
+        Self { id: r.id, name: r.name, format: r.format, body: r.body, updated_at: r.updated_at }
+    }
+}
+
 pub(crate) async fn list(st: &AppState, me: &crate::models::user::User) -> Result<Vec<Template>> {
     need_viewer(st, me).await?;
-    Ok(sqlx::query_as("select id, name, format, body, updated_at from mail_templates order by name")
-        .fetch_all(&st.pool).await?)
+    Ok(db::list_templates(&st.pool).await?.into_iter().map(Template::from).collect())
 }
 
 #[derive(Deserialize)]
@@ -49,34 +55,28 @@ fn check(b: &TemplateIn) -> Result<String> {
 }
 
 async fn one(st: &AppState, id: Uuid) -> Result<Template> {
-    sqlx::query_as("select id, name, format, body, updated_at from mail_templates where id = $1")
-        .bind(id).fetch_optional(&st.pool).await?.ok_or(AppError::NotFound)
+    db::find_template(&st.pool, id).await?.map(Template::from).ok_or(AppError::NotFound)
 }
 
 pub(crate) async fn create(st: &AppState, me: &crate::models::user::User, b: TemplateIn) -> Result<Template> {
     need_viewer(st, me).await?;
     let name = check(&b)?;
-    let taken: bool = sqlx::query_scalar("select exists(select 1 from mail_templates where name = $1)")
-        .bind(&name).fetch_one(&st.pool).await?;
+    let taken = db::has_name(&st.pool, &name).await?;
     if taken {
         return Err(AppError::Conflict("template_exists"));
     }
-    let id: Uuid = sqlx::query_scalar(
-        "insert into mail_templates (name, format, body, created_by) values ($1, $2, $3, $4) returning id")
-        .bind(&name).bind(&b.format).bind(&b.body).bind(me.id).fetch_one(&st.pool).await?;
+    let id = db::insert_template(&st.pool, &name, &b.format, &b.body, me.id).await?;
     one(st, id).await
 }
 
 pub(crate) async fn replace(st: &AppState, me: &crate::models::user::User, id: Uuid, b: TemplateIn) -> Result<Template> {
     need_viewer(st, me).await?;
     let name = check(&b)?;
-    let taken: bool = sqlx::query_scalar("select exists(select 1 from mail_templates where name = $1 and id <> $2)")
-        .bind(&name).bind(id).fetch_one(&st.pool).await?;
+    let taken = db::has_other_name(&st.pool, &name, id).await?;
     if taken {
         return Err(AppError::Conflict("template_exists"));
     }
-    let n = sqlx::query("update mail_templates set name = $2, format = $3, body = $4, updated_at = now() where id = $1")
-        .bind(id).bind(&name).bind(&b.format).bind(&b.body).execute(&st.pool).await?.rows_affected();
+    let n = db::update_template(&st.pool, id, &name, &b.format, &b.body).await?;
     if n == 0 {
         return Err(AppError::NotFound);
     }
@@ -85,8 +85,7 @@ pub(crate) async fn replace(st: &AppState, me: &crate::models::user::User, id: U
 
 pub(crate) async fn delete(st: &AppState, me: &crate::models::user::User, id: Uuid) -> Result<serde_json::Value> {
     need_viewer(st, me).await?;
-    let n = sqlx::query("delete from mail_templates where id = $1")
-        .bind(id).execute(&st.pool).await?.rows_affected();
+    let n = db::delete_template(&st.pool, id).await?;
     if n == 0 {
         return Err(AppError::NotFound);
     }
