@@ -13,6 +13,7 @@ pub mod admin;
 pub mod audit;
 pub mod attachments;
 pub mod bank_accounts;
+pub mod bootstrap;
 pub mod budget;
 pub mod cards;
 pub mod chats;
