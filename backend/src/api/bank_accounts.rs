@@ -9,8 +9,6 @@ use crate::{
     state::AppState,
 };
 
-pub(crate) use crate::domain::bank_accounts::list_of;
-
 pub async fn list(State(st): State<AppState>, CurrentUser(me): CurrentUser) -> Result<Json<Vec<BankAccount>>> {
     Ok(Json(bank_accounts::list(&st, me.id).await?))
 }
