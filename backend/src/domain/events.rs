@@ -19,6 +19,7 @@ use sqlx::{PgPool, Postgres};
 use uuid::Uuid;
 
 use crate::{
+    db::events as db_events,
     purchases_xlsx,
     domain::{common, records},
     decision,
@@ -42,19 +43,7 @@ const PRICE_MAX: f64 = 9_999_999_999.99;
 
 // --- satir ------------------------------------------------------------------
 
-/// Liste ve ayrinti AYNI satiri dondurur. `record_ids` = kayit widget'larinin
-/// kayitlari (ikiz HARIC: ikiz widget olamaz).
-macro_rules! event_cols {
-    () => {
-        "e.id, e.record_id, e.title, e.kind_id, e.status, e.priority, e.owner_id, e.date,
-         to_char(e.start_time, 'HH24:MI') as start_time, e.location_id, e.place, e.attendees, e.description,
-         e.created_by, e.created_at, e.updated_at,
-         coalesce((select array_agg(w.record_id order by w.position) from event_widgets w
-                    where w.event_id = e.id and w.record_id is not null), '{}') as record_ids"
-    };
-}
-
-#[derive(Serialize, sqlx::FromRow)]
+#[derive(Serialize)]
 pub struct EventRow {
     id: Uuid,
     record_id: Uuid,
@@ -79,15 +68,23 @@ pub struct EventRow {
 }
 
 async fn load(pool: &PgPool, id: Uuid) -> Result<EventRow> {
-    sqlx::query_as(concat!("select ", event_cols!(), " from events e where e.id = $1"))
-        .bind(id).fetch_optional(pool).await?.ok_or(AppError::NotFound)
+    db_events::find_event(pool, id).await?.map(EventRow::from).ok_or(AppError::NotFound)
+}
+
+impl From<db_events::EventRow> for EventRow {
+    fn from(r: db_events::EventRow) -> Self {
+        Self {
+            id: r.id, record_id: r.record_id, title: r.title, kind_id: r.kind_id, status: r.status, priority: r.priority,
+            owner_id: r.owner_id, date: r.date, start_time: r.start_time, location_id: r.location_id, place: r.place,
+            attendees: r.attendees, description: r.description, created_by: r.created_by, created_at: r.created_at,
+            updated_at: r.updated_at, record_ids: r.record_ids,
+        }
+    }
 }
 
 /// Okuma herkese acik; tablo tek sayfada (ekip kucuk, suzme istemcide).
 pub(crate) async fn list(st: &AppState, ) -> Result<Vec<EventRow>> {
-    Ok(sqlx::query_as(concat!(
-        "select ", event_cols!(), " from events e order by e.date nulls last, e.created_at limit 1000"))
-        .fetch_all(&st.pool).await?)
+    Ok(db_events::list_events(&st.pool).await?.into_iter().map(EventRow::from).collect())
 }
 
 // --- ayrinti ---------------------------------------------------------------
@@ -113,7 +110,7 @@ pub struct Detail {
     requests: Vec<CheckpointRequest>,
 }
 
-#[derive(Serialize, sqlx::FromRow)]
+#[derive(Serialize)]
 struct CheckpointRequest {
     id: Uuid,
     checkpoint_id: Uuid,
@@ -123,13 +120,13 @@ struct CheckpointRequest {
     created_at: DateTime<Utc>,
 }
 
-#[derive(Serialize, sqlx::FromRow)]
+#[derive(Serialize)]
 struct Participant {
     user_id: Uuid,
     role: Option<String>,
 }
 
-#[derive(Serialize, sqlx::FromRow)]
+#[derive(Serialize)]
 struct Checkpoint {
     id: Uuid,
     label: String,
@@ -138,7 +135,7 @@ struct Checkpoint {
     done: bool,
 }
 
-#[derive(Serialize, sqlx::FromRow)]
+#[derive(Serialize)]
 struct Widget {
     id: Uuid,
     #[serde(rename = "type")]
@@ -146,17 +143,7 @@ struct Widget {
     record_id: Option<Uuid>,
 }
 
-/// `materials` sutunlari, `m` takma adiyla (etkinlik ayrintisi ve maliye ayni satiri okur).
-macro_rules! material_cols {
-    () => {
-        "m.id, m.name, m.notes, m.type as kind, m.priority, m.state, m.qty, m.has_sponsor, m.owned,
-         m.chosen_provider_id, m.sponsor_chosen, m.sponsor_qty, m.sponsor_date, m.in_sponsor_record,
-         m.delivered, m.purchased, m.purchased_at, m.created_by, m.updated_at,
-         m.budget::float8 as budget, m.overage_ln"
-    };
-}
-
-#[derive(Serialize, sqlx::FromRow)]
+#[derive(Serialize)]
 pub struct Material {
     id: Uuid,
     name: String,
@@ -189,13 +176,24 @@ pub struct Material {
     /// ln(kart fiyati / butce). Bos: fiyat ya da butce yok, sponsor secili, ya da fiyat 0.
     overage_ln: Option<f64>,
     /// Kademe (0 $, 1 $$, 2 $$$), `overage_ln` ve kalemin zamanindaki taban ile turetilir.
-    #[sqlx(skip)]
     overage_level: Option<u8>,
-    #[sqlx(skip)]
     providers: Vec<Provider>,
 }
 
-#[derive(Serialize, sqlx::FromRow)]
+impl From<db_events::MaterialRow> for Material {
+    fn from(r: db_events::MaterialRow) -> Self {
+        Self {
+            id: r.id, name: r.name, notes: r.notes, kind: r.kind, priority: r.priority, state: r.state,
+            qty: r.qty, has_sponsor: r.has_sponsor, owned: r.owned, chosen_provider_id: r.chosen_provider_id,
+            sponsor_chosen: r.sponsor_chosen, sponsor_qty: r.sponsor_qty, sponsor_date: r.sponsor_date,
+            in_sponsor_record: r.in_sponsor_record, delivered: r.delivered, purchased: r.purchased,
+            purchased_at: r.purchased_at, created_by: r.created_by, updated_at: r.updated_at, budget: r.budget,
+            overage_ln: r.overage_ln, overage_level: None, providers: Vec::new(),
+        }
+    }
+}
+
+#[derive(Serialize)]
 struct Provider {
     id: Uuid,
     #[serde(skip)]
@@ -208,11 +206,10 @@ struct Provider {
     price: Option<f64>,
     arrival_date: Option<NaiveDate>,
     /// Bu teklifin kademesi (kalemin butcesine gore). Sutun degil.
-    #[sqlx(skip)]
     overage_level: Option<u8>,
 }
 
-// LLM yuku (kisisel/kurumsal veriden arindirilmis); `material_cols!` yukarida tanimli.
+// LLM yuku (kisisel/kurumsal veriden arindirilmis).
 mod context;
 pub(crate) use context::{
     known_names, llm_context, llm_restore, material_brief, material_sample, material_suggestions, reject_suggestion,
@@ -225,35 +222,17 @@ async fn detail_of(st: &AppState, me: &User, event: EventRow) -> Result<Detail> 
     let can_manage = common::has_scope(st, me, "manage_events").await?;
     let can_edit = can_manage || crate::db::scope::can_edit_record(&st.pool, me, &twin, &st.tree).await?;
     let can_approve = can_manage || event.owner_id == Some(me.id);
-    let participants = sqlx::query_as(
-        "select user_id, role from event_participants where event_id = $1 order by added_at")
-        .bind(event.id).fetch_all(&st.pool).await?;
-    let team_ids = sqlx::query_scalar(
-        "select et.team_id from event_teams et join teams t on t.id = et.team_id
-          where et.event_id = $1 order by t.name")
-        .bind(event.id).fetch_all(&st.pool).await?;
-    let checkpoints = sqlx::query_as(
-        "select c.id, c.label, coalesce(c.due_date, e.date + c.offset_days::int) as date,
-                c.done_at is not null as done
-           from event_checkpoints c join events e on e.id = c.event_id
-          where c.event_id = $1
-          order by (c.done_at is null), c.done_at,
-                   coalesce(c.due_date, e.date + c.offset_days::int) nulls last, c.position")
-        .bind(event.id).fetch_all(&st.pool).await?;
+    let participants = db_events::list_participants(&st.pool, event.id).await?.into_iter()
+        .map(|r| Participant { user_id: r.user_id, role: r.role }).collect();
+    let team_ids = db_events::list_team_ids(&st.pool, event.id).await?;
+    let checkpoints = db_events::list_checkpoints(&st.pool, event.id).await?.into_iter()
+        .map(|r| Checkpoint { id: r.id, label: r.label, date: r.date, done: r.done }).collect();
     // Tamamlananlar uste (tamamlanma sirasiyla); geri alinan tarih yerine doner.
-    let requests = sqlx::query_as(
-        "select r.id, r.checkpoint_id, r.user_id, r.action, r.created_at
-           from event_checkpoint_requests r join event_checkpoints c on c.id = r.checkpoint_id
-          where c.event_id = $1 and ($2 or r.user_id = $3) order by r.created_at")
-        .bind(event.id).bind(can_approve).bind(me.id).fetch_all(&st.pool).await?;
-    let widgets = sqlx::query_as(
-        "select id, widget_type as kind, record_id from event_widgets where event_id = $1 order by position")
-        .bind(event.id).fetch_all(&st.pool).await?;
-    let mut materials: Vec<Material> = sqlx::query_as(concat!(
-        "select ", material_cols!(), " from materials m
-           join event_materials em on em.material_id = m.id
-          where em.event_id = $1 order by m.created_at, m.id"))
-        .bind(event.id).fetch_all(&st.pool).await?;
+    let requests = db_events::list_requests(&st.pool, event.id, can_approve, me.id).await?.into_iter()
+        .map(|r| CheckpointRequest { id: r.id, checkpoint_id: r.checkpoint_id, user_id: r.user_id, action: r.action, created_at: r.created_at }).collect();
+    let widgets = db_events::list_widgets(&st.pool, event.id).await?.into_iter()
+        .map(|r| Widget { id: r.id, kind: r.kind, record_id: r.record_id }).collect();
+    let mut materials: Vec<Material> = db_events::list_event_materials(&st.pool, event.id).await?.into_iter().map(Material::from).collect();
     attach_providers(&st.pool, &mut materials).await?;
     fill_levels(&st.pool, &mut materials).await?;
     Ok(Detail { event, participants, team_ids, checkpoints, widgets, materials, can_edit, can_manage, can_approve, requests })
@@ -382,32 +361,18 @@ pub(crate) async fn create(
     let status = if b.date.is_some() { EventStatus::Planning } else { EventStatus::Idea };
 
     let mut tx = st.pool.begin().await?;
-    let chat_id: Uuid = sqlx::query_scalar("insert into chats default values returning id")
-        .fetch_one(&mut *tx).await?;
-    let record_id: Uuid = sqlx::query_scalar(
-        "insert into records (unit_id, chat_id, kind, title, priority, owner_id, created_by)
-         values ($1, $2, $3, $4, $5, $6, $6) returning id")
-        .bind(b.unit_id).bind(chat_id).bind(RecordKind::Task).bind(&title).bind(priority).bind(me.id)
-        .fetch_one(&mut *tx).await?;
+    let chat_id = db_events::insert_chat(&mut *tx).await?;
+    let record_id = db_events::insert_record(&mut *tx, b.unit_id, chat_id, RecordKind::Task, &title, priority, me.id).await?;
     records::log(&mut tx, chat_id, me.id, "created", &title, None,
         records::change(serde_json::Value::Null, me.id)).await?;
     records::log_override(&mut tx, chat_id, me.id, &title, "record", reasons).await?;
-    let id: Uuid = sqlx::query_scalar(
-        "insert into events (record_id, title, kind_id, status, priority, owner_id, date, created_by, description)
-         values ($1, $2, $3, $4, $5, $6, $7, $6, $8) returning id")
-        .bind(record_id).bind(&title).bind(b.kind_id).bind(status).bind(priority).bind(me.id).bind(b.date)
-        .bind(&description).fetch_one(&mut *tx).await?;
-    sqlx::query("insert into event_participants (event_id, user_id) values ($1, $2)")
-        .bind(id).bind(me.id).execute(&mut *tx).await?;
+    let id = db_events::insert_event(&mut *tx, record_id, &title, b.kind_id, status, priority, me.id, b.date, description.as_deref()).await?;
+    db_events::insert_participant(&mut *tx, id, me.id).await?;
     for (i, w) in widgets.iter().enumerate() {
-        sqlx::query("insert into event_widgets (event_id, widget_type, position) values ($1, $2, $3)
-                     on conflict do nothing")
-            .bind(id).bind(*w).bind(i as i16).execute(&mut *tx).await?;
+        db_events::insert_template_widget(&mut *tx, id, *w, i as i16).await?;
     }
     for (i, (label, offset)) in checkpoints.iter().enumerate() {
-        sqlx::query(
-            "insert into event_checkpoints (event_id, label, offset_days, position) values ($1, $2, $3, $4)")
-            .bind(id).bind(label).bind(*offset).bind(i as i16).execute(&mut *tx).await?;
+        db_events::insert_template_checkpoint(&mut *tx, id, label, *offset, i as i16).await?;
     }
     tx.commit().await?;
     Ok(Created { id, record_id })
@@ -489,16 +454,13 @@ pub(crate) async fn patch(
     if let Some((field, reasons)) = overridden {
         records::log_override(&mut tx, twin.chat_id, me.id, &twin.title, field, Some(reasons)).await?;
     }
-    let set = |sql: &'static str| sqlx::query(sql).bind(ev.id);
     match p {
         EventPatch::Title(v) => {
             let v = common::text(Some(v), TITLE_MAX, "invalid_title")?
                 .ok_or(AppError::BadRequest("invalid_title"))?;
             // Tek ad, iki yuz: ikizin basligi AYNI islemde (spec/73 §3a).
-            set("update events set title = $2, updated_at = now() where id = $1")
-                .bind(&v).execute(&mut *tx).await?;
-            sqlx::query("update records set title = $2 where id = $1")
-                .bind(twin.id).bind(&v).execute(&mut *tx).await?;
+            db_events::set_title(&mut *tx, ev.id, &v).await?;
+            db_events::set_record_title(&mut *tx, twin.id, &v).await?;
             if v != ev.title {
                 records::log(&mut tx, twin.chat_id, me.id, "field_changed", &ev.title, Some("title"),
                     records::change(&ev.title, &v)).await?;
@@ -508,16 +470,13 @@ pub(crate) async fn patch(
             if matches!(v, EventStatus::Confirmed | EventStatus::Done) && ev.date.is_none() {
                 return Err(AppError::Conflict("event_needs_date"));
             }
-            set("update events set status = $2, updated_at = now() where id = $1")
-                .bind(v).execute(&mut *tx).await?;
+            db_events::set_status(&mut *tx, ev.id, v).await?;
             log_change(&mut tx, &twin, me, "status", json(ev.status), json(v)).await?;
         }
         EventPatch::Priority(v) => {
-            set("update events set priority = $2, updated_at = now() where id = $1")
-                .bind(v).execute(&mut *tx).await?;
+            db_events::set_priority(&mut *tx, ev.id, v).await?;
             // Onem ve sorumlu iki yuzde ayni: ozet satiri ve "top kimde" ikizden okunur.
-            sqlx::query("update records set priority = $2 where id = $1")
-                .bind(twin.id).bind(v).execute(&mut *tx).await?;
+            db_events::set_record_priority(&mut *tx, twin.id, v).await?;
             log_change(&mut tx, &twin, me, "priority", json(ev.priority), json(v)).await?;
         }
         EventPatch::OwnerId(v) => {
@@ -528,10 +487,8 @@ pub(crate) async fn patch(
             {
                 return Err(AppError::Denied("owner_change_denied"));
             }
-            set("update events set owner_id = $2, updated_at = now() where id = $1")
-                .bind(v).execute(&mut *tx).await?;
-            sqlx::query("update records set owner_id = $2 where id = $1")
-                .bind(twin.id).bind(v).execute(&mut *tx).await?;
+            db_events::set_owner(&mut *tx, ev.id, v).await?;
+            db_events::set_record_owner(&mut *tx, twin.id, v).await?;
             log_change(&mut tx, &twin, me, "owner_id", json(ev.owner_id), json(v)).await?;
         }
         EventPatch::Date(v) => {
@@ -541,16 +498,10 @@ pub(crate) async fn patch(
             // Tamamlanmis goreli checkpoint ESKI tarihine sabitlenir; yalniz
             // bekleyenler etkinlikle kayar (spec/73 §4).
             if let Some(old) = ev.date {
-                sqlx::query(
-                    "update event_checkpoints set due_date = $2 + offset_days::int, offset_days = null
-                      where event_id = $1 and done_at is not null and offset_days is not null")
-                    .bind(ev.id).bind(old).execute(&mut *tx).await?;
+                db_events::fix_checkpoint_dates(&mut *tx, ev.id, old).await?;
             }
             // Tarihsiz etkinligin saati olmaz (sema check'i).
-            set("update events set date = $2,
-                    start_time = case when $2::date is null then null else start_time end,
-                    updated_at = now() where id = $1")
-                .bind(v).execute(&mut *tx).await?;
+            db_events::set_date(&mut *tx, ev.id, v).await?;
             log_change(&mut tx, &twin, me, "date", json(ev.date), json(v)).await?;
         }
         EventPatch::StartTime(v) => {
@@ -559,8 +510,7 @@ pub(crate) async fn patch(
             if t.is_some() && ev.date.is_none() {
                 return Err(AppError::Conflict("event_needs_date"));
             }
-            set("update events set start_time = $2, updated_at = now() where id = $1")
-                .bind(t).execute(&mut *tx).await?;
+            db_events::set_start_time(&mut *tx, ev.id, t).await?;
             log_change(&mut tx, &twin, me, "start_time", json(&ev.start_time),
                 json(t.map(|t| t.format("%H:%M").to_string()))).await?;
         }
@@ -573,25 +523,20 @@ pub(crate) async fn patch(
                 let name = |id: Option<Uuid>| id.map(|i| tree.name(i).to_string());
                 (name(ev.location_id).or(ev.place.clone()), name(v))
             };
-            set("update events set location_id = $2,
-                    place = case when $2::uuid is null then place end, updated_at = now() where id = $1")
-                .bind(v).execute(&mut *tx).await?;
+            db_events::set_location(&mut *tx, ev.id, v).await?;
             log_change(&mut tx, &twin, me, "place", json(from), json(to)).await?;
         }
         EventPatch::Place(v) => {
             let v = common::text(v, TITLE_MAX, "invalid_place")?;
             let from = ev.location_id.map(|i| common::tree(st).name(i).to_string()).or(ev.place.clone());
-            set("update events set place = $2,
-                    location_id = case when $2::text is null then location_id end, updated_at = now() where id = $1")
-                .bind(&v).execute(&mut *tx).await?;
+            db_events::set_place(&mut *tx, ev.id, v.as_deref()).await?;
             log_change(&mut tx, &twin, me, "place", json(from), json(&v)).await?;
         }
         EventPatch::Attendees(v) => {
             if v.is_some_and(|n| !(0..=100_000).contains(&n)) {
                 return Err(AppError::BadRequest("invalid_attendees"));
             }
-            set("update events set attendees = $2, updated_at = now() where id = $1")
-                .bind(v).execute(&mut *tx).await?;
+            db_events::set_attendees(&mut *tx, ev.id, v).await?;
             log_change(&mut tx, &twin, me, "attendees", json(ev.attendees), json(v)).await?;
         }
         EventPatch::Description(v) => {
@@ -599,8 +544,7 @@ pub(crate) async fn patch(
             if bypass_quality && v.is_none() {
                 return Err(AppError::BadRequest("description_required"));
             }
-            set("update events set description = $2, updated_at = now() where id = $1")
-                .bind(&v).execute(&mut *tx).await?;
+            db_events::set_description(&mut *tx, ev.id, v.as_deref()).await?;
             log_change(&mut tx, &twin, me, "description", json(&ev.description), json(&v)).await?;
         }
     }
@@ -628,14 +572,8 @@ pub(crate) async fn put_participant(
     records::check_user(&st.pool, Some(uid)).await?;
     let role = common::text(b.role, ROLE_MAX, "invalid_role")?;
     let mut tx = st.pool.begin().await?;
-    sqlx::query(
-        "insert into event_participants (event_id, user_id, role) values ($1, $2, $3)
-         on conflict (event_id, user_id) do update set role = excluded.role")
-        .bind(ev.id).bind(uid).bind(role).execute(&mut *tx).await?;
-    sqlx::query(
-        "insert into record_participants (record_id, user_id, added_by) values ($1, $2, $3)
-         on conflict do nothing")
-        .bind(twin.id).bind(uid).bind(me.id).execute(&mut *tx).await?;
+    db_events::upsert_participant(&mut *tx, ev.id, uid, role).await?;
+    db_events::insert_record_participant(&mut *tx, twin.id, uid, me.id).await?;
     records::touch(&mut tx, twin.id).await?;
     tx.commit().await?;
     reply(st, me, ev.id).await
@@ -648,10 +586,8 @@ pub(crate) async fn remove_participant(
     let (ev, twin) = editable(st, me, id).await?;
     let uid = user;
     let mut tx = st.pool.begin().await?;
-    sqlx::query("delete from event_participants where event_id = $1 and user_id = $2")
-        .bind(ev.id).bind(uid).execute(&mut *tx).await?;
-    sqlx::query("delete from record_participants where record_id = $1 and user_id = $2")
-        .bind(twin.id).bind(uid).execute(&mut *tx).await?;
+    db_events::delete_participant(&mut *tx, ev.id, uid).await?;
+    db_events::delete_record_participant(&mut *tx, twin.id, uid).await?;
     tx.commit().await?;
     reply(st, me, ev.id).await
 }
@@ -663,8 +599,7 @@ pub(crate) async fn put_team(
     let (ev, _) = editable(st, me, id).await?;
     let tid = team;
     records::check_team(&st.pool, Some(tid)).await?;
-    sqlx::query("insert into event_teams (event_id, team_id) values ($1, $2) on conflict do nothing")
-        .bind(ev.id).bind(tid).execute(&st.pool).await?;
+    db_events::insert_team(&st.pool, ev.id, tid).await?;
     reply(st, me, ev.id).await
 }
 
@@ -673,8 +608,7 @@ pub(crate) async fn remove_team(
     id: Uuid, team: Uuid,
 ) -> Result<Detail> {
     let (ev, _) = editable(st, me, id).await?;
-    sqlx::query("delete from event_teams where event_id = $1 and team_id = $2")
-        .bind(ev.id).bind(team).execute(&st.pool).await?;
+    db_events::delete_team(&st.pool, ev.id, team).await?;
     reply(st, me, ev.id).await
 }
 
@@ -696,16 +630,12 @@ pub(crate) async fn add_checkpoint(
     let label = common::text(Some(b.label), LABEL_MAX, "invalid_label")?
         .ok_or(AppError::BadRequest("invalid_label"))?;
     // Tarih verilmezse varsayilan son tarih: etkinlikten DEADLINE_DAYS once (goreli).
-    sqlx::query(
-        "insert into event_checkpoints (event_id, label, due_date, offset_days, position)
-         values ($1, $2, $3, case when $3::date is null then $4 end,
-                 (select coalesce(max(position) + 1, 0) from event_checkpoints where event_id = $1))")
-        .bind(ev.id).bind(label).bind(b.date).bind(-DEADLINE_DAYS).execute(&st.pool).await?;
+    db_events::insert_checkpoint(&st.pool, ev.id, label, b.date, -DEADLINE_DAYS).await?;
     reply(st, me, ev.id).await
 }
 
-async fn event_of(pool: &PgPool, sql: &'static str, id: Uuid) -> Result<Uuid> {
-    sqlx::query_scalar(sql).bind(id).fetch_optional(pool).await?.ok_or(AppError::NotFound)
+async fn event_of(pool: &PgPool, id: Uuid) -> Result<Uuid> {
+    db_events::find_checkpoint_event(pool, id).await?.ok_or(AppError::NotFound)
 }
 
 #[derive(Deserialize)]
@@ -734,24 +664,18 @@ pub(crate) async fn patch_checkpoint(
     st: &AppState, me: &User, id: Uuid,
     b: CheckpointPatch,
 ) -> Result<Detail> {
-    let event = event_of(&st.pool, "select event_id from event_checkpoints where id = $1", id).await?;
+    let event = event_of(&st.pool, id).await?;
     let (ev, _) = editable(st, me, event).await?;
     let mut tx = st.pool.begin().await?;
     if let Some(done) = b.done {
         require_approver(st, me, &ev).await?;
-        sqlx::query(
-            "update event_checkpoints set done_at = case when $2 then coalesce(done_at, now()) end where id = $1")
-            .bind(id).bind(done).execute(&mut *tx).await?;
+        db_events::set_checkpoint_done(&mut *tx, id, done).await?;
         // Dogrudan yapilan eylemin bekleyen istegi artik anlamsiz.
-        sqlx::query("delete from event_checkpoint_requests where checkpoint_id = $1 and action = $2")
-            .bind(id).bind(if done { "done" } else { "undone" }).execute(&mut *tx).await?;
+        db_events::delete_checkpoint_action_requests(&mut *tx, id, if done { "done" } else { "undone" }).await?;
     }
     if let Some(date) = b.date {
         require_scope(st, me, "manage_events").await?;
-        sqlx::query(
-            "update event_checkpoints set due_date = $2, offset_days = case when $2::date is null then $3 end
-              where id = $1")
-            .bind(id).bind(date).bind(-DEADLINE_DAYS).execute(&mut *tx).await?;
+        db_events::set_checkpoint_date(&mut *tx, id, date, -DEADLINE_DAYS).await?;
     }
     tx.commit().await?;
     reply(st, me, event).await
@@ -760,10 +684,10 @@ pub(crate) async fn patch_checkpoint(
 pub(crate) async fn delete_checkpoint(
     st: &AppState, me: &User, id: Uuid,
 ) -> Result<Detail> {
-    let event = event_of(&st.pool, "select event_id from event_checkpoints where id = $1", id).await?;
+    let event = event_of(&st.pool, id).await?;
     let ev = load(&st.pool, event).await?;
     require_approver(st, me, &ev).await?;
-    sqlx::query("delete from event_checkpoints where id = $1").bind(id).execute(&st.pool).await?;
+    db_events::delete_checkpoint(&st.pool, id).await?;
     reply(st, me, event).await
 }
 
@@ -796,20 +720,15 @@ pub(crate) async fn request_checkpoint(
     st: &AppState, me: &User, id: Uuid,
     b: NewRequest,
 ) -> Result<Detail> {
-    let event = event_of(&st.pool, "select event_id from event_checkpoints where id = $1", id).await?;
+    let event = event_of(&st.pool, id).await?;
     let (ev, twin) = editable(st, me, event).await?;
-    let (label, done): (String, bool) = sqlx::query_as(
-        "select label, done_at is not null from event_checkpoints where id = $1")
-        .bind(id).fetch_one(&st.pool).await?;
+    let (label, done) = db_events::load_checkpoint_state(&st.pool, id).await?;
     // Zaten istenen duruma gelmis adim icin istek anlamsiz.
     if (matches!(b.action, RequestAction::Done) && done) || (matches!(b.action, RequestAction::Undone) && !done) {
         return Err(AppError::Conflict("checkpoint_state"));
     }
     let mut tx = st.pool.begin().await?;
-    let added = sqlx::query(
-        "insert into event_checkpoint_requests (checkpoint_id, user_id, action) values ($1, $2, $3)
-         on conflict do nothing")
-        .bind(id).bind(me.id).bind(b.action.as_str()).execute(&mut *tx).await?.rows_affected();
+    let added = db_events::insert_checkpoint_request(&mut *tx, id, me.id, b.action.as_str()).await?;
     if added > 0 {
         records::log(&mut tx, twin.chat_id, me.id, "checkpoint_requested", &label, Some(b.action.as_str()), None).await?;
         records::touch(&mut tx, twin.id).await?;
@@ -829,30 +748,22 @@ pub(crate) async fn resolve_request(
     st: &AppState, me: &User, id: Uuid,
     b: Resolve,
 ) -> Result<Detail> {
-    let (cid, action, event, label): (Uuid, String, Uuid, String) = sqlx::query_as(
-        "select r.checkpoint_id, r.action, c.event_id, c.label
-           from event_checkpoint_requests r join event_checkpoints c on c.id = r.checkpoint_id
-          where r.id = $1")
-        .bind(id).fetch_optional(&st.pool).await?.ok_or(AppError::NotFound)?;
+    let r = db_events::find_request_resolution(&st.pool, id).await?.ok_or(AppError::NotFound)?;
+    let (cid, action, event, label) = (r.checkpoint_id, r.action, r.event_id, r.label);
     let ev = load(&st.pool, event).await?;
     require_approver(st, me, &ev).await?;
     let twin = records::load(&st.pool, ev.record_id).await?;
     let mut tx = st.pool.begin().await?;
     if b.approve {
         match action.as_str() {
-            "done" => sqlx::query(
-                "update event_checkpoints set done_at = coalesce(done_at, now()) where id = $1")
-                .bind(cid).execute(&mut *tx).await?,
-            "undone" => sqlx::query("update event_checkpoints set done_at = null where id = $1")
-                .bind(cid).execute(&mut *tx).await?,
+            "done" => db_events::approve_checkpoint_done(&mut *tx, cid).await?,
+            "undone" => db_events::approve_checkpoint_undone(&mut *tx, cid).await?,
             // Adimla birlikte tum istekleri de (cascade) gider.
-            _ => sqlx::query("delete from event_checkpoints where id = $1").bind(cid).execute(&mut *tx).await?,
+            _ => db_events::delete_checkpoint(&mut *tx, cid).await?,
         };
     }
     // Onayda ayni adim icin ayni eylemi isteyen digerleri de karsilanmis olur.
-    sqlx::query(
-        "delete from event_checkpoint_requests where id = $1 or ($2 and checkpoint_id = $3 and action = $4)")
-        .bind(id).bind(b.approve).bind(cid).bind(&action).execute(&mut *tx).await?;
+    db_events::delete_resolved_requests(&mut *tx, id, b.approve, cid, &action).await?;
     records::log(&mut tx, twin.chat_id, me.id,
         if b.approve { "checkpoint_approved" } else { "checkpoint_denied" }, &label, Some(&action), None).await?;
     records::touch(&mut tx, twin.id).await?;
@@ -894,11 +805,7 @@ pub(crate) async fn add_widget(
             require_scope(st, me, "manage_event_widgets").await?;
         }
     }
-    sqlx::query(
-        "insert into event_widgets (event_id, widget_type, record_id, position)
-         values ($1, $2, $3, (select coalesce(max(position) + 1, 0) from event_widgets where event_id = $1))
-         on conflict do nothing")
-        .bind(id).bind(b.kind).bind(b.record_id).execute(&st.pool).await?;
+    db_events::insert_widget(&st.pool, id, b.kind, b.record_id).await?;
     reply(st, me, id).await
 }
 
@@ -907,15 +814,13 @@ pub(crate) async fn add_widget(
 pub(crate) async fn delete_widget(
     st: &AppState, me: &User, id: Uuid,
 ) -> Result<Detail> {
-    let (event, kind): (Uuid, WidgetType) = sqlx::query_as(
-        "select event_id, widget_type from event_widgets where id = $1")
-        .bind(id).fetch_optional(&st.pool).await?.ok_or(AppError::NotFound)?;
+    let (event, kind) = db_events::find_widget_owner(&st.pool, id).await?.ok_or(AppError::NotFound)?;
     if kind == WidgetType::Record {
         editable(st, me, event).await?;
     } else {
         require_scope(st, me, "manage_event_widgets").await?;
     }
-    sqlx::query("delete from event_widgets where id = $1").bind(id).execute(&st.pool).await?;
+    db_events::delete_widget(&st.pool, id).await?;
     reply(st, me, event).await
 }
 
@@ -945,11 +850,8 @@ pub(crate) async fn add_material(
     // Kalem bagimsiz dogar, etkinlige `event_materials` ile baglanir.
     let mut tx = st.pool.begin().await?;
     let origin = if b.suggestion_id.is_some() { "ai" } else { "manual" };
-    let material: Uuid = sqlx::query_scalar(
-        "insert into materials (name, notes, created_by, origin) values ($1, $2, $3, $4) returning id")
-        .bind(name).bind(notes).bind(me.id).bind(origin).fetch_one(&mut *tx).await?;
-    sqlx::query("insert into event_materials (material_id, event_id) values ($1, $2)")
-        .bind(material).bind(id).execute(&mut *tx).await?;
+    let material = db_events::insert_material(&mut *tx, name, notes, me.id, origin).await?;
+    db_events::insert_event_material(&mut *tx, material, id).await?;
     if let Some(sid) = b.suggestion_id {
         decide_suggestion(&mut tx, id, sid, me.id, "accepted", Some(material)).await?;
     }
@@ -960,11 +862,9 @@ pub(crate) async fn add_material(
 /// Teklifleri kalemlere ekler (etkinlik ayrintisi ve maliye ortak).
 async fn attach_providers<'e>(ex: impl sqlx::PgExecutor<'e>, materials: &mut [Material]) -> Result<()> {
     let ids: Vec<Uuid> = materials.iter().map(|m| m.id).collect();
-    let providers: Vec<Provider> = sqlx::query_as(
-        "select id, material_id, contact, name, price::float8 as price, arrival_date
-           from material_providers where material_id = any($1) order by price nulls last, id")
-        .bind(&ids).fetch_all(ex).await?;
-    for p in providers {
+    let providers = db_events::list_providers(ex, &ids).await?;
+    for p in providers.into_iter().map(|p| Provider { id: p.id, material_id: p.material_id, contact: p.contact, name: p.name,
+        price: p.price, arrival_date: p.arrival_date, overage_level: None }) {
         if let Some(m) = materials.iter_mut().find(|m| m.id == p.material_id) {
             m.providers.push(p);
         }
@@ -984,9 +884,7 @@ fn base_at(bases: &[(DateTime<Utc>, f64)], at: DateTime<Utc>) -> Option<f64> {
 
 /// Kademeleri (tarihli taban ile) doldurur. Kademe sutun degil; her okumada turetilir.
 async fn fill_levels(pool: &PgPool, materials: &mut [Material]) -> Result<()> {
-    let bases: Vec<(DateTime<Utc>, f64)> = sqlx::query_as(
-        "select effective_from, yellow_max_ln from overage_base order by effective_from")
-        .fetch_all(pool).await?;
+    let bases = db_events::list_overage_bases(pool).await?;
     for m in materials.iter_mut() {
         let Some(y) = base_at(&bases, m.updated_at) else { continue };
         m.overage_level = overage_level(m.overage_ln, y);
@@ -1017,20 +915,17 @@ fn overage_ln(price: Option<f64>, budget: Option<f64>) -> Option<f64> {
 
 /// Teklif ya da butce degisince asimi yeniden turetir: tek kural yeri `apply`'dir (bos yama).
 async fn refresh_overage(conn: &mut sqlx::PgConnection, material: Uuid) -> Result<()> {
-    let mut rows: Vec<Material> = sqlx::query_as(concat!("select ", material_cols!(), " from materials m where m.id = $1"))
-        .bind(material).fetch_all(&mut *conn).await?;
+    let mut rows: Vec<Material> = db_events::list_material_by_id(&mut *conn, material).await?.into_iter().map(Material::from).collect();
     attach_providers(&mut *conn, &mut rows).await?;
     let m = apply(rows.pop().ok_or(AppError::NotFound)?, MaterialPatch::default())?;
-    sqlx::query("update materials set overage_ln = $2 where id = $1")
-        .bind(material).bind(m.overage_ln).execute(&mut *conn).await?;
+    db_events::set_overage(&mut *conn, material, m.overage_ln).await?;
     Ok(())
 }
 
 /// Maliye incelemesinden gecmis kalemin tedarigi donar: ad, adet, adimlar, sponsor,
 /// secim ve tekliflere yazilmaz. Not, oncelik ve teslim isareti serbest.
 async fn require_unpurchased(pool: &PgPool, material: Uuid) -> Result<()> {
-    let purchased: bool = sqlx::query_scalar("select purchased from materials where id = $1")
-        .bind(material).fetch_one(pool).await?;
+    let purchased = db_events::load_purchased(pool, material).await?;
     if purchased { Err(AppError::Conflict("purchased_locked")) } else { Ok(()) }
 }
 
@@ -1166,16 +1061,13 @@ pub enum MatReply {
 
 /// Kalemin etkinligi: `None` etkinliksiz (Maliye duvari) kalem; kalem yoksa 404.
 async fn material_event(pool: &PgPool, id: Uuid) -> Result<Option<Uuid>> {
-    let row: Option<(Option<Uuid>,)> = sqlx::query_as(
-        "select (select event_id from event_materials where material_id = m.id) from materials m where m.id = $1")
-        .bind(id).fetch_optional(pool).await?;
+    let row = db_events::find_material_event(pool, id).await?;
     row.map(|r| r.0).ok_or(AppError::NotFound)
 }
 
 /// Tek kalem + teklifleri + kademeler (etkinlik ayrintisi ve Maliye ayni satiri okur).
 pub(crate) async fn material_one(pool: &PgPool, id: Uuid) -> Result<Material> {
-    let mut m: Vec<Material> = sqlx::query_as(concat!("select ", material_cols!(), " from materials m where m.id = $1"))
-        .bind(id).fetch_all(pool).await?;
+    let mut m: Vec<Material> = db_events::list_material_by_id(pool, id).await?.into_iter().map(Material::from).collect();
     attach_providers(pool, &mut m).await?;
     fill_levels(pool, &mut m).await?;
     m.pop().ok_or(AppError::NotFound)
@@ -1197,28 +1089,18 @@ pub(crate) async fn patch_material(
     // Butce ayri yetki: tedarik yazmak butce degistirmeye yetmez.
     if b.budget.is_some() { require_scope(st, me, "manage_budgets").await?; }
     let mut tx = st.pool.begin().await?;
-    let mut cur: Material = sqlx::query_as(concat!("select ", material_cols!(), " from materials m where m.id = $1 for update"))
-        .bind(id).fetch_one(&mut *tx).await?;
+    let mut cur = Material::from(db_events::lock_material(&mut *tx, id).await?);
     // Asim kart fiyatindan turer: teklifler de lazim.
     attach_providers(&mut *tx, std::slice::from_mut(&mut cur)).await?;
     let m = apply(cur, b)?;
     // Secilen teklif bu kalemin: bileske FK de zorlar, ama 500 yerine 400 donelim.
     if let Some(pid) = m.chosen_provider_id {
-        let mine: bool = sqlx::query_scalar("select exists(select 1 from material_providers where id = $1 and material_id = $2)")
-            .bind(pid).bind(id).fetch_one(&mut *tx).await?;
+        let mine = db_events::provider_belongs_to_material(&mut *tx, pid, id).await?;
         if !mine { return Err(AppError::BadRequest("invalid_provider")); }
     }
-    sqlx::query(
-        "update materials set name = $2, notes = $3, type = $4, priority = $5, state = $6, qty = $7,
-                owned = $8, has_sponsor = $9, chosen_provider_id = $10, sponsor_chosen = $11,
-                sponsor_qty = $12, sponsor_date = $13, in_sponsor_record = $14, delivered = $15,
-                budget = round($16::numeric, 2), overage_ln = $17, updated_at = now()
-          where id = $1")
-        .bind(id).bind(&m.name).bind(&m.notes).bind(m.kind).bind(m.priority).bind(m.state).bind(m.qty)
-        .bind(m.owned).bind(m.has_sponsor).bind(m.chosen_provider_id).bind(m.sponsor_chosen)
-        .bind(m.sponsor_qty).bind(m.sponsor_date).bind(m.in_sponsor_record).bind(m.delivered)
-        .bind(m.budget).bind(m.overage_ln)
-        .execute(&mut *tx).await?;
+    db_events::update_material(&mut *tx, id, &m.name, m.notes.as_deref(), m.kind, m.priority, m.state, m.qty,
+        m.owned, m.has_sponsor, m.chosen_provider_id, m.sponsor_chosen, m.sponsor_qty, m.sponsor_date,
+        m.in_sponsor_record, m.delivered, m.budget, m.overage_ln).await?;
     tx.commit().await?;
     mat_reply(st, me, id, event).await
 }
@@ -1229,7 +1111,7 @@ pub(crate) async fn delete_material(
     let event = material_event(&st.pool, id).await?;
     require_scope(st, me, "manage_purchases").await?;
     require_unpurchased(&st.pool, id).await?;
-    sqlx::query("delete from materials where id = $1").bind(id).execute(&st.pool).await?;
+    db_events::delete_material(&st.pool, id).await?;
     match event {
         Some(e) => Ok(MatReply::Event(Box::new(reply(st, me, e).await?))),
         None => Ok(MatReply::Deleted { deleted: true }),
@@ -1267,12 +1149,8 @@ pub(crate) async fn add_provider(
         None => None,
     };
     // Para numeric'te: float yalniz tasima, kayitta kurusa yuvarlanir.
-    sqlx::query(
-        "insert into material_providers (material_id, contact, name, price, arrival_date, vendor_id)
-         values ($1, $2, $3, round($4::numeric, 2), $5, $6)")
-        .bind(id).bind(contact).bind(name).bind(b.price).bind(b.arrival_date).bind(vendor)
-        .execute(&mut *tx).await?;
-    sqlx::query("update materials set updated_at = now() where id = $1").bind(id).execute(&mut *tx).await?;
+    db_events::insert_provider(&mut *tx, id, contact, name, b.price, b.arrival_date, vendor).await?;
+    db_events::touch_material(&mut *tx, id).await?;
     refresh_overage(&mut tx, id).await?;
     tx.commit().await?;
     mat_reply(st, me, id, event).await
@@ -1285,8 +1163,8 @@ pub(crate) async fn delete_provider(
     require_scope(st, me, "manage_purchases").await?;
     require_unpurchased(&st.pool, material).await?;
     let mut tx = st.pool.begin().await?;
-    sqlx::query("delete from material_providers where id = $1").bind(id).execute(&mut *tx).await?;
-    sqlx::query("update materials set updated_at = now() where id = $1").bind(material).execute(&mut *tx).await?;
+    db_events::delete_provider(&mut *tx, id).await?;
+    db_events::touch_material(&mut *tx, material).await?;
     refresh_overage(&mut tx, material).await?;
     tx.commit().await?;
     mat_reply(st, me, material, event).await
@@ -1294,10 +1172,7 @@ pub(crate) async fn delete_provider(
 
 /// Teklifin (kalemi, etkinligi); etkinlik `None` ise kalem etkinliksizdir (Maliye duvari).
 async fn provider_owner(pool: &PgPool, id: Uuid) -> Result<(Uuid, Option<Uuid>)> {
-    sqlx::query_as(
-        "select p.material_id, (select em.event_id from event_materials em where em.material_id = p.material_id)
-           from material_providers p where p.id = $1")
-        .bind(id).fetch_optional(pool).await?.ok_or(AppError::NotFound)
+    db_events::find_provider_owner(pool, id).await?.ok_or(AppError::NotFound)
 }
 
 /// Kismi: gelen alan degisir; `price`/`arrival_date` icin `null` siler.
@@ -1334,30 +1209,17 @@ pub(crate) async fn patch_provider(
     };
     let relabel = contact.is_some() || name.is_some();
     let mut tx = st.pool.begin().await?;
-    sqlx::query(
-        "update material_providers set
-            contact = coalesce($2, contact),
-            name = case when $3 then $4::text else name end,
-            price = case when $5 then round($6::numeric, 2) else price end,
-            arrival_date = case when $7 then $8 else arrival_date end
-          where id = $1")
-        .bind(id).bind(contact)
-        .bind(name.is_some()).bind(name.flatten())
-        .bind(b.price.is_some()).bind(b.price.flatten())
-        .bind(b.arrival_date.is_some()).bind(b.arrival_date.flatten())
-        .execute(&mut *tx).await?;
+    db_events::patch_provider(&mut *tx, id, contact, name, b.price, b.arrival_date).await?;
     if relabel {
         // Etiket degisti: tedarikci bagi yeniden kurulur.
-        let (n, c): (Option<String>, String) = sqlx::query_as("select name, contact from material_providers where id = $1")
-            .bind(id).fetch_one(&mut *tx).await?;
+        let (n, c) = db_events::load_provider_label(&mut *tx, id).await?;
         let vendor = match super::purchasing::offer_label(n.as_deref(), &c) {
             Some(l) => super::purchasing::ensure_vendor(&mut tx, l, Some(me.id)).await?,
             None => None,
         };
-        sqlx::query("update material_providers set vendor_id = $2 where id = $1")
-            .bind(id).bind(vendor).execute(&mut *tx).await?;
+        db_events::set_provider_vendor(&mut *tx, id, vendor).await?;
     }
-    sqlx::query("update materials set updated_at = now() where id = $1").bind(material).execute(&mut *tx).await?;
+    db_events::touch_material(&mut *tx, material).await?;
     refresh_overage(&mut tx, material).await?;
     tx.commit().await?;
     mat_reply(st, me, material, event).await
@@ -1375,17 +1237,10 @@ pub(crate) async fn set_purchased(
     st: &AppState, me: &User, id: Uuid,
     b: PurchasedPatch,
 ) -> Result<Material> {
-    let (state, owned): (i16, bool) = sqlx::query_as("select state, owned from materials where id = $1")
-        .bind(id).fetch_optional(&st.pool).await?.ok_or(AppError::NotFound)?;
+    let (state, owned) = db_events::find_purchase_state(&st.pool, id).await?.ok_or(AppError::NotFound)?;
     require_scope(st, me, "review_purchases").await?;
     if b.purchased && (state != 3 || owned) { return Err(AppError::Conflict("not_approved")); }
-    sqlx::query(
-        "update materials set purchased = $2,
-                purchased_at = case when $2 then now() end,
-                purchased_by = case when $2 then $3::uuid end,
-                updated_at = now()
-          where id = $1")
-        .bind(id).bind(b.purchased).bind(me.id).execute(&st.pool).await?;
+    db_events::set_purchased(&st.pool, id, b.purchased, me.id).await?;
     material_one(&st.pool, id).await
 }
 

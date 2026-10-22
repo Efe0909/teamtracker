@@ -307,7 +307,7 @@ async fn build_context(st: &AppState, me: &User, id: Uuid, free_text: bool) -> R
         done: c.done,
     }).collect();
 
-    let mut materials = db_context::list_materials(&st.pool, id).await?;
+    let mut materials: Vec<Material> = db_context::list_materials(&st.pool, id).await?.into_iter().map(Material::from).collect();
     attach_providers(&st.pool, &mut materials).await?;
     fill_levels(&st.pool, &mut materials).await?;
 

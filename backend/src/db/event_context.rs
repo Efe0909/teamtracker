@@ -2,7 +2,7 @@
 
 use chrono::NaiveDate;
 use uuid::Uuid;
-use crate::domain::events::Material;
+use crate::db::events::MaterialRow;
 
 #[derive(sqlx::FromRow)]
 pub(crate) struct OutcomeRow {
@@ -102,7 +102,7 @@ pub(crate) async fn list_checkpoints(ex: impl sqlx::PgExecutor<'_>, id: Uuid) ->
         .bind(id).fetch_all(ex).await
 }
 
-pub(crate) async fn list_materials(ex: impl sqlx::PgExecutor<'_>, id: Uuid) -> Result<Vec<Material>, sqlx::Error> {
+pub(crate) async fn list_materials(ex: impl sqlx::PgExecutor<'_>, id: Uuid) -> Result<Vec<MaterialRow>, sqlx::Error> {
     sqlx::query_as(concat!(
         "select ",
         "m.id, m.name, m.notes, m.type as kind, m.priority, m.state, m.qty, m.has_sponsor, m.owned,
