@@ -12,12 +12,12 @@ use std::collections::HashMap;
 
 use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::{PgPool, Postgres, QueryBuilder};
+use sqlx::{PgPool, Postgres};
 use uuid::Uuid;
 
 use crate::{
     domain::{cards::{self, CardView}, common},
-    db::{filters::Filters, scope},
+    db::{filters::Filters, records as db, scope},
     decision,
     error::{AppError, Result},
     models::{
@@ -36,7 +36,7 @@ const LIST_LIMIT: i64 = 500;
 
 // --- liste -----------------------------------------------------------------
 
-#[derive(Serialize, sqlx::FromRow)]
+#[derive(Serialize)]
 pub(crate) struct RecordSummary {
     id: Uuid,
     kind: RecordKind,
@@ -63,28 +63,17 @@ pub(crate) async fn list(st: &AppState, me: &User, params: HashMap<String, Strin
     let f = Filters::parse(&params);
     // Sorgu kilit ALTINDA kurulur, kilit birakildiktan SONRA kosar: guard
     // `.await` uzerinden tasinamaz (state.rs).
-    let mut qb = QueryBuilder::<Postgres>::new(
-        "select r.id, r.kind, r.title, r.status, r.priority, r.unit_id, r.pillar_id,
-                r.team_id, r.owner_id, r.due_date, r.created_at, r.updated_at,
-                (select count(*) from actions a
-                  where a.record_id = r.id and a.status in ('open','in_progress')) as open_actions,
-                exists(select 1 from actions a
-                  where a.record_id = r.id and a.status in ('open','in_progress')
-                    and a.due_date < current_date) as action_overdue,
-                (select count(*) from messages m where m.chat_id = r.chat_id) as messages,
-                (select e.id from events e where e.record_id = r.id) as event_id
-           from records r");
-    {
+    let qb = {
         let tree = common::tree(st);
-        f.push_where(&mut qb, me, &tree);
-    }
-    // Sabitlenenler widget'i: yalniz benim sabitlediklerim.
-    if params.get("pinned").is_some_and(|v| v == "true") {
-        qb.push(" and exists(select 1 from record_pins p where p.record_id = r.id and p.user_id = ")
-            .push_bind(me.id).push(")");
-    }
-    qb.push(f.order_by()).push(" limit ").push_bind(LIST_LIMIT);
-    Ok(qb.build_query_as().fetch_all(&st.pool).await?)
+        // Sabitlenenler widget'i: yalniz benim sabitlediklerim.
+        db::build_list(&f, me, &tree, params.get("pinned").is_some_and(|v| v == "true"), LIST_LIMIT)
+    };
+    Ok(db::list_records(&st.pool, qb).await?.into_iter().map(|r| RecordSummary {
+        id: r.id, kind: r.kind, title: r.title, status: r.status, priority: r.priority,
+        unit_id: r.unit_id, pillar_id: r.pillar_id, team_id: r.team_id, owner_id: r.owner_id,
+        due_date: r.due_date, created_at: r.created_at, updated_at: r.updated_at,
+        open_actions: r.open_actions, action_overdue: r.action_overdue, messages: r.messages, event_id: r.event_id,
+    }).collect())
 }
 
 // --- ayrinti ---------------------------------------------------------------
@@ -120,7 +109,7 @@ pub(crate) struct Membership {
     requests: Vec<JoinRequest>,
 }
 
-#[derive(Serialize, sqlx::FromRow)]
+#[derive(Serialize)]
 pub(crate) struct JoinRequest {
     user_id: Uuid,
     created_at: chrono::DateTime<chrono::Utc>,
@@ -137,7 +126,7 @@ pub(crate) struct Access {
     can_edit_deadline: bool,
 }
 
-#[derive(Serialize, sqlx::FromRow)]
+#[derive(Serialize)]
 pub(crate) struct ActionOut {
     id: Uuid,
     title: String,
@@ -156,27 +145,20 @@ pub(crate) async fn load(pool: &PgPool, id: Uuid) -> Result<Record> {
 
 pub(crate) async fn detail_of(st: &AppState, me: &User, rec: Record) -> Result<Detail> {
     let can_edit = scope::can_edit_record(&st.pool, me, &rec, &st.tree).await?;
-    let mode: String = sqlx::query_scalar("select access_mode from records where id = $1")
-        .bind(rec.id).fetch_one(&st.pool).await?;
+    let mode = db::get_access_mode(&st.pool, rec.id).await?;
     let restricted = mode == "private" && !can_edit;
-    let event_id: Option<Uuid> = sqlx::query_scalar("select id from events where record_id = $1")
-        .bind(rec.id).fetch_optional(&st.pool).await?;
+    let event_id = db::find_event(&st.pool, rec.id).await?;
     let can_decide = decider(me, &rec);
-    let request: Option<String> = sqlx::query_scalar(
-        "select status from record_join_requests where record_id = $1 and user_id = $2")
-        .bind(rec.id).bind(me.id).fetch_optional(&st.pool).await?;
+    let request = db::find_join_status(&st.pool, rec.id, me.id).await?;
     let requests: Vec<JoinRequest> = if can_decide {
-        sqlx::query_as(
-            "select user_id, created_at from record_join_requests
-              where record_id = $1 and status = 'pending' order by created_at")
-            .bind(rec.id).fetch_all(&st.pool).await?
+        db::list_join_requests(&st.pool, rec.id).await?.into_iter().map(|r| JoinRequest {
+            user_id: r.user_id, created_at: r.created_at,
+        }).collect()
     } else {
         Vec::new()
     };
     let membership = Membership { mode, is_member: can_edit, restricted, request, can_decide, requests };
-    let pinned: bool = sqlx::query_scalar(
-        "select exists(select 1 from record_pins where user_id = $1 and record_id = $2)")
-        .bind(me.id).bind(rec.id).fetch_one(&st.pool).await?;
+    let pinned = db::is_pinned(&st.pool, me.id, rec.id).await?;
     // Gizli kayit, uye degil: yalniz kayit satiri (baslik, aciklama, durum...) acik.
     if restricted {
         return Ok(Detail {
@@ -184,23 +166,15 @@ pub(crate) async fn detail_of(st: &AppState, me: &User, rec: Record) -> Result<D
             access: Access { can_edit: false, can_edit_deadline: false }, pinned, membership, event_id,
         });
     }
-    let actions = sqlx::query_as(
-        "select a.id, a.title, a.status,
-                array(select x.user_id from action_assignees x where x.action_id = a.id
-                       order by x.added_at, x.user_id) as owner_ids,
-                a.due_date, a.created_at, a.resolved_at, a.closing_note
-           from actions a where a.record_id = $1
-          order by (a.status in ('closed','cancelled')), a.created_at")
-        .bind(rec.id).fetch_all(&st.pool).await?;
-    let participants = sqlx::query_scalar(
-        "select user_id from record_participants where record_id = $1 order by added_at")
-        .bind(rec.id).fetch_all(&st.pool).await?;
+    let actions = db::list_actions(&st.pool, rec.id).await?.into_iter().map(|r| ActionOut {
+        id: r.id, title: r.title, status: r.status, owner_ids: r.owner_ids, due_date: r.due_date,
+        created_at: r.created_at, resolved_at: r.resolved_at, closing_note: r.closing_note,
+    }).collect();
+    let participants = db::list_participants(&st.pool, rec.id).await?;
     let can_edit_deadline = can_edit && common::has_scope(st, me, "edit_deadline").await?;
     let mut cards = cards::of_record(st, me, &rec).await?;
     // Kisiye ozel sira; listede olmayan kart (yeni) sona, kendi sirasiyla.
-    let order: Option<Vec<Uuid>> = sqlx::query_scalar(
-        "select card_ids from card_order where user_id = $1 and record_id = $2")
-        .bind(me.id).bind(rec.id).fetch_optional(&st.pool).await?;
+    let order = db::find_card_order(&st.pool, me.id, rec.id).await?;
     if let Some(order) = order {
         cards.sort_by_key(|c| order.iter().position(|id| *id == c.id()).unwrap_or(usize::MAX));
     }
@@ -239,11 +213,7 @@ pub(crate) async fn may_set_owner(st: &AppState, me: &User, rec: &Record, to: Op
 async fn add_action_owners(
     tx: &mut sqlx::Transaction<'_, Postgres>, record_id: Uuid, owners: &[Uuid], by: Uuid,
 ) -> Result<()> {
-    sqlx::query(
-        "insert into record_participants (record_id, user_id, added_by)
-         select $1, u, $3 from unnest($2::uuid[]) as u
-         on conflict do nothing")
-        .bind(record_id).bind(owners).bind(by).execute(&mut **tx).await?;
+    db::insert_action_participants(&mut **tx, record_id, owners, by).await?;
     Ok(())
 }
 
@@ -258,8 +228,7 @@ async fn check_owners(pool: &PgPool, ids: Vec<Uuid>) -> Result<Vec<Uuid>> {
     if out.len() > 20 {
         return Err(AppError::BadRequest("too_many_owners"));
     }
-    let n: i64 = sqlx::query_scalar("select count(*) from users where id = any($1) and is_active")
-        .bind(&out).fetch_one(pool).await?;
+    let n = db::count_active_users(pool, &out).await?;
     if n as usize != out.len() {
         return Err(AppError::BadRequest("unknown_user"));
     }
@@ -270,13 +239,7 @@ async fn check_owners(pool: &PgPool, ids: Vec<Uuid>) -> Result<Vec<Uuid>> {
 async fn set_action_owners(
     tx: &mut sqlx::Transaction<'_, Postgres>, action: Uuid, owners: &[Uuid], by: Uuid,
 ) -> Result<()> {
-    sqlx::query("delete from action_assignees where action_id = $1 and user_id <> all($2)")
-        .bind(action).bind(owners).execute(&mut **tx).await?;
-    sqlx::query(
-        "insert into action_assignees (action_id, user_id, added_by)
-         select $1, u, $3 from unnest($2::uuid[]) as u
-         on conflict do nothing")
-        .bind(action).bind(owners).bind(by).execute(&mut **tx).await?;
+    db::set_action_owners(tx, action, owners, by).await?;
     Ok(())
 }
 
@@ -292,15 +255,13 @@ pub(crate) async fn require_edit(st: &AppState, me: &User, rec: &Record) -> Resu
 
 pub(crate) async fn check_user(pool: &PgPool, id: Option<Uuid>) -> Result<()> {
     let Some(id) = id else { return Ok(()) };
-    let ok: Option<i32> = sqlx::query_scalar("select 1 from users where id = $1 and is_active")
-        .bind(id).fetch_optional(pool).await?;
+    let ok = db::find_active_user(pool, id).await?;
     ok.map(|_| ()).ok_or(AppError::BadRequest("unknown_user"))
 }
 
 pub(crate) async fn check_team(pool: &PgPool, id: Option<Uuid>) -> Result<()> {
     let Some(id) = id else { return Ok(()) };
-    let ok: Option<i32> = sqlx::query_scalar("select 1 from teams where id = $1")
-        .bind(id).fetch_optional(pool).await?;
+    let ok = db::find_team(pool, id).await?;
     ok.map(|_| ()).ok_or(AppError::BadRequest("unknown_team"))
 }
 
@@ -320,8 +281,7 @@ pub(crate) fn check_unit(st: &AppState, id: Uuid) -> Result<()> {
 /// bir `pillars` satiri olmali.
 async fn check_pillar(pool: &PgPool, id: Option<Uuid>) -> Result<()> {
     let Some(id) = id else { return Ok(()) };
-    let ok: Option<i32> = sqlx::query_scalar("select 1 from pillars where id = $1 and is_active")
-        .bind(id).fetch_optional(pool).await?;
+    let ok = db::find_active_pillar(pool, id).await?;
     ok.map(|_| ()).ok_or(AppError::BadRequest("invalid_pillar"))
 }
 
@@ -329,11 +289,7 @@ pub(crate) async fn log(
     tx: &mut sqlx::Transaction<'_, Postgres>, chat_id: Uuid, actor: Uuid,
     verb: &str, subject: &str, target: Option<&str>, detail: Option<String>,
 ) -> Result<()> {
-    sqlx::query(
-        "insert into activity (chat_id, actor_id, verb, subject_label, target_label, detail)
-         values ($1, $2, $3, $4, $5, $6)")
-        .bind(chat_id).bind(actor).bind(verb).bind(subject).bind(target).bind(detail)
-        .execute(&mut **tx).await?;
+    db::insert_activity(&mut **tx, chat_id, actor, verb, subject, target, detail).await?;
     Ok(())
 }
 
@@ -450,16 +406,9 @@ pub(crate) async fn create(st: &AppState, me: &User, b: NewRecord) -> Result<Cre
     };
 
     let mut tx = st.pool.begin().await?;
-    let chat_id: Uuid = sqlx::query_scalar("insert into chats default values returning id")
-        .fetch_one(&mut *tx).await?;
-    let id: Uuid = sqlx::query_scalar(
-        "insert into records (unit_id, pillar_id, team_id, chat_id, kind, title, description,
-                              priority, owner_id, created_by, access_mode)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) returning id")
-        .bind(b.unit_id).bind(b.pillar_id).bind(b.team_id).bind(chat_id).bind(b.kind)
-        .bind(&title).bind(description).bind(b.priority.unwrap_or(Priority::Medium))
-        .bind(b.owner_id).bind(me.id).bind(access_mode)
-        .fetch_one(&mut *tx).await?;
+    let chat_id = db::insert_chat(&mut *tx).await?;
+    let id = db::insert_record(&mut *tx, b.unit_id, b.pillar_id, b.team_id, chat_id, b.kind,
+        &title, description, b.priority.unwrap_or(Priority::Medium), b.owner_id, me.id, access_mode).await?;
     log(&mut tx, chat_id, me.id, "created", &title, None,
         change(serde_json::Value::Null, b.owner_id)).await?;
     log_override(&mut tx, chat_id, me.id, &title, "record", reasons).await?;
@@ -522,15 +471,12 @@ pub(crate) async fn patch(st: &AppState, me: &User, id: Uuid, body: RecordPatchB
     // Modelin bu istekteki karari: yalniz degerlendirme tetiklendiyse yanita girer.
     let mut quality: Option<decision::Quality> = None;
 
-    // (alan, sql, yeni) — SQL SABIT, kullanici girdisi yalniz bind. ESKI deger
+    // (alan, yeni) — SQL db katmaninda SABIT. ESKI deger
     // burada okunmaz: islemde satir kilitlenip taze okunur (asagida).
-    let (field, sql, to): (&str, &str, serde_json::Value) = match p {
+    let (field, to): (&str, serde_json::Value) = match p {
         RecordPatch::Status(v) => {
             if matches!(v, RecordStatus::Closed) {
-                let open: i64 = sqlx::query_scalar(
-                    "select count(*) from actions where record_id = $1
-                        and status in ('open','in_progress')")
-                    .bind(rec.id).fetch_one(&st.pool).await?;
+                let open = db::count_open_actions(&st.pool, rec.id).await?;
                 if open > 0 {
                     // Kayit acik eylemi varken kapanmaz (spec/20-sema.md §3a).
                     return Err(AppError::Conflict("open_actions"));
@@ -541,39 +487,38 @@ pub(crate) async fn patch(st: &AppState, me: &User, id: Uuid, body: RecordPatchB
                     (note, reasons, quality) = (Some(n), r, q);
                 }
             }
-            ("status", "update records set status = $2 where id = $1",
-             serde_json::to_value(v).unwrap_or_default())
+            ("status", serde_json::to_value(v).unwrap_or_default())
         }
-        RecordPatch::Priority(v) => ("priority", "update records set priority = $2 where id = $1",
+        RecordPatch::Priority(v) => ("priority",
             serde_json::to_value(v).unwrap_or_default()),
         RecordPatch::OwnerId(v) => {
             check_user(&st.pool, v).await?;
             if !may_set_owner(st, me, &rec, v).await? {
                 return Err(AppError::Denied("owner_change_denied"));
             }
-            ("owner_id", "update records set owner_id = $2 where id = $1",
+            ("owner_id",
              serde_json::to_value(v).unwrap_or_default())
         }
         RecordPatch::TeamId(v) => {
             check_team(&st.pool, v).await?;
-            ("team_id", "update records set team_id = $2 where id = $1",
+            ("team_id",
              serde_json::to_value(v).unwrap_or_default())
         }
         RecordPatch::PillarId(v) => {
             check_pillar(&st.pool, v).await?;
-            ("pillar_id", "update records set pillar_id = $2 where id = $1",
+            ("pillar_id",
              serde_json::to_value(v).unwrap_or_default())
         }
         RecordPatch::UnitId(v) => {
             check_unit(st, v)?;
-            ("unit_id", "update records set unit_id = $2 where id = $1",
+            ("unit_id",
              serde_json::to_value(v).unwrap_or_default())
         }
         RecordPatch::DueDate(v) => {
             if !common::has_scope(st, me, "edit_deadline").await? {
                 return Err(AppError::Forbidden);
             }
-            ("due_date", "update records set due_date = $2 where id = $1",
+            ("due_date",
              serde_json::to_value(v).unwrap_or_default())
         }
         RecordPatch::AccessMode(v) => {
@@ -584,7 +529,7 @@ pub(crate) async fn patch(st: &AppState, me: &User, id: Uuid, body: RecordPatchB
             if !matches!(v.as_str(), "public" | "request" | "private") {
                 return Err(AppError::BadRequest("invalid_access_mode"));
             }
-            ("access_mode", "update records set access_mode = $2 where id = $1", v.into())
+            ("access_mode", v.into())
         }
         RecordPatch::Title(v) => {
             let v = common::text(Some(v), TITLE_MAX, "invalid_title")?
@@ -596,7 +541,7 @@ pub(crate) async fn patch(st: &AppState, me: &User, id: Uuid, body: RecordPatchB
                     &decision::entry_state(&v, rec.description.as_deref()), quality_override).await?;
                 (reasons, quality) = (r, Some(q));
             }
-            ("title", "update records set title = $2 where id = $1", v.into())
+            ("title", v.into())
         }
         RecordPatch::Description(v) => {
             let v = common::text(v, TEXT_MAX, "invalid_description")?;
@@ -609,7 +554,7 @@ pub(crate) async fn patch(st: &AppState, me: &User, id: Uuid, body: RecordPatchB
                     &decision::entry_state(&rec.title, v.as_deref()), quality_override).await?;
                 (reasons, quality) = (r, Some(q));
             }
-            ("description", "update records set description = $2 where id = $1",
+            ("description",
              serde_json::to_value(v).unwrap_or_default())
         }
     };
@@ -618,10 +563,7 @@ pub(crate) async fn patch(st: &AppState, me: &User, id: Uuid, body: RecordPatchB
     // `rec` istek basinda okundu, arada baska biri yazmis olabilir. Gunluge
     // yazilan "eski" deger de buradan gelir (eskiden bayat `rec`ten geliyordu).
     let mut tx = st.pool.begin().await?;
-    let from = sqlx::query_scalar::<_, Option<serde_json::Value>>(
-        "select to_jsonb(r) -> $2::text from records r where r.id = $1 for update")
-        .bind(rec.id).bind(field).fetch_one(&mut *tx).await?
-        .unwrap_or_default();
+    let from = db::lock_field(&mut *tx, rec.id, field).await?.unwrap_or_default();
     if from != to {
         // Son yazan kazanir ANCAK sessizce degil: istemci baska bir deger
         // gormusken alan degismisse 409. Ayni alana yazan ikinci kisi
@@ -629,14 +571,12 @@ pub(crate) async fn patch(st: &AppState, me: &User, id: Uuid, body: RecordPatchB
         if base.as_ref().is_some_and(|b| *b != from) {
             return Err(AppError::Conflict("stale_field"));
         }
-        bind_value(sqlx::query(sql).bind(rec.id), field, &to)?
-            .execute(&mut *tx).await?;
+        db::update_field(&mut *tx, rec.id, field, field_value(field, &to)?).await?;
         log(&mut tx, rec.chat_id, me.id, "field_changed", &rec.title, Some(field),
             change(&from, &to)).await?;
         // Kapanis notu satirda; closed'dan cikan her gecis onu siler (yeniden acma).
         if field == "status" {
-            sqlx::query("update records set closing_note = $2 where id = $1")
-                .bind(rec.id).bind(&note).execute(&mut *tx).await?;
+            db::set_closing_note(&mut *tx, rec.id, &note).await?;
         }
         if let Some(n) = &note {
             log(&mut tx, rec.chat_id, me.id, "closing_note", &rec.title, Some("record"), Some(n.clone())).await?;
@@ -645,14 +585,8 @@ pub(crate) async fn patch(st: &AppState, me: &User, id: Uuid, body: RecordPatchB
             if note.is_some() { "closing_note" } else { field }, reasons).await?;
         // Ikizin basligi, onemi ve sorumlusu etkinlige de yazilir: iki yuz ayni
         // (spec/73 §3a). SQL sabit; deger yine sutun tipine baglanir.
-        let synced = match field {
-            "title" => Some("update events set title = $2, updated_at = now() where record_id = $1"),
-            "priority" => Some("update events set priority = $2, updated_at = now() where record_id = $1"),
-            "owner_id" => Some("update events set owner_id = $2, updated_at = now() where record_id = $1"),
-            _ => None,
-        };
-        if let Some(sql) = synced {
-            bind_value(sqlx::query(sql).bind(rec.id), field, &to)?.execute(&mut *tx).await?;
+        if matches!(field, "title" | "priority" | "owner_id") {
+            db::update_event_field(&mut *tx, rec.id, field, field_value(field, &to)?).await?;
         }
         tx.commit().await?;
     }
@@ -669,22 +603,20 @@ pub(crate) struct Patched {
     quality: Option<decision::Quality>,
 }
 
-type PgQuery<'q> = sqlx::query::Query<'q, Postgres, sqlx::postgres::PgArguments>;
-
-/// JSON degeri sutun tipine geri baglar. Enum/metin -> text, kimlik -> uuid,
+/// JSON degeri sutun tipine geri cevirir. Enum/metin -> text, kimlik -> uuid,
 /// tarih -> date; `null` her tipte NULL.
-fn bind_value<'q>(q: PgQuery<'q>, field: &str, v: &serde_json::Value) -> Result<PgQuery<'q>> {
+fn field_value(field: &str, v: &serde_json::Value) -> Result<(Option<String>, Option<Uuid>, Option<NaiveDate>)> {
     let s = v.as_str().map(String::from);
     Ok(match field {
         "owner_id" | "team_id" | "pillar_id" | "unit_id" => {
-            q.bind(s.map(|s| s.parse::<Uuid>()).transpose()
-                .map_err(|_| AppError::BadRequest("invalid_body"))?)
+            (None, s.map(|s| s.parse::<Uuid>()).transpose()
+                .map_err(|_| AppError::BadRequest("invalid_body"))?, None)
         }
         "due_date" => {
-            q.bind(s.map(|s| s.parse::<NaiveDate>()).transpose()
+            (None, None, s.map(|s| s.parse::<NaiveDate>()).transpose()
                 .map_err(|_| AppError::BadRequest("invalid_body"))?)
         }
-        _ => q.bind(s),
+        _ => (s, None, None),
     })
 }
 
@@ -710,11 +642,7 @@ pub(crate) async fn add_action(st: &AppState, me: &User, record_id: Uuid, b: New
         return Err(AppError::Forbidden);
     }
     let mut tx = st.pool.begin().await?;
-    let action: Uuid = sqlx::query_scalar(
-        "insert into actions (record_id, title, created_by, due_date)
-         values ($1, $2, $3, $4) returning id")
-        .bind(rec.id).bind(&title).bind(me.id).bind(b.due_date)
-        .fetch_one(&mut *tx).await?;
+    let action = db::insert_action(&mut *tx, rec.id, &title, me.id, b.due_date).await?;
     set_action_owners(&mut tx, action, &owners, me.id).await?;
     add_action_owners(&mut tx, rec.id, &owners, me.id).await?;
     log(&mut tx, rec.chat_id, me.id, "action_added", &title, None,
@@ -745,24 +673,8 @@ pub(crate) struct ActionPatchBody {
     quality_override: bool,
 }
 
-#[derive(sqlx::FromRow)]
-struct ActionRow {
-    id: Uuid,
-    record_id: Uuid,
-    title: String,
-    status: ActionStatus,
-    owner_ids: Vec<Uuid>,
-    due_date: Option<NaiveDate>,
-}
-
 pub(crate) async fn patch_action(st: &AppState, me: &User, action_id: Uuid, body: ActionPatchBody) -> Result<Detail> {
-    let a: ActionRow = sqlx::query_as(
-        "select a.id, a.record_id, a.title, a.status,
-                array(select x.user_id from action_assignees x where x.action_id = a.id
-                       order by x.added_at, x.user_id) as owner_ids,
-                a.due_date
-           from actions a where a.id = $1")
-        .bind(action_id).fetch_optional(&st.pool).await?.ok_or(AppError::NotFound)?;
+    let a = db::find_action(&st.pool, action_id).await?.ok_or(AppError::NotFound)?;
     let rec = load(&st.pool, a.record_id).await?;
     require_edit(st, me, &rec).await?;
     let ActionPatchBody { patch: p, closing_note, quality_override } = body;
@@ -784,13 +696,7 @@ pub(crate) async fn patch_action(st: &AppState, me: &User, action_id: Uuid, body
             let done = matches!(v, ActionStatus::Closed | ActionStatus::Cancelled);
             // Kapatan ve zamani izde durur; yeniden acmak ikisini de siler.
             // Kapanis notu yalniz closed'a geciste dolar, baska her durum siler.
-            sqlx::query(
-                "update actions set status = $2,
-                        resolved_by = case when $3 then $4 end,
-                        resolved_at = case when $3 then now() end,
-                        closing_note = $5
-                  where id = $1")
-                .bind(a.id).bind(v).bind(done).bind(me.id).bind(&note).execute(&mut *tx).await?;
+            db::set_action_status(&mut *tx, a.id, v, done, me.id, &note).await?;
             if let Some(n) = &note {
                 log(&mut tx, rec.chat_id, me.id, "closing_note", &a.title, Some("action"), Some(n.clone())).await?;
             }
@@ -811,15 +717,13 @@ pub(crate) async fn patch_action(st: &AppState, me: &User, action_id: Uuid, body
             if !common::has_scope(st, me, "edit_deadline").await? {
                 return Err(AppError::Forbidden);
             }
-            sqlx::query("update actions set due_date = $2 where id = $1")
-                .bind(a.id).bind(v).execute(&mut *tx).await?;
+            db::set_action_due_date(&mut *tx, a.id, v).await?;
             ("due_date", serde_json::to_value(a.due_date), serde_json::to_value(v))
         }
         ActionPatch::Title(v) => {
             let v = common::text(Some(v), TITLE_MAX, "invalid_title")?
                 .ok_or(AppError::BadRequest("invalid_title"))?;
-            sqlx::query("update actions set title = $2 where id = $1")
-                .bind(a.id).bind(&v).execute(&mut *tx).await?;
+            db::set_action_title(&mut *tx, a.id, &v).await?;
             ("title", Ok(a.title.clone().into()), Ok(v.into()))
         }
     };
@@ -836,14 +740,13 @@ pub(crate) async fn patch_action(st: &AppState, me: &User, action_id: Uuid, body
 
 /// Eylem ve mesaj kaydin "hareket" siralamasini tazeler (updated_at tetikleyici).
 pub(crate) async fn touch(tx: &mut sqlx::Transaction<'_, Postgres>, record_id: Uuid) -> Result<()> {
-    sqlx::query("update records set updated_at = now() where id = $1")
-        .bind(record_id).execute(&mut **tx).await?;
+    db::touch_record(&mut **tx, record_id).await?;
     Ok(())
 }
 
 // --- benim eylemlerim ------------------------------------------------------
 
-#[derive(Serialize, sqlx::FromRow)]
+#[derive(Serialize)]
 pub(crate) struct MyAction {
     id: Uuid,
     title: String,
@@ -854,13 +757,10 @@ pub(crate) struct MyAction {
 }
 
 pub(crate) async fn my_actions(st: &AppState, me: &User) -> Result<Vec<MyAction>> {
-    Ok(sqlx::query_as(
-        "select a.id, a.title, a.status, a.due_date, a.record_id, r.title as record_title
-           from actions a join records r on r.id = a.record_id
-          where exists(select 1 from action_assignees x where x.action_id = a.id and x.user_id = $1)
-            and a.status in ('open','in_progress')
-          order by a.due_date nulls last, a.created_at")
-        .bind(me.id).fetch_all(&st.pool).await?)
+    Ok(db::list_my_actions(&st.pool, me.id).await?.into_iter().map(|r| MyAction {
+        id: r.id, title: r.title, status: r.status, due_date: r.due_date,
+        record_id: r.record_id, record_title: r.record_title,
+    }).collect())
 }
 
 // --- katilimcilar ----------------------------------------------------------
@@ -871,10 +771,7 @@ pub(crate) async fn add_participant(st: &AppState, me: &User, id: Uuid, uid: Uui
     require_edit(st, me, &rec).await?;
     check_user(&st.pool, Some(uid)).await?;
     let mut tx = st.pool.begin().await?;
-    let added = sqlx::query(
-        "insert into record_participants (record_id, user_id, added_by) values ($1, $2, $3)
-         on conflict do nothing")
-        .bind(rec.id).bind(uid).bind(me.id).execute(&mut *tx).await?.rows_affected();
+    let added = db::insert_participant(&mut *tx, rec.id, uid, me.id).await?;
     if added > 0 {
         touch(&mut tx, rec.id).await?;
     }
@@ -888,8 +785,7 @@ pub(crate) async fn remove_participant(st: &AppState, me: &User, id: Uuid, uid: 
     let rec = load(&st.pool, id).await?;
     require_edit(st, me, &rec).await?;
     let mut tx = st.pool.begin().await?;
-    let gone = sqlx::query("delete from record_participants where record_id = $1 and user_id = $2")
-        .bind(rec.id).bind(uid).execute(&mut *tx).await?.rows_affected();
+    let gone = db::delete_participant(&mut *tx, rec.id, uid).await?;
     if gone > 0 {
         touch(&mut tx, rec.id).await?;
     }
@@ -902,15 +798,13 @@ pub(crate) async fn remove_participant(st: &AppState, me: &User, id: Uuid, uid: 
 /// Sabitle / kaldir (IDEMPOTENT). Okuma herkese acik oldugu icin yetki aranmaz.
 pub(crate) async fn pin(st: &AppState, me: &User, id: Uuid) -> Result<Detail> {
     let rec = load(&st.pool, id).await?;
-    sqlx::query("insert into record_pins (user_id, record_id) values ($1, $2) on conflict do nothing")
-        .bind(me.id).bind(rec.id).execute(&st.pool).await?;
+    db::insert_pin(&st.pool, me.id, rec.id).await?;
     detail_of(st, me, rec).await
 }
 
 pub(crate) async fn unpin(st: &AppState, me: &User, id: Uuid) -> Result<Detail> {
     let rec = load(&st.pool, id).await?;
-    sqlx::query("delete from record_pins where user_id = $1 and record_id = $2")
-        .bind(me.id).bind(rec.id).execute(&st.pool).await?;
+    db::delete_pin(&st.pool, me.id, rec.id).await?;
     detail_of(st, me, rec).await
 }
 
@@ -925,10 +819,7 @@ pub(crate) async fn set_card_order(st: &AppState, me: &User, id: Uuid, b: CardOr
     if b.ids.len() > 200 {
         return Err(AppError::BadRequest("invalid_body"));
     }
-    sqlx::query(
-        "insert into card_order (user_id, record_id, card_ids) values ($1, $2, $3)
-         on conflict (user_id, record_id) do update set card_ids = excluded.card_ids")
-        .bind(me.id).bind(rec.id).bind(&b.ids).execute(&st.pool).await?;
+    db::upsert_card_order(&st.pool, me.id, rec.id, &b.ids).await?;
     detail_of(st, me, rec).await
 }
 
@@ -941,24 +832,15 @@ pub(crate) async fn join(st: &AppState, me: &User, id: Uuid) -> Result<Detail> {
     if scope::can_edit_record(&st.pool, me, &rec, &st.tree).await? {
         return detail_of(st, me, rec).await;
     }
-    let mode: String = sqlx::query_scalar("select access_mode from records where id = $1")
-        .bind(rec.id).fetch_one(&st.pool).await?;
+    let mode = db::get_access_mode(&st.pool, rec.id).await?;
     let mut tx = st.pool.begin().await?;
     if mode == "public" {
-        sqlx::query(
-            "insert into record_participants (record_id, user_id, added_by) values ($1, $2, $2)
-             on conflict do nothing")
-            .bind(rec.id).bind(me.id).execute(&mut *tx).await?;
+        db::insert_self_participant(&mut *tx, rec.id, me.id).await?;
         log(&mut tx, rec.chat_id, me.id, "joined", &rec.title, None, None).await?;
         touch(&mut tx, rec.id).await?;
     } else {
         // Reddedilmis istek yeniden acilabilir; bekleyen zaten bekliyor.
-        let changed = sqlx::query(
-            "insert into record_join_requests (record_id, user_id) values ($1, $2)
-             on conflict (record_id, user_id) do update
-               set status = 'pending', created_at = now(), decided_by = null
-             where record_join_requests.status = 'denied'")
-            .bind(rec.id).bind(me.id).execute(&mut *tx).await?.rows_affected();
+        let changed = db::upsert_join_request(&mut *tx, rec.id, me.id).await?;
         if changed > 0 {
             log(&mut tx, rec.chat_id, me.id, "join_requested", &rec.title, None, None).await?;
         }
@@ -970,8 +852,7 @@ pub(crate) async fn join(st: &AppState, me: &User, id: Uuid) -> Result<Detail> {
 /// Kendi bekleyen istegimi geri cek.
 pub(crate) async fn cancel_join(st: &AppState, me: &User, id: Uuid) -> Result<Detail> {
     let rec = load(&st.pool, id).await?;
-    sqlx::query("delete from record_join_requests where record_id = $1 and user_id = $2")
-        .bind(rec.id).bind(me.id).execute(&st.pool).await?;
+    db::delete_join_request(&st.pool, rec.id, me.id).await?;
     detail_of(st, me, rec).await
 }
 
@@ -986,25 +867,15 @@ pub(crate) async fn decide_join(st: &AppState, me: &User, id: Uuid, uid: Uuid, b
     if !decider(me, &rec) {
         return Err(AppError::Forbidden);
     }
-    let name: String = sqlx::query_scalar(
-        "select u.name from record_join_requests r join users u on u.id = r.user_id
-          where r.record_id = $1 and r.user_id = $2 and r.status = 'pending'")
-        .bind(rec.id).bind(uid).fetch_optional(&st.pool).await?.ok_or(AppError::NotFound)?;
+    let name = db::find_requester_name(&st.pool, rec.id, uid).await?.ok_or(AppError::NotFound)?;
     let mut tx = st.pool.begin().await?;
     if b.approve {
-        sqlx::query("delete from record_join_requests where record_id = $1 and user_id = $2")
-            .bind(rec.id).bind(uid).execute(&mut *tx).await?;
-        sqlx::query(
-            "insert into record_participants (record_id, user_id, added_by) values ($1, $2, $3)
-             on conflict do nothing")
-            .bind(rec.id).bind(uid).bind(me.id).execute(&mut *tx).await?;
+        db::delete_join_request(&mut *tx, rec.id, uid).await?;
+        db::insert_approved_participant(&mut *tx, rec.id, uid, me.id).await?;
         log(&mut tx, rec.chat_id, me.id, "join_approved", &name, None, None).await?;
         touch(&mut tx, rec.id).await?;
     } else {
-        sqlx::query(
-            "update record_join_requests set status = 'denied', decided_by = $3
-              where record_id = $1 and user_id = $2")
-            .bind(rec.id).bind(uid).bind(me.id).execute(&mut *tx).await?;
+        db::deny_join_request(&mut *tx, rec.id, uid, me.id).await?;
     }
     tx.commit().await?;
     detail_of(st, me, rec).await
@@ -1012,8 +883,7 @@ pub(crate) async fn decide_join(st: &AppState, me: &User, id: Uuid, uid: Uuid, b
 
 /// Gizli kayit mi ve ben uye degil miyim: sohbet/kart/oy gibi uc noktalar bunu sorar.
 pub(crate) async fn is_restricted(st: &AppState, me: &User, rec: &Record) -> Result<bool> {
-    let mode: String = sqlx::query_scalar("select access_mode from records where id = $1")
-        .bind(rec.id).fetch_one(&st.pool).await?;
+    let mode = db::get_access_mode(&st.pool, rec.id).await?;
     Ok(mode == "private" && !scope::can_edit_record(&st.pool, me, rec, &st.tree).await?)
 }
 
@@ -1021,8 +891,7 @@ pub(crate) async fn is_restricted(st: &AppState, me: &User, rec: &Record) -> Res
 /// `request` ve `private`'ta yalniz uye (onayli katilimci ya da duzenleyen).
 /// `is_restricted`'tan ayri: `request` kayitta okuma acik kalir.
 pub(crate) async fn may_respond(st: &AppState, me: &User, rec: &Record) -> Result<bool> {
-    let mode: String = sqlx::query_scalar("select access_mode from records where id = $1")
-        .bind(rec.id).fetch_one(&st.pool).await?;
+    let mode = db::get_access_mode(&st.pool, rec.id).await?;
     Ok(mode == "public" || scope::can_edit_record(&st.pool, me, rec, &st.tree).await?)
 }
 
