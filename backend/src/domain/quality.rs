@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
+    db::quality as db,
     decision::{self, QualityConfig},
     error::{AppError, Result},
     models::user::User,
@@ -34,9 +35,7 @@ fn admin_only(me: &User) -> Result<()> {
 }
 
 async fn view(st: &AppState) -> Result<QualityView> {
-    let row: Option<(DateTime<Utc>, Option<Uuid>)> =
-        sqlx::query_as("select updated_at, updated_by from quality_config")
-            .fetch_optional(&st.pool).await?;
+    let row = db::find_metadata(&st.pool).await?;
     let config = st.quality.read().unwrap_or_else(|e| e.into_inner()).clone();
     Ok(QualityView {
         config,
@@ -57,10 +56,7 @@ pub(crate) async fn put(st: &AppState, me: &User, ip: Option<std::net::IpAddr>, 
     admin_only(me)?;
     cfg.validate().map_err(AppError::BadRequest)?;
     let json = serde_json::to_value(&cfg).map_err(|_| AppError::BadRequest("invalid_body"))?;
-    sqlx::query(
-        "insert into quality_config (id, config, updated_by) values (true, $1, $2)
-         on conflict (id) do update set config = $1, updated_by = $2, updated_at = now()")
-        .bind(json).bind(me.id).execute(&st.pool).await?;
+    db::upsert_config(&st.pool, json, me.id).await?;
     *st.quality.write().unwrap_or_else(|e| e.into_inner()) = cfg;
     crate::audit::log_event(st, ip, "quality_config_changed", Some(me.id), Some(&me.email), None).await;
     view(st).await
@@ -69,7 +65,7 @@ pub(crate) async fn put(st: &AppState, me: &User, ip: Option<std::net::IpAddr>, 
 /// Varsayilana don: satir silinir, kodun metinleri gecerli olur.
 pub(crate) async fn reset(st: &AppState, me: &User, ip: Option<std::net::IpAddr>) -> Result<QualityView> {
     admin_only(me)?;
-    sqlx::query("delete from quality_config").execute(&st.pool).await?;
+    db::delete_config(&st.pool).await?;
     *st.quality.write().unwrap_or_else(|e| e.into_inner()) = QualityConfig::defaults();
     crate::audit::log_event(st, ip, "quality_config_reset", Some(me.id), Some(&me.email), None).await;
     view(st).await
