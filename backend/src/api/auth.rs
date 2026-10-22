@@ -273,9 +273,7 @@ pub async fn google_callback(
 
     // Ilk giriste google_sub baglanir. Ayni sub farkli e-postayla gelirse
     // e-posta GUNCELLENIR: kimligin capasi sub (identity.py handle_login).
-    sqlx::query("update users set google_sub = $1, email = $2, last_login_at = now() where id = $3")
-        .bind(&info.sub).bind(&email).bind(user_id)
-        .execute(&st.pool).await?;
+    crate::domain::auth::record_login(&st, &info.sub, &email, user_id).await?;
 
     let jar = auth::open_session(jar, &st.cfg, user_id);
     log_event(&st, client_ip(&h), "login", Some(user_id), Some(&email), None).await;
@@ -304,25 +302,11 @@ async fn exchange(st: &AppState, code: &str, verifier: &str, redirect: &str) -> 
         .json().await.map_err(|e| format!("userinfo body: {e}"))
 }
 
-#[derive(sqlx::FromRow)]
-struct Candidate {
-    id: Uuid,
-    google_sub: Option<String>,
-    is_active: bool,
-}
-
 /// Davetli listesi: `users`'ta olmayan e-posta GIREMEZ, kullanici burada
 /// olusturulmaz (KNOW-94, spec/70 §2.3). Dis `Result` veritabani hatasi,
 /// ic `Result` karar.
 async fn can_enter(st: &AppState, email: &str, sub: &str) -> Result<std::result::Result<Uuid, LoginError>> {
-    let by_sub: Option<Candidate> =
-        sqlx::query_as("select id, google_sub, is_active from users where google_sub = $1")
-            .bind(sub).fetch_optional(&st.pool).await?;
-    let found = match by_sub {
-        Some(c) => Some(c),
-        None => sqlx::query_as("select id, google_sub, is_active from users where lower(email) = lower($1)")
-            .bind(email).fetch_optional(&st.pool).await?,
-    };
+    let found = crate::domain::auth::find_candidate(st, email, sub).await?;
     let Some(c) = found else { return Ok(Err(LoginError::Uninvited)) };
     if c.google_sub.as_deref().is_some_and(|s| s != sub) {
         // E-posta ayni, Google hesabi baska: adres devredilmis olabilir.

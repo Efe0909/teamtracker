@@ -8,6 +8,7 @@
 
 pub(crate) mod admin;
 pub(crate) mod attachments;
+pub(crate) mod auth;
 pub(crate) mod bank_accounts;
 pub(crate) mod budget;
 pub(crate) mod cards;

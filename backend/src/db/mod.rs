@@ -11,6 +11,7 @@ pub mod search;
 pub mod tree;
 pub mod admin;
 pub mod audit;
+pub mod auth;
 pub mod attachments;
 pub mod bank_accounts;
 pub mod bootstrap;
