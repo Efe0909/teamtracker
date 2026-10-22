@@ -9,12 +9,13 @@
 //! `edit_user_names` kapsamiyla — kendi ya da baskasinin adi. Kapsam yoksa
 //! ad herkes icin salt okunur.
 
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use serde::Deserialize;
 use serde_json::json;
 use uuid::Uuid;
 
 use crate::{
+    db::profile as db,
     domain::common,
     error::{AppError, Result},
     models::user::User,
@@ -38,8 +39,7 @@ pub(crate) async fn rename(st: &AppState, me: &User, id: Uuid, p: NameIn) -> Res
     }
     let name = common::text(Some(p.name), NAME_MAX, "invalid_name")?
         .ok_or(AppError::BadRequest("invalid_name"))?;
-    let n = sqlx::query("update users set name = $2 where id = $1")
-        .bind(id).bind(&name).execute(&st.pool).await?.rows_affected();
+    let n = db::set_name(&st.pool, id, &name).await?;
     if n == 0 {
         return Err(AppError::NotFound);
     }
@@ -73,19 +73,7 @@ fn phone_ok(p: &str) -> bool {
 
 pub(crate) async fn patch(st: &AppState, me: &User, p: ProfilePatch) -> Result<()> {
     let mut tx = st.pool.begin().await?;
-    #[derive(sqlx::FromRow)]
-    struct Row {
-        nickname: Option<String>,
-        phone: Option<String>,
-        birth_day: Option<i16>,
-        birth_month: Option<i16>,
-        birth_year: Option<i16>,
-        avatar_id: Option<Uuid>,
-    }
-    let old: Row = sqlx::query_as(
-        "select nickname, phone, birth_day, birth_month, birth_year, avatar_id
-           from users where id = $1 for update")
-        .bind(me.id).fetch_one(&mut *tx).await?;
+    let old = db::find_for_update(&mut *tx, me.id).await?;
 
     let nickname = match p.nickname {
         Some(v) => common::text(v, NICK_MAX, "invalid_nickname")?,
@@ -117,12 +105,7 @@ pub(crate) async fn patch(st: &AppState, me: &User, p: ProfilePatch) -> Result<(
     let avatar = match p.avatar_id {
         Some(Some(a)) => {
             // Yalniz kendi yukledigi, silinmemis, profil sinirindaki gorsel (spec/83 §4.1).
-            let ok: bool = sqlx::query_scalar(
-                "select exists(select 1 from attachments
-                                where id = $1 and uploader_id = $2 and deleted_at is null
-                                  and kind = 'image' and byte_size <= $3)")
-                .bind(a).bind(me.id).bind(crate::media::Purpose::Avatar.max_bytes() as i64)
-                .fetch_one(&mut *tx).await?;
+            let ok = db::check_avatar(&mut *tx, a, me.id, crate::media::Purpose::Avatar.max_bytes() as i64).await?;
             if !ok {
                 return Err(AppError::BadRequest("invalid_avatar"));
             }
@@ -131,11 +114,9 @@ pub(crate) async fn patch(st: &AppState, me: &User, p: ProfilePatch) -> Result<(
         Some(None) => None,
         None => old.avatar_id,
     };
-    sqlx::query(
-        "update users set nickname = $2, phone = $3, birth_day = $4, birth_month = $5,
-                          birth_year = $6, avatar_id = $7 where id = $1")
-        .bind(me.id).bind(nickname).bind(phone).bind(day).bind(month).bind(year).bind(avatar)
-        .execute(&mut *tx).await?;
+    db::update_profile(&mut *tx, me.id, db::ProfileRow {
+        nickname, phone, birth_day: day, birth_month: month, birth_year: year, avatar_id: avatar,
+    }).await?;
     tx.commit().await?;
     Ok(())
 }
@@ -143,40 +124,22 @@ pub(crate) async fn patch(st: &AppState, me: &User, p: ProfilePatch) -> Result<(
 /// `GET /api/me/export` — kisinin KENDI verisi, JSON indirme (spec/82 §3.5).
 /// Ek dosyalari yok (kimlikleriyle listelenmez bile: mesaj metni yeter).
 pub(crate) async fn export(st: &AppState, me: &User) -> Result<serde_json::Value> {
-    #[derive(sqlx::FromRow, serde::Serialize)]
-    struct Profile {
-        email: String,
-        name: String,
-        nickname: Option<String>,
-        phone: Option<String>,
-        birth_day: Option<i16>,
-        birth_month: Option<i16>,
-        birth_year: Option<i16>,
-        notify_level: String,
-        created_at: DateTime<Utc>,
-        last_login_at: Option<DateTime<Utc>>,
-    }
-    let profile: Profile = sqlx::query_as(
-        "select email, name, nickname, phone, birth_day, birth_month, birth_year, notify_level,
-                created_at, last_login_at
-           from users where id = $1")
-        .bind(me.id).fetch_one(&st.pool).await?;
-    let teams: Vec<String> = sqlx::query_scalar(
-        "select t.name from team_members m join teams t on t.id = m.team_id where m.user_id = $1 order by t.name")
-        .bind(me.id).fetch_all(&st.pool).await?;
-    let records: Vec<(Uuid, String, Option<String>, DateTime<Utc>)> = sqlx::query_as(
-        "select id, title, description, created_at from records where created_by = $1 order by created_at")
-        .bind(me.id).fetch_all(&st.pool).await?;
-    let messages: Vec<(Uuid, String, DateTime<Utc>)> = sqlx::query_as(
-        "select chat_id, body, created_at from messages where author_id = $1 order by created_at")
-        .bind(me.id).fetch_all(&st.pool).await?;
+    let profile = db::find_export(&st.pool, me.id).await?;
+    let teams = db::list_team_names(&st.pool, me.id).await?;
+    let records = db::list_records(&st.pool, me.id).await?;
+    let messages = db::list_messages(&st.pool, me.id).await?;
     let body = json!({
         "exported_at": Utc::now(),
-        "profile": profile,
+        "profile": {
+            "email": profile.email, "name": profile.name, "nickname": profile.nickname,
+            "phone": profile.phone, "birth_day": profile.birth_day, "birth_month": profile.birth_month,
+            "birth_year": profile.birth_year, "notify_level": profile.notify_level,
+            "created_at": profile.created_at, "last_login_at": profile.last_login_at,
+        },
         "teams": teams,
         "bank_accounts": crate::domain::bank_accounts::list_of(st, me.id).await?,
-        "records": records.into_iter().map(|(id, title, description, created_at)|
-            json!({ "id": id, "title": title, "description": description, "created_at": created_at })).collect::<Vec<_>>(),
+        "records": records.into_iter().map(|r|
+            json!({ "id": r.id, "title": r.title, "description": r.description, "created_at": r.created_at })).collect::<Vec<_>>(),
         "messages": messages.into_iter().map(|(chat_id, body, created_at)|
             json!({ "chat_id": chat_id, "body": body, "created_at": created_at })).collect::<Vec<_>>(),
     });
