@@ -12,7 +12,7 @@ use uuid::Uuid;
 
 use crate::{
     domain::{attachments::{self as att, AttachView}, common, records},
-    db::scope,
+    db::{chats as db, scope},
     error::{AppError, Result},
     mentions,
     models::{record::Record, user::User},
@@ -24,7 +24,7 @@ const BODY_MAX: usize = 4000;
 /// Akisin bir satiri. `kind=activity` ise `verb` + `target_label` + `body`
 /// (detay, cogunlukla `{"from","to"}` JSON'u) yapilandirilmis olgudur;
 /// cumleyi on yuz kurar.
-#[derive(Serialize, sqlx::FromRow)]
+#[derive(Serialize)]
 pub(crate) struct FeedItem {
     kind: String,
     id: Uuid,
@@ -38,7 +38,7 @@ pub(crate) struct FeedItem {
     edited_at: Option<DateTime<Utc>>,
 }
 
-#[derive(Serialize, sqlx::FromRow)]
+#[derive(Serialize)]
 pub(crate) struct Quote {
     id: Uuid,
     author_id: Option<Uuid>,
@@ -54,7 +54,7 @@ pub(crate) struct Feed {
     attachments: HashMap<Uuid, Vec<AttachView>>,
 }
 
-#[derive(Serialize, sqlx::FromRow)]
+#[derive(Serialize)]
 pub(crate) struct InboxChat {
     chat_id: Uuid,
     title: String,
@@ -71,35 +71,16 @@ pub(crate) async fn inbox(st: &AppState, me: &User) -> Result<Vec<InboxChat>> {
     // Kisisel gelen kutusu: admin/dal izniyle gorulebilen HER sohbet degil,
     // iliskili olduklarim. Bu iliskilerin hepsi mevcut yazma kuralini saglar.
     // Okunmamis bilgisi yok: notifications_seen_at sohbet okuma zamani degil.
-    let rows: Vec<InboxChat> = sqlx::query_as(
-        r#"WITH my_chats AS (
-          SELECT t.chat_id, t.name as title, 'team' as kind,
-                 null::uuid as record_id, t.id as team_id
-          FROM teams t
-          WHERE EXISTS (SELECT 1 FROM team_members m WHERE m.team_id = t.id AND m.user_id = $1)
-          UNION ALL
-          SELECT r.chat_id, r.title, 'record' as kind, r.id as record_id, r.team_id
-          FROM records r
-          WHERE r.owner_id = $1 OR r.created_by = $1
-             OR EXISTS (SELECT 1 FROM record_participants p WHERE p.record_id = r.id AND p.user_id = $1)
-             OR EXISTS (SELECT 1 FROM team_members m WHERE m.team_id = r.team_id AND m.user_id = $1)
-        )
-        SELECT c.chat_id, c.title, c.kind, c.record_id, c.team_id, true as can_post,
-               m.body as last_message, m.author_id as last_actor_id, m.created_at as updated_at
-        FROM my_chats c
-        LEFT JOIN LATERAL (
-          SELECT body, author_id, created_at FROM messages WHERE chat_id = c.chat_id
-          ORDER BY created_at DESC, id DESC LIMIT 1
-        ) m ON true
-        ORDER BY m.created_at DESC NULLS LAST, c.chat_id"#
-    ).bind(me.id).fetch_all(&st.pool).await?;
+    let rows = db::list_inbox(&st.pool, me.id).await?.into_iter().map(|r| InboxChat {
+        chat_id: r.chat_id, title: r.title, kind: r.kind, record_id: r.record_id, team_id: r.team_id,
+        can_post: r.can_post, last_message: r.last_message, last_actor_id: r.last_actor_id, updated_at: r.updated_at,
+    }).collect();
 
     Ok(rows)
 }
 
 async fn chat_exists(st: &AppState, chat: Uuid) -> Result<()> {
-    let ok: Option<i32> = sqlx::query_scalar("select 1 from chats where id = $1")
-        .bind(chat).fetch_optional(&st.pool).await?;
+    let ok = db::find_chat(&st.pool, chat).await?;
     ok.map(|_| ()).ok_or(AppError::NotFound)
 }
 
@@ -109,8 +90,7 @@ async fn chat_exists(st: &AppState, chat: Uuid) -> Result<()> {
 pub(crate) async fn authorize_read(st: &AppState, me: &User, chat: Uuid) -> Result<()> {
     chat_exists(st, chat).await?;
     // Gizli kayitta sohbet yalniz uyelere acik.
-    let owner_rec: Option<Uuid> = sqlx::query_scalar("select id from records where chat_id = $1")
-        .bind(chat).fetch_optional(&st.pool).await?;
+    let owner_rec = db::find_record(&st.pool, chat).await?;
     if let Some(rid) = owner_rec {
         let rec = Record::fetch(&st.pool, rid).await?.ok_or(AppError::NotFound)?;
         if records::is_restricted(st, me, &rec).await? {
@@ -122,24 +102,20 @@ pub(crate) async fn authorize_read(st: &AppState, me: &User, chat: Uuid) -> Resu
 
 pub(crate) async fn feed(st: &AppState, me: &User, chat: Uuid) -> Result<Feed> {
     authorize_read(st, me, chat).await?;
-    let items: Vec<FeedItem> = sqlx::query_as(
-        "select kind, id, created_at, actor_id, verb, subject_label, target_label, body,
-                reply_to_id, edited_at
-           from chat_feed where chat_id = $1 order by created_at, id")
-        .bind(chat).fetch_all(&st.pool).await?;
+    let items: Vec<FeedItem> = db::list_feed(&st.pool, chat).await?.into_iter().map(|r| FeedItem {
+        kind: r.kind, id: r.id, created_at: r.created_at, actor_id: r.actor_id, verb: r.verb,
+        subject_label: r.subject_label, target_label: r.target_label, body: r.body,
+        reply_to_id: r.reply_to_id, edited_at: r.edited_at,
+    }).collect();
     let ids: Vec<Uuid> = items.iter().filter_map(|i| i.reply_to_id).collect();
     let quotes = if ids.is_empty() {
         Vec::new()
     } else {
-        sqlx::query_as("select id, author_id, body from messages where id = any($1)")
-            .bind(&ids).fetch_all(&st.pool).await?
+        db::list_quotes(&st.pool, &ids).await?.into_iter().map(|(id, author_id, body)| Quote { id, author_id, body }).collect()
     };
 
     // Mesaj ekleri: TEK sorgu. Etiket hakki sohbetin sahibinden, hepsinde ayni.
-    let links: Vec<(Uuid, Uuid)> = sqlx::query_as(
-        "select ma.message_id, ma.attachment_id from message_attachments ma
-           join messages m on m.id = ma.message_id where m.chat_id = $1")
-        .bind(chat).fetch_all(&st.pool).await?;
+    let links = db::list_attachments(&st.pool, chat).await?;
     let mut attachments: HashMap<Uuid, Vec<AttachView>> = HashMap::new();
     if !links.is_empty() {
         let (rec, team) = owner(st, chat).await?;
@@ -157,13 +133,11 @@ pub(crate) async fn feed(st: &AppState, me: &User, chat: Uuid) -> Result<Feed> {
 
 /// Sohbetin sahibi: kayit mi, takim mi (ters yonde bagli).
 async fn owner(st: &AppState, chat: Uuid) -> Result<(Option<Record>, Option<Uuid>)> {
-    let record_id: Option<Uuid> = sqlx::query_scalar("select id from records where chat_id = $1")
-        .bind(chat).fetch_optional(&st.pool).await?;
+    let record_id = db::find_record(&st.pool, chat).await?;
     if let Some(rid) = record_id {
         return Ok((Record::fetch(&st.pool, rid).await?, None));
     }
-    let team: Option<Uuid> = sqlx::query_scalar("select id from teams where chat_id = $1")
-        .bind(chat).fetch_optional(&st.pool).await?;
+    let team = db::find_team(&st.pool, chat).await?;
     Ok((None, team))
 }
 
@@ -196,8 +170,7 @@ pub(crate) async fn post(st: &AppState, me: &User, chat: Uuid, b: NewMessage) ->
     }
 
     // Sahip: kayit mi, takim mi?
-    let record_id: Option<Uuid> = sqlx::query_scalar("select id from records where chat_id = $1")
-        .bind(chat).fetch_optional(&st.pool).await?;
+    let record_id = db::find_record(&st.pool, chat).await?;
     let allowed = match record_id {
         Some(rid) => {
             let rec: Record = Record::fetch(&st.pool, rid).await?.ok_or(AppError::NotFound)?;
@@ -205,10 +178,7 @@ pub(crate) async fn post(st: &AppState, me: &User, chat: Uuid, b: NewMessage) ->
         }
         None => {
             // Takim duvari: uyeler ve admin. Uyelik BURADAN degismez.
-            let member: Option<i32> = sqlx::query_scalar(
-                "select 1 from teams t join team_members m on m.team_id = t.id
-                  where t.chat_id = $1 and m.user_id = $2")
-                .bind(chat).bind(me.id).fetch_optional(&st.pool).await?;
+            let member = db::find_member(&st.pool, chat, me.id).await?;
             me.is_admin || member.is_some()
         }
     };
@@ -217,9 +187,7 @@ pub(crate) async fn post(st: &AppState, me: &User, chat: Uuid, b: NewMessage) ->
     }
     if let Some(r) = b.reply_to_id {
         // FK de reddeder (sohbet disina yanit yok), ama 500 yerine kod dondur.
-        let same: Option<i32> = sqlx::query_scalar(
-            "select 1 from messages where id = $1 and chat_id = $2")
-            .bind(r).bind(chat).fetch_optional(&st.pool).await?;
+        let same = db::find_reply(&st.pool, r, chat).await?;
         if same.is_none() {
             return Err(AppError::BadRequest("invalid_reply"));
         }
@@ -227,15 +195,9 @@ pub(crate) async fn post(st: &AppState, me: &User, chat: Uuid, b: NewMessage) ->
     att::claimable(&st.pool, me.id, &mut attach_ids).await?;
 
     let mut tx = st.pool.begin().await?;
-    let id: Uuid = sqlx::query_scalar(
-        "insert into messages (chat_id, author_id, body, reply_to_id)
-         values ($1, $2, $3, $4) returning id")
-        .bind(chat).bind(me.id).bind(&body).bind(b.reply_to_id)
-        .fetch_one(&mut *tx).await?;
+    let id = db::insert_message(&mut *tx, chat, me.id, &body, b.reply_to_id).await?;
     if !attach_ids.is_empty() {
-        sqlx::query("insert into message_attachments (message_id, attachment_id)
-                     select $1, unnest($2::uuid[])")
-            .bind(id).bind(&attach_ids).execute(&mut *tx).await?;
+        db::insert_attachments(&mut *tx, id, &attach_ids).await?;
     }
     if let Some(rid) = record_id {
         records::touch(&mut tx, rid).await?;
@@ -260,16 +222,12 @@ async fn invite(
     }
     // Katlama Rust'ta, SQL'de degil: Turkce I/i katlamasi SQL'de ayni sonucu
     // vermeyebilir. Aktif kullanici sayisi kulup olceginde.
-    let users: Vec<(Uuid, String)> = sqlx::query_as("select id, name from users where is_active")
-        .fetch_all(&mut **tx).await?;
+    let users = db::list_active_users(&mut **tx).await?;
     let ids: Vec<Uuid> = users.into_iter()
         .filter(|(id, name)| *id != by && keys.contains(&mentions::handle(name)))
         .map(|(id, _)| id).collect();
     if !ids.is_empty() {
-        sqlx::query(
-            "insert into record_participants (record_id, user_id, added_by)
-             select $1, unnest($2::uuid[]), $3 on conflict do nothing")
-            .bind(record).bind(ids).bind(by).execute(&mut **tx).await?;
+        db::insert_participants(&mut **tx, record, ids, by).await?;
     }
     Ok(())
 }
