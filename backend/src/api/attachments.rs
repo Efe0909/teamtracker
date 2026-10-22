@@ -11,13 +11,10 @@ use axum::{
 use crate::{
     api::common::Body,
     auth::CurrentUser,
-    domain::attachments::{self, ServedAttachment, TagIn, TagOut, UploadQuery},
+    domain::attachments::{self, AttachView, ServedAttachment, TagIn, TagOut, UploadQuery},
     error::{AppError, Result},
     state::AppState,
 };
-
-#[allow(unused_imports)]
-pub(crate) use crate::domain::attachments::{can_tag, claimable, claimable_for, views, AttachView};
 
 pub async fn upload(
     State(st): State<AppState>, CurrentUser(me): CurrentUser, Query(q): Query<UploadQuery>,

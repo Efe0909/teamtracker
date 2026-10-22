@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 use super::finance::need_viewer;
 use crate::{
-    api::common,
+    domain::common,
     error::{AppError, Result},
     state::AppState,
 };
@@ -25,7 +25,7 @@ pub struct Template {
 }
 
 pub(crate) async fn list(st: &AppState, me: &crate::models::user::User) -> Result<Vec<Template>> {
-    need_viewer(&st, &me).await?;
+    need_viewer(st, me).await?;
     Ok(sqlx::query_as("select id, name, format, body, updated_at from mail_templates order by name")
         .fetch_all(&st.pool).await?)
 }
@@ -54,7 +54,7 @@ async fn one(st: &AppState, id: Uuid) -> Result<Template> {
 }
 
 pub(crate) async fn create(st: &AppState, me: &crate::models::user::User, b: TemplateIn) -> Result<Template> {
-    need_viewer(&st, &me).await?;
+    need_viewer(st, me).await?;
     let name = check(&b)?;
     let taken: bool = sqlx::query_scalar("select exists(select 1 from mail_templates where name = $1)")
         .bind(&name).fetch_one(&st.pool).await?;
@@ -68,7 +68,7 @@ pub(crate) async fn create(st: &AppState, me: &crate::models::user::User, b: Tem
 }
 
 pub(crate) async fn replace(st: &AppState, me: &crate::models::user::User, id: Uuid, b: TemplateIn) -> Result<Template> {
-    need_viewer(&st, &me).await?;
+    need_viewer(st, me).await?;
     let name = check(&b)?;
     let taken: bool = sqlx::query_scalar("select exists(select 1 from mail_templates where name = $1 and id <> $2)")
         .bind(&name).bind(id).fetch_one(&st.pool).await?;
@@ -84,7 +84,7 @@ pub(crate) async fn replace(st: &AppState, me: &crate::models::user::User, id: U
 }
 
 pub(crate) async fn delete(st: &AppState, me: &crate::models::user::User, id: Uuid) -> Result<serde_json::Value> {
-    need_viewer(&st, &me).await?;
+    need_viewer(st, me).await?;
     let n = sqlx::query("delete from mail_templates where id = $1")
         .bind(id).execute(&st.pool).await?.rows_affected();
     if n == 0 {

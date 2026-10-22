@@ -337,7 +337,7 @@ pub(crate) async fn llm_context(
 async fn build_context(st: &AppState, me: &User, id: Uuid, free_text: bool) -> Result<Context> {
     require_scope(st, me, USE_AI).await?;
     require_visible(st, me, id).await?;
-    let cfg = crate::api::llm::load(&st.pool).await?;
+    let cfg = crate::domain::llm::load(&st.pool).await?;
     if free_text && !cfg.free_text_allowed {
         return Err(AppError::BadRequest("free_text_disabled"));
     }

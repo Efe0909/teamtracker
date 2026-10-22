@@ -19,7 +19,7 @@ use uuid::Uuid;
 
 use super::finance::{need, need_viewer, today};
 use crate::{
-    api::common,
+    domain::common,
     error::{AppError, Result},
     finance::cents,
     state::AppState,
@@ -228,7 +228,7 @@ pub(crate) async fn budget(st: &AppState, me: &crate::models::user::User, q: Bud
     let Some(id) = id else {
         return Ok(BudgetView { period: None, rows: Vec::new(), can_write });
     };
-    let period = period_one(&st, id).await?;
+    let period = period_one(st, id).await?;
     Ok(BudgetView { rows: budget_rows(st, id).await?, period: Some(period), can_write })
 }
 
@@ -282,7 +282,7 @@ pub(crate) async fn put_line(st: &AppState, me: &crate::models::user::User, b: L
                 .execute(&st.pool).await?;
         }
     }
-    let period = period_one(&st, b.period_id).await?;
+    let period = period_one(st, b.period_id).await?;
     Ok(BudgetView { rows: budget_rows(st, b.period_id).await?, period: Some(period), can_write: true })
 }
 
@@ -479,8 +479,8 @@ pub(crate) async fn budget_xlsx(st: &AppState, me: &crate::models::user::User, q
         None => sqlx::query_scalar("select id from finance_periods order by (span @> $1::date) desc, lower(span) desc limit 1")
             .bind(today()).fetch_optional(&st.pool).await?.ok_or(AppError::NotFound)?,
     };
-    let period = period_one(&st, id).await?;
-    let rows = budget_rows(&st, id).await?;
+    let period = period_one(st, id).await?;
+    let rows = budget_rows(st, id).await?;
     let cats: Vec<(Uuid, String, Option<String>)> = sqlx::query_as(
         "select id, name, attrs->>'ledger' from nodes where node_type = 'category'")
         .fetch_all(&st.pool).await?;

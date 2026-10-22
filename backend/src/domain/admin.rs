@@ -18,7 +18,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::{
-    api::common,
+    domain::common,
     audit,
     db::scope,
     error::{AppError, Result},
@@ -173,7 +173,7 @@ fn admin_only(me: &User) -> Result<()> {
 }
 
 pub(crate) async fn get(st: &AppState, me: &User) -> Result<AdminView> {
-    can_manage(&st, &me).await?;
+    can_manage(st, me).await?;
     view(&st.pool, me).await
 }
 
@@ -188,7 +188,7 @@ pub struct NewUser {
 /// Davet: satir acilir, kisi Google'la ilk girdiginde `google_sub` baglanir
 /// (giris `users`'ta olmayan e-postayi reddeder, spec/70 §2.3).
 pub(crate) async fn add_user(st: &AppState, me: &User, b: NewUser) -> Result<AdminView> {
-    can_manage(&st, &me).await?;
+    can_manage(st, me).await?;
     let email = b.email.trim().to_lowercase();
     // Kaba denetim: asil dogrulama Google girisi. Burada yazim hatasi yakalanir.
     if email.len() > 254 || !email.contains('@') || email.contains(char::is_whitespace) {
@@ -228,8 +228,8 @@ pub enum UserOp {
 }
 
 pub(crate) async fn patch_user(st: &AppState, me: &User, id: Uuid, op: UserOp, ip: Option<std::net::IpAddr>) -> Result<AdminView> {
-    can_manage(&st, &me).await?;
-    within_grant(&st, &me, id, &op).await?;
+    can_manage(st, me).await?;
+    within_grant(st, me, id, &op).await?;
     let mut tx = st.pool.begin().await?;
     // Aktif adminler KILITLI okunur: iki admin ayni anda birbirini dusururse
     // ikisi de "bir admin daha var" gorup sistemi adminsiz birakabilirdi.
@@ -249,7 +249,7 @@ pub(crate) async fn patch_user(st: &AppState, me: &User, id: Uuid, op: UserOp, i
     // (olay, ayrinti) — yalniz gercekten degisen yazilir.
     let event: Option<(&str, Option<String>)> = match op {
         UserOp::Admin(want) => {
-            admin_only(&me)?;
+            admin_only(me)?;
             if want == is_admin {
                 None
             } else {
@@ -309,7 +309,7 @@ pub(crate) async fn patch_user(st: &AppState, me: &User, id: Uuid, op: UserOp, i
             (n > 0).then_some(("role_revoked", Some(name)))
         }
         UserOp::GrantNode(node) => {
-            let name = node_name(&st, node)?;
+            let name = node_name(st, node)?;
             let n = sqlx::query(
                 "insert into user_node_scopes (user_id, node_id, granted_by) values ($1, $2, $3)
                  on conflict do nothing")
@@ -332,7 +332,7 @@ pub(crate) async fn patch_user(st: &AppState, me: &User, id: Uuid, op: UserOp, i
             None
         }
         UserOp::RevokeNode(node) => {
-            let name = node_name(&st, node)?;
+            let name = node_name(st, node)?;
             let n = sqlx::query("delete from user_node_scopes where user_id = $1 and node_id = $2")
                 .bind(id).bind(node).execute(&mut *tx).await?.rows_affected();
             (n > 0).then_some(("scope_revoked", Some(format!("dal: {name}"))))
@@ -512,34 +512,34 @@ async fn write_role(
 }
 
 pub(crate) async fn create_role(st: &AppState, me: &User, b: RoleIn, ip: Option<std::net::IpAddr>) -> Result<AdminView> {
-    admin_only(&me)?;
+    admin_only(me)?;
     let name = b.name.clone().unwrap_or_default();
     let mut tx = st.pool.begin().await?;
-    write_role(&st, &mut tx, None, &me, b).await?;
+    write_role(st, &mut tx, None, me, b).await?;
     tx.commit().await?;
     audit::log_event(st, ip, "role_created", Some(me.id), Some(&me.email),
         Some(name.trim())).await;
-    view(&st.pool, &me).await
+    view(&st.pool, me).await
 }
 
 pub(crate) async fn patch_role(st: &AppState, me: &User, id: Uuid, b: RoleIn) -> Result<AdminView> {
-    admin_only(&me)?;
+    admin_only(me)?;
     role_name(&st.pool, id).await.map_err(|_| AppError::NotFound)?;
     let mut tx = st.pool.begin().await?;
-    write_role(&st, &mut tx, Some(id), &me, b).await?;
+    write_role(st, &mut tx, Some(id), me, b).await?;
     tx.commit().await?;
-    view(&st.pool, &me).await
+    view(&st.pool, me).await
 }
 
 /// Rol silinince yalniz ONDAN gelen gider; ayni kapsam dogrudan da verildiyse
 /// `user_scopes` satiri kalir — iki kaynak bagimsiz.
 pub(crate) async fn delete_role(st: &AppState, me: &User, id: Uuid, ip: Option<std::net::IpAddr>) -> Result<AdminView> {
-    admin_only(&me)?;
+    admin_only(me)?;
     let name: String = sqlx::query_scalar("delete from roles where id = $1 returning name")
         .bind(id).fetch_optional(&st.pool).await?.ok_or(AppError::NotFound)?;
     audit::log_event(st, ip, "role_deleted", Some(me.id), Some(&me.email),
         Some(&name)).await;
-    view(&st.pool, &me).await
+    view(&st.pool, me).await
 }
 
 // --- aktivite ----------------------------------------------------------------
@@ -574,7 +574,7 @@ pub struct PersonUse {
 
 /// Kisi bazli kullanim: son giris, son hareket, gunluk istek/dakika.
 pub(crate) async fn activity(st: &AppState, me: &User) -> Result<Vec<PersonUse>> {
-    can_manage(&st, &me).await?;
+    can_manage(st, me).await?;
     let people: Vec<LoginRow> = sqlx::query_as(
         "select id, last_login_at, last_seen_at from users order by name")
         .fetch_all(&st.pool).await?;

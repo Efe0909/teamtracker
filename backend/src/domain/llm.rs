@@ -16,7 +16,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::{
-    api::{common, events},
+    domain::{common, events},
     decision,
     error::{AppError, Result},
     llm::{self, Contract, Effective, Endpoint, Params, ProfileRow},
@@ -316,7 +316,7 @@ pub(crate) async fn put_profile(st: &AppState, me: &User, ip: Option<std::net::I
     }
     let tested_at = if model == p.model {
         p.tested_at
-    } else if endpoint_on(&st, endpoint) {
+    } else if endpoint_on(st, endpoint) {
         Some(llm::tested(&st.pool, None, p.id, model, None).await?
             .ok_or(AppError::BadRequest("llm_model_untested"))?)
     } else {
@@ -446,7 +446,7 @@ pub(crate) async fn put_task(st: &AppState, me: &User, ip: Option<std::net::IpAd
     }
     let current = llm::task(&st.pool, c.feature).await?;
     let switching = current.as_ref().is_none_or(|t| t.profile_id != p.id);
-    if switching && llm::service_on(&st, c)
+    if switching && llm::service_on(st, c)
         && llm::tested(&st.pool, Some(c.feature), p.id, &p.model, None).await?.is_none()
     {
         return Err(AppError::BadRequest("llm_profile_untested"));
@@ -514,7 +514,7 @@ pub(crate) async fn try_it(st: &AppState, me: &User, b: TryIn) -> Result<Value> 
     if !llm::valid_batch(c, b.batch) {
         return Err(AppError::BadRequest("llm_params_invalid"));
     }
-    let current = llm::settings(&st, c).await;
+    let current = llm::settings(st, c).await;
     let mut e = Effective {
         profile_id: Some(p.id), profile_name: p.name.clone(), enabled: true, store_bodies: false,
         batch: b.batch.and_then(|v| u32::try_from(v).ok()).unwrap_or(current.batch),
@@ -621,9 +621,9 @@ pub(crate) async fn activate_prompt(st: &AppState, me: &User, ip: Option<std::ne
     if b.version < 0 || (b.version > 0 && prompt_body(&st.pool, c.feature, b.version).await.is_err()) {
         return Err(AppError::BadRequest("llm_prompt_invalid"));
     }
-    let e = llm::settings(&st, c).await;
+    let e = llm::settings(st, c).await;
     let profile_id = e.profile_id.ok_or(AppError::NotFound)?;
-    if llm::service_on(&st, c)
+    if llm::service_on(st, c)
         && llm::tested(&st.pool, Some(c.feature), profile_id, &e.model, Some(b.version)).await?.is_none()
     {
         return Err(AppError::BadRequest("llm_prompt_untested"));

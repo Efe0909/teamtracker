@@ -309,7 +309,7 @@ pub(crate) async fn material_suggestions(
     st: &AppState, me: &User, id: Uuid, b: SuggestIn,
 ) -> Result<SuggestOut> {
     require_scope(st, me, "manage_purchases").await?;
-    let cfg = crate::api::llm::load(&st.pool).await?;
+    let cfg = crate::domain::llm::load(&st.pool).await?;
     let ctx = build_context(st, me, id, b.free_text.unwrap_or(cfg.free_text_allowed)).await?;
 
     let known = known_names(st).await?;
@@ -390,7 +390,7 @@ pub(crate) async fn material_brief(
 ) -> Result<MaterialBrief> {
     let free = match q.free_text {
         Some(f) => f,
-        None => crate::api::llm::load(&st.pool).await?.free_text_allowed,
+        None => crate::domain::llm::load(&st.pool).await?.free_text_allowed,
     };
     let ctx = build_context(st, me, id, free).await?;
     let e = llm::settings(st, suggest_contract()).await;

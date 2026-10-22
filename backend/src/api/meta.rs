@@ -10,7 +10,7 @@ use serde::Serialize;
 use uuid::Uuid;
 
 use crate::{
-    api::common,
+    domain::common,
     auth::CurrentUser,
     db,
     error::Result,

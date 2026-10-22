@@ -15,12 +15,6 @@ use crate::{
     state::AppState,
 };
 
-// Gecici yonlendirme (paralel refaktor): sonraki ajanlar tasinmis yardimcilari kullanir.
-pub(crate) use crate::domain::records::{
-    change, check_description, check_team, check_title, check_unit, check_user,
-    is_restricted, load, log, log_override, may_set_owner, require_edit, touch,
-};
-
 pub async fn list(
     State(st): State<AppState>, CurrentUser(me): CurrentUser, Query(params): Query<HashMap<String, String>>,
 ) -> Result<Json<Vec<RecordSummary>>> {

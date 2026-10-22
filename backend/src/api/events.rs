@@ -3,8 +3,6 @@
 use axum::{extract::{Path, Query, State}, http::header, response::{IntoResponse, Response}, Json};
 use crate::{api::common::{self, Body}, auth::CurrentUser, domain::events as domain_events, domain::events::*, error::Result, state::AppState};
 
-pub(crate) use domain_events::{known_names, material_sample, try_suggest};
-
 pub async fn list(State(st): State<AppState>, CurrentUser(_me): CurrentUser) -> Result<Json<Vec<EventRow>>> {
     Ok(Json(domain_events::list(&st).await?))
 }

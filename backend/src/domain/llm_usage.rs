@@ -297,7 +297,7 @@ pub(crate) async fn status(st: &AppState, me: &crate::models::user::User) -> Res
     for c in &llm::CONTRACTS {
         services.push(ServiceState {
             feature: c.feature, label: c.label, service: c.service.key(),
-            on: llm::service_on(&st, c), enabled: llm::settings(&st, c).await.enabled,
+            on: llm::service_on(st, c), enabled: llm::settings(st, c).await.enabled,
         });
     }
     let (calls, bodies, daily_rows, oldest_call, size_bytes): (i64, i64, i64, Option<DateTime<Utc>>, i64) = sqlx::query_as(
@@ -336,12 +336,12 @@ pub struct KeyView {
 /// Anahtarin kullanim/limit bilgisi (5 dk onbellek). Anahtar ISTEMCIYE GITMEZ.
 pub(crate) async fn key(st: &AppState, me: &crate::models::user::User, q: RefreshIn) -> Result<KeyView> {
     crate::domain::llm::require(st, me).await?;
-    let any_on = llm::CONTRACTS.iter().any(|c| llm::service_on(&st, c));
+    let any_on = llm::CONTRACTS.iter().any(|c| llm::service_on(st, c));
     if !any_on {
         return Ok(KeyView { off: true, error: false, fetched_at: None, data: None });
     }
     let got = st.llm_cache.key.get(std::time::Duration::from_secs(300), q.refresh.is_some(), || async {
-        let v = openrouter::get(&st, "/api/v1/key", true).await?;
+        let v = openrouter::get(st, "/api/v1/key", true).await?;
         let d = v.get("data").cloned().unwrap_or(Value::Null);
         let pick = |k: &str| d.get(k).cloned().unwrap_or(Value::Null);
         Ok(serde_json::json!({
@@ -409,7 +409,7 @@ fn model_info(m: &Value) -> Option<ModelInfo> {
 pub(crate) async fn models(st: &AppState, me: &crate::models::user::User, q: RefreshIn) -> Result<ModelsView> {
     crate::domain::llm::require(st, me).await?;
     let got = st.llm_cache.models.get(std::time::Duration::from_secs(3600), q.refresh.is_some(), || async {
-        let v = openrouter::get(&st, "/api/v1/models", false).await?;
+        let v = openrouter::get(st, "/api/v1/models", false).await?;
         let list: Vec<Value> = v.get("data").and_then(Value::as_array).cloned().ok_or("data yok")?;
         Ok(Value::Array(list))
     }).await;

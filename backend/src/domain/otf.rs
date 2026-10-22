@@ -15,7 +15,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::{
-    api::common,
+    domain::common,
     domain::events,
     error::{AppError, Result},
     models::enums::NodeType,
@@ -395,7 +395,7 @@ pub(crate) async fn put(st: &AppState, me: &crate::models::user::User, id: Uuid,
         return Err(AppError::BadRequest("too_many_contacts"));
     }
     for c in &b.contacts {
-        crate::api::records::check_user(&st.pool, Some(*c)).await?;
+        crate::domain::records::check_user(&st.pool, Some(*c)).await?;
     }
     check_outcomes(st, &b.outcome_ids, &load_outcome_ids(&st.pool, id).await?)?;
 

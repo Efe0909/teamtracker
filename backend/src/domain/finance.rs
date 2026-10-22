@@ -17,7 +17,7 @@ use sqlx::PgConnection;
 use uuid::Uuid;
 
 use crate::{
-    api::{attachments::{self as att, AttachView}, common},
+    domain::{attachments::{self as att, AttachView}, common},
     audit,
     config::Service,
     error::{AppError, Result},
@@ -228,7 +228,7 @@ async fn review(tx: &mut PgConnection, id: Uuid, action: &str, note: Option<&str
 pub(crate) async fn submit(st: &AppState, me: &User, b: InvoiceIn) -> Result<InvoiceView> {
     let mut v = shape(b, today())?;
     let mut tx = st.pool.begin().await?;
-    check_refs(&mut tx, &me, &mut v).await?;
+    check_refs(&mut tx, me, &mut v).await?;
     let (fx_rate, fx_on, fx_source) = match v.fx {
         Some((r, on, s)) => (Some(r), Some(on), Some(s)),
         None => (None, None, None),
@@ -264,7 +264,7 @@ pub(crate) async fn edit(st: &AppState, me: &User, id: Uuid, b: InvoiceIn) -> Re
     // Eski baglar once kalkar: ayni ek yeniden secilmisse bagsiz gorunsun.
     sqlx::query("delete from invoice_items where invoice_id = $1").bind(id).execute(&mut *tx).await?;
     sqlx::query("delete from invoice_attachments where invoice_id = $1").bind(id).execute(&mut *tx).await?;
-    check_refs(&mut tx, &me, &mut v).await?;
+    check_refs(&mut tx, me, &mut v).await?;
     let (fx_rate, fx_on, fx_source) = match v.fx {
         Some((r, on, s)) => (Some(r), Some(on), Some(s)),
         None => (None, None, None),
@@ -499,7 +499,7 @@ pub(crate) async fn decide(st: &AppState, me: &User, id: Uuid, b: DecisionIn) ->
         .bind(id).fetch_optional(&mut *tx).await?;
     let (owner, status, purchased_on, paid_by, claim) = row.ok_or(AppError::NotFound)?;
     if b.action != "withdraw" {
-        need(&st, &me, "review_purchases").await?;
+        need(st, me, "review_purchases").await?;
     }
     if matches!(b.action.as_str(), "changes" | "reject" | "cancel") && note.is_none() {
         return Err(AppError::BadRequest("note_required"));
@@ -525,14 +525,14 @@ pub(crate) async fn decide(st: &AppState, me: &User, id: Uuid, b: DecisionIn) ->
             if status != "pending" {
                 return Err(AppError::Conflict("invoice_locked"));
             }
-            approve(&mut tx, &me, id, purchased_on, &paid_by, b.claim_id).await?;
+            approve(&mut tx, me, id, purchased_on, &paid_by, b.claim_id).await?;
             "approved"
         }
         "cancel" => {
             if status != "approved" {
                 return Err(AppError::Conflict("invoice_locked"));
             }
-            cancel(&mut tx, &me, id, claim).await?;
+            cancel(&mut tx, me, id, claim).await?;
             "cancelled"
         }
         _ => return Err(AppError::BadRequest("invalid_action")),
@@ -957,7 +957,7 @@ pub(crate) async fn patch_claim(st: &AppState, me: &User, id: Uuid, b: ClaimPatc
     }
     match b.status.as_str() {
         "paid" => {
-            need(&st, &me, "manage_ledger").await?;
+            need(st, me, "manage_ledger").await?;
             // SEB hic yatirmadiysa 0 gecerli (defter satiri acilmaz).
             let received = match b.received_amount {
                 Some(v) if v.abs() < 0.005 => 0,
@@ -1053,7 +1053,7 @@ pub(crate) async fn ledger(st: &AppState, me: &User) -> Result<LedgerView> {
     Ok(LedgerView {
         balance, month_in, month_out,
         last_check: check.map(|(on, bank, diff)| json!({ "checked_on": on, "bank_balance": bank, "diff": diff })),
-        entries, can_write: common::has_scope(&st, &me, "manage_ledger").await?,
+        entries, can_write: common::has_scope(st, me, "manage_ledger").await?,
     })
 }
 

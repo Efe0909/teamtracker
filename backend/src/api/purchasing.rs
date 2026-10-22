@@ -4,8 +4,6 @@ use axum::{extract::{Path, Query, State}, Json};
 use serde_json::Value;
 use crate::{api::common::{self, Body}, auth::CurrentUser, domain::purchasing as domain_purchasing, domain::purchasing::*, error::Result, state::AppState};
 
-pub(crate) use domain_purchasing::backfill_vendors;
-
 pub async fn materials(State(st): State<AppState>, CurrentUser(me): CurrentUser, Query(q): Query<MatQuery>) -> Result<Json<MatList>> {
     Ok(Json(domain_purchasing::materials(&st, &me, q).await?))
 }

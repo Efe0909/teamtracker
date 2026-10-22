@@ -10,8 +10,6 @@ use crate::{
     state::AppState,
 };
 
-pub(crate) use crate::domain::chats::authorize_read;
-
 pub async fn inbox(State(st): State<AppState>, CurrentUser(me): CurrentUser) -> Result<Json<Vec<InboxChat>>> {
     Ok(Json(chats::inbox(&st, &me).await?))
 }

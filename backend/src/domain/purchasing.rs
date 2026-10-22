@@ -12,9 +12,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use uuid::Uuid;
 
-use crate::api::finance::{need, need_viewer, today};
+use crate::domain::finance::{need, need_viewer, today};
 use crate::{
-    api::common,
+    domain::common,
     error::{AppError, Result},
     finance::cents,
     models::user::User,
