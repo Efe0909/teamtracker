@@ -16,6 +16,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::{
+    db::llm as db,
     domain::{common, events},
     decision,
     error::{AppError, Result},
@@ -52,14 +53,12 @@ pub struct LlmView {
 
 /// Gecerli yapilandirma. Satirdaki JSON okunamazsa (sema degisti) varsayilan.
 pub(crate) async fn load(pool: &PgPool) -> Result<LlmConfig> {
-    let row: Option<serde_json::Value> = sqlx::query_scalar("select config from llm_config")
-        .fetch_optional(pool).await?;
+    let row = db::find_config(pool).await?;
     Ok(row.and_then(|v| serde_json::from_value(v).ok()).unwrap_or_else(LlmConfig::defaults))
 }
 
 async fn view(st: &AppState) -> Result<LlmView> {
-    let row: Option<(DateTime<Utc>, Option<Uuid>)> =
-        sqlx::query_as("select updated_at, updated_by from llm_config").fetch_optional(&st.pool).await?;
+    let row = db::find_metadata(&st.pool).await?;
     Ok(LlmView {
         config: load(&st.pool).await?,
         defaults: LlmConfig::defaults(),
@@ -77,10 +76,7 @@ pub(crate) async fn get(st: &AppState, me: &User) -> Result<LlmView> {
 pub(crate) async fn put(st: &AppState, me: &User, ip: Option<std::net::IpAddr>, cfg: LlmConfig) -> Result<LlmView> {
     require(st, me).await?;
     let json = serde_json::to_value(&cfg).map_err(|_| AppError::BadRequest("invalid_body"))?;
-    sqlx::query(
-        "insert into llm_config (id, config, updated_by) values (true, $1, $2)
-         on conflict (id) do update set config = $1, updated_by = $2, updated_at = now()")
-        .bind(json).bind(me.id).execute(&st.pool).await?;
+    db::upsert_config(&st.pool, json, me.id).await?;
     crate::audit::log_event(st, ip, "llm_config_changed", Some(me.id), Some(&me.email), None).await;
     view(st).await
 }
@@ -108,14 +104,14 @@ pub(crate) async fn redact_try(st: &AppState, me: &User, b: RedactIn) -> Result<
 /// Varsayilana don: satir silinir.
 pub(crate) async fn reset(st: &AppState, me: &User, ip: Option<std::net::IpAddr>) -> Result<LlmView> {
     require(st, me).await?;
-    sqlx::query("delete from llm_config").execute(&st.pool).await?;
+    db::delete_config(&st.pool).await?;
     crate::audit::log_event(st, ip, "llm_config_reset", Some(me.id), Some(&me.email), None).await;
     view(st).await
 }
 
 // --- limitler --------------------------------------------------------------------
 
-#[derive(Serialize, sqlx::FromRow)]
+#[derive(Serialize)]
 pub struct LimitRow {
     id: Uuid,
     profile_id: Uuid,
@@ -128,15 +124,10 @@ pub struct LimitRow {
 }
 
 async fn limits_of(pool: &PgPool, profile: Option<Uuid>) -> Result<Vec<LimitRow>> {
-    Ok(sqlx::query_as(
-        "select l.id, l.profile_id, p.name as profile_name, l.window_minutes, l.usd, l.created_at,
-                (select coalesce(sum(c.cost_usd), 0) from llm_calls c
-                  where c.profile_id = l.profile_id
-                    and c.created_at > now() - make_interval(mins => l.window_minutes)) as spent
-           from llm_limits l join llm_profiles p on p.id = l.profile_id
-          where $1::uuid is null or l.profile_id = $1
-          order by p.name, l.window_minutes")
-        .bind(profile).fetch_all(pool).await?)
+    Ok(db::list_limits(pool, profile).await?.into_iter().map(|r| LimitRow {
+        id: r.id, profile_id: r.profile_id, profile_name: r.profile_name,
+        window_minutes: r.window_minutes, usd: r.usd, spent: r.spent, created_at: r.created_at,
+    }).collect())
 }
 
 /// Butun limitler (Genel'deki "en dolu limitler" karti).
@@ -164,19 +155,14 @@ pub(crate) async fn put_limit(st: &AppState, me: &User, ip: Option<std::net::IpA
     if !valid_limit(&b) {
         return Err(AppError::BadRequest("llm_limit_invalid"));
     }
-    sqlx::query(
-        "insert into llm_limits (profile_id, window_minutes, usd, created_by) values ($1, $2, $3, $4)
-         on conflict (profile_id, window_minutes) do update set usd = $3, created_by = $4, created_at = now()")
-        .bind(p.id).bind(b.window_minutes).bind(b.usd).bind(me.id).execute(&st.pool).await?;
+    db::upsert_limit(&st.pool, p.id, b.window_minutes, b.usd, me.id).await?;
     log(st, ip, me, "llm_limit_changed", &format!("{} {}dk ${}", p.name, b.window_minutes, b.usd)).await;
     profile_view(st, p).await
 }
 
 pub(crate) async fn delete_limit(st: &AppState, me: &User, ip: Option<std::net::IpAddr>, id: Uuid) -> Result<ProfileView> {
     require(st, me).await?;
-    let gone: Option<(Uuid, i32)> = sqlx::query_as(
-        "delete from llm_limits where id = $1 returning profile_id, window_minutes")
-        .bind(id).fetch_optional(&st.pool).await?;
+    let gone = db::delete_limit(&st.pool, id).await?;
     let (profile_id, window) = gone.ok_or(AppError::NotFound)?;
     let p = llm::profile(&st.pool, profile_id).await?.ok_or(AppError::NotFound)?;
     log(st, ip, me, "llm_limit_changed", &format!("{} {window}dk silindi", p.name)).await;
@@ -211,8 +197,7 @@ fn endpoint_on(st: &AppState, e: Endpoint) -> bool {
 }
 
 async fn profile_view(st: &AppState, p: ProfileRow) -> Result<ProfileView> {
-    let used_by = sqlx::query_scalar("select feature from llm_tasks where profile_id = $1 order by feature")
-        .bind(p.id).fetch_all(&st.pool).await?;
+    let used_by = db::list_profile_tasks(&st.pool, p.id).await?;
     let limits = limits_of(&st.pool, Some(p.id)).await?;
     let endpoint = p.endpoint();
     Ok(ProfileView {
@@ -227,10 +212,7 @@ async fn profile_or_404(pool: &PgPool, id: Uuid) -> Result<ProfileRow> {
 }
 
 async fn all_profiles(st: &AppState) -> Result<Vec<ProfileView>> {
-    let rows: Vec<ProfileRow> = sqlx::query_as(
-        "select id, name, endpoint, model, params, tested_at, created_at, updated_at, updated_by
-           from llm_profiles order by endpoint, created_at, name")
-        .fetch_all(&st.pool).await?;
+    let rows = db::list_profiles(&st.pool).await?;
     let mut out = Vec::with_capacity(rows.len());
     for p in rows {
         out.push(profile_view(st, p).await?);
@@ -260,9 +242,7 @@ pub struct NewProfileIn {
 }
 
 async fn name_taken(pool: &PgPool, name: &str, except: Option<Uuid>) -> Result<bool> {
-    Ok(sqlx::query_scalar(
-        "select exists (select 1 from llm_profiles where lower(name) = lower($1) and ($2::uuid is null or id <> $2))")
-        .bind(name).bind(except).fetch_one(pool).await?)
+    Ok(db::check_profile_name(pool, name, except).await?)
 }
 
 fn check_fields(name: &str, model: &str, endpoint: Endpoint, params: &Params) -> Result<()> {
@@ -285,9 +265,7 @@ pub(crate) async fn create_profile(st: &AppState, me: &User, ip: Option<std::net
         return Err(AppError::Conflict("llm_profile_name_taken"));
     }
     let params = serde_json::to_value(&b.params).map_err(|_| AppError::BadRequest("invalid_body"))?;
-    let id: Uuid = sqlx::query_scalar(
-        "insert into llm_profiles (name, endpoint, model, params, updated_by) values ($1, $2, $3, $4, $5) returning id")
-        .bind(name).bind(b.endpoint.key()).bind(model).bind(params).bind(me.id).fetch_one(&st.pool).await?;
+    let id = db::insert_profile(&st.pool, name, b.endpoint.key(), model, params, me.id).await?;
     log(st, ip, me, "llm_profile_changed", &format!("{name} oluşturuldu: {model}")).await;
     let p = llm::profile(&st.pool, id).await?.ok_or(AppError::NotFound)?;
     profile_view(st, p).await
@@ -323,10 +301,7 @@ pub(crate) async fn put_profile(st: &AppState, me: &User, ip: Option<std::net::I
         None
     };
     let params = serde_json::to_value(&b.params).map_err(|_| AppError::BadRequest("invalid_body"))?;
-    sqlx::query(
-        "update llm_profiles set name = $2, model = $3, params = $4, tested_at = $5, updated_by = $6, updated_at = now()
-          where id = $1")
-        .bind(p.id).bind(name).bind(model).bind(params).bind(tested_at).bind(me.id).execute(&st.pool).await?;
+    db::update_profile(&st.pool, p.id, name, model, params, tested_at, me.id).await?;
     log(st, ip, me, "llm_profile_changed", &format!("{name}: {model}")).await;
     let p = llm::profile(&st.pool, p.id).await?.ok_or(AppError::NotFound)?;
     profile_view(st, p).await
@@ -336,12 +311,11 @@ pub(crate) async fn put_profile(st: &AppState, me: &User, ip: Option<std::net::I
 pub(crate) async fn delete_profile(st: &AppState, me: &User, ip: Option<std::net::IpAddr>, id: Uuid) -> Result<Vec<ProfileView>> {
     require(st, me).await?;
     let p = profile_or_404(&st.pool, id).await?;
-    let used: bool = sqlx::query_scalar("select exists (select 1 from llm_tasks where profile_id = $1)")
-        .bind(p.id).fetch_one(&st.pool).await?;
+    let used = db::check_profile_usage(&st.pool, p.id).await?;
     if used {
         return Err(AppError::Conflict("llm_profile_in_use"));
     }
-    sqlx::query("delete from llm_profiles where id = $1").bind(p.id).execute(&st.pool).await?;
+    db::delete_profile(&st.pool, p.id).await?;
     log(st, ip, me, "llm_profile_changed", &format!("{} silindi", p.name)).await;
     all_profiles(st).await
 }
@@ -451,13 +425,7 @@ pub(crate) async fn put_task(st: &AppState, me: &User, ip: Option<std::net::IpAd
     {
         return Err(AppError::BadRequest("llm_profile_untested"));
     }
-    sqlx::query(
-        "insert into llm_tasks (feature, profile_id, batch, enabled, store_bodies, updated_by)
-         values ($1, $2, $3, $4, $5, $6)
-         on conflict (feature) do update set profile_id = $2, batch = $3, enabled = $4, store_bodies = $5,
-           updated_by = $6, updated_at = now()")
-        .bind(c.feature).bind(p.id).bind(b.batch).bind(b.enabled).bind(b.store_bodies).bind(me.id)
-        .execute(&st.pool).await?;
+    db::upsert_task(&st.pool, c.feature, p.id, b.batch, b.enabled, b.store_bodies, me.id).await?;
     log(st, ip, me, "llm_task_changed", &format!("{} → {}", c.feature, p.name)).await;
     if b.store_bodies != current.as_ref().is_some_and(|t| t.store_bodies) {
         let ev = if b.store_bodies { "llm_bodies_on" } else { "llm_bodies_off" };
@@ -541,7 +509,7 @@ pub(crate) async fn try_it(st: &AppState, me: &User, b: TryIn) -> Result<Value> 
 
 // --- istemler --------------------------------------------------------------------
 
-#[derive(Serialize, sqlx::FromRow)]
+#[derive(Serialize)]
 struct PromptRow {
     version: i32,
     body: String,
@@ -562,8 +530,7 @@ pub struct PromptsView {
 const PROMPT_MAX: usize = 8000;
 
 async fn prompt_body(pool: &PgPool, feature: &str, version: i32) -> Result<String> {
-    sqlx::query_scalar("select body from llm_prompts where feature = $1 and version = $2")
-        .bind(feature).bind(version).fetch_optional(pool).await?
+    db::find_prompt_body(pool, feature, version).await?
         .ok_or(AppError::BadRequest("llm_prompt_invalid"))
 }
 
@@ -573,9 +540,9 @@ fn prompt_contract(raw: &str) -> Result<(&'static Contract, &'static str)> {
 }
 
 async fn prompts(st: &AppState, c: &'static Contract, code_default: &'static str) -> Result<PromptsView> {
-    let versions = sqlx::query_as(
-        "select version, body, created_by, created_at from llm_prompts where feature = $1 order by version desc")
-        .bind(c.feature).fetch_all(&st.pool).await?;
+    let versions = db::list_prompts(&st.pool, c.feature).await?.into_iter().map(|r| PromptRow {
+        version: r.version, body: r.body, created_by: r.created_by, created_at: r.created_at,
+    }).collect();
     let active = llm::settings(st, c).await.prompt_version;
     Ok(PromptsView { feature: c.feature, active, code_default, versions })
 }
@@ -600,10 +567,7 @@ pub(crate) async fn add_prompt(st: &AppState, me: &User, raw: &str, b: PromptIn)
     if body.is_empty() || body.chars().count() > PROMPT_MAX {
         return Err(AppError::BadRequest("llm_prompt_invalid"));
     }
-    sqlx::query(
-        "insert into llm_prompts (feature, version, body, created_by)
-         select $1, coalesce(max(version), 0) + 1, $2, $3 from llm_prompts where feature = $1")
-        .bind(c.feature).bind(body).bind(me.id).execute(&st.pool).await?;
+    db::insert_prompt(&st.pool, c.feature, body, me.id).await?;
     prompts(st, c, code).await
 }
 
@@ -628,8 +592,7 @@ pub(crate) async fn activate_prompt(st: &AppState, me: &User, ip: Option<std::ne
     {
         return Err(AppError::BadRequest("llm_prompt_untested"));
     }
-    sqlx::query("update llm_tasks set prompt_version = nullif($2, 0), updated_by = $3, updated_at = now() where feature = $1")
-        .bind(c.feature).bind(b.version).bind(me.id).execute(&st.pool).await?;
+    db::set_prompt_version(&st.pool, c.feature, b.version, me.id).await?;
     log(st, ip, me, "llm_prompt_changed", &format!("{} v{}", c.feature, b.version)).await;
     prompts(st, c, code).await
 }
