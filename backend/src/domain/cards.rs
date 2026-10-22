@@ -22,8 +22,7 @@ use serde_json::{json, Map, Value};
 use uuid::Uuid;
 
 use crate::{
-    api::attachments::{self as att, AttachView},
-    domain::{common, records::{self, Detail}},
+    domain::{attachments::{self as att, AttachView}, common, records::{self, Detail}},
     error::{AppError, Result},
     models::{enums::SignupAnswer, record::Record, user::User},
     state::AppState,
