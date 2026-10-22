@@ -15,14 +15,13 @@
 
 use std::collections::HashMap;
 
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::{
     domain::{common, records},
-    db::scope,
+    db::{attachments::{self as db, Blob}, scope},
     error::{AppError, Result},
     media::{self, MediaError},
     mentions,
@@ -54,34 +53,15 @@ pub(crate) struct AttachView {
     tags: Vec<TagOut>,
 }
 
-#[derive(sqlx::FromRow)]
-struct Row {
-    id: Uuid,
-    mime: String,
-    kind: String,
-    byte_size: i64,
-    width: Option<i32>,
-    height: Option<i32>,
-    original_name: Option<String>,
-    uploader_id: Option<Uuid>,
-    deleted_at: Option<DateTime<Utc>>,
-}
-
 /// Ek gorunumleri, TEK sorgu + TEK etiket sorgusu (N+1 yok). `can_tag`
 /// cagirandan: ayni sohbetteki/kayittaki eklerin hepsinde katilim ayni.
 pub(crate) async fn views(p: &PgPool, me: &User, ids: &[Uuid], can_tag: bool) -> Result<HashMap<Uuid, AttachView>> {
     if ids.is_empty() {
         return Ok(HashMap::new());
     }
-    let rows: Vec<Row> = sqlx::query_as(
-        "select id, mime, kind, byte_size, width, height, original_name, uploader_id, deleted_at
-           from attachments where id = any($1)")
-        .bind(ids).fetch_all(p).await?;
+    let rows = db::list_attachments(p, ids).await?;
     let mut tags: HashMap<Uuid, Vec<TagOut>> = HashMap::new();
-    let tag_rows: Vec<(Uuid, Uuid, String)> = sqlx::query_as(
-        "select at.attachment_id, t.id, t.name from attachment_tags at
-           join tags t on t.id = at.tag_id where at.attachment_id = any($1) order by t.name")
-        .bind(ids).fetch_all(p).await?;
+    let tag_rows = db::list_attachment_tags(p, ids).await?;
     for (a, id, name) in tag_rows {
         tags.entry(a).or_default().push(TagOut { id, name });
     }
@@ -110,9 +90,7 @@ pub(crate) async fn can_tag(st: &AppState, me: &User, record: Option<&Record>, t
         return Ok(scope::can_edit_record(&st.pool, me, rec, &st.tree).await?);
     }
     if let Some(t) = team {
-        let m: Option<i32> = sqlx::query_scalar(
-            "select 1 from team_members where team_id = $1 and user_id = $2")
-            .bind(t).bind(me.id).fetch_optional(&st.pool).await?;
+        let m = db::find_member(&st.pool, t, me.id).await?;
         return Ok(m.is_some());
     }
     Ok(false)
@@ -120,17 +98,7 @@ pub(crate) async fn can_tag(st: &AppState, me: &User, record: Option<&Record>, t
 
 /// Ekin yeri: hangi kaydin (mesaj ya da kart uzerinden) ya da takimin.
 async fn place(st: &AppState, id: Uuid) -> Result<(Option<Record>, Option<Uuid>)> {
-    let (record, team): (Option<Uuid>, Option<Uuid>) = sqlx::query_as(
-        "select coalesce(rm.id, c.record_id), t.id
-           from attachments a
-           left join message_attachments ma on ma.attachment_id = a.id
-           left join messages m on m.id = ma.message_id
-           left join records rm on rm.chat_id = m.chat_id
-           left join teams t on t.chat_id = m.chat_id
-           left join card_attachments ca on ca.attachment_id = a.id
-           left join cards c on c.id = ca.card_id
-          where a.id = $1 limit 1")
-        .bind(id).fetch_optional(&st.pool).await?.ok_or(AppError::NotFound)?;
+    let (record, team) = db::find_place(&st.pool, id).await?.ok_or(AppError::NotFound)?;
     let rec = match record {
         Some(r) => Record::fetch(&st.pool, r).await?,
         None => None,
@@ -192,15 +160,9 @@ pub(crate) async fn upload(st: &AppState, me: &User, q: UploadQuery, bytes: Vec<
         Ok::<(), MediaError>(())
     }).await.map_err(|_| AppError::Conflict("storage_offline"))?.map_err(media_err)?;
 
-    let id: Uuid = sqlx::query_scalar(
-        "insert into attachments (volume_id, uploader_id, mime, kind, purpose, byte_size, checksum,
-                                  width, height, original_name, storage_key, thumb_key)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) returning id")
-        .bind(volume.id).bind(me.id).bind(processed.format.mime()).bind(processed.format.kind().key())
-        .bind(purpose.key()).bind(size).bind(checksum)
-        .bind(processed.width.map(|w| w as i32)).bind(processed.height.map(|h| h as i32)).bind(name)
-        .bind(&key).bind(&thumb_key)
-        .fetch_one(&st.pool).await?;
+    let id = db::insert_attachment(&st.pool, volume.id, me.id, processed.format.mime(), processed.format.kind().key(),
+        purpose.key(), size, checksum, processed.width.map(|w| w as i32), processed.height.map(|h| h as i32),
+        name, &key, &thumb_key).await?;
     // Yeni ek henuz hicbir yere bagli degil: etiket baglaninca acilir.
     views(&st.pool, me, &[id], false).await?.remove(&id).ok_or(AppError::NotFound)
 }
@@ -215,18 +177,6 @@ fn media_err(e: MediaError) -> AppError {
 
 // --- sun -------------------------------------------------------------------
 
-#[derive(sqlx::FromRow)]
-struct Blob {
-    uploader_id: Option<Uuid>,
-    mime: String,
-    kind: String,
-    original_name: Option<String>,
-    storage_key: String,
-    thumb_key: Option<String>,
-    mount_path: String,
-    media_prefix: String,
-}
-
 pub(crate) struct ServedAttachment {
     pub(crate) bytes: Vec<u8>,
     pub(crate) content_type: String,
@@ -236,12 +186,7 @@ pub(crate) struct ServedAttachment {
 
 /// Silinmemis ekin blob bilgisi; silinmis ya da yok -> 404.
 async fn blob(st: &AppState, id: Uuid) -> Result<Blob> {
-    sqlx::query_as(
-        "select a.uploader_id, a.mime, a.kind, a.original_name, a.storage_key, a.thumb_key,
-                v.mount_path, v.media_prefix
-           from attachments a join storage_volumes v on v.id = a.volume_id
-          where a.id = $1 and a.deleted_at is null")
-        .bind(id).fetch_optional(&st.pool).await?.ok_or(AppError::NotFound)
+    db::find_blob(&st.pool, id).await?.ok_or(AppError::NotFound)
 }
 
 /// Gizli kayda (sohbet ya da kart) bagli ek yalniz uyeye (spec/75 A5). Bagsiz
@@ -251,10 +196,7 @@ pub(crate) async fn serve(st: &AppState, me: &User, id: Uuid, thumb: bool) -> Re
     let b = blob(st, id).await?;
     if let (Some(rec), _) = place(st, id).await? {
         if records::is_restricted(st, me, &rec).await? {
-            let face: bool = sqlx::query_scalar(
-                "select exists(select 1 from users where avatar_id = $1)
-                     or exists(select 1 from teams where banner_id = $1)")
-                .bind(id).fetch_one(&st.pool).await?;
+            let face = db::is_face(&st.pool, id).await?;
             if !face {
                 return Err(AppError::Forbidden);
             }
@@ -313,15 +255,11 @@ pub(crate) async fn delete(st: &AppState, me: &User, id: Uuid) -> Result<()> {
         return Err(AppError::Forbidden);
     }
     // Fatura ve kasa belgesi yasal saklama: silinmez (spec/83 D7).
-    let locked: bool = sqlx::query_scalar(
-        "select exists(select 1 from invoice_attachments where attachment_id = $1)
-             or exists(select 1 from ledger_attachments where attachment_id = $1)")
-        .bind(id).fetch_one(&st.pool).await?;
+    let locked = db::is_locked(&st.pool, id).await?;
     if locked {
         return Err(AppError::Conflict("attachment_locked"));
     }
-    sqlx::query("update attachments set deleted_at = now(), deleted_by = $2 where id = $1")
-        .bind(id).bind(me.id).execute(&st.pool).await?;
+    db::mark_deleted(&st.pool, id, me.id).await?;
     let root = std::path::Path::new(&b.mount_path).join(&b.media_prefix);
     media::remove(&root, Some(&b.storage_key));
     media::remove(&root, b.thumb_key.as_deref());
@@ -331,8 +269,7 @@ pub(crate) async fn delete(st: &AppState, me: &User, id: Uuid) -> Result<()> {
 // --- etiketler (R3-F13) -----------------------------------------------------
 
 pub(crate) async fn tags(st: &AppState) -> Result<Vec<TagOut>> {
-    Ok(sqlx::query_as::<_, (Uuid, String)>("select id, name from tags order by name")
-        .fetch_all(&st.pool).await?.into_iter().map(|(id, name)| TagOut { id, name }).collect())
+    Ok(db::list_tags(&st.pool).await?.into_iter().map(|(id, name)| TagOut { id, name }).collect())
 }
 
 #[derive(Deserialize)]
@@ -350,22 +287,15 @@ pub(crate) async fn add_tag(st: &AppState, me: &User, id: Uuid, b: TagIn) -> Res
     }
     let name = common::text(Some(b.name), 60, "invalid_name")?.ok_or(AppError::BadRequest("invalid_name"))?;
     let slug = Some(mentions::handle(&name)).filter(|s| !s.is_empty()).unwrap_or_else(|| "etiket".into());
-    let existing: Option<Uuid> = sqlx::query_scalar("select id from tags where slug = $1")
-        .bind(&slug).fetch_optional(&st.pool).await?;
+    let existing = db::find_tag(&st.pool, &slug).await?;
     let tag = match existing {
         Some(t) => t,
         None if me.is_admin || common::has_scope(st, me, "create_tags").await? => {
-            sqlx::query_scalar(
-                "insert into tags (name, slug, created_by) values ($1, $2, $3)
-                 on conflict (slug) do update set slug = excluded.slug returning id")
-                .bind(&name).bind(&slug).bind(me.id).fetch_one(&st.pool).await?
+            db::upsert_tag(&st.pool, &name, &slug, me.id).await?
         }
         None => return Err(AppError::Forbidden),
     };
-    sqlx::query(
-        "insert into attachment_tags (attachment_id, tag_id, added_by) values ($1, $2, $3)
-         on conflict do nothing")
-        .bind(id).bind(tag).bind(me.id).execute(&st.pool).await?;
+    db::insert_tag_link(&st.pool, id, tag, me.id).await?;
     one(st, me, id).await
 }
 
@@ -373,8 +303,7 @@ pub(crate) async fn remove_tag(st: &AppState, me: &User, id: Uuid, tag: Uuid) ->
     if !one(st, me, id).await?.can_tag {
         return Err(AppError::Forbidden);
     }
-    sqlx::query("delete from attachment_tags where attachment_id = $1 and tag_id = $2")
-        .bind(id).bind(tag).execute(&st.pool).await?;
+    db::delete_tag_link(&st.pool, id, tag).await?;
     one(st, me, id).await
 }
 
@@ -395,10 +324,6 @@ pub(crate) async fn claimable_for<'e, E: sqlx::PgExecutor<'e>>(
     if ids.is_empty() {
         return Ok(());
     }
-    let n: i64 = sqlx::query_scalar(concat!(
-        "select count(*) from attachments a
-          where a.id = any($1) and a.uploader_id = $2 and a.deleted_at is null
-            and a.purpose = $3 and ", media::unowned!()))
-        .bind(&*ids).bind(me).bind(purpose.key()).fetch_one(p).await?;
+    let n = db::count_claimable(p, ids, me, purpose.key()).await?;
     if n as usize == ids.len() { Ok(()) } else { Err(AppError::BadRequest("invalid_attachment")) }
 }
