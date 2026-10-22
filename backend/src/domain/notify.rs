@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
+    db::notify as db,
     error::{AppError, Result},
     mentions,
     models::enums::NotifyLevel,
@@ -24,7 +25,7 @@ use crate::{
 
 /// Beni ilgilendiren sohbetlerdeki son hareketler, benimkiler haric; tercihime
 /// gore suzulmus. Son 60 satir.
-#[derive(Serialize, sqlx::FromRow)]
+#[derive(Serialize)]
 pub(crate) struct Notice {
     kind: String,
     id: Uuid,
@@ -38,7 +39,6 @@ pub(crate) struct Notice {
     record_id: Option<Uuid>,
     team_id: Option<Uuid>,
     title: String,
-    #[sqlx(skip)]
     unread: bool,
 }
 
@@ -58,12 +58,8 @@ pub(crate) struct Prefs {
 }
 
 async fn load_prefs(st: &AppState, me: Uuid) -> Result<Prefs> {
-    let (level, quiet_start, quiet_end): (NotifyLevel, Option<i16>, Option<i16>) = sqlx::query_as(
-        "select notify_level, quiet_start, quiet_end from users where id = $1")
-        .bind(me).fetch_one(&st.pool).await?;
-    let rows: Vec<(Uuid, NotifyLevel)> = sqlx::query_as(
-        "select chat_id, mode from chat_prefs where user_id = $1")
-        .bind(me).fetch_all(&st.pool).await?;
+    let (level, quiet_start, quiet_end) = db::get_preferences(&st.pool, me).await?;
+    let rows = db::list_chat_preferences(&st.pool, me).await?;
     Ok(Prefs { level, quiet_start, quiet_end, chats: rows.into_iter().collect() })
 }
 
@@ -75,41 +71,24 @@ fn mentions_me(body: Option<&str>, my_handle: &str) -> bool {
 
 pub(crate) async fn list(st: &AppState, me: &User) -> Result<NoticeList> {
     let prefs = load_prefs(st, me.id).await?;
-    let seen: DateTime<Utc> = sqlx::query_scalar("select notifications_seen_at from users where id = $1")
-        .bind(me.id).fetch_one(&st.pool).await?;
+    let seen = db::get_seen_at(&st.pool, me.id).await?;
     // Suzme Rust'ta: fazladan cekilir (4x), sonra kirpilir.
-    let rows: Vec<Notice> = sqlx::query_as(
-        "with mine as (
-           select r.chat_id, r.id as record_id, null::uuid as team_id, r.title
-             from records r
-            where r.owner_id = $1 or r.created_by = $1
-               or exists(select 1 from record_participants p
-                          where p.record_id = r.id and p.user_id = $1)
-               or exists(select 1 from actions a join action_assignees x on x.action_id = a.id
-                          where a.record_id = r.id and x.user_id = $1)
-               or r.team_id in (select team_id from team_members where user_id = $1)
-           union all
-           select t.chat_id, null, t.id, t.name
-             from teams t join team_members m on m.team_id = t.id and m.user_id = $1
-         )
-         select f.kind, f.id, f.created_at, f.chat_id, f.actor_id, f.verb, f.subject_label,
-                f.target_label, f.body, mine.record_id, mine.team_id, mine.title
-           from chat_feed f join mine on mine.chat_id = f.chat_id
-          where f.actor_id is distinct from $1
-          order by f.created_at desc limit 240")
-        .bind(me.id).fetch_all(&st.pool).await?;
+    let rows = db::list_notices(&st.pool, me.id).await?;
     let handle = mentions::handle(&me.name);
     let items: Vec<Notice> = rows.into_iter().filter(|n| {
         let mentioned = n.kind == "message" && mentions_me(n.body.as_deref(), &handle);
         push::decide(prefs.level, prefs.chats.get(&n.chat_id).copied(), mentioned, None, 0).in_app
-    }).take(60).map(|mut n| { n.unread = n.created_at > seen; n }).collect();
+    }).take(60).map(|n| Notice {
+        unread: n.created_at > seen, kind: n.kind, id: n.id, created_at: n.created_at, chat_id: n.chat_id,
+        actor_id: n.actor_id, verb: n.verb, subject_label: n.subject_label, target_label: n.target_label,
+        body: n.body, record_id: n.record_id, team_id: n.team_id, title: n.title,
+    }).collect();
     let unread = items.iter().filter(|n| n.unread).count();
     Ok(NoticeList { items, unread })
 }
 
 pub(crate) async fn seen(st: &AppState, me: &User) -> Result<()> {
-    sqlx::query("update users set notifications_seen_at = now() where id = $1")
-        .bind(me.id).execute(&st.pool).await?;
+    db::mark_seen(&st.pool, me.id).await?;
     Ok(())
 }
 
@@ -135,9 +114,7 @@ pub(crate) async fn patch_prefs(st: &AppState, me: &User, p: PrefsPatch) -> Resu
     if start.is_some() != end.is_some() || !hour_ok(start) || !hour_ok(end) {
         return Err(AppError::BadRequest("invalid_quiet_hours"));
     }
-    sqlx::query("update users set notify_level = $2, quiet_start = $3, quiet_end = $4 where id = $1")
-        .bind(me.id).bind(p.level.unwrap_or(old.level)).bind(start).bind(end)
-        .execute(&st.pool).await?;
+    db::update_preferences(&st.pool, me.id, p.level.unwrap_or(old.level), start, end).await?;
     load_prefs(st, me.id).await
 }
 
@@ -148,21 +125,16 @@ pub(crate) struct ChatPref {
 }
 
 pub(crate) async fn set_chat(st: &AppState, me: &User, chat: Uuid, b: ChatPref) -> Result<Prefs> {
-    let exists: Option<i32> = sqlx::query_scalar("select 1 from chats where id = $1")
-        .bind(chat).fetch_optional(&st.pool).await?;
+    let exists = db::find_chat(&st.pool, chat).await?;
     if exists.is_none() {
         return Err(AppError::NotFound);
     }
     match b.mode {
         Some(mode) => {
-            sqlx::query(
-                "insert into chat_prefs (user_id, chat_id, mode) values ($1, $2, $3)
-                 on conflict (user_id, chat_id) do update set mode = excluded.mode")
-                .bind(me.id).bind(chat).bind(mode).execute(&st.pool).await?;
+            db::upsert_chat_preference(&st.pool, me.id, chat, mode).await?;
         }
         None => {
-            sqlx::query("delete from chat_prefs where user_id = $1 and chat_id = $2")
-                .bind(me.id).bind(chat).execute(&st.pool).await?;
+            db::delete_chat_preference(&st.pool, me.id, chat).await?;
         }
     }
     load_prefs(st, me.id).await
@@ -183,11 +155,7 @@ pub(crate) async fn subscribe(st: &AppState, me: &User, b: Subscription) -> Resu
         return Err(AppError::BadRequest("invalid_subscription"));
     }
     // Ayni tarayici baska hesapla girdiyse abonelik ona gecer.
-    sqlx::query(
-        "insert into push_subscriptions (user_id, endpoint, p256dh, auth) values ($1, $2, $3, $4)
-         on conflict (endpoint) do update
-           set user_id = excluded.user_id, p256dh = excluded.p256dh, auth = excluded.auth")
-        .bind(me.id).bind(&b.endpoint).bind(&b.p256dh).bind(&b.auth).execute(&st.pool).await?;
+    db::upsert_subscription(&st.pool, me.id, &b.endpoint, &b.p256dh, &b.auth).await?;
     Ok(())
 }
 
@@ -197,8 +165,7 @@ pub(crate) struct Unsubscribe {
 }
 
 pub(crate) async fn unsubscribe(st: &AppState, me: &User, b: Unsubscribe) -> Result<()> {
-    sqlx::query("delete from push_subscriptions where user_id = $1 and endpoint = $2")
-        .bind(me.id).bind(&b.endpoint).execute(&st.pool).await?;
+    db::delete_user_subscription(&st.pool, me.id, &b.endpoint).await?;
     Ok(())
 }
 
@@ -228,34 +195,20 @@ async fn fanout_inner(st: &AppState, chat: Uuid, author: Uuid, body: &str) -> Re
     let Some(vapid) = st.vapid.as_ref() else { return Ok(()) };
     let push_channel = Channel::Push(vapid.clone());
     // Sohbetin sahibi ve izleyicileri: kayit ya da takim duvari.
-    let rec: Option<(Uuid, String, Vec<Uuid>)> = sqlx::query_as(
-        "select r.id, r.title, array(
-                  select r.owner_id where r.owner_id is not null
-                  union select r.created_by
-                  union select user_id from record_participants where record_id = r.id
-                  union select x.user_id from actions a join action_assignees x on x.action_id = a.id
-                         where a.record_id = r.id
-                  union select user_id from team_members where team_id = r.team_id)
-           from records r where r.chat_id = $1")
-        .bind(chat).fetch_optional(&st.pool).await?;
+    let rec = db::find_record_audience(&st.pool, chat).await?;
     let (url, title, audience) = match rec {
         Some((id, title, aud)) => (format!("/record/{id}"), title, aud),
         None => {
-            let team: Option<(Uuid, String, Vec<Uuid>)> = sqlx::query_as(
-                "select t.id, t.name, array(select user_id from team_members where team_id = t.id)
-                   from teams t where t.chat_id = $1")
-                .bind(chat).fetch_optional(&st.pool).await?;
+            let team = db::find_team_audience(&st.pool, chat).await?;
             let Some((id, name, aud)) = team else { return Ok(()) };
             (format!("/team/{id}"), name, aud)
         }
     };
-    let author_name: String = sqlx::query_scalar("select name from users where id = $1")
-        .bind(author).fetch_one(&st.pool).await?;
+    let author_name = db::get_user_name(&st.pool, author).await?;
     let hour = Utc::now().hour() as i16;
     for uid in audience.into_iter().filter(|u| *u != author) {
         let prefs = load_prefs(st, uid).await?;
-        let name: Option<String> = sqlx::query_scalar("select name from users where id = $1 and is_active")
-            .bind(uid).fetch_optional(&st.pool).await?;
+        let name = db::find_active_user_name(&st.pool, uid).await?;
         let Some(name) = name else { continue };
         let mentioned = mentions_me(Some(body), &mentions::handle(&name));
         let quiet = prefs.quiet_start.zip(prefs.quiet_end);
@@ -264,24 +217,19 @@ async fn fanout_inner(st: &AppState, chat: Uuid, author: Uuid, body: &str) -> Re
         }
         let text = if mentioned { format!("{author_name} seni andı") } else { format!("{author_name} yeni mesaj yazdı") };
         let msg = Message { title: title.clone(), body: text, url: url.clone(), tag: chat.to_string() };
-        let subs: Vec<(Uuid, String, String, String)> = sqlx::query_as(
-            "select id, endpoint, p256dh, auth from push_subscriptions where user_id = $1")
-            .bind(uid).fetch_all(&st.pool).await?;
-        for (id, endpoint, p256dh, auth) in subs {
+        let subs = db::list_subscriptions(&st.pool, uid).await?;
+        for db::SubscriptionRow { id, endpoint, p256dh, auth } in subs {
             match push_channel.deliver(&Address::Push { endpoint: &endpoint, p256dh: &p256dh, auth: &auth }, &msg).await {
                 Outcome::Sent => {
-                    sqlx::query("update push_subscriptions set last_ok_at = now(), fail_count = 0 where id = $1")
-                        .bind(id).execute(&st.pool).await?;
+                    db::mark_subscription_ok(&st.pool, id).await?;
                 }
                 // Olu abonelik: sil, yoksa sunucu olu adreslere gondermeye devam eder.
                 Outcome::Gone => {
-                    sqlx::query("delete from push_subscriptions where id = $1").bind(id).execute(&st.pool).await?;
+                    db::delete_subscription(&st.pool, id).await?;
                 }
                 Outcome::Retry | Outcome::Rejected => {
-                    sqlx::query("update push_subscriptions set fail_count = fail_count + 1 where id = $1")
-                        .bind(id).execute(&st.pool).await?;
-                    sqlx::query("delete from push_subscriptions where id = $1 and fail_count >= 5")
-                        .bind(id).execute(&st.pool).await?;
+                    db::increment_subscription_failures(&st.pool, id).await?;
+                    db::delete_failed_subscription(&st.pool, id).await?;
                 }
             }
         }

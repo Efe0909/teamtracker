@@ -106,8 +106,7 @@ fn locked(n: &crate::db::tree::Node) -> Option<&'static str> {
 async fn view(st: &AppState, access: &NodeAccess) -> Result<TreeView> {
     let deps = deps::deps_by_node(&st.pool).await?;
     let descriptions: HashMap<Uuid, String> =
-        sqlx::query_as("select id, description from nodes where description is not null")
-            .fetch_all(&st.pool).await?.into_iter().collect();
+        deps::list_descriptions(&st.pool).await?.into_iter().collect();
 
     let tree = common::tree(st);
     // Alt agac toplamlari TEK gecis: Euler sirasinin tersinde cocuk her zaman
@@ -277,22 +276,12 @@ pub(crate) async fn create(st: &AppState, me: &User, b: NewNode) -> Result<TreeV
 
     let mut tx = st.pool.begin().await?;
     // Kardeslerin SONUNA: sira elle verilmiyor, ekleme sirasi korunuyor.
-    let id: Uuid = sqlx::query_scalar(
-        "insert into nodes (parent_id, name, node_type, description, created_by, shape, attrs, sort_order)
-         values ($1, $2, $3, $4, $5, $6, $7,
-                 coalesce((select max(sort_order) from nodes where parent_id = $1), -1) + 1)
-         returning id")
-        .bind(parent_id).bind(&name).bind(node_type).bind(&description).bind(me.id)
-        .bind(shape).bind(&attrs)
-        .fetch_one(&mut *tx).await.map_err(shape_error)?;
+    let id = deps::insert_node(&mut *tx, parent_id, &name, node_type, &description, me.id, shape, &attrs)
+        .await.map_err(shape_error)?;
     // Yeni etkinlik turu: slotlari ayni islemde (spec/74 §5).
     if node_type == NodeType::Choice {
         for (i, (slot_name, slot)) in refdata::OPTION_SLOTS.iter().enumerate() {
-            sqlx::query(
-                "insert into nodes (parent_id, name, node_type, shape, attrs, created_by, sort_order)
-                 values ($1, $2, 'operational', 'list', $3, $4, $5)")
-                .bind(id).bind(*slot_name).bind(json!({ "slot": slot })).bind(me.id).bind(i as i32)
-                .execute(&mut *tx).await?;
+            deps::insert_slot(&mut *tx, id, slot_name, json!({ "slot": slot }), me.id, i as i32).await?;
         }
     }
     log(&mut tx, me.id, "node_created", &name, Some(&parent_name), json!({ "node_type": node_type })).await?;
@@ -355,8 +344,7 @@ pub(crate) async fn patch(st: &AppState, me: &User, id: Uuid, p: NodePatch) -> R
     let bypass_quality = common::has_scope(st, me, "bypass_text_quality").await?;
     let _write = st.structure.lock().await;
     let current_description: Option<String> =
-        sqlx::query_scalar("select description from nodes where id = $1")
-            .bind(id).fetch_optional(&st.pool).await?.flatten();
+        deps::find_description(&st.pool, id).await?.flatten();
 
     let (next, changes) = {
         let tree = common::tree(st);
@@ -474,13 +462,8 @@ pub(crate) async fn patch(st: &AppState, me: &User, id: Uuid, p: NodePatch) -> R
     }
 
     let mut tx = st.pool.begin().await?;
-    sqlx::query(
-        "update nodes set name = $2, node_type = $3, description = $4, parent_id = $5,
-                          is_active = $6, shape = $7, attrs = $8
-          where id = $1")
-        .bind(id).bind(&next.name).bind(next.node_type).bind(&next.description)
-        .bind(next.parent_id).bind(next.is_active).bind(next.shape).bind(&next.attrs)
-        .execute(&mut *tx).await.map_err(shape_error)?;
+    deps::update_node(&mut *tx, id, &next.name, next.node_type, &next.description,
+        next.parent_id, next.is_active, next.shape, &next.attrs).await.map_err(shape_error)?;
     for (field, from, to) in changes {
         log(&mut tx, me.id, "node_changed", &next.name, Some(field),
             json!({ "from": from, "to": to })).await?;
@@ -499,11 +482,7 @@ async fn log(
     tx: &mut Tx<'_>, actor: Uuid, verb: &str, subject: &str, target: Option<&str>, detail: Value,
 ) -> Result<()> {
     let detail = (!detail.is_null()).then(|| detail.to_string());
-    sqlx::query(
-        "insert into activity (chat_id, actor_id, verb, subject_label, target_label, detail)
-         values (null, $1, $2, $3, $4, $5)")
-        .bind(actor).bind(verb).bind(subject).bind(target).bind(detail)
-        .execute(&mut **tx).await?;
+    deps::insert_activity(&mut **tx, actor, verb, subject, target, detail).await?;
     Ok(())
 }
 
@@ -532,7 +511,7 @@ pub(crate) async fn delete(st: &AppState, me: &User, id: Uuid) -> Result<TreeVie
         (node.name.clone(), tree.subtree(id).len().saturating_sub(1))
     };
     let mut tx = st.pool.begin().await?;
-    sqlx::query("delete from nodes where id = $1").bind(id).execute(&mut *tx).await
+    deps::delete_node(&mut *tx, id).await
         .map_err(|e| match &e {
             sqlx::Error::Database(d) if d.is_foreign_key_violation() => AppError::Conflict("node_in_use"),
             _ => e.into(),
@@ -551,18 +530,15 @@ pub(crate) async fn favorite(st: &AppState, me: &User, id: Uuid) -> Result<Vec<U
     if common::tree(st).get(id).is_none() {
         return Err(AppError::NotFound);
     }
-    sqlx::query("insert into node_favorites (user_id, node_id) values ($1, $2) on conflict do nothing")
-        .bind(me.id).bind(id).execute(&st.pool).await?;
+    deps::insert_favorite(&st.pool, me.id, id).await?;
     favorites_of(st, me.id).await
 }
 
 pub(crate) async fn unfavorite(st: &AppState, me: &User, id: Uuid) -> Result<Vec<Uuid>> {
-    sqlx::query("delete from node_favorites where user_id = $1 and node_id = $2")
-        .bind(me.id).bind(id).execute(&st.pool).await?;
+    deps::delete_favorite(&st.pool, me.id, id).await?;
     favorites_of(st, me.id).await
 }
 
 async fn favorites_of(st: &AppState, user: Uuid) -> Result<Vec<Uuid>> {
-    Ok(sqlx::query_scalar("select node_id from node_favorites where user_id = $1 order by created_at")
-        .bind(user).fetch_all(&st.pool).await?)
+    Ok(deps::list_favorites(&st.pool, user).await?)
 }
