@@ -9,6 +9,28 @@ pub mod pool;
 pub mod scope;
 pub mod search;
 pub mod tree;
+pub mod admin;
+pub mod attachments;
+pub mod bank_accounts;
+pub mod budget;
+pub mod cards;
+pub mod chats;
+pub mod event_context;
+pub mod events;
+pub mod finance;
+pub mod home;
+pub mod llm;
+pub mod llm_usage;
+pub mod materials;
+pub mod notify;
+pub mod otf;
+pub mod profile;
+pub mod purchasing;
+pub mod quality;
+pub mod records;
+pub mod recurring;
+pub mod teams;
+pub mod templates;
 
 /// Gocler acilista kendiliginden kosar. Dosya adlari, ilk gercek
 /// kurulumdan sonra DONAR: yeniden adlandirilan goc uygulanmamis
