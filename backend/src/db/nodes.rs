@@ -13,6 +13,13 @@ use uuid::Uuid;
 use crate::models::enums::{NodeType, Shape};
 use serde_json::Value;
 
+pub(crate) async fn list_tree_nodes(ex: impl sqlx::PgExecutor<'_>) -> Result<Vec<crate::db::tree::NodeRow>, sqlx::Error> {
+    sqlx::query_as(
+        "select id, parent_id, name, node_type, sort_order, is_active, key, shape, attrs from nodes",
+    )
+    .fetch_all(ex).await
+}
+
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Deps {
     pub children: i64,
