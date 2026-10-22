@@ -1,0 +1,558 @@
+//! OTF widget'i: etkinlik talep formu (FORM.GN.05) verisi ve .docx'i.
+//!
+//! Etkinlikten gelen alanlar (ad, tarih, saat, yer, katilimci sayisi) formda
+//! TEKRAR TUTULMAZ: dosya uretilirken etkinlikten okunur. Formun kendine ait
+//! olanlari `event_otf`, isaretli kutular `event_otf_items`, sorumlular
+//! `event_otf_contacts` (telefon kisinin profilinden).
+//!
+//! Kulubun gonderim kurallari (duyuru): kulup adresinden, Word, dosya adi
+//! KULUPADI_25EKIM_OTF.docx, konu "KULUP ADI ETKINLIK TARIHI OTF", etkinlikten
+//! en gec 3 IS GUNU once. Dosya adi, konu ve son gun burada uretilir.
+
+use chrono::{Datelike, Duration, Local, NaiveDate, NaiveTime, Weekday};
+use serde::{Deserialize, Serialize};
+use sqlx::PgPool;
+use uuid::Uuid;
+
+use crate::{
+    api::common,
+    domain::events,
+    error::{AppError, Result},
+    models::enums::NodeType,
+    otf, refdata,
+    state::AppState,
+};
+
+const TEXT_MAX: usize = 4000;
+const SHORT_MAX: usize = 300;
+const MONTHS: [&str; 12] = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
+const MONTHS_UP: [&str; 12] = ["OCAK", "ŞUBAT", "MART", "NİSAN", "MAYIS", "HAZİRAN", "TEMMUZ", "AĞUSTOS", "EYLÜL", "EKİM", "KASIM", "ARALIK"];
+const WEEKDAYS: [&str; 7] = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"];
+/// Kulup duyurusu: OTF etkinlikten en gec bu kadar IS GUNU once iletilir.
+const DEADLINE_WORKDAYS: u32 = 3;
+
+#[derive(Serialize, Deserialize, sqlx::FromRow, Default)]
+pub struct Fields {
+    #[serde(default)]
+    purpose: Option<String>,
+    /// "HH:MM"
+    #[serde(default)]
+    end_time: Option<String>,
+    #[serde(default)]
+    advisor: Option<String>,
+    #[serde(default)]
+    age_group: Option<String>,
+    #[serde(default)]
+    outcomes: Option<String>,
+    #[serde(default)]
+    layout_notes: Option<String>,
+    #[serde(default)]
+    av_notes: Option<String>,
+    #[serde(default)]
+    tech_notes: Option<String>,
+    #[serde(default)]
+    host_notes: Option<String>,
+    #[serde(default)]
+    care_notes: Option<String>,
+    #[serde(default)]
+    other_notes: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, sqlx::FromRow)]
+pub struct Item {
+    item: String,
+    #[serde(default)]
+    quantity: Option<i32>,
+}
+
+#[derive(Serialize)]
+pub struct CatalogSection {
+    key: &'static str,
+    label: &'static str,
+    items: Vec<CatalogItem>,
+}
+
+#[derive(Serialize)]
+pub struct CatalogItem {
+    key: &'static str,
+    label: &'static str,
+}
+
+#[derive(Serialize)]
+pub struct View {
+    #[serde(flatten)]
+    fields: Fields,
+    items: Vec<Item>,
+    contacts: Vec<Uuid>,
+    /// Etkinlik Kazanimlari listesinden secilenler (`event_otf_outcomes`);
+    /// `outcomes` alani yalniz listede olmayan serbest metin.
+    outcome_ids: Vec<Uuid>,
+    /// Secilebilir kazanimlar, agac sirasinda: aktif olanlar + formda secili
+    /// olup sonradan pasiflesenler. `description` ayirt etmek icin.
+    outcome_options: Vec<OutcomeOption>,
+    /// Kutu katalogu: ekran bolum ve etiketleri buradan cizer (tek kaynak Rust).
+    catalog: Vec<CatalogSection>,
+    club_name: String,
+    file_name: String,
+    subject: String,
+    /// Etkinlikten 3 is gunu once; tarihsiz etkinlikte null.
+    deadline: Option<NaiveDate>,
+    /// Bugun son gunu gecti mi.
+    late: bool,
+    /// Otomatik doldurmanin kaynagi olacak form (en son kaydedilen, gozden
+    /// gecirilmis baska etkinligin formu); yoksa null.
+    autofill_source: Option<Source>,
+    /// Bu form kopyayla dolduysa: kaynak ve gozden gecirme durumu.
+    review: Option<Review>,
+}
+
+#[derive(Serialize)]
+pub struct OutcomeOption {
+    id: Uuid,
+    name: String,
+    description: Option<String>,
+    is_active: bool,
+}
+
+#[derive(Serialize, sqlx::FromRow)]
+pub struct Source {
+    event_id: Uuid,
+    title: String,
+    updated_at: chrono::DateTime<chrono::Utc>,
+}
+
+#[derive(Serialize, sqlx::FromRow)]
+pub struct Review {
+    /// Kaynak etkinlik silindiyse null.
+    copied_from: Option<Uuid>,
+    copied_title: Option<String>,
+    /// true iken Word indirilemez.
+    needs_review: bool,
+    /// Kopyadan sonra en az bir alan degisti mi ("gozden gecirdim" icin sart).
+    edited: bool,
+}
+
+async fn load_review(pool: &PgPool, id: Uuid) -> Result<Option<Review>> {
+    Ok(sqlx::query_as(
+        "select o.copied_from, e.title as copied_title, o.needs_review, o.edited
+           from event_otf o left join events e on e.id = o.copied_from
+          where o.event_id = $1 and (o.copied_from is not null or o.needs_review)")
+        .bind(id).fetch_optional(pool).await?)
+}
+
+/// En son kaydedilmis, gozden gecirilmis (kopya bekleyen degil) baska form.
+async fn source_of(pool: &PgPool, id: Uuid) -> Result<Option<Source>> {
+    Ok(sqlx::query_as(
+        "select o.event_id, e.title, o.updated_at
+           from event_otf o join events e on e.id = o.event_id
+          where o.event_id <> $1 and not o.needs_review
+          order by o.updated_at desc limit 1")
+        .bind(id).fetch_optional(pool).await?)
+}
+
+/// Formun icerigi (alanlar + kutular + sorumlular), karsilastirma icin.
+async fn snapshot(pool: &PgPool, id: Uuid) -> Result<serde_json::Value> {
+    let mut items = load_items(pool, id).await?;
+    items.sort_by(|a, b| a.item.cmp(&b.item));
+    let mut outcomes = load_outcome_ids(pool, id).await?;
+    outcomes.sort();
+    Ok(serde_json::json!([load_fields(pool, id).await?, items, load_contacts(pool, id).await?, outcomes]))
+}
+
+#[derive(sqlx::FromRow)]
+struct EventInfo {
+    title: String,
+    date: Option<NaiveDate>,
+    start_time: Option<String>,
+    place: Option<String>,
+    attendees: Option<i32>,
+}
+
+async fn event_info(pool: &PgPool, id: Uuid) -> Result<EventInfo> {
+    sqlx::query_as(
+        // Yer: listeden secildiyse dugum adi, yoksa metin (spec/74 §5b).
+        "select e.title, e.date, to_char(e.start_time, 'HH24:MI') as start_time,
+                coalesce(n.name, e.place) as place, e.attendees
+           from events e left join nodes n on n.id = e.location_id where e.id = $1")
+        .bind(id).fetch_optional(pool).await?.ok_or(AppError::NotFound)
+}
+
+async fn load_fields(pool: &PgPool, id: Uuid) -> Result<Fields> {
+    Ok(sqlx::query_as(
+        "select purpose, to_char(end_time, 'HH24:MI') as end_time, advisor, age_group, outcomes,
+                layout_notes, av_notes, tech_notes, host_notes, care_notes, other_notes
+           from event_otf where event_id = $1")
+        .bind(id).fetch_optional(pool).await?.unwrap_or_default())
+}
+
+async fn load_items(pool: &PgPool, id: Uuid) -> Result<Vec<Item>> {
+    Ok(sqlx::query_as("select item, quantity from event_otf_items where event_id = $1")
+        .bind(id).fetch_all(pool).await?)
+}
+
+async fn load_contacts(pool: &PgPool, id: Uuid) -> Result<Vec<Uuid>> {
+    Ok(sqlx::query_scalar("select user_id from event_otf_contacts where event_id = $1 order by position")
+        .bind(id).fetch_all(pool).await?)
+}
+
+/// Formdaki "KAZANIMLAR" alani: secilen kazanim adlari satir satir, ardindan
+/// listede olmayan serbest metin. DB'de ayri durur, birlesim yalniz Word'de.
+fn outcomes_text(picked: &[String], free: Option<&str>) -> String {
+    picked.iter().map(String::as_str).chain(free.filter(|s| !s.trim().is_empty()))
+        .collect::<Vec<_>>().join("\n")
+}
+
+/// Secili kazanim id'leri (sirasiz; sira icin `in_tree_order`).
+async fn load_outcome_ids(pool: &PgPool, id: Uuid) -> Result<Vec<Uuid>> {
+    Ok(sqlx::query_scalar("select outcome_id from event_otf_outcomes where event_id = $1")
+        .bind(id).fetch_all(pool).await?)
+}
+
+fn in_tree_order(st: &AppState, mut ids: Vec<Uuid>) -> Vec<Uuid> {
+    let tree = common::tree(st);
+    let rank: std::collections::HashMap<Uuid, usize> =
+        tree.order().iter().enumerate().map(|(i, id)| (*id, i)).collect();
+    ids.sort_by_key(|i| rank.get(i).copied().unwrap_or(usize::MAX));
+    ids
+}
+
+/// Secilebilir kazanimlar: aktif olanlar + formda secili kalan pasifler.
+async fn outcome_options(st: &AppState, selected: &[Uuid]) -> Result<Vec<OutcomeOption>> {
+    let ids: Vec<Uuid> = {
+        let tree = common::tree(st);
+        tree.order().iter().copied()
+            .filter(|i| tree.get(*i).is_some_and(|n| n.node_type == NodeType::Outcome
+                && (n.is_active || selected.contains(i)) && refdata::under(&tree, *i, refdata::EVENT_OUTCOMES)))
+            .collect()
+    };
+    let described: std::collections::HashMap<Uuid, Option<String>> =
+        sqlx::query_as("select id, description from nodes where id = any($1)")
+            .bind(&ids).fetch_all(&st.pool).await?.into_iter().collect();
+    let tree = common::tree(st);
+    Ok(ids.into_iter().filter_map(|i| tree.get(i).map(|n| OutcomeOption {
+        id: i, name: n.name.clone(), is_active: n.is_active,
+        description: described.get(&i).cloned().flatten(),
+    })).collect())
+}
+
+/// Her id Etkinlik Kazanimlari altinda bir `outcome` olmali; yeni secilen aktif
+/// olmali (formda zaten secili pasif kalabilir).
+fn check_outcomes(st: &AppState, ids: &[Uuid], current: &[Uuid]) -> Result<()> {
+    let tree = common::tree(st);
+    for id in ids {
+        let ok = tree.get(*id).is_some_and(|n| n.node_type == NodeType::Outcome
+            && (n.is_active || current.contains(id)) && refdata::under(&tree, *id, refdata::EVENT_OUTCOMES));
+        if !ok {
+            return Err(AppError::BadRequest("invalid_outcome"));
+        }
+    }
+    Ok(())
+}
+
+/// Etkinlikten N is gunu once (hafta sonlari sayilmaz; resmi tatil bilinmiyor).
+fn deadline(date: NaiveDate) -> NaiveDate {
+    let mut d = date;
+    let mut n = 0;
+    while n < DEADLINE_WORKDAYS {
+        d -= Duration::days(1);
+        if !matches!(d.weekday(), Weekday::Sat | Weekday::Sun) {
+            n += 1;
+        }
+    }
+    d
+}
+
+fn month(d: NaiveDate) -> usize {
+    d.month0() as usize
+}
+
+/// KULUPADI_25EKIM_OTF.docx
+fn file_name(code: &str, date: Option<NaiveDate>) -> String {
+    match date {
+        Some(d) => format!("{code}_{}{}_OTF.docx", d.day(), MONTHS_UP[month(d)]),
+        None => format!("{code}_TARIHSIZ_OTF.docx"),
+    }
+}
+
+fn view(
+    st: &AppState, ev: &EventInfo, fields: Fields, items: Vec<Item>, contacts: Vec<Uuid>,
+    autofill_source: Option<Source>, review: Option<Review>,
+) -> View {
+    let cfg = &st.cfg;
+    let deadline = ev.date.map(deadline);
+    View {
+        fields, items, contacts, autofill_source, review,
+        // Kazanimlar `reply`'de dolar (agac + aciklama sorgusu ister).
+        outcome_ids: Vec::new(), outcome_options: Vec::new(),
+        catalog: otf::SECTIONS.iter().map(|s| CatalogSection {
+            key: s.key, label: s.label,
+            items: s.items.iter().map(|(key, label)| CatalogItem { key, label }).collect(),
+        }).collect(),
+        club_name: cfg.club_name.clone(),
+        file_name: file_name(&cfg.club_code, ev.date),
+        subject: match ev.date {
+            Some(d) => format!("{} {} {} OTF", cfg.club_name, d.day(), MONTHS_UP[month(d)]),
+            None => format!("{} OTF", cfg.club_name),
+        },
+        late: deadline.is_some_and(|d| Local::now().date_naive() > d),
+        deadline,
+    }
+}
+
+pub(crate) async fn get(st: &AppState, me: &crate::models::user::User, id: Uuid) -> Result<View> {
+    events::require_visible(st, me, id).await?;
+    reply(st, id).await
+}
+
+async fn reply(st: &AppState, id: Uuid) -> Result<View> {
+    let ev = event_info(&st.pool, id).await?;
+    let selected = in_tree_order(st, load_outcome_ids(&st.pool, id).await?);
+    let options = outcome_options(st, &selected).await?;
+    let mut v = view(st, &ev, load_fields(&st.pool, id).await?, load_items(&st.pool, id).await?,
+        load_contacts(&st.pool, id).await?, source_of(&st.pool, id).await?, load_review(&st.pool, id).await?);
+    v.outcome_ids = selected;
+    v.outcome_options = options;
+    Ok(v)
+}
+
+#[derive(Deserialize)]
+pub struct Input {
+    #[serde(flatten)]
+    fields: Fields,
+    #[serde(default)]
+    items: Vec<Item>,
+    #[serde(default)]
+    contacts: Vec<Uuid>,
+    /// Etkinlik Kazanimlari'ndan secilenler (sira onemsiz; kayit agac sirasinda okunur).
+    #[serde(default)]
+    outcome_ids: Vec<Uuid>,
+    /// "Formu gozden gecirdim": kopyayla dolan formun kilidini acar. Kopyadan
+    /// sonra en az bir alan degismediyse 409 `otf_review_needs_edit`.
+    #[serde(default)]
+    reviewed: bool,
+}
+
+/// Otomatik doldur: etkinlikten GELMEYEN butun alanlar (alanlar, kutular,
+/// sorumlular) en son kaydedilmis baska formdan kopyalanir; form "gozden
+/// gecirilmeli" olur ve o sure Word indirilemez. Var olan form uzerine yazilir.
+pub(crate) async fn autofill(st: &AppState, me: &crate::models::user::User, id: Uuid) -> Result<View> {
+    events::editable(st, me, id).await?;
+    let src = source_of(&st.pool, id).await?.ok_or(AppError::Conflict("otf_no_source"))?.event_id;
+    let mut tx = st.pool.begin().await?;
+    sqlx::query(
+        "insert into event_otf (event_id, purpose, end_time, advisor, age_group, outcomes,
+                                layout_notes, av_notes, tech_notes, host_notes, care_notes, other_notes,
+                                copied_from, needs_review, edited)
+         select $1, purpose, end_time, advisor, age_group, outcomes,
+                layout_notes, av_notes, tech_notes, host_notes, care_notes, other_notes, $2, true, false
+           from event_otf where event_id = $2
+         on conflict (event_id) do update set
+           purpose = excluded.purpose, end_time = excluded.end_time, advisor = excluded.advisor,
+           age_group = excluded.age_group, outcomes = excluded.outcomes,
+           layout_notes = excluded.layout_notes, av_notes = excluded.av_notes,
+           tech_notes = excluded.tech_notes, host_notes = excluded.host_notes,
+           care_notes = excluded.care_notes, other_notes = excluded.other_notes,
+           copied_from = excluded.copied_from, needs_review = true, edited = false, updated_at = now()")
+        .bind(id).bind(src).execute(&mut *tx).await?;
+    sqlx::query("delete from event_otf_items where event_id = $1").bind(id).execute(&mut *tx).await?;
+    sqlx::query("insert into event_otf_items (event_id, item, quantity)
+                 select $1, item, quantity from event_otf_items where event_id = $2")
+        .bind(id).bind(src).execute(&mut *tx).await?;
+    sqlx::query("delete from event_otf_contacts where event_id = $1").bind(id).execute(&mut *tx).await?;
+    sqlx::query("insert into event_otf_contacts (event_id, user_id, position)
+                 select $1, user_id, position from event_otf_contacts where event_id = $2")
+        .bind(id).bind(src).execute(&mut *tx).await?;
+    sqlx::query("delete from event_otf_outcomes where event_id = $1").bind(id).execute(&mut *tx).await?;
+    sqlx::query("insert into event_otf_outcomes (event_id, outcome_id)
+                 select $1, outcome_id from event_otf_outcomes where event_id = $2")
+        .bind(id).bind(src).execute(&mut *tx).await?;
+    tx.commit().await?;
+    reply(st, id).await
+}
+
+fn clean(v: Option<String>, max: usize, code: &'static str) -> Result<Option<String>> {
+    common::text(v, max, code)
+}
+
+/// Formun tamami tek istekte (form gibi kaydedilir). Etkinligi duzenleyebilen yazar.
+pub(crate) async fn put(st: &AppState, me: &crate::models::user::User, id: Uuid, b: Input) -> Result<View> {
+    events::editable(st, me, id).await?;
+    let f = b.fields;
+    let end_time = f.end_time.as_deref().filter(|s| !s.is_empty())
+        .map(|s| NaiveTime::parse_from_str(s, "%H:%M")).transpose()
+        .map_err(|_| AppError::BadRequest("invalid_time"))?;
+    let text = |v: Option<String>| clean(v, TEXT_MAX, "invalid_description");
+    let short = |v: Option<String>| clean(v, SHORT_MAX, "invalid_description");
+    for it in &b.items {
+        if otf::section_of(&it.item).is_none() {
+            return Err(AppError::BadRequest("invalid_otf_item"));
+        }
+        if it.quantity.is_some_and(|q| !(1..=10_000).contains(&q)) {
+            return Err(AppError::BadRequest("invalid_quantity"));
+        }
+    }
+    if b.contacts.len() > 3 {
+        return Err(AppError::BadRequest("too_many_contacts"));
+    }
+    for c in &b.contacts {
+        crate::api::records::check_user(&st.pool, Some(*c)).await?;
+    }
+    check_outcomes(st, &b.outcome_ids, &load_outcome_ids(&st.pool, id).await?)?;
+
+    let before = snapshot(&st.pool, id).await?;
+    let mut tx = st.pool.begin().await?;
+    sqlx::query(
+        "insert into event_otf (event_id, purpose, end_time, advisor, age_group, outcomes,
+                                layout_notes, av_notes, tech_notes, host_notes, care_notes, other_notes)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+         on conflict (event_id) do update set
+           purpose = excluded.purpose, end_time = excluded.end_time, advisor = excluded.advisor,
+           age_group = excluded.age_group, outcomes = excluded.outcomes,
+           layout_notes = excluded.layout_notes, av_notes = excluded.av_notes,
+           tech_notes = excluded.tech_notes, host_notes = excluded.host_notes,
+           care_notes = excluded.care_notes, other_notes = excluded.other_notes, updated_at = now()")
+        .bind(id).bind(text(f.purpose)?).bind(end_time).bind(short(f.advisor)?).bind(short(f.age_group)?)
+        .bind(text(f.outcomes)?).bind(text(f.layout_notes)?).bind(text(f.av_notes)?)
+        .bind(text(f.tech_notes)?).bind(text(f.host_notes)?).bind(text(f.care_notes)?)
+        .bind(text(f.other_notes)?)
+        .execute(&mut *tx).await?;
+    sqlx::query("delete from event_otf_items where event_id = $1").bind(id).execute(&mut *tx).await?;
+    for it in &b.items {
+        sqlx::query("insert into event_otf_items (event_id, item, quantity) values ($1, $2, $3)
+                     on conflict do nothing")
+            .bind(id).bind(&it.item).bind(it.quantity).execute(&mut *tx).await?;
+    }
+    sqlx::query("delete from event_otf_contacts where event_id = $1").bind(id).execute(&mut *tx).await?;
+    for (i, c) in b.contacts.iter().enumerate() {
+        sqlx::query("insert into event_otf_contacts (event_id, user_id, position) values ($1, $2, $3)
+                     on conflict do nothing")
+            .bind(id).bind(c).bind(i as i16).execute(&mut *tx).await?;
+    }
+    sqlx::query("delete from event_otf_outcomes where event_id = $1").bind(id).execute(&mut *tx).await?;
+    for o in &b.outcome_ids {
+        sqlx::query("insert into event_otf_outcomes (event_id, outcome_id) values ($1, $2)
+                     on conflict do nothing")
+            .bind(id).bind(o).execute(&mut *tx).await?;
+    }
+    tx.commit().await?;
+
+    // Kopya bekleyen form: icerik degistiyse "duzenlendi"; "gozden gecirdim"
+    // ancak duzenlenmis formda kilidi acar.
+    let review = load_review(&st.pool, id).await?;
+    if let Some(r) = review.filter(|r| r.needs_review) {
+        let edited = r.edited || snapshot(&st.pool, id).await? != before;
+        if b.reviewed && !edited {
+            return Err(AppError::Conflict("otf_review_needs_edit"));
+        }
+        sqlx::query("update event_otf set edited = $2, needs_review = not $3 where event_id = $1")
+            .bind(id).bind(edited).bind(b.reviewed).execute(&st.pool).await?;
+    }
+    reply(st, id).await
+}
+
+#[derive(sqlx::FromRow)]
+struct Contact {
+    name: String,
+    phone: Option<String>,
+}
+
+/// Doldurulmus .docx. Okuma etkinlik gibi: herkese acik, ikiz gizliyse uyeye (A4).
+pub(crate) struct DocxFile {
+    pub(crate) bytes: Vec<u8>,
+    pub(crate) file_name: String,
+}
+
+pub(crate) async fn docx(st: &AppState, me: &crate::models::user::User, id: Uuid) -> Result<DocxFile> {
+    events::require_visible(st, me, id).await?;
+    let ev = event_info(&st.pool, id).await?;
+    // Kopyayla dolup gozden gecirilmemis form gonderilmesin.
+    if load_review(&st.pool, id).await?.is_some_and(|r| r.needs_review) {
+        return Err(AppError::Conflict("otf_unreviewed"));
+    }
+    let f = load_fields(&st.pool, id).await?;
+    let items = load_items(&st.pool, id).await?;
+    let contacts: Vec<Contact> = sqlx::query_as(
+        "select u.name, u.phone from event_otf_contacts c join users u on u.id = c.user_id
+          where c.event_id = $1 order by c.position")
+        .bind(id).fetch_all(&st.pool).await?;
+
+    // Kazanimlar: listeden secilenlerin ADLARI (agac sirasinda), sonra serbest metin.
+    let picked_outcomes: Vec<String> = {
+        let ids = in_tree_order(st, load_outcome_ids(&st.pool, id).await?);
+        let tree = common::tree(st);
+        ids.iter().filter_map(|i| tree.get(*i)).map(|n| n.name.clone()).collect()
+    };
+    let mut text: Vec<(&str, String)> = vec![
+        ("club", st.cfg.club_name.clone()),
+        ("name_purpose", [Some(ev.title.clone()), f.purpose.clone()].into_iter().flatten()
+            .collect::<Vec<_>>().join("\n")),
+        ("date", ev.date.map(|d| format!("{} {} {} {}", d.day(), MONTHS[month(d)], d.year(),
+            WEEKDAYS[d.weekday().num_days_from_monday() as usize])).unwrap_or_default()),
+        ("time", match (&ev.start_time, &f.end_time) {
+            (Some(s), Some(e)) => format!("{s} – {e}"),
+            (Some(s), None) => s.clone(),
+            (None, Some(e)) => format!("– {e}"),
+            (None, None) => String::new(),
+        }),
+        ("place", ev.place.clone().unwrap_or_default()),
+        ("advisor", f.advisor.clone().unwrap_or_default()),
+        ("attendees", ev.attendees.map(|n| n.to_string()).unwrap_or_default()),
+        ("age_group", f.age_group.clone().unwrap_or_default()),
+        ("outcomes", outcomes_text(&picked_outcomes, f.outcomes.as_deref())),
+    ];
+    // Bolum aciklamasi: once adetli kalemler, sonra serbest not. Bicim universitenin
+    // gonderim kuralindan: ekipmanin yanina "+" ve adet ("Projeksiyon+2"; gercek
+    // formlarda "SANDALYE+60").
+    let notes = [&f.layout_notes, &f.av_notes, &f.tech_notes, &f.host_notes, &f.care_notes, &f.other_notes];
+    for (s, note) in otf::SECTIONS.iter().zip(notes) {
+        let mut lines: Vec<String> = s.items.iter()
+            .filter_map(|(k, label)| items.iter().find(|i| i.item == *k)
+                .and_then(|i| i.quantity).map(|q| format!("{label}+{q}")))
+            .collect();
+        lines.extend(note.clone());
+        text.push((s.notes, lines.join("\n")));
+    }
+    let keys = [("contact1_name", "contact1_phone"), ("contact2_name", "contact2_phone"), ("contact3_name", "contact3_phone")];
+    for (c, (n, p)) in contacts.iter().zip(keys) {
+        text.push((n, c.name.clone()));
+        text.push((p, c.phone.clone().unwrap_or_default()));
+    }
+    let checked: Vec<&str> = items.iter().map(|i| i.item.as_str()).collect();
+    let bytes = otf::render(&text, &checked).map_err(|e| {
+        tracing::error!("otf render: {e}");
+        AppError::Conflict("otf_template")
+    })?;
+
+    let name = file_name(&st.cfg.club_code, ev.date);
+    // filename*'i tanimayan istemci icin ASCII: Turkce harf en yakin harfe.
+    Ok(DocxFile { bytes, file_name: name })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn deadline_skips_weekends() {
+        let d = |y, m, d| NaiveDate::from_ymd_opt(y, m, d).unwrap_or_default();
+        // Pazartesi etkinligi -> onceki Carsamba (Cuma, Persembe, Carsamba)
+        assert_eq!(deadline(d(2026, 10, 26)), d(2026, 10, 21));
+        // Cuma etkinligi -> Salı
+        assert_eq!(deadline(d(2026, 10, 23)), d(2026, 10, 20));
+    }
+
+    #[test]
+    fn outcomes_text_joins_picked_then_free() {
+        let p = vec!["Marka bilinirliği".to_string(), "Ekip içi bağ".to_string()];
+        assert_eq!(outcomes_text(&p, Some("Sponsor tanışması")), "Marka bilinirliği\nEkip içi bağ\nSponsor tanışması");
+        assert_eq!(outcomes_text(&p, None), "Marka bilinirliği\nEkip içi bağ");
+        assert_eq!(outcomes_text(&[], Some("  ")), "", "bos serbest metin satir eklemez");
+        assert_eq!(outcomes_text(&[], Some("yalniz metin")), "yalniz metin");
+    }
+
+    #[test]
+    fn file_name_matches_club_rule() {
+        let d = NaiveDate::from_ymd_opt(2026, 10, 25);
+        assert_eq!(file_name("OZUKULUBU", d), "OZUKULUBU_25EKİM_OTF.docx");
+    }
+}
