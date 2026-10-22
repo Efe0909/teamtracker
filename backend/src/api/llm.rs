@@ -11,7 +11,7 @@ use crate::{
     state::AppState,
 };
 
-pub(crate) use crate::domain::llm::{load, require};
+pub(crate) use crate::domain::llm::load;
 pub(crate) use crate::domain::llm::{
     ActiveIn, LimitIn, LimitRow, LlmView, NewProfileIn, ProfileIn, ProfileView, PromptIn,
     PromptsView, RedactIn, TaskIn, TaskView, TryIn,
