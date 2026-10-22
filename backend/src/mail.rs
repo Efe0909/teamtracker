@@ -57,11 +57,7 @@ Hangi sohbetten ne kadar bildirim alacağını uygulamada <i>Bildirimler</i> aya
 
 /// Kuyruga yaz ve gunluge dus. Gonderim hatasi diye bir sey yok: ag yok.
 pub async fn enqueue<'e>(db: impl PgExecutor<'e>, kind: &str, m: &Mail) -> Result<(), sqlx::Error> {
-    sqlx::query(
-        "insert into mail_outbox (kind, to_email, subject, body_html, body_text)
-         values ($1, $2, $3, $4, $5)")
-        .bind(kind).bind(&m.to).bind(&m.subject).bind(&m.html).bind(&m.text)
-        .execute(db).await?;
+    crate::db::mail::insert_mail(db, kind, m).await?;
     tracing::info!(kind, to = %m.to, subject = %m.subject, "posta kuyruga yazildi");
     Ok(())
 }
@@ -149,43 +145,24 @@ pub async fn run_outbox(pool: PgPool, resend: Arc<Resend>) {
     }
 }
 
-#[derive(sqlx::FromRow)]
-struct Pending {
-    id: uuid::Uuid,
-    to_email: String,
-    subject: String,
-    body_html: String,
-    body_text: String,
-    attempts: i32,
-}
-
 async fn drain(pool: &PgPool, resend: &Resend) -> Result<(), sqlx::Error> {
     let mut tx = pool.begin().await?;
-    let rows: Vec<Pending> = sqlx::query_as(
-        "select id, to_email, subject, body_html, body_text, attempts from mail_outbox
-          where sent_at is null and attempts < $1 and next_try_at <= now()
-          order by created_at limit 10 for update skip locked")
-        .bind(MAX_ATTEMPTS).fetch_all(&mut *tx).await?;
+    let rows = crate::db::mail::list_pending(&mut *tx, MAX_ATTEMPTS).await?;
     for r in rows {
         let mail = Mail { to: r.to_email, subject: r.subject, html: r.body_html, text: r.body_text };
         let (outcome, note) = resend.post(&mail).await;
         match outcome {
             Outcome::Sent => {
-                sqlx::query("update mail_outbox set sent_at = now(), error = null, attempts = attempts + 1 where id = $1")
-                    .bind(r.id).execute(&mut *tx).await?;
+                crate::db::mail::mark_sent(&mut *tx, r.id).await?;
                 tracing::info!(to = %mail.to, "posta gonderildi");
             }
             Outcome::Retry | Outcome::Gone => {
                 let n = r.attempts + 1;
-                sqlx::query(
-                    "update mail_outbox set attempts = $2, error = $3,
-                            next_try_at = now() + make_interval(mins => $4) where id = $1")
-                    .bind(r.id).bind(n).bind(&note).bind(n * n).execute(&mut *tx).await?;
+                crate::db::mail::set_retry(&mut *tx, r.id, n, &note, n * n).await?;
                 tracing::warn!(to = %mail.to, "posta gecici hata ({n}/{MAX_ATTEMPTS}): {note}");
             }
             Outcome::Rejected => {
-                sqlx::query("update mail_outbox set attempts = $2, error = $3 where id = $1")
-                    .bind(r.id).bind(MAX_ATTEMPTS).bind(&note).execute(&mut *tx).await?;
+                crate::db::mail::set_rejected(&mut *tx, r.id, MAX_ATTEMPTS, &note).await?;
                 tracing::warn!(to = %mail.to, "posta reddedildi: {note}");
             }
         }

@@ -23,6 +23,7 @@ pub mod finance;
 pub mod home;
 pub mod llm;
 pub mod llm_usage;
+pub mod mail;
 pub mod materials;
 pub mod media;
 pub mod notify;
