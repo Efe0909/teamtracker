@@ -1,7 +1,59 @@
 # Domain katmanı refaktörü — ortak kurallar
 
-Üç ajan sırayla çalışır: **agent1 → agent2 → agent3**. Her ajan önce bu dosyayı, sonra
-kendi `agentN.md`'sini, sonra `00-envanter.md`'de kendi dosyalarının bölümünü okur.
+Üç ajan **paralel** çalışır (agent1, agent2, agent3 aynı anda), her biri kendi dalında.
+Her ajan önce bu dosyayı (özellikle § Paralel çalışma), sonra kendi `agentN.md`'sini, sonra
+`00-envanter.md`'de kendi dosyalarının bölümünü okur.
+
+## Paralel çalışma (önce bunu oku)
+
+Ajanlar birbirinin işini beklemez. Çakışmamak için:
+
+1. **Kendi dalın, kendi worktree'n.** `refactor/domain-layer`'dan dallan:
+
+   | ajan | dal | worktree |
+   |---|---|---|
+   | agent1 | `refactor/domain-agent1` | `/home/Efe/Projects/teamtracker-agent1` |
+   | agent2 | `refactor/domain-agent2` | `/home/Efe/Projects/teamtracker-agent2` |
+   | agent3 | `refactor/domain-agent3` | `/home/Efe/Projects/teamtracker-agent3` |
+
+   Worktree koordinatör tarafından açıldıysa doğrudan orada çalış (`git worktree list` ile
+   doğrula, dalın tabanı `refactor/domain-layer` olmalı). Açılmadıysa:
+   `git -C /home/Efe/Projects/teamtracker worktree add <worktree> -b <dal> refactor/domain-layer`.
+   Ana `/home/Efe/Projects/teamtracker` dizinine **yazma**. Commit'leri kendi dalına at,
+   sonda `git push -u origin <dal>`. `main`'e ya da `refactor/domain-layer`'a merge etme.
+2. **Yalnız kendi dosyalarına yaz:** kendi modüllerinin `src/api/<m>.rs` ve
+   `src/domain/<m>.rs` dosyaları. Başka ajanın dosyasına, `api/mod.rs`'e, `main.rs`'e ve
+   `refactor/` altına dokunma. Ajan dosyalarındaki "şu çağıranı da güncelle" maddeleri
+   paralel düzende **geçersiz**: o işi aşağıdaki yönlendirme + son temizlik yapar.
+3. **Başka ajanın çağırdığı şeyi taşıyınca yönlendirme bırak.** `00-envanter.md`'de
+   `ÇAĞIRAN:` satırında başka ajanın dosyası geçen bir fonksiyonu/tipi taşıdığında, kendi
+   `api/<m>.rs`'inde şunu bırak (kural 8'in paralel istisnası):
+   ```rust
+   // Gecici yonlendirme (paralel refaktor): son temizlik kaldirir.
+   pub(crate) use crate::domain::<m>::{fn_a, TypeB};
+   ```
+   Böylece diğer ajanın dalındaki `crate::api::<m>::fn_a` / `super::<m>::fn_a` çağrıları
+   birleştirmeden sonra da derlenir. Kendi dosyaların arasındaki çağıranları ise kural 8 ile
+   doğrudan `crate::domain::…`'e çevir. Yönlendirme bir handler'la aynı adı taşıyorsa
+   bırakma, rapora yaz.
+4. **Başka ajanın modülüne** domain'den her zaman `crate::api::<m>::…` ile eriş (kural 9),
+   ortak yardımcılar dahil: `crate::api::common::{text, has_scope, tree, …}`. O ajan taşımış
+   olsun olmasın bu yol çalışır (yönlendirme sayesinde). `crate::domain::<başkasının m>`
+   yazma — senin dalında o dosya boş.
+5. **Görünürlük hazır:** koordinatör `api/mod.rs`'teki modülleri ve `pub(super)` yardımcıları
+   (`home::manage_teams`, `finance::{is_viewer, need_viewer, need, today}`) `pub(crate)`
+   yaptı. Başka bir şey erişilemez çıkarsa kendi dosyanda değilse dokunma, rapora yaz.
+6. **`tools/local_test.sh` sabit port (18099-18102) ve sabit veritabanı kullanır.** Aynı anda
+   yalnız biri koşabilir, kilitle çalıştır:
+   `flock /tmp/ekiptakip-local-test.lock tools/local_test.sh`.
+   `cargo` kendi worktree'nde ayrı `target/` kullanır, çakışmaz.
+7. **Son temizlik (agent3.md § Son temizlik) birleştirmeden SONRA** yapılır: üç dal
+   `refactor/domain-layer`'a agent1 → agent2 → agent3 sırasıyla birleştirilince, ayrı bir
+   istekle. Yönlendirmeleri kaldırmak, `crate::api::` yollarını çevirmek, `api/mod.rs`
+   görünürlüğünü geri almak ve `main.rs:61` yolunu düzeltmek o adımdadır.
+
+Rapora ek: **bıraktığın yönlendirmelerin ve `crate::api::` yollarının tam listesi** — son
+temizlik bundan yürür.
 
 ## Neden
 
@@ -17,6 +69,8 @@ Bu refaktörde **logger EKLENMEZ** — yalnız taşıma.
   `pub(crate) mod` ile bildiriyor, `main.rs`'te `mod domain;` var. Boş hâliyle derleniyor.
 - `domain/events/context.rs` ve `domain/events/context/materials.rs` boş ama henüz
   bildirilmemiş: agent2 `domain/events.rs` içine `mod context;` ekler.
+- `api/mod.rs`'teki modüller ve beş `pub(super)` yardımcı geçici olarak `pub(crate)`
+  (paralel çalışma için, § Paralel çalışma madde 5).
 - Kapsam dışı (dokunma): `api/auth.rs`, `api/meta.rs`, `api/mod.rs` (rota tablosu),
   `realtime.rs`, `audit.rs`, ara katmanlar, `db/`, `models/`, kökteki modüller
   (`crate::finance`, `crate::llm`, `crate::otf`, `crate::mail`…). İzin verilen istisnalar

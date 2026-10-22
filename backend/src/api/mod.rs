@@ -4,30 +4,32 @@
 //! verir. Butun uclar `/api` altinda; nginx yalniz bu oneki buraya vekiller.
 //! Host ayrimi (app./dashboard./apex) on yuzun isi, burada yok.
 
-mod admin;
-mod attachments;
+// Gecici pub(crate): domain/ refaktörü sirasinda henuz tasinmamis fonksiyonlara
+// `crate::api::…` ile erisilir (refactor/README.md kural 9). Son temizlik geri alir.
+pub(crate) mod admin;
+pub(crate) mod attachments;
 mod auth;
-mod bank_accounts;
-mod budget;
-mod cards;
-mod chats;
-mod common;
-mod events;
-mod finance;
-mod home;
-mod llm;
-mod llm_usage;
+pub(crate) mod bank_accounts;
+pub(crate) mod budget;
+pub(crate) mod cards;
+pub(crate) mod chats;
+pub(crate) mod common;
+pub(crate) mod events;
+pub(crate) mod finance;
+pub(crate) mod home;
+pub(crate) mod llm;
+pub(crate) mod llm_usage;
 mod meta;
-mod nodes;
-mod notify;
-mod otf;
-mod profile;
+pub(crate) mod nodes;
+pub(crate) mod notify;
+pub(crate) mod otf;
+pub(crate) mod profile;
 pub mod purchasing;
-mod quality;
-mod recurring;
-mod records;
-mod teams;
-mod templates;
+pub(crate) mod quality;
+pub(crate) mod recurring;
+pub(crate) mod records;
+pub(crate) mod teams;
+pub(crate) mod templates;
 
 use axum::{
     extract::{DefaultBodyLimit, State},

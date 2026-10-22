@@ -3,13 +3,15 @@
 Önce `refactor/README.md`'yi oku; kurallar orada. Bu dosya yalnız kapsamı ve özel durumları
 söyler. Envanter: `refactor/00-envanter.md` (aşağıdaki dosyaların `===api/…===` bölümleri).
 
-**Senden önce agent1 bitti:** `common`, `records`, `cards`, `attachments`, `notify`, `chats`,
-`nodes`, `home`, `teams`, `bank_accounts`, `profile` domain'de. Başlamadan `git log` ile
-commit'lerini ve agent1'in raporunu gör. Domain kodun bunları `crate::domain::…` ile çağırır
-(`crate::domain::common::{text, has_scope, tree, …}`, `crate::domain::records::{load, log, …}`).
-
-**Senden sonra agent3** maliye ve yönetimi taşıyacak: `api/finance.rs` ve `api/llm.rs` hâlâ
-`api/`'de olacak; onlara README kural 9 ile `crate::api::…` yolundan eriş.
+**Paralel çalışıyorsun** (README § Paralel çalışma): dalın `refactor/domain-agent2`,
+worktree'n `/home/Efe/Projects/teamtracker-agent2`. agent1 (`common`, `records`, `cards`,
+`attachments`, …) ve agent3 (`finance`, `llm`, …) aynı anda çalışıyor. Senin dalında onların
+modülleri henüz `api/`'de: domain kodun onları **her zaman** `crate::api::…` ile çağırır
+(`crate::api::common::{text, has_scope, tree, …}`, `crate::api::records::{load, log, …}`,
+`crate::api::finance::{need, need_viewer, today}`, `crate::api::llm::load`). Birleştirmeden
+sonra bu yollar onların yönlendirmeleri üzerinden çalışır; son temizlik çevirir. Onların
+dosyalarına dokunma. Aşağıdaki "başka ajanın dosyasını güncelle" maddeleri yerine
+yönlendirme geçerli.
 
 ## Kapsam (~3.200 satır)
 
@@ -40,27 +42,29 @@ iki alt modülü de aynı commit'te (re-export zinciri). Sonra `otf`.
 - **`events.rs` testleri** (`mod material_tests` ve `#[cfg(test)]`) kodla domain'e gider.
 - **`purchases_xlsx`** (`-> Result<Response>`): domain bayt + dosya adı döner, başlıkları
   handler kurar.
-- **`purchasing.rs`** — `use super::finance::{need, need_viewer, today};` var. `need*`
-  `pub(super)`: domain'den erişmek için `api/finance.rs`'te bu üçünü `pub(crate)` yap
-  (agent3'ün dosyasında izin verilen tek değişiklik) ve `crate::api::finance::{need,
-  need_viewer, today}` ile çağır. agent3 taşıyınca yolu düzeltecek.
+- **`purchasing.rs`** — `use super::finance::{need, need_viewer, today};` var. Koordinatör
+  üçünü `pub(crate)` yaptı; domain'den `crate::api::finance::{need, need_viewer, today}` ile
+  çağır. `api/finance.rs`'e dokunma.
 - **`purchasing::backfill_vendors`** `main.rs:61`'den çağrılıyor (`api::purchasing::…`):
-  `main.rs`'teki yolu `domain::purchasing::backfill_vendors` yap (izin verilen istisna).
-  `api/mod.rs`'teki `pub mod purchasing;` görünürlüğü bundan sonra gerekmeyebilir —
-  `api/mod.rs`'e DOKUNMA, uyarı çıkarsa rapora yaz.
+  `main.rs`'e dokunma, `api/purchasing.rs`'te `backfill_vendors` için yönlendirme bırak.
+  Son temizlik `main.rs` yolunu çevirir.
 - **LLM bağlamı** `crate::api::llm::load` çağırıyor (agent3'ün) — kural 9: olduğu gibi
   bırak. `crate::llm::…` (kök modül: `run`, `settings`, `contract`) kapsam dışı, aynen kalır.
 - **`llm.rs` (agent3'ün)** `events::known_names`, `events::material_sample`,
-  `events::try_suggest` kullanıyor: taşıyınca `api/llm.rs`'teki import yolunu
-  `crate::domain::events::…`'e çevir (kural 8).
+  `events::try_suggest` kullanıyor: `api/llm.rs`'e dokunma; `api/events.rs`'teki mevcut
+  `pub(crate) use context::{…}` satırı bunları zaten dışa veriyor — taşıyınca
+  `pub(crate) use crate::domain::events::{known_names, material_sample, try_suggest};`
+  yönlendirmesi olarak koru.
 - **`otf.rs`** — `events::editable`, `events::require_visible` (bu agent) ve
-  `crate::api::records::check_user` (agent1 taşıdı; yolu zaten güncellenmiş olmalı, değilse
-  düzelt). `docx` dosya yanıtı: domain bayt + ad döner.
+  `crate::api::records::check_user` (agent1'in; `crate::api::records::check_user` olarak
+  bırak). `docx` dosya yanıtı: domain bayt + ad döner.
 
 ## Bitti sayılır
 
 - 5 dosyanın her biri için `grep -n sqlx src/api/<dosya>.rs` boş.
-- `cargo clippy --all-targets`, `cargo test`, `tools/local_test.sh` yeşil.
-- Commit'ler: events (+context, materials) + purchasing, otf.
-- README'deki rapor; özellikle bıraktığın `crate::api::finance::…` ve
-  `crate::api::llm::…` yollarını listele (agent3 bunları düzeltecek).
+- `cargo clippy --all-targets`, `cargo test`,
+  `flock /tmp/ekiptakip-local-test.lock tools/local_test.sh` yeşil.
+- Commit'ler: events (+context, materials) + purchasing, otf — `refactor/domain-agent2`
+  dalında, push edilmiş.
+- README'deki rapor; özellikle bıraktığın yönlendirmeleri ve bütün `crate::api::…` yollarını
+  listele (son temizlik bunları çevirecek).
