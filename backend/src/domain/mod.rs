@@ -18,6 +18,7 @@ pub(crate) mod finance;
 pub(crate) mod home;
 pub(crate) mod llm;
 pub(crate) mod llm_usage;
+pub(crate) mod meta;
 pub(crate) mod nodes;
 pub(crate) mod notify;
 pub(crate) mod otf;

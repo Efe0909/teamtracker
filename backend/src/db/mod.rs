@@ -26,6 +26,7 @@ pub mod llm_usage;
 pub mod mail;
 pub mod materials;
 pub mod media;
+pub mod meta;
 pub mod notify;
 pub mod otf;
 pub mod profile;
