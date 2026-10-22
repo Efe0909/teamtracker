@@ -14,7 +14,6 @@ use crate::{
     state::AppState,
 };
 
-pub(crate) use crate::domain::home::manage_teams;
 
 pub async fn home(State(st): State<AppState>, CurrentUser(me): CurrentUser) -> Result<Json<Home>> {
     Ok(Json(home::home(&st, &me).await?))

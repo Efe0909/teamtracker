@@ -11,6 +11,7 @@ use uuid::Uuid;
 use crate::error::AppError;
 
 // Gecici: domain'e tasinmamis uclar icin. Son temizlik kaldirir.
+#[allow(unused_imports)]
 pub(crate) use crate::domain::common::{has_scope, min_chars, present, text, tree, DESC_MIN, NAME_MIN};
 
 /// JSON govde. axum'un `Json` reddi DUZ METIN doner; API her hatayi
