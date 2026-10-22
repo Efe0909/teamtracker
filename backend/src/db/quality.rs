@@ -3,6 +3,10 @@
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
+pub(crate) async fn find_config(ex: impl sqlx::PgExecutor<'_>) -> Result<Option<serde_json::Value>, sqlx::Error> {
+    sqlx::query_scalar("select config from quality_config").fetch_optional(ex).await
+}
+
 pub(crate) async fn find_metadata(ex: impl sqlx::PgExecutor<'_>) -> Result<Option<(DateTime<Utc>, Option<Uuid>)>, sqlx::Error> {
     sqlx::query_as("select updated_at, updated_by from quality_config")
         .fetch_optional(ex).await

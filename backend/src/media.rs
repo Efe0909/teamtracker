@@ -462,38 +462,6 @@ pub fn new_keys(format: Format) -> (String, Option<String>) {
     (format!("{dir}/{id}.{}", format.ext()), thumb)
 }
 
-/// `a` takma adli ek icin "hicbir sahibe bagli degil" kosulu: supurme ve
-/// `claimable` AYNI metni kullanir (spec/83 §4.1). Listede olmayan bag,
-/// supurmede ekini kaybeder; test kosulu goclerdeki `references attachments`
-/// satirlariyla karsilastirir (`OWNER_TABLES`). Makro: sorgu `concat!` ile
-/// statik kalsin.
-macro_rules! unowned {
-    () => {
-        "not exists (select 1 from card_attachments x where x.attachment_id = a.id)
-         and not exists (select 1 from message_attachments x where x.attachment_id = a.id)
-         and not exists (select 1 from users x where x.avatar_id = a.id)
-         and not exists (select 1 from teams x where x.banner_id = a.id)
-         and not exists (select 1 from invoice_attachments x where x.attachment_id = a.id)
-         and not exists (select 1 from ledger_attachments x where x.attachment_id = a.id)"
-    };
-}
-pub(crate) use unowned;
-
-/// Eki sahiplenen bag tablolari: (tablo, sutun) — `unowned!` ile ayni liste.
-#[cfg(test)]
-const OWNER_TABLES: &[(&str, &str)] = &[
-    ("card_attachments", "attachment_id"),
-    ("message_attachments", "attachment_id"),
-    ("users", "avatar_id"),
-    ("teams", "banner_id"),
-    ("invoice_attachments", "attachment_id"),
-    ("ledger_attachments", "attachment_id"),
-];
-
-/// Eke isaret eden ama SAHIPLENMEYEN tablolar (etiket baglari).
-#[cfg(test)]
-const NON_OWNER_TABLES: &[&str] = &["attachment_tags"];
-
 pub fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), MediaError> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
@@ -518,8 +486,7 @@ pub fn remove(root: &Path, key: Option<&str>) {
 }
 
 pub async fn active_volume(pool: &PgPool) -> Result<Option<Volume>, sqlx::Error> {
-    sqlx::query_as("select id, mount_path, media_prefix from storage_volumes where is_active")
-        .fetch_optional(pool).await
+    crate::db::media::find_active_volume(pool).await
 }
 
 /// Acilista: `EKIPTAKIP_MEDIA_ROOT` etkin birim olarak kaydedilir, donanim
@@ -529,18 +496,7 @@ pub async fn sync_volume(pool: &PgPool, root: &str) {
     let online = std::fs::create_dir_all(root).is_ok()
         && std::fs::metadata(root).is_ok_and(|m| m.is_dir() && !m.permissions().readonly());
     let (device, fs_uuid, fs_type) = if online { probe(Path::new(root)) } else { (None, None, None) };
-    let res = sqlx::query(
-        "with v as (
-           insert into storage_volumes (label, kind, mount_path, device, fs_uuid, fs_type,
-                                        is_active, is_online, checked_at)
-           values ('default', 'local', $1, $2, $3, $4, true, $5, now())
-           on conflict (label) do update set mount_path = $1, device = $2, fs_uuid = $3,
-             fs_type = $4, is_active = true, is_online = $5, checked_at = now()
-           returning id)
-         update storage_volumes set is_active = false
-          where is_active and id <> (select id from v)")
-        .bind(root).bind(device).bind(fs_uuid).bind(fs_type).bind(online)
-        .execute(pool).await;
+    let res = crate::db::media::upsert_volume(pool, root, device, fs_uuid, fs_type, online).await;
     match res {
         Ok(_) if online => tracing::info!("medya birimi: {root}"),
         Ok(_) => tracing::warn!("medya birimi cevrimdisi: {root}"),
@@ -590,24 +546,12 @@ fn probe(root: &Path) -> (Option<String>, Option<String>, Option<String>) {
 ///
 /// Bir gunluk pay: yeni yuklenmis ama henuz baglanmamis ek silinmesin.
 pub async fn sweep(pool: &PgPool) -> Result<(u64, usize), sqlx::Error> {
-    let chats = sqlx::query(
-        "delete from chats c
-          where c.created_at < now() - interval '1 day'
-            and not exists (select 1 from records r where r.chat_id = c.id)
-            and not exists (select 1 from teams t where t.chat_id = c.id)")
-        .execute(pool).await?.rows_affected();
-    let gone: Vec<(String, String, String, Option<String>)> = sqlx::query_as(concat!(
-        "with d as (
-           delete from attachments a
-            where a.created_at < now() - interval '1 day' and ", unowned!(), "
-           returning volume_id, storage_key, thumb_key)
-         select v.mount_path, v.media_prefix, d.storage_key, d.thumb_key
-           from d join storage_volumes v on v.id = d.volume_id"))
-        .fetch_all(pool).await?;
-    for (mount, prefix, key, thumb) in &gone {
-        let root = Path::new(mount).join(prefix);
-        remove(&root, Some(key));
-        remove(&root, thumb.as_deref());
+    let chats = crate::db::media::delete_orphan_chats(pool).await?;
+    let gone = crate::db::media::delete_unowned_attachments(pool).await?;
+    for attachment in &gone {
+        let root = Path::new(&attachment.mount_path).join(&attachment.media_prefix);
+        remove(&root, Some(&attachment.storage_key));
+        remove(&root, attachment.thumb_key.as_deref());
     }
     Ok((chats, gone.len()))
 }
@@ -720,39 +664,4 @@ mod tests {
         assert!(!Purpose::Avatar.accept().contains("pdf"));
     }
 
-    /// Goclerde eke isaret eden her tablo ya sahip listesinde ya etiket listesinde;
-    /// sahip listesindeki her bag `unowned!` kosulunda. Yeni bag tablosu eklenip
-    /// burada unutulursa supurme o tablonun eklerini siler.
-    #[test]
-    fn sahip_listesi_goclerle_ayni() {
-        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("migrations");
-        let mut found = Vec::new();
-        let mut files: Vec<_> = std::fs::read_dir(&dir).map(|d| d.flatten().map(|e| e.path()).collect()).unwrap_or_default();
-        files.sort();
-        assert!(!files.is_empty(), "goc dizini okunamadi");
-        for f in files {
-            let mut table = String::new();
-            for line in std::fs::read_to_string(&f).unwrap_or_default().lines() {
-                let l = line.trim().to_ascii_lowercase();
-                for p in ["create table if not exists ", "create table ", "alter table "] {
-                    if let Some(rest) = l.strip_prefix(p) {
-                        table = rest.split([' ', '(']).next().unwrap_or_default().to_string();
-                        break;
-                    }
-                }
-                if l.contains("references attachments") && !found.contains(&table) {
-                    found.push(table.clone());
-                }
-            }
-        }
-        let sql = unowned!();
-        for t in &found {
-            let owner = OWNER_TABLES.iter().find(|(o, _)| o == t);
-            assert!(owner.is_some() || NON_OWNER_TABLES.contains(&t.as_str()), "{t} listede yok");
-            if let Some((o, c)) = owner {
-                assert!(sql.contains(&format!("from {o} x where x.{c} = a.id")), "{o}.{c} unowned! kosulunda yok");
-            }
-        }
-        assert_eq!(found.len(), OWNER_TABLES.len() + NON_OWNER_TABLES.len());
-    }
 }

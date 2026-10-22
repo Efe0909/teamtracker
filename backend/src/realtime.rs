@@ -188,13 +188,11 @@ fn target(path: &str) -> Option<Target> {
 }
 
 async fn record_of_card(st: &AppState, id: Uuid) -> Option<Uuid> {
-    sqlx::query_scalar("select record_id from cards where id = $1")
-        .bind(id).fetch_optional(&st.pool).await.ok().flatten()
+    crate::db::realtime::find_card_record(&st.pool, id).await.ok().flatten()
 }
 
 async fn record_of_action(st: &AppState, id: Uuid) -> Option<Uuid> {
-    sqlx::query_scalar("select record_id from actions where id = $1")
-        .bind(id).fetch_optional(&st.pool).await.ok().flatten()
+    crate::db::realtime::find_action_record(&st.pool, id).await.ok().flatten()
 }
 
 pub async fn publish_writes(State(st): State<AppState>, req: Request, next: Next) -> Response {

@@ -88,11 +88,6 @@ pub struct Record {
 
 impl Record {
     pub async fn fetch(pool: &sqlx::PgPool, id: Uuid) -> Result<Option<Record>, sqlx::Error> {
-        sqlx::query_as(
-            "select id, unit_id, pillar_id, team_id, chat_id, kind, title, description,
-                    status, priority, owner_id, created_by, due_date, created_at, updated_at,
-                    closing_note
-               from records where id = $1")
-            .bind(id).fetch_optional(pool).await
+        crate::db::records::find_record(pool, id).await
     }
 }

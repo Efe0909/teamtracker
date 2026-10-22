@@ -7,6 +7,15 @@ use uuid::Uuid;
 
 use crate::{db::{filters::Filters, tree::TreeIndex}, models::{enums::{ActionStatus, Priority, RecordKind, RecordStatus}, user::User}};
 
+pub(crate) async fn find_record(ex: impl sqlx::PgExecutor<'_>, id: Uuid) -> Result<Option<crate::models::record::Record>, sqlx::Error> {
+    sqlx::query_as(
+        "select id, unit_id, pillar_id, team_id, chat_id, kind, title, description,
+                    status, priority, owner_id, created_by, due_date, created_at, updated_at,
+                    closing_note
+               from records where id = $1")
+        .bind(id).fetch_optional(ex).await
+}
+
 #[derive(sqlx::FromRow)]
 pub(crate) struct SummaryRow {
     pub id: Uuid,

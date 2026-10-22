@@ -8,6 +8,7 @@
 
 pub(crate) mod admin;
 pub(crate) mod attachments;
+pub(crate) mod auth;
 pub(crate) mod bank_accounts;
 pub(crate) mod budget;
 pub(crate) mod cards;
@@ -18,6 +19,7 @@ pub(crate) mod finance;
 pub(crate) mod home;
 pub(crate) mod llm;
 pub(crate) mod llm_usage;
+pub(crate) mod meta;
 pub(crate) mod nodes;
 pub(crate) mod notify;
 pub(crate) mod otf;

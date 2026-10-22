@@ -27,19 +27,9 @@ pub async fn admins(p: &PgPool, path: &str) {
     };
     for email in emails(&text) {
         // Yalniz DEGISEN satir olay yazar: her acilista ayni olay birikmesin.
-        let res = sqlx::query(
-            "with u as (
-               insert into users (email, name, color, is_admin, is_active)
-               values ($1, split_part($1, '@', 1),
-                       ($2::text[])[1 + ((select count(*) from users) % 6)::int], true, true)
-               on conflict (lower(email)) do update set is_admin = true, is_active = true
-                 where not (users.is_admin and users.is_active)
-               returning email)
-             insert into security_events (event_type, email, detail)
-             select 'admin_granted', email, 'bootstrap' from u")
-            .bind(&email).bind(COLORS.to_vec()).execute(p).await;
+        let res = crate::db::bootstrap::upsert_admin(p, &email, COLORS.to_vec()).await;
         match res {
-            Ok(r) if r.rows_affected() > 0 => tracing::info!("ilk yonetici: {email}"),
+            Ok(n) if n > 0 => tracing::info!("ilk yonetici: {email}"),
             Ok(_) => {}
             Err(e) => tracing::error!("ilk yonetici yazilamadi ({email}): {e}"),
         }

@@ -3,6 +3,18 @@
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
+pub(crate) async fn find_active_user(ex: impl sqlx::PgExecutor<'_>, id: Uuid) -> Result<Option<crate::models::user::User>, sqlx::Error> {
+    sqlx::query_as(
+        "select id, email, name, color, is_admin, is_active, notify_level \
+         from users where id = $1 and is_active")
+        .bind(id).fetch_optional(ex).await
+}
+
+pub(crate) async fn list_dev_users(ex: impl sqlx::PgExecutor<'_>) -> Result<Vec<(Uuid, String, Option<String>)>, sqlx::Error> {
+    sqlx::query_as("select id, name, color from users where is_active order by name")
+        .fetch_all(ex).await
+}
+
 pub(crate) async fn set_name(ex: impl sqlx::PgExecutor<'_>, id: Uuid, name: &str) -> Result<u64, sqlx::Error> {
     Ok(sqlx::query("update users set name = $2 where id = $1")
         .bind(id).bind(name).execute(ex).await?.rows_affected())

@@ -39,6 +39,7 @@ use serde::Serialize;
 use uuid::Uuid;
 
 use crate::{auth::CurrentUser, error::{AppError, Result}, media, state::AppState};
+use crate::domain::profile::DevUser;
 
 pub(crate) use crate::domain::chats::authorize_read as authorize_chat_read;
 
@@ -214,18 +215,10 @@ struct MeUser {
     is_admin: bool,
 }
 
-#[derive(Serialize, sqlx::FromRow)]
-struct DevUser {
-    id: Uuid,
-    name: String,
-    color: Option<String>,
-}
-
 async fn me(State(st): State<AppState>, jar: SignedCookieJar, user: Option<CurrentUser>) -> Result<Json<Me>> {
     let fake = st.cfg.fake_identity();
     let dev_users = if fake {
-        Some(sqlx::query_as("select id, name, color from users where is_active order by name")
-            .fetch_all(&st.pool).await?)
+        Some(crate::domain::profile::list_dev_users(&st).await?)
     } else {
         None
     };

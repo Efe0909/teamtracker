@@ -10,7 +10,7 @@
 //! ad herkes icin salt okunur.
 
 use chrono::Utc;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use uuid::Uuid;
 
@@ -25,6 +25,18 @@ use crate::{
 const NICK_MAX: usize = 40;
 const PHONE_MAX: usize = 30;
 const NAME_MAX: usize = 200;
+
+#[derive(Serialize)]
+pub(crate) struct DevUser {
+    id: Uuid,
+    name: String,
+    color: Option<String>,
+}
+
+pub(crate) async fn list_dev_users(st: &AppState) -> Result<Vec<DevUser>> {
+    Ok(db::list_dev_users(&st.pool).await?.into_iter()
+        .map(|(id, name, color)| DevUser { id, name, color }).collect())
+}
 
 /// Ad degisikligi. Kapsam kontrolu `active` uzerinden: admin zaten tum
 /// kapsamlara sahip (scope.rs), bu yuzden ayrica `is_admin` bakmaya gerek yok.
