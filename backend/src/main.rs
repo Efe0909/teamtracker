@@ -15,6 +15,7 @@ mod csrf;
 #[allow(dead_code)]
 mod db;
 mod decision;
+mod domain;
 mod error;
 mod finance;
 mod llm;
