@@ -159,10 +159,6 @@ pub(crate) async fn list_event_materials(ex: impl sqlx::PgExecutor<'_>, id: Uuid
         .bind(id).fetch_all(ex).await
 }
 
-pub(crate) async fn insert_chat(ex: impl sqlx::PgExecutor<'_>) -> Result<Uuid, sqlx::Error> {
-    sqlx::query_scalar("insert into chats default values returning id").fetch_one(ex).await
-}
-
 pub(crate) async fn insert_record(
     ex: impl sqlx::PgExecutor<'_>, unit: Uuid, chat: Uuid, kind: RecordKind, title: &str, priority: Priority, by: Uuid,
 ) -> Result<Uuid, sqlx::Error> {
@@ -291,22 +287,8 @@ pub(crate) async fn upsert_participant(ex: impl sqlx::PgExecutor<'_>, id: Uuid, 
     Ok(())
 }
 
-pub(crate) async fn insert_record_participant(ex: impl sqlx::PgExecutor<'_>, id: Uuid, user: Uuid, by: Uuid) -> Result<(), sqlx::Error> {
-    sqlx::query(
-        "insert into record_participants (record_id, user_id, added_by) values ($1, $2, $3)
-         on conflict do nothing")
-        .bind(id).bind(user).bind(by).execute(ex).await?;
-    Ok(())
-}
-
 pub(crate) async fn delete_participant(ex: impl sqlx::PgExecutor<'_>, id: Uuid, user: Uuid) -> Result<(), sqlx::Error> {
     sqlx::query("delete from event_participants where event_id = $1 and user_id = $2")
-        .bind(id).bind(user).execute(ex).await?;
-    Ok(())
-}
-
-pub(crate) async fn delete_record_participant(ex: impl sqlx::PgExecutor<'_>, id: Uuid, user: Uuid) -> Result<(), sqlx::Error> {
-    sqlx::query("delete from record_participants where record_id = $1 and user_id = $2")
         .bind(id).bind(user).execute(ex).await?;
     Ok(())
 }
@@ -571,11 +553,6 @@ pub(crate) async fn load_provider_label(ex: impl sqlx::PgExecutor<'_>, id: Uuid)
     sqlx::query_as("select name, contact from material_providers where id = $1").bind(id).fetch_one(ex).await
 }
 
-pub(crate) async fn set_provider_vendor(ex: impl sqlx::PgExecutor<'_>, id: Uuid, vendor: Option<Uuid>) -> Result<(), sqlx::Error> {
-    sqlx::query("update material_providers set vendor_id = $2 where id = $1").bind(id).bind(vendor).execute(ex).await?;
-    Ok(())
-}
-
 pub(crate) async fn find_purchase_state(ex: impl sqlx::PgExecutor<'_>, id: Uuid) -> Result<Option<(i16, bool)>, sqlx::Error> {
     sqlx::query_as("select state, owned from materials where id = $1").bind(id).fetch_optional(ex).await
 }
@@ -589,4 +566,9 @@ pub(crate) async fn set_purchased(ex: impl sqlx::PgExecutor<'_>, id: Uuid, purch
           where id = $1")
         .bind(id).bind(purchased).bind(by).execute(ex).await?;
     Ok(())
+}
+
+pub(crate) async fn event_exists(ex: impl sqlx::PgExecutor<'_>, id: Uuid) -> Result<bool, sqlx::Error> {
+    sqlx::query_scalar("select exists(select 1 from events where id = $1)")
+        .bind(id).fetch_one(ex).await
 }

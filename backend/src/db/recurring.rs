@@ -27,11 +27,6 @@ pub(crate) async fn list_recurring(ex: impl sqlx::PgExecutor<'_>) -> Result<Vec<
         .fetch_all(ex).await
 }
 
-pub(crate) async fn has_category(ex: impl sqlx::PgExecutor<'_>, id: Uuid) -> Result<bool, sqlx::Error> {
-    sqlx::query_scalar("select exists(select 1 from nodes where id = $1 and node_type = 'category')")
-        .bind(id).fetch_one(ex).await
-}
-
 pub(crate) async fn insert_recurring(ex: impl sqlx::PgExecutor<'_>, name: &str, amount: i64, currency: &str, every: &str, next_on: NaiveDate, category_id: Option<Uuid>) -> Result<Uuid, sqlx::Error> {
     sqlx::query_scalar(
         "insert into recurring_expenses (name, amount, currency, every, next_on, category_id)

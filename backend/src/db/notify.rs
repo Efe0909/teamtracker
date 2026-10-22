@@ -76,10 +76,6 @@ pub(crate) async fn update_preferences(ex: impl sqlx::PgExecutor<'_>, user: Uuid
     Ok(())
 }
 
-pub(crate) async fn find_chat(ex: impl sqlx::PgExecutor<'_>, chat: Uuid) -> Result<Option<i32>, sqlx::Error> {
-    sqlx::query_scalar("select 1 from chats where id = $1").bind(chat).fetch_optional(ex).await
-}
-
 pub(crate) async fn upsert_chat_preference(ex: impl sqlx::PgExecutor<'_>, user: Uuid, chat: Uuid, mode: NotifyLevel) -> Result<(), sqlx::Error> {
     sqlx::query(
         "insert into chat_prefs (user_id, chat_id, mode) values ($1, $2, $3)
@@ -126,14 +122,6 @@ pub(crate) async fn find_team_audience(ex: impl sqlx::PgExecutor<'_>, chat: Uuid
         "select t.id, t.name, array(select user_id from team_members where team_id = t.id)
                    from teams t where t.chat_id = $1")
         .bind(chat).fetch_optional(ex).await
-}
-
-pub(crate) async fn get_user_name(ex: impl sqlx::PgExecutor<'_>, user: Uuid) -> Result<String, sqlx::Error> {
-    sqlx::query_scalar("select name from users where id = $1").bind(user).fetch_one(ex).await
-}
-
-pub(crate) async fn find_active_user_name(ex: impl sqlx::PgExecutor<'_>, user: Uuid) -> Result<Option<String>, sqlx::Error> {
-    sqlx::query_scalar("select name from users where id = $1 and is_active").bind(user).fetch_optional(ex).await
 }
 
 pub(crate) async fn list_subscriptions(ex: impl sqlx::PgExecutor<'_>, user: Uuid) -> Result<Vec<SubscriptionRow>, sqlx::Error> {

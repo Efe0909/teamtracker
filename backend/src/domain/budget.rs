@@ -202,7 +202,7 @@ pub struct LineIn {
 /// Tek satir yaz/sil; cevap donemin guncel gorunumu.
 pub(crate) async fn put_line(st: &AppState, me: &crate::models::user::User, b: LineIn) -> Result<BudgetView> {
     need(st, me, "manage_budgets").await?;
-    let cat = db::has_category(&st.pool, b.category_id).await?;
+    let cat = crate::db::nodes::category_exists(&st.pool, b.category_id).await?;
     if !cat {
         return Err(AppError::BadRequest("invalid_category"));
     }
@@ -211,7 +211,7 @@ pub(crate) async fn put_line(st: &AppState, me: &crate::models::user::User, b: L
         return Err(AppError::NotFound);
     }
     if let Some(e) = b.event_id {
-        let ok = db::has_event(&st.pool, e).await?;
+        let ok = crate::db::events::event_exists(&st.pool, e).await?;
         if !ok {
             return Err(AppError::BadRequest("invalid_event"));
         }

@@ -90,3 +90,13 @@ pub(crate) async fn list_messages(ex: impl sqlx::PgExecutor<'_>, user: Uuid) -> 
         "select chat_id, body, created_at from messages where author_id = $1 order by created_at")
         .bind(user).fetch_all(ex).await
 }
+
+pub(crate) async fn find_user_name(ex: impl sqlx::PgExecutor<'_>, id: Uuid) -> Result<Option<String>, sqlx::Error> {
+    sqlx::query_scalar("select name from users where id = $1")
+        .bind(id).fetch_optional(ex).await
+}
+
+pub(crate) async fn find_active_name(ex: impl sqlx::PgExecutor<'_>, user: Uuid) -> Result<Option<String>, sqlx::Error> {
+    sqlx::query_scalar("select name from users where id = $1 and is_active")
+        .bind(user).fetch_optional(ex).await
+}

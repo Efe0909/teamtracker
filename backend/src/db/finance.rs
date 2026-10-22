@@ -9,11 +9,6 @@ pub(crate) async fn insert_ledger_check(ex: impl sqlx::PgExecutor<'_>, checked_o
     Ok(())
 }
 
-pub(crate) async fn find_user_name(ex: impl sqlx::PgExecutor<'_>, id: Uuid) -> Result<Option<String>, sqlx::Error> {
-    sqlx::query_scalar("select name from users where id = $1")
-        .bind(id).fetch_optional(ex).await
-}
-
 pub(crate) async fn insert_member_payout(ex: impl sqlx::PgExecutor<'_>, on: NaiveDate, amount: i64, description: &str, user: Uuid, by: Uuid) -> Result<(), sqlx::Error> {
     sqlx::query(
         "insert into ledger_entries (occurred_on, amount, kind, description, payee_user_id, created_by)
@@ -214,11 +209,6 @@ pub(crate) async fn find_ledger_check(ex: impl sqlx::PgExecutor<'_>) -> Result<O
         .fetch_optional(ex).await
 }
 
-pub(crate) async fn has_category(ex: impl sqlx::PgExecutor<'_>, id: Uuid) -> Result<bool, sqlx::Error> {
-    sqlx::query_scalar("select exists(select 1 from nodes where id = $1 and node_type = 'category')")
-        .bind(id).fetch_one(ex).await
-}
-
 pub(crate) async fn has_opening_entry(ex: impl sqlx::PgExecutor<'_>) -> Result<bool, sqlx::Error> {
     sqlx::query_scalar("select exists(select 1 from ledger_entries where kind = 'opening')")
         .fetch_one(ex).await
@@ -380,11 +370,6 @@ pub(crate) async fn insert_monthly_claim(ex: impl sqlx::PgExecutor<'_>, month: N
             "insert into reimbursement_claims (kind, month, created_by) values ('monthly', date_trunc('month', $1::date)::date, $2)
              on conflict (month) where kind = 'monthly' do nothing returning id")
         .bind(month).bind(by).fetch_optional(ex).await
-}
-
-pub(crate) async fn has_event(ex: impl sqlx::PgExecutor<'_>, id: Uuid) -> Result<bool, sqlx::Error> {
-    sqlx::query_scalar("select exists(select 1 from events where id = $1)")
-        .bind(id).fetch_one(ex).await
 }
 
 pub(crate) async fn insert_event_claim(ex: impl sqlx::PgExecutor<'_>, event: Uuid, by: Uuid) -> Result<Option<Uuid>, sqlx::Error> {

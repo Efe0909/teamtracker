@@ -199,11 +199,6 @@ pub(crate) async fn set_needed_by(ex: impl sqlx::PgExecutor<'_>, id: Uuid, date:
     Ok(())
 }
 
-pub(crate) async fn category_exists(ex: impl sqlx::PgExecutor<'_>, id: Uuid) -> Result<bool, sqlx::Error> {
-    sqlx::query_scalar("select exists(select 1 from nodes where id = $1 and node_type = 'category')")
-        .bind(id).fetch_one(ex).await
-}
-
 pub(crate) async fn set_category(ex: impl sqlx::PgExecutor<'_>, id: Uuid, category: Uuid) -> Result<(), sqlx::Error> {
     sqlx::query("update materials set category_id = $2, updated_at = now() where id = $1")
         .bind(id).bind(category).execute(ex).await?;
@@ -223,7 +218,7 @@ pub(crate) async fn list_unlinked_providers(ex: impl sqlx::PgExecutor<'_>) -> Re
         "select id, name, contact from material_providers where vendor_id is null").fetch_all(ex).await
 }
 
-pub(crate) async fn set_provider_vendor(ex: impl sqlx::PgExecutor<'_>, id: Uuid, vendor: Uuid) -> Result<(), sqlx::Error> {
+pub(crate) async fn set_provider_vendor(ex: impl sqlx::PgExecutor<'_>, id: Uuid, vendor: Option<Uuid>) -> Result<(), sqlx::Error> {
     sqlx::query("update material_providers set vendor_id = $2 where id = $1")
         .bind(id).bind(vendor).execute(ex).await?;
     Ok(())

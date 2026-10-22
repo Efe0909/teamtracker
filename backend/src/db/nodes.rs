@@ -138,3 +138,8 @@ pub(crate) async fn list_favorites(ex: impl sqlx::PgExecutor<'_>, user: Uuid) ->
     sqlx::query_scalar("select node_id from node_favorites where user_id = $1 order by created_at")
         .bind(user).fetch_all(ex).await
 }
+
+pub(crate) async fn category_exists(ex: impl sqlx::PgExecutor<'_>, id: Uuid) -> Result<bool, sqlx::Error> {
+    sqlx::query_scalar("select exists(select 1 from nodes where id = $1 and node_type = 'category')")
+        .bind(id).fetch_one(ex).await
+}

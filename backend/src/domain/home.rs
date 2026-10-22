@@ -120,7 +120,7 @@ async fn wall(
 pub(crate) async fn set_member(st: &AppState, me: &User, team: Uuid, b: MemberIn) -> Result<TeamView> {
     manage_teams(st, me).await?;
     let chat = team_chat(st, team).await?;
-    let person = db::find_active_name(&st.pool, b.user_id).await?
+    let person = crate::db::profile::find_active_name(&st.pool, b.user_id).await?
         .ok_or(AppError::BadRequest("unknown_user"))?;
     let before = db::find_role(&st.pool, team, b.user_id).await?;
     // Ayni rol: yazma da gecmis de yok.

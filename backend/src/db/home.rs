@@ -84,11 +84,6 @@ pub(crate) async fn insert_activity(ex: impl sqlx::PgExecutor<'_>, chat: Uuid, a
     Ok(())
 }
 
-pub(crate) async fn find_active_name(ex: impl sqlx::PgExecutor<'_>, user: Uuid) -> Result<Option<String>, sqlx::Error> {
-    sqlx::query_scalar("select name from users where id = $1 and is_active")
-        .bind(user).fetch_optional(ex).await
-}
-
 pub(crate) async fn find_role(ex: impl sqlx::PgExecutor<'_>, team: Uuid, user: Uuid) -> Result<Option<TeamRole>, sqlx::Error> {
     sqlx::query_scalar(
         "select role from team_members where team_id = $1 and user_id = $2")

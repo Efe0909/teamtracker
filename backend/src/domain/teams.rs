@@ -54,7 +54,7 @@ async fn wall(
     tx: &mut Tx<'_>, chat: Uuid, actor: Uuid, verb: &str, subject: &str,
     target: Option<&str>, detail: Option<String>,
 ) -> Result<()> {
-    db::insert_activity(&mut **tx, chat, actor, verb, subject, target, detail).await?;
+    crate::db::records::insert_activity(&mut **tx, chat, actor, verb, subject, target, detail).await?;
     Ok(())
 }
 
@@ -75,7 +75,7 @@ async fn set_banner(tx: &mut Tx<'_>, team: Uuid, banner: Option<Uuid>) -> Result
 async fn insert_team(
     tx: &mut Tx<'_>, actor: Uuid, name: &str, description: Option<&str>, color: Option<&str>,
 ) -> Result<(Uuid, Uuid)> {
-    let chat = db::insert_chat(&mut **tx).await?;
+    let chat = crate::db::chats::insert_chat(&mut **tx).await?;
     let id = db::insert_team(&mut **tx, name, description, color, chat).await.map_err(name_taken)?;
     wall(tx, chat, actor, "team_created", name, None, None).await?;
     Ok((id, chat))

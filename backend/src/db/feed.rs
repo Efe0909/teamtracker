@@ -73,8 +73,7 @@ pub async fn of_chat(
     let quotes: Vec<(Uuid, Option<Uuid>, String)> = if reply_ids.is_empty() {
         Vec::new()
     } else {
-        sqlx::query_as("select id, author_id, body from messages where id = any($1)")
-            .bind(&reply_ids).fetch_all(pool).await?
+        super::chats::list_quotes(pool, &reply_ids).await?
     };
 
     let find = |id: Option<Uuid>| id.and_then(|i| people.iter().find(|p| p.id == i))

@@ -680,7 +680,7 @@ pub(crate) async fn create_claim(st: &AppState, me: &User, b: ClaimIn) -> Result
     let id: Option<Uuid> = match (b.kind.as_str(), b.month, b.event_id) {
         ("monthly", Some(m), None) => db::insert_monthly_claim(&st.pool, m, me.id).await?,
         ("event", None, Some(e)) => {
-            let exists = db::has_event(&st.pool, e).await?;
+            let exists = crate::db::events::event_exists(&st.pool, e).await?;
             if !exists {
                 return Err(AppError::BadRequest("invalid_event"));
             }
@@ -879,7 +879,7 @@ pub(crate) async fn add_entry(st: &AppState, me: &User, b: EntryIn) -> Result<Le
     }
     let desc = text(Some(b.description), DESC_MAX, "invalid_description")?.ok_or(AppError::BadRequest("invalid_description"))?;
     if let Some(c) = b.category_id {
-        let ok = db::has_category(&st.pool, c).await?;
+        let ok = crate::db::nodes::category_exists(&st.pool, c).await?;
         if !ok {
             return Err(AppError::BadRequest("invalid_category"));
         }
@@ -958,7 +958,7 @@ pub struct PayoutIn {
 pub(crate) async fn payout(st: &AppState, me: &User, b: PayoutIn) -> Result<LedgerView> {
     need(st, me, "manage_ledger").await?;
     let amount = cents(b.amount).ok_or(AppError::BadRequest("invalid_amount"))?;
-    let name = db::find_user_name(&st.pool, b.user_id).await?;
+    let name = crate::db::profile::find_user_name(&st.pool, b.user_id).await?;
     let name = name.ok_or(AppError::BadRequest("invalid_user_id"))?;
     let desc = text(b.description, DESC_MAX, "invalid_description")?.unwrap_or_else(|| format!("{name} için iade"));
     let on = b.occurred_on.unwrap_or_else(today);

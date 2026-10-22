@@ -361,7 +361,7 @@ pub(crate) async fn create(
     let status = if b.date.is_some() { EventStatus::Planning } else { EventStatus::Idea };
 
     let mut tx = st.pool.begin().await?;
-    let chat_id = db_events::insert_chat(&mut *tx).await?;
+    let chat_id = crate::db::chats::insert_chat(&mut *tx).await?;
     let record_id = db_events::insert_record(&mut *tx, b.unit_id, chat_id, RecordKind::Task, &title, priority, me.id).await?;
     records::log(&mut tx, chat_id, me.id, "created", &title, None,
         records::change(serde_json::Value::Null, me.id)).await?;
@@ -573,7 +573,7 @@ pub(crate) async fn put_participant(
     let role = common::text(b.role, ROLE_MAX, "invalid_role")?;
     let mut tx = st.pool.begin().await?;
     db_events::upsert_participant(&mut *tx, ev.id, uid, role).await?;
-    db_events::insert_record_participant(&mut *tx, twin.id, uid, me.id).await?;
+    crate::db::records::insert_participant(&mut *tx, twin.id, uid, me.id).await?;
     records::touch(&mut tx, twin.id).await?;
     tx.commit().await?;
     reply(st, me, ev.id).await
@@ -587,7 +587,7 @@ pub(crate) async fn remove_participant(
     let uid = user;
     let mut tx = st.pool.begin().await?;
     db_events::delete_participant(&mut *tx, ev.id, uid).await?;
-    db_events::delete_record_participant(&mut *tx, twin.id, uid).await?;
+    crate::db::records::delete_participant(&mut *tx, twin.id, uid).await?;
     tx.commit().await?;
     reply(st, me, ev.id).await
 }
@@ -1217,7 +1217,7 @@ pub(crate) async fn patch_provider(
             Some(l) => super::purchasing::ensure_vendor(&mut tx, l, Some(me.id)).await?,
             None => None,
         };
-        db_events::set_provider_vendor(&mut *tx, id, vendor).await?;
+        crate::db::purchasing::set_provider_vendor(&mut *tx, id, vendor).await?;
     }
     db_events::touch_material(&mut *tx, material).await?;
     refresh_overage(&mut tx, material).await?;

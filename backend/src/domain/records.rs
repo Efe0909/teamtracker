@@ -406,7 +406,7 @@ pub(crate) async fn create(st: &AppState, me: &User, b: NewRecord) -> Result<Cre
     };
 
     let mut tx = st.pool.begin().await?;
-    let chat_id = db::insert_chat(&mut *tx).await?;
+    let chat_id = crate::db::chats::insert_chat(&mut *tx).await?;
     let id = db::insert_record(&mut *tx, b.unit_id, b.pillar_id, b.team_id, chat_id, b.kind,
         &title, description, b.priority.unwrap_or(Priority::Medium), b.owner_id, me.id, access_mode).await?;
     log(&mut tx, chat_id, me.id, "created", &title, None,

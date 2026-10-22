@@ -124,3 +124,7 @@ pub(crate) async fn insert_participants(ex: impl sqlx::PgExecutor<'_>, record: U
         .bind(record).bind(ids).bind(by).execute(ex).await?;
     Ok(())
 }
+
+pub(crate) async fn insert_chat(ex: impl sqlx::PgExecutor<'_>) -> Result<Uuid, sqlx::Error> {
+    sqlx::query_scalar("insert into chats default values returning id").fetch_one(ex).await
+}

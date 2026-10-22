@@ -371,7 +371,7 @@ pub(crate) async fn patch_material(st: &AppState, me: &User, id: Uuid, b: Materi
         db_purchasing::set_needed_by(&mut *tx, id, n).await?;
     }
     if let Some(c) = b.category_id {
-        let ok = db_purchasing::category_exists(&mut *tx, c).await?;
+        let ok = crate::db::nodes::category_exists(&mut *tx, c).await?;
         if !ok {
             return Err(AppError::BadRequest("invalid_category"));
         }
@@ -415,7 +415,7 @@ pub(crate) async fn backfill_vendors(pool: &sqlx::PgPool) -> Result<u64> {
     for (id, name, contact) in rows {
         let Some(label) = offer_label(name.as_deref(), &contact) else { continue };
         if let Some(v) = ensure_vendor(&mut conn, label, None).await? {
-            db_purchasing::set_provider_vendor(&mut *conn, id, v).await?;
+            db_purchasing::set_provider_vendor(&mut *conn, id, Some(v)).await?;
             linked += 1;
         }
     }

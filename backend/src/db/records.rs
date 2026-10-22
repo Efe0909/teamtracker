@@ -181,10 +181,6 @@ pub(crate) async fn insert_activity(ex: impl sqlx::PgExecutor<'_>, chat: Uuid, a
     Ok(())
 }
 
-pub(crate) async fn insert_chat(ex: impl sqlx::PgExecutor<'_>) -> Result<Uuid, sqlx::Error> {
-    sqlx::query_scalar("insert into chats default values returning id").fetch_one(ex).await
-}
-
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn insert_record(
     ex: impl sqlx::PgExecutor<'_>, unit: Uuid, pillar: Option<Uuid>, team: Option<Uuid>, chat: Uuid,

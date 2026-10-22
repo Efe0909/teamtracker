@@ -125,7 +125,7 @@ pub(crate) struct ChatPref {
 }
 
 pub(crate) async fn set_chat(st: &AppState, me: &User, chat: Uuid, b: ChatPref) -> Result<Prefs> {
-    let exists = db::find_chat(&st.pool, chat).await?;
+    let exists = crate::db::chats::find_chat(&st.pool, chat).await?;
     if exists.is_none() {
         return Err(AppError::NotFound);
     }
@@ -204,11 +204,11 @@ async fn fanout_inner(st: &AppState, chat: Uuid, author: Uuid, body: &str) -> Re
             (format!("/team/{id}"), name, aud)
         }
     };
-    let author_name = db::get_user_name(&st.pool, author).await?;
+    let author_name = crate::db::profile::find_user_name(&st.pool, author).await?.ok_or(sqlx::Error::RowNotFound)?;
     let hour = Utc::now().hour() as i16;
     for uid in audience.into_iter().filter(|u| *u != author) {
         let prefs = load_prefs(st, uid).await?;
-        let name = db::find_active_user_name(&st.pool, uid).await?;
+        let name = crate::db::profile::find_active_name(&st.pool, uid).await?;
         let Some(name) = name else { continue };
         let mentioned = mentions_me(Some(body), &mentions::handle(&name));
         let quiet = prefs.quiet_start.zip(prefs.quiet_end);

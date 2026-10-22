@@ -64,7 +64,7 @@ async fn check(st: &AppState, b: &RecurringIn) -> Result<(String, i64, String)> 
         Some(_) => return Err(AppError::BadRequest("invalid_currency")),
     };
     if let Some(c) = b.category_id {
-        let ok = db::has_category(&st.pool, c).await?;
+        let ok = crate::db::nodes::category_exists(&st.pool, c).await?;
         if !ok {
             return Err(AppError::BadRequest("invalid_category"));
         }

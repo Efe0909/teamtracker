@@ -2,15 +2,6 @@
 
 use uuid::Uuid;
 
-pub(crate) async fn insert_activity(ex: impl sqlx::PgExecutor<'_>, chat: Uuid, actor: Uuid, verb: &str, subject: &str, target: Option<&str>, detail: Option<String>) -> Result<(), sqlx::Error> {
-    sqlx::query(
-        "insert into activity (chat_id, actor_id, verb, subject_label, target_label, detail)
-         values ($1, $2, $3, $4, $5, $6)")
-        .bind(chat).bind(actor).bind(verb).bind(subject).bind(target).bind(detail)
-        .execute(ex).await?;
-    Ok(())
-}
-
 pub(crate) async fn check_banner(ex: impl sqlx::PgExecutor<'_>, attachment: Uuid, max_bytes: i64) -> Result<bool, sqlx::Error> {
     sqlx::query_scalar(
             "select exists(select 1 from attachments where id = $1 and deleted_at is null
@@ -22,10 +13,6 @@ pub(crate) async fn set_banner(ex: impl sqlx::PgExecutor<'_>, team: Uuid, banner
     sqlx::query("update teams set banner_id = $2 where id = $1")
         .bind(team).bind(banner).execute(ex).await?;
     Ok(())
-}
-
-pub(crate) async fn insert_chat(ex: impl sqlx::PgExecutor<'_>) -> Result<Uuid, sqlx::Error> {
-    sqlx::query_scalar("insert into chats default values returning id").fetch_one(ex).await
 }
 
 pub(crate) async fn insert_team(ex: impl sqlx::PgExecutor<'_>, name: &str, description: Option<&str>, color: Option<&str>, chat: Uuid) -> Result<Uuid, sqlx::Error> {

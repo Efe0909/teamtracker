@@ -123,18 +123,8 @@ pub(crate) async fn find_export_period(ex: impl sqlx::PgExecutor<'_>, day: Naive
         .bind(day).fetch_optional(ex).await
 }
 
-pub(crate) async fn has_category(ex: impl sqlx::PgExecutor<'_>, id: Uuid) -> Result<bool, sqlx::Error> {
-    sqlx::query_scalar("select exists(select 1 from nodes where id = $1 and node_type = 'category')")
-        .bind(id).fetch_one(ex).await
-}
-
 pub(crate) async fn has_period(ex: impl sqlx::PgExecutor<'_>, id: Uuid) -> Result<bool, sqlx::Error> {
     sqlx::query_scalar("select exists(select 1 from finance_periods where id = $1)")
-        .bind(id).fetch_one(ex).await
-}
-
-pub(crate) async fn has_event(ex: impl sqlx::PgExecutor<'_>, id: Uuid) -> Result<bool, sqlx::Error> {
-    sqlx::query_scalar("select exists(select 1 from events where id = $1)")
         .bind(id).fetch_one(ex).await
 }
 
