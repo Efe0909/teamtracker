@@ -1,106 +1,27 @@
-//! Maliye > mail sablonlari (spec/81 §9, §3.9): `.html`/`.md` govdesi saklanir; degiskenler
-//! (`{{ad:tur}}`) saklanmaz, govdeden okunur ve cizim ISTEMCIDE yapilir. Uygulama mail
-//! gondermez. Sablon yazmak maliye gorebilen herkese acik (spec/81 §11).
+use axum::{extract::{Path, State}, Json};
 
-use axum::{
-    extract::{Path, State},
-    Json,
-};
-use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
-use uuid::Uuid;
-
-use super::finance::need_viewer;
 use crate::{
     api::common::{self, Body},
     auth::CurrentUser,
-    error::{AppError, Result},
+    domain::templates,
+    error::Result,
     state::AppState,
 };
 
-const BODY_MAX: usize = 262_144;
-
-#[derive(Serialize, sqlx::FromRow)]
-pub struct Template {
-    id: Uuid,
-    name: String,
-    format: String,
-    body: String,
-    updated_at: DateTime<Utc>,
-}
+pub(crate) use crate::domain::templates::{Template, TemplateIn};
 
 pub async fn list(State(st): State<AppState>, CurrentUser(me): CurrentUser) -> Result<Json<Vec<Template>>> {
-    need_viewer(&st, &me).await?;
-    Ok(Json(sqlx::query_as("select id, name, format, body, updated_at from mail_templates order by name")
-        .fetch_all(&st.pool).await?))
+    templates::list(&st, &me).await.map(Json)
 }
 
-#[derive(Deserialize)]
-pub struct TemplateIn {
-    name: String,
-    format: String,
-    body: String,
+pub async fn create(State(st): State<AppState>, CurrentUser(me): CurrentUser, Body(b): Body<TemplateIn>) -> Result<Json<Template>> {
+    templates::create(&st, &me, b).await.map(Json)
 }
 
-fn check(b: &TemplateIn) -> Result<String> {
-    let name = common::text(Some(b.name.clone()), 120, "invalid_name")?.ok_or(AppError::BadRequest("invalid_name"))?;
-    if b.format != "html" && b.format != "md" {
-        return Err(AppError::BadRequest("invalid_format"));
-    }
-    if b.body.trim().is_empty() || b.body.len() > BODY_MAX {
-        return Err(AppError::BadRequest("invalid_body"));
-    }
-    Ok(name)
+pub async fn replace(State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>, Body(b): Body<TemplateIn>) -> Result<Json<Template>> {
+    templates::replace(&st, &me, common::id(&raw)?, b).await.map(Json)
 }
 
-async fn one(st: &AppState, id: Uuid) -> Result<Template> {
-    sqlx::query_as("select id, name, format, body, updated_at from mail_templates where id = $1")
-        .bind(id).fetch_optional(&st.pool).await?.ok_or(AppError::NotFound)
-}
-
-pub async fn create(
-    State(st): State<AppState>, CurrentUser(me): CurrentUser, Body(b): Body<TemplateIn>,
-) -> Result<Json<Template>> {
-    need_viewer(&st, &me).await?;
-    let name = check(&b)?;
-    let taken: bool = sqlx::query_scalar("select exists(select 1 from mail_templates where name = $1)")
-        .bind(&name).fetch_one(&st.pool).await?;
-    if taken {
-        return Err(AppError::Conflict("template_exists"));
-    }
-    let id: Uuid = sqlx::query_scalar(
-        "insert into mail_templates (name, format, body, created_by) values ($1, $2, $3, $4) returning id")
-        .bind(&name).bind(&b.format).bind(&b.body).bind(me.id).fetch_one(&st.pool).await?;
-    one(&st, id).await.map(Json)
-}
-
-pub async fn replace(
-    State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>, Body(b): Body<TemplateIn>,
-) -> Result<Json<Template>> {
-    need_viewer(&st, &me).await?;
-    let id = common::id(&raw)?;
-    let name = check(&b)?;
-    let taken: bool = sqlx::query_scalar("select exists(select 1 from mail_templates where name = $1 and id <> $2)")
-        .bind(&name).bind(id).fetch_one(&st.pool).await?;
-    if taken {
-        return Err(AppError::Conflict("template_exists"));
-    }
-    let n = sqlx::query("update mail_templates set name = $2, format = $3, body = $4, updated_at = now() where id = $1")
-        .bind(id).bind(&name).bind(&b.format).bind(&b.body).execute(&st.pool).await?.rows_affected();
-    if n == 0 {
-        return Err(AppError::NotFound);
-    }
-    one(&st, id).await.map(Json)
-}
-
-pub async fn delete(
-    State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>,
-) -> Result<Json<serde_json::Value>> {
-    need_viewer(&st, &me).await?;
-    let n = sqlx::query("delete from mail_templates where id = $1")
-        .bind(common::id(&raw)?).execute(&st.pool).await?.rows_affected();
-    if n == 0 {
-        return Err(AppError::NotFound);
-    }
-    Ok(Json(serde_json::json!({ "deleted": true })))
+pub async fn delete(State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>) -> Result<Json<serde_json::Value>> {
+    templates::delete(&st, &me, common::id(&raw)?).await.map(Json)
 }
