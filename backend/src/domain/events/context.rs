@@ -13,14 +13,14 @@
 //! Kulup ve yer `{{KULUP}}`/`{{YER}}` yer tutucusu olarak gider; model cevabindaki
 //! yer tutucuyu sunucu doldurur (`llm_restore`).
 
-use axum::extract::Query;
 use chrono::Datelike;
+use crate::db::event_context::{self as db_context, OtfRow};
 
 // Malzeme onerisi: daraltilmis istek + model cagrisi + sunucu suzgeci (spec/79 §9).
 mod materials;
 pub(crate) use materials::{
     decide as decide_suggestion, material_brief, material_suggestions, reject_suggestion, sample_input as material_sample,
-    try_suggest,
+    try_suggest, MaterialBrief, SuggestIn, SuggestOut,
 };
 
 use super::*;
@@ -100,12 +100,6 @@ struct EventCtx {
     description: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     place_description: Option<String>,
-}
-
-#[derive(Serialize, sqlx::FromRow)]
-struct OutcomeRow {
-    name: String,
-    description: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -194,36 +188,6 @@ struct OfferCtx {
 
 // --- sorgular ----------------------------------------------------------------
 
-#[derive(sqlx::FromRow)]
-struct Head {
-    title: String,
-    kind: String,
-    status: String,
-    priority: String,
-    date: Option<NaiveDate>,
-    start_time: Option<String>,
-    attendees: Option<i32>,
-    description: Option<String>,
-    has_place: bool,
-    place_description: Option<String>,
-    participant_count: i64,
-    team_count: i64,
-}
-
-#[derive(sqlx::FromRow)]
-struct OtfRow {
-    end_time: Option<String>,
-    age_group: Option<String>,
-    purpose: Option<String>,
-    outcomes: Option<String>,
-    layout_notes: Option<String>,
-    av_notes: Option<String>,
-    tech_notes: Option<String>,
-    host_notes: Option<String>,
-    care_notes: Option<String>,
-    other_notes: Option<String>,
-}
-
 impl OtfRow {
     /// `SECTIONS[..].notes` sutun adiyla.
     fn note(&self, column: &str) -> Option<&str> {
@@ -240,21 +204,10 @@ impl OtfRow {
     }
 }
 
-#[derive(sqlx::FromRow)]
-struct CheckpointRow {
-    label: String,
-    date: Option<NaiveDate>,
-    done: bool,
-    /// Sablondan geldi (`offset_days` dolu); elle eklenenin tarihi mutlak.
-    templated: bool,
-}
-
 /// Metinde aranacak adlar: kisiler ve kurumlar (takim, tedarikci, kulup).
 pub(crate) async fn known_names(st: &AppState) -> Result<Known> {
-    let people: Vec<String> = sqlx::query_scalar("select name from users").fetch_all(&st.pool).await?;
-    let mut orgs: Vec<String> = sqlx::query_scalar(
-        "select name from teams union select name from material_providers where name is not null")
-        .fetch_all(&st.pool).await?;
+    let people = db_context::list_people(&st.pool).await?;
+    let mut orgs = db_context::list_organizations(&st.pool).await?;
     orgs.push(st.cfg.club_name.clone());
     orgs.push(st.cfg.club_code.clone());
     Ok(Known::default().people(people.iter().map(String::as_str)).orgs(orgs.iter().map(String::as_str)))
@@ -292,14 +245,8 @@ fn material_ctx(s: &Scrub, m: Material) -> MaterialCtx {
 }
 
 async fn otf_ctx(st: &AppState, s: &Scrub<'_>, id: Uuid) -> Result<Option<OtfCtx>> {
-    let row: Option<OtfRow> = sqlx::query_as(
-        "select to_char(end_time, 'HH24:MI') as end_time, age_group, purpose, outcomes,
-                layout_notes, av_notes, tech_notes, host_notes, care_notes, other_notes
-           from event_otf where event_id = $1")
-        .bind(id).fetch_optional(&st.pool).await?;
-    let picked: Vec<(String, Option<i32>)> = sqlx::query_as(
-        "select item, quantity from event_otf_items where event_id = $1 order by item")
-        .bind(id).fetch_all(&st.pool).await?;
+    let row = db_context::find_otf(&st.pool, id).await?;
+    let picked = db_context::list_otf_items(&st.pool, id).await?;
     let items: Vec<ItemCtx> = picked.iter().filter_map(|(item, quantity)| {
         SECTIONS.iter().flat_map(|sec| sec.items.iter())
             .find(|(key, _)| key == item)
@@ -328,10 +275,9 @@ async fn otf_ctx(st: &AppState, s: &Scrub<'_>, id: Uuid) -> Result<Option<OtfCtx
 // --- uclar -------------------------------------------------------------------
 
 pub(crate) async fn llm_context(
-    State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>, Query(q): Query<Params>,
-) -> Result<Json<Context>> {
-    let id = common::id(&raw)?;
-    Ok(Json(build_context(&st, &me, id, q.free_text.unwrap_or(false)).await?))
+    st: &AppState, me: &User, id: Uuid, q: Params,
+) -> Result<Context> {
+    build_context(st, me, id, q.free_text.unwrap_or(false)).await
 }
 
 /// Uc ile dahili cagiranlarin (modele istek kuran islevler) ortak yolu: ayni kapsam ve
@@ -339,38 +285,21 @@ pub(crate) async fn llm_context(
 async fn build_context(st: &AppState, me: &User, id: Uuid, free_text: bool) -> Result<Context> {
     require_scope(st, me, USE_AI).await?;
     require_visible(st, me, id).await?;
-    let cfg = crate::api::llm::load(&st.pool).await?;
+    let cfg = crate::domain::llm::load(&st.pool).await?;
     if free_text && !cfg.free_text_allowed {
         return Err(AppError::BadRequest("free_text_disabled"));
     }
     let s = Scrub { rules: &cfg.rules, known: known_names(st).await?, free_text };
 
-    let head: Head = sqlx::query_as(
-        "select e.title, k.name as kind, e.status, e.priority, e.date,
-                to_char(e.start_time, 'HH24:MI') as start_time, e.attendees, e.description,
-                coalesce(l.name, nullif(trim(e.place), '')) is not null as has_place,
-                l.description as place_description,
-                (select count(*) from event_participants p where p.event_id = e.id) as participant_count,
-                (select count(*) from event_teams t where t.event_id = e.id) as team_count
-           from events e join nodes k on k.id = e.kind_id left join nodes l on l.id = e.location_id
-          where e.id = $1")
-        .bind(id).fetch_optional(&st.pool).await?.ok_or(AppError::NotFound)?;
+    let head = db_context::find_head(&st.pool, id).await?.ok_or(AppError::NotFound)?;
 
-    let outcome_rows: Vec<OutcomeRow> = sqlx::query_as(
-        "select n.name, n.description from event_otf_outcomes o join nodes n on n.id = o.outcome_id
-          where o.event_id = $1 order by n.name")
-        .bind(id).fetch_all(&st.pool).await?;
+    let outcome_rows = db_context::list_outcomes(&st.pool, id).await?;
     let outcomes = outcome_rows.into_iter().map(|o| OutcomeCtx {
         name: s.short(&o.name),
         description: o.description.as_deref().map(str::trim).filter(|d| !d.is_empty()).map(|d| s.short(d)),
     }).collect();
 
-    let checkpoint_rows: Vec<CheckpointRow> = sqlx::query_as(
-        "select c.label, coalesce(c.due_date, e.date + c.offset_days::int) as date,
-                c.done_at is not null as done, c.offset_days is not null as templated
-           from event_checkpoints c join events e on e.id = c.event_id
-          where c.event_id = $1 order by c.position")
-        .bind(id).fetch_all(&st.pool).await?;
+    let checkpoint_rows = db_context::list_checkpoints(&st.pool, id).await?;
     let checkpoints = checkpoint_rows.into_iter().map(|c| CheckpointCtx {
         label: if c.templated { Some(c.label) } else { s.free(Some(&c.label)) },
         custom: !c.templated,
@@ -378,11 +307,7 @@ async fn build_context(st: &AppState, me: &User, id: Uuid, free_text: bool) -> R
         done: c.done,
     }).collect();
 
-    let mut materials: Vec<Material> = sqlx::query_as(concat!(
-        "select ", material_cols!(), " from materials m
-           join event_materials em on em.material_id = m.id
-          where em.event_id = $1 order by m.created_at, m.id"))
-        .bind(id).fetch_all(&st.pool).await?;
+    let mut materials: Vec<Material> = db_context::list_materials(&st.pool, id).await?.into_iter().map(Material::from).collect();
     attach_providers(&st.pool, &mut materials).await?;
     fill_levels(&st.pool, &mut materials).await?;
 
@@ -424,17 +349,13 @@ pub struct RestoreOut {
 /// Model cevabindaki `{{KULUP}}`/`{{YER}}` gercek degerle doldurulur. Gercek deger
 /// yalniz burada okunur, modele hic gitmez.
 pub(crate) async fn llm_restore(
-    State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>, Body(b): Body<RestoreIn>,
-) -> Result<Json<RestoreOut>> {
-    let id = common::id(&raw)?;
-    require_scope(&st, &me, USE_AI).await?;
-    require_visible(&st, &me, id).await?;
+    st: &AppState, me: &User, id: Uuid, b: RestoreIn,
+) -> Result<RestoreOut> {
+    require_scope(st, me, USE_AI).await?;
+    require_visible(st, me, id).await?;
     if b.text.chars().count() > RESTORE_MAX {
         return Err(AppError::BadRequest("invalid_body"));
     }
-    let place: Option<String> = sqlx::query_scalar(
-        "select coalesce(l.name, nullif(trim(e.place), '')) from events e
-           left join nodes l on l.id = e.location_id where e.id = $1")
-        .bind(id).fetch_one(&st.pool).await?;
-    Ok(Json(RestoreOut { text: redact::restore(&b.text, &st.cfg.club_name, place.as_deref().unwrap_or("")) }))
+    let place = db_context::find_place(&st.pool, id).await?;
+    Ok(RestoreOut { text: redact::restore(&b.text, &st.cfg.club_name, place.as_deref().unwrap_or("")) })
 }

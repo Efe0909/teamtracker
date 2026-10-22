@@ -123,16 +123,11 @@ async fn touch_presence(st: &AppState, id: Uuid) {
         return;
     }
     let n = st.pending_requests.lock().unwrap_or_else(|e| e.into_inner()).remove(&id).unwrap_or(0);
-    if let Err(e) = sqlx::query(
-        "insert into user_activity (user_id, day, requests, minutes) values ($1, current_date, $2, 1)
-         on conflict (user_id, day) do update
-           set requests = user_activity.requests + excluded.requests, minutes = user_activity.minutes + 1")
-        .bind(id).bind(n as i32).execute(&st.pool).await
+    if let Err(e) = crate::db::auth::upsert_activity(&st.pool, id, n as i32).await
     {
         tracing::warn!("activity update failed: {e}");
     }
-    if let Err(e) = sqlx::query("update users set last_seen_at = now() where id = $1")
-        .bind(id).execute(&st.pool).await
+    if let Err(e) = crate::db::auth::touch_presence(&st.pool, id).await
     {
         tracing::warn!("presence update failed: {e}");
     }

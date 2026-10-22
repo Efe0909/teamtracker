@@ -125,8 +125,7 @@ impl QualityConfig {
 /// Acilista: satir varsa o, yoksa ya da bozuksa varsayilan (bozuk satir uyarilir,
 /// servisi dusurmez).
 pub async fn load(pool: &PgPool) -> QualityConfig {
-    let row: Result<Option<Value>, _> = sqlx::query_scalar("select config from quality_config")
-        .fetch_optional(pool).await;
+    let row = crate::db::quality::find_config(pool).await;
     match row {
         Ok(Some(v)) => match serde_json::from_value::<QualityConfig>(v) {
             Ok(c) if c.validate().is_ok() => c,

@@ -22,6 +22,7 @@
 
 use super::*;
 use crate::llm::{self, Effective, Fail, Parsed, Status, Who};
+use crate::db::materials as db_materials;
 
 /// Cevabin uymasi gereken sema (spec/79 §9): yalniz `{items: [{name, description}]}`.
 /// `name` -> `materials.name`, `description` -> `materials.notes`. Adet, tur, oncelik ve
@@ -194,7 +195,6 @@ impl MaterialBrief {
         }
     }
 }
-
 // --- uc ------------------------------------------------------------------------
 
 /// Varsayilan parti; arayuz 3'erli gosterir (spec/79 §9 madde 6). Yonetimden 3-15.
@@ -297,9 +297,7 @@ fn chat_body(e: &Effective, brief: &MaterialBrief) -> serde_json::Value {
 
 /// Etkinligin mevcut kalemleri HAM adlariyla (ozet temizlenmis adi tasir; eslesme gercek adla olmali).
 async fn existing_names(st: &AppState, event: Uuid) -> Result<Vec<String>> {
-    Ok(sqlx::query_scalar(
-        "select m.name from materials m join event_materials em on em.material_id = m.id where em.event_id = $1")
-        .bind(event).fetch_all(&st.pool).await?)
+    Ok(db_materials::list_existing_names(&st.pool, event).await?)
 }
 
 /// `POST /api/events/{id}/material-suggestions`: tek model cagrisiyla bir parti oneri.
@@ -307,18 +305,14 @@ async fn existing_names(st: &AppState, event: Uuid) -> Result<Vec<String>> {
 /// kisiye oneri cikmaz. Her oneri `material_suggestions`'a `pending` yazilir (spec/79 §9.1);
 /// reddedilenler oradan okunur (istemcinin listesi de eklenir: kayit oncesi oturumlar).
 pub(crate) async fn material_suggestions(
-    State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>, Body(b): Body<SuggestIn>,
-) -> Result<Json<SuggestOut>> {
-    let id = common::id(&raw)?;
-    require_scope(&st, &me, "manage_purchases").await?;
-    let cfg = crate::api::llm::load(&st.pool).await?;
-    let ctx = build_context(&st, &me, id, b.free_text.unwrap_or(cfg.free_text_allowed)).await?;
+    st: &AppState, me: &User, id: Uuid, b: SuggestIn,
+) -> Result<SuggestOut> {
+    require_scope(st, me, "manage_purchases").await?;
+    let cfg = crate::domain::llm::load(&st.pool).await?;
+    let ctx = build_context(st, me, id, b.free_text.unwrap_or(cfg.free_text_allowed)).await?;
 
-    let known = known_names(&st).await?;
-    let mut rejected: Vec<String> = sqlx::query_scalar(
-        "select name from material_suggestions where event_id = $1 and status = 'rejected'
-          order by decided_at desc limit 50")
-        .bind(id).fetch_all(&st.pool).await?;
+    let known = known_names(st).await?;
+    let mut rejected = db_materials::list_rejected_names(&st.pool, id).await?;
     rejected.reverse(); // eskiden yeniye: asagidaki kesme en eskileri atar
     rejected.extend(b.rejected.iter().map(|r| r.trim().to_string()));
     let skip = rejected.len().saturating_sub(REJECTED_MAX);
@@ -327,25 +321,21 @@ pub(crate) async fn material_suggestions(
     let cleaned = rejected.iter().map(|r| redact::redact(r, &cfg.rules, &known)).collect();
 
     let c = suggest_contract();
-    let e = llm::settings(&st, c).await;
+    let e = llm::settings(st, c).await;
     let brief = MaterialBrief::from_context(&ctx).with_rejected(cleaned).with_max_items(e.batch);
-    let existing = existing_names(&st, id).await?;
+    let existing = existing_names(st, id).await?;
     let batch_id = Uuid::new_v4();
     let who = Who { user_id: Some(me.id), event_id: Some(id), is_try: false };
     let max = e.batch as usize;
-    let done = llm::run(&st, c, &e, who, Some(batch_id), chat_body(&e, &brief),
+    let done = llm::run(st, c, &e, who, Some(batch_id), chat_body(&e, &brief),
         |resp| parse_reply(resp, &existing, &rejected, max)).await;
     match done.result {
         Ok(items) => {
             let names: Vec<&str> = items.iter().map(|s| s.name.as_str()).collect();
             let descs: Vec<&str> = items.iter().map(|s| s.description.as_str()).collect();
-            let ids: Vec<Uuid> = sqlx::query_scalar(
-                "insert into material_suggestions (event_id, batch_id, name, description)
-                 select $1, $2, n, d from unnest($3::text[], $4::text[]) with ordinality as t(n, d, i)
-                 order by i returning id")
-                .bind(id).bind(batch_id).bind(&names).bind(&descs).fetch_all(&st.pool).await?;
+            let ids = db_materials::insert_suggestions(&st.pool, id, batch_id, &names, &descs).await?;
             let items = ids.into_iter().zip(items).map(|(id, item)| Saved { id, item }).collect();
-            Ok(Json(SuggestOut { items, batch_id }))
+            Ok(SuggestOut { items, batch_id })
         }
         Err(Fail::Limit) => Err(AppError::Limited("suggest_limit")),
         Err(Fail::Off | Fail::Disabled | Fail::Failed) => Err(AppError::Unavailable("suggest_unavailable")),
@@ -355,13 +345,12 @@ pub(crate) async fn material_suggestions(
 /// `POST /api/events/{id}/material-suggestions/{sid}/reject`: bekleyen oneriyi reddeder;
 /// sonraki partilerde modele "bunu onerme" diye gider. Karara baglanmis oneri 409.
 pub(crate) async fn reject_suggestion(
-    State(st): State<AppState>, CurrentUser(me): CurrentUser, Path((raw, sraw)): Path<(String, String)>,
-) -> Result<axum::http::StatusCode> {
-    let (id, sid) = (common::id(&raw)?, common::id(&sraw)?);
-    require_scope(&st, &me, "manage_purchases").await?;
-    require_visible(&st, &me, id).await?;
+    st: &AppState, me: &User, id: Uuid, sid: Uuid,
+) -> Result<()> {
+    require_scope(st, me, "manage_purchases").await?;
+    require_visible(st, me, id).await?;
     decide(&mut *st.pool.acquire().await?, id, sid, me.id, "rejected", None).await?;
-    Ok(axum::http::StatusCode::NO_CONTENT)
+    Ok(())
 }
 
 /// Bekleyen oneriyi karara baglar (ret ya da kabul + dogan kalem). Yoksa 404, karara
@@ -369,18 +358,13 @@ pub(crate) async fn reject_suggestion(
 pub(crate) async fn decide(
     conn: &mut sqlx::PgConnection, event: Uuid, sid: Uuid, by: Uuid, status: &str, material: Option<Uuid>,
 ) -> Result<()> {
-    let pending: Option<bool> = sqlx::query_scalar(
-        "select status = 'pending' from material_suggestions where id = $1 and event_id = $2 for update")
-        .bind(sid).bind(event).fetch_optional(&mut *conn).await?;
+    let pending = db_materials::find_pending_suggestion(&mut *conn, event, sid).await?;
     match pending {
         None => return Err(AppError::NotFound),
         Some(false) => return Err(AppError::Conflict("suggestion_decided")),
         Some(true) => {}
     }
-    sqlx::query(
-        "update material_suggestions set status = $2, material_id = $3, decided_by = $4, decided_at = now()
-          where id = $1")
-        .bind(sid).bind(status).bind(material).bind(by).execute(&mut *conn).await?;
+    db_materials::set_suggestion_decision(&mut *conn, sid, status, material, by).await?;
     Ok(())
 }
 
@@ -389,16 +373,15 @@ pub(crate) async fn decide(
 /// istekle gelir, burada bos). Model cagrilmaz. Kapi `llm_context` ile ayni; `free_text`
 /// verilmezse oneri ucu gibi yonetim ayarina uyar.
 pub(crate) async fn material_brief(
-    State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>, Query(q): Query<Params>,
-) -> Result<Json<MaterialBrief>> {
-    let id = common::id(&raw)?;
+    st: &AppState, me: &User, id: Uuid, q: Params,
+) -> Result<MaterialBrief> {
     let free = match q.free_text {
         Some(f) => f,
-        None => crate::api::llm::load(&st.pool).await?.free_text_allowed,
+        None => crate::domain::llm::load(&st.pool).await?.free_text_allowed,
     };
-    let ctx = build_context(&st, &me, id, free).await?;
-    let e = llm::settings(&st, suggest_contract()).await;
-    Ok(Json(MaterialBrief::from_context(&ctx).with_max_items(e.batch)))
+    let ctx = build_context(st, me, id, free).await?;
+    let e = llm::settings(st, suggest_contract()).await;
+    Ok(MaterialBrief::from_context(&ctx).with_max_items(e.batch))
 }
 
 /// "Dene" ornegi: spec/79 §9'daki ilk denemenin ozeti (robotik atolyesi). Yonetimde

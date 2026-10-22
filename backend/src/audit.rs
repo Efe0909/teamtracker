@@ -32,11 +32,7 @@ pub async fn log_event(
     actor: Option<Uuid>, email: Option<&str>, detail: Option<&str>,
 ) {
     let ip = ip.map(|ip| ip.to_string());
-    let res = sqlx::query(
-        "insert into security_events (event_type, actor_id, email, ip, detail) \
-         values ($1, $2, $3, $4::inet, $5)")
-        .bind(event_type).bind(actor).bind(email).bind(ip).bind(detail)
-        .execute(&st.pool).await;
+    let res = crate::db::audit::insert_event(&st.pool, event_type, actor, email, ip, detail).await;
     if let Err(e) = res {
         tracing::error!("security_events insert failed: {e}");
     }

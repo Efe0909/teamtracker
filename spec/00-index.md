@@ -30,6 +30,7 @@
 | `84-birlestirme.md` | serbest metin mükerrerleri: normalize anahtar, aday (sözcük kümesi + trigram + embedding), yumuşak ve geri alınabilir birleştirme, günlük — **tasarım** (göç 030; tedarikçi dolgusu uygulandı) |
 | `85-embedding.md` | `embeddings` LLM profil türü (OpenRouter, OpenAI uyumlu), pgvector açılışta, eskime denetimli dizinleme, karma anlamsal arama; spec/79 değişmezleri — **tasarım** (göç 032) |
 | `86-baglantilar-graf.md` | `@[ad](record:id)` / `@[ad](event:id)` bağlantıları, `links` tablosu, geri bağlantılar, Obsidian tarzı graf (kayıt + etkinlik + ağaç) — **tasarım** (göç 031) |
+| `87-logged.md` | `Logged<T>` Writer monad: alan olayları (`DomainEvent`), `bind`/`bind_async`, commit sonrası yayın, `into_inner` clippy kapısı; izleyici/KPI ve MCP penceresinin temeli — **tasarım** |
 | `60-kaynak-uyarlama.md` | kaynak panoların çözümlemesi: veri hattı, ekran ekran uyarlama, alınmayacaklar |
 | `61-arastirma-sentezi.md` | IWS ve ekip araçları kaynak taraması — bizim ölçeğe uyan/uymayan pratikler |
 | `referans/` | kaynak arayüz dosyaları (`spec/referans/layout-a.html`) |
