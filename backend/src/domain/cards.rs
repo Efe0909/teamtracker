@@ -22,6 +22,7 @@ use serde_json::{json, Map, Value};
 use uuid::Uuid;
 
 use crate::{
+    db::cards as db,
     domain::{attachments::{self as att, AttachView}, common, records::{self, Detail}},
     error::{AppError, Result},
     models::{enums::SignupAnswer, record::Record, user::User},
@@ -228,17 +229,12 @@ impl CardView {
 
 /// Kaydin kartlari: TEK kart sorgusu, TEK ek sorgusu (N+1 yok).
 pub(crate) async fn of_record(st: &AppState, me: &User, rec: &Record) -> Result<Vec<CardView>> {
-    let rows: Vec<(Uuid, String, Value)> = sqlx::query_as(
-        "select id, card_type, data from cards where record_id = $1 order by sort_order, created_at")
-        .bind(rec.id).fetch_all(&st.pool).await?;
+    let rows = db::list_for_record(&st.pool, rec.id).await?;
     if rows.is_empty() {
         return Ok(Vec::new());
     }
     let ids: Vec<Uuid> = rows.iter().map(|r| r.0).collect();
-    let links: Vec<(Uuid, Uuid)> = sqlx::query_as(
-        "select card_id, attachment_id from card_attachments where card_id = any($1)
-          order by sort_order")
-        .bind(&ids).fetch_all(&st.pool).await?;
+    let links = db::list_attachments(&st.pool, &ids).await?;
     let mut media: HashMap<Uuid, Vec<AttachView>> = HashMap::new();
     if !links.is_empty() {
         let tag = att::can_tag(st, me, Some(rec), None).await?;
@@ -310,12 +306,7 @@ pub(crate) async fn insert(
 ) -> Result<()> {
     let t = kind(card_type).ok_or(AppError::BadRequest("invalid_card_type"))?;
     let data = clean(t, title, data, None)?;
-    let card: Uuid = sqlx::query_scalar(
-        "insert into cards (record_id, card_type, data, created_by, sort_order)
-         values ($1, $2, $3, $4,
-                 coalesce((select max(sort_order) from cards where record_id = $1), -1) + 1)
-         returning id")
-        .bind(record).bind(t.key).bind(&data).bind(me).fetch_one(&mut **tx).await?;
+    let card = db::insert_card(&mut **tx, record, t.key, &data, me).await?;
     link_option_photos(tx, card, me, &data).await?;
     Ok(())
 }
@@ -330,24 +321,14 @@ async fn link_option_photos(
     if ids.is_empty() {
         return Ok(());
     }
-    let n: i64 = sqlx::query_scalar(
-        "select count(distinct a.id) from attachments a
-          where a.id = any($1) and a.deleted_at is null
-            and (a.uploader_id = $2
-                 or exists (select 1 from card_attachments x where x.card_id = $3 and x.attachment_id = a.id))")
-        .bind(&ids).bind(me).bind(card).fetch_one(&mut **tx).await?;
+    let n = db::count_option_photos(&mut **tx, &ids, me, card).await?;
     let mut uniq = ids.clone();
     uniq.sort();
     uniq.dedup();
     if n as usize != uniq.len() {
         return Err(AppError::BadRequest("invalid_attachment"));
     }
-    sqlx::query(
-        "insert into card_attachments (card_id, attachment_id, sort_order)
-         select $1, a, coalesce((select max(sort_order) from card_attachments where card_id = $1), -1) + n
-           from unnest($2::uuid[]) with ordinality as x(a, n)
-         on conflict do nothing")
-        .bind(card).bind(&uniq).execute(&mut **tx).await?;
+    db::insert_option_photos(&mut **tx, card, &uniq).await?;
     Ok(())
 }
 
@@ -365,8 +346,7 @@ pub(crate) async fn create(st: &AppState, me: &User, record_id: Uuid, b: CardIn)
 /// Kart + kaydi. Taninmayan turde `None` tur doner (yalniz silinebilir).
 async fn load(st: &AppState, id: Uuid) -> Result<(Uuid, Option<&'static CardType>, Record)> {
     let (id, record, card_type): (Uuid, Uuid, String) =
-        sqlx::query_as("select id, record_id, card_type from cards where id = $1")
-            .bind(id).fetch_optional(&st.pool).await?.ok_or(AppError::NotFound)?;
+        db::find_card(&st.pool, id).await?.ok_or(AppError::NotFound)?;
     Ok((id, kind(&card_type), records::load(&st.pool, record).await?))
 }
 
@@ -375,16 +355,11 @@ async fn load(st: &AppState, id: Uuid) -> Result<(Uuid, Option<&'static CardType
 pub(crate) async fn patch(st: &AppState, me: &User, id: Uuid, b: CardIn) -> Result<Detail> {
     let (id, t, rec) = load(st, id).await?;
     records::require_edit(st, me, &rec).await?;
-    let existing: Value = sqlx::query_scalar("select data from cards where id = $1")
-        .bind(id).fetch_one(&st.pool).await?;
+    let existing = db::get_data(&st.pool, id).await?;
     let data = clean(t.ok_or(AppError::BadRequest("invalid_card_type"))?, b.title, &b.data,
         Some(existing.as_object().map_or_else(PollFeatures::default, PollFeatures::of)))?;
     let mut tx = st.pool.begin().await?;
-    sqlx::query(
-        "update cards set data = jsonb_strip_nulls(
-                 jsonb_build_object('signups', data->'signups', 'votes', data->'votes')) || $2
-          where id = $1")
-        .bind(id).bind(&data).execute(&mut *tx).await?;
+    db::update_data(&mut *tx, id, &data).await?;
     link_option_photos(&mut tx, id, me.id, &data).await?;
     records::touch(&mut tx, rec.id).await?;
     tx.commit().await?;
@@ -397,7 +372,7 @@ pub(crate) async fn delete(st: &AppState, me: &User, id: Uuid) -> Result<Detail>
     let (id, _, rec) = load(st, id).await?;
     records::require_edit(st, me, &rec).await?;
     let mut tx = st.pool.begin().await?;
-    sqlx::query("delete from cards where id = $1").bind(id).execute(&mut *tx).await?;
+    db::delete_card(&mut *tx, id).await?;
     records::touch(&mut tx, rec.id).await?;
     tx.commit().await?;
     records::detail_of(st, me, rec).await
@@ -420,18 +395,12 @@ pub(crate) async fn signup(st: &AppState, me: &User, id: Uuid, b: SignupIn) -> R
     let key = me.id.to_string();
     match b.answer {
         None => {
-            sqlx::query("update cards set data = data #- array['signups', $2] where id = $1")
-                .bind(id).bind(&key).execute(&st.pool).await?;
+            db::delete_signup(&st.pool, id, &key).await?;
         }
         Some(a) if t.answers.contains(&a) => {
             let note = common::text(b.note, 200, "invalid_body")?;
             let entry = json!({ "answer": a, "note": note, "at": chrono::Utc::now().to_rfc3339() });
-            sqlx::query(
-                "update cards set data = jsonb_set(
-                   case when data ? 'signups' then data else data || '{\"signups\": {}}' end,
-                   array['signups', $2], $3, true)
-                  where id = $1")
-                .bind(id).bind(&key).bind(entry).execute(&st.pool).await?;
+            db::set_signup(&st.pool, id, &key, entry).await?;
         }
         // Havuza "belki" yazilamaz: o turde boyle bir cevap yok.
         Some(_) => return Err(AppError::BadRequest("invalid_answer")),
@@ -469,8 +438,7 @@ pub(crate) async fn vote(st: &AppState, me: &User, id: Uuid, b: VoteIn) -> Resul
     if !t.is_some_and(|t| t.poll) {
         return Err(AppError::BadRequest("invalid_card_type"));
     }
-    let data: Value = sqlx::query_scalar("select data from cards where id = $1")
-        .bind(id).fetch_one(&st.pool).await?;
+    let data = db::get_data(&st.pool, id).await?;
     let key = me.id.to_string();
     let other = common::text(b.other, 200, "invalid_body")?;
     let mut picked = b.options;
@@ -478,8 +446,7 @@ pub(crate) async fn vote(st: &AppState, me: &User, id: Uuid, b: VoteIn) -> Resul
     picked.sort_unstable();
     picked.dedup();
     if picked.is_empty() && other.is_none() {
-        sqlx::query("update cards set data = data #- array['votes', $2] where id = $1")
-            .bind(id).bind(&key).execute(&st.pool).await?;
+        db::delete_vote(&st.pool, id, &key).await?;
         return records::detail_of(st, me, rec).await;
     }
     if poll_closed(data.get("closes_at").and_then(Value::as_str)) {
@@ -495,12 +462,7 @@ pub(crate) async fn vote(st: &AppState, me: &User, id: Uuid, b: VoteIn) -> Resul
     if let (Some(text), Some(o)) = (other, entry.as_object_mut()) {
         o.insert("text".into(), json!(text));
     }
-    sqlx::query(
-        "update cards set data = jsonb_set(
-           case when data ? 'votes' then data else data || '{\"votes\": {}}' end,
-           array['votes', $2], $3, true)
-          where id = $1")
-        .bind(id).bind(&key).bind(entry).execute(&st.pool).await?;
+    db::set_vote(&st.pool, id, &key, entry).await?;
     records::detail_of(st, me, rec).await
 }
 
@@ -519,11 +481,7 @@ pub(crate) async fn attach(st: &AppState, me: &User, id: Uuid, b: AttachIn) -> R
     let mut ids = b.attachment_ids;
     att::claimable(&st.pool, me.id, &mut ids).await?;
     let mut tx = st.pool.begin().await?;
-    sqlx::query(
-        "insert into card_attachments (card_id, attachment_id, sort_order)
-         select $1, a, coalesce((select max(sort_order) from card_attachments where card_id = $1), -1) + n
-           from unnest($2::uuid[]) with ordinality as x(a, n)")
-        .bind(id).bind(&ids).execute(&mut *tx).await?;
+    db::insert_attachments(&mut *tx, id, &ids).await?;
     records::touch(&mut tx, rec.id).await?;
     tx.commit().await?;
     records::detail_of(st, me, rec).await
