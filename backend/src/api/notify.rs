@@ -14,8 +14,6 @@ use crate::{
     state::AppState,
 };
 
-pub(crate) use crate::domain::notify::fanout;
-
 pub async fn list(State(st): State<AppState>, CurrentUser(me): CurrentUser) -> Result<Json<NoticeList>> {
     Ok(Json(notify::list(&st, &me).await?))
 }

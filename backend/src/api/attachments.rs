@@ -16,6 +16,7 @@ use crate::{
     state::AppState,
 };
 
+#[allow(unused_imports)]
 pub(crate) use crate::domain::attachments::{can_tag, claimable, claimable_for, views, AttachView};
 
 pub async fn upload(
