@@ -29,6 +29,7 @@ pub mod otf;
 pub mod profile;
 pub mod purchasing;
 pub mod quality;
+pub mod realtime;
 pub mod records;
 pub mod recurring;
 pub mod teams;
