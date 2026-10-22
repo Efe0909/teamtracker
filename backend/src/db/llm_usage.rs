@@ -5,6 +5,72 @@ use serde_json::Value;
 use uuid::Uuid;
 use crate::llm;
 
+#[allow(clippy::too_many_arguments)]
+pub(crate) async fn insert_call(
+    ex: impl sqlx::PgExecutor<'_>, feature: &str, model: &str, user_id: Option<Uuid>,
+    event_id: Option<Uuid>, is_try: bool, prompt_version: Option<i32>, status: &str,
+    http_status: Option<i32>, error: &Option<String>, ms: i32, prompt_tokens: Option<i32>,
+    completion_tokens: Option<i32>, cost_usd: Option<f64>, or_gen_id: &Option<String>,
+    batch_id: Option<Uuid>, asked: Option<i32>, kept: Option<i32>, outcome: Option<&str>,
+    profile_id: Option<Uuid>,
+) -> Result<Uuid, sqlx::Error> {
+    sqlx::query_scalar(
+        "insert into llm_calls (feature, model, user_id, event_id, is_try, prompt_version, status,
+                                http_status, error, ms, prompt_tokens, completion_tokens, cost_usd,
+                                or_gen_id, batch_id, asked, kept, outcome, profile_id)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+         returning id")
+        .bind(feature).bind(model).bind(user_id).bind(event_id).bind(is_try)
+        .bind(prompt_version).bind(status).bind(http_status).bind(error)
+        .bind(ms).bind(prompt_tokens).bind(completion_tokens)
+        .bind(cost_usd).bind(or_gen_id).bind(batch_id).bind(asked).bind(kept).bind(outcome)
+        .bind(profile_id).fetch_one(ex).await
+}
+
+pub(crate) async fn insert_body(ex: impl sqlx::PgExecutor<'_>, id: Uuid, request: &Value, response: Option<&String>) -> Result<(), sqlx::Error> {
+    sqlx::query("insert into llm_call_bodies (call_id, request, response) values ($1, $2, $3)")
+        .bind(id).bind(request).bind(response).execute(ex).await?;
+    Ok(())
+}
+
+pub(crate) async fn upsert_daily_usage(ex: impl sqlx::PgExecutor<'_>, timezone: &str) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "insert into llm_usage_daily (day, feature, model, calls, errors, prompt_tokens, completion_tokens,
+                                      cost_usd, unpriced, ms_total)
+         select (created_at at time zone $1)::date, feature, model,
+                count(*), count(*) filter (where status <> 'ok'),
+                coalesce(sum(prompt_tokens), 0), coalesce(sum(completion_tokens), 0),
+                coalesce(sum(cost_usd), 0), count(*) filter (where cost_usd is null), coalesce(sum(ms), 0)
+           from llm_calls
+          where status <> 'limit' and (created_at at time zone $1)::date < (now() at time zone $1)::date
+          group by 1, 2, 3
+         on conflict (day, feature, model) do update set
+           calls = excluded.calls, errors = excluded.errors, prompt_tokens = excluded.prompt_tokens,
+           completion_tokens = excluded.completion_tokens, cost_usd = excluded.cost_usd,
+           unpriced = excluded.unpriced, ms_total = excluded.ms_total")
+        .bind(timezone).execute(ex).await?;
+    Ok(())
+}
+
+pub(crate) async fn delete_expired_calls(ex: impl sqlx::PgExecutor<'_>, timezone: &str, boundary: NaiveDate) -> Result<u64, sqlx::Error> {
+    Ok(sqlx::query("delete from llm_calls where (created_at at time zone $1)::date < $2")
+        .bind(timezone).bind(boundary).execute(ex).await?.rows_affected())
+}
+
+pub(crate) async fn delete_expired_bodies(ex: impl sqlx::PgExecutor<'_>, ttl_days: i32) -> Result<u64, sqlx::Error> {
+    Ok(sqlx::query("delete from llm_call_bodies where created_at < now() - make_interval(days => $1)")
+        .bind(ttl_days).execute(ex).await?.rows_affected())
+}
+
+pub(crate) async fn find_boundary(ex: impl sqlx::PgExecutor<'_>, timezone: &str, retention_days: i32) -> Result<NaiveDate, sqlx::Error> {
+    sqlx::query_scalar("select (now() at time zone $1)::date - $2::int")
+        .bind(timezone).bind(retention_days).fetch_one(ex).await
+}
+
+pub(crate) async fn find_today(ex: impl sqlx::PgExecutor<'_>, timezone: &str) -> Result<NaiveDate, sqlx::Error> {
+    sqlx::query_scalar("select (now() at time zone $1)::date").bind(timezone).fetch_one(ex).await
+}
+
 pub(crate) struct Filter {
     pub from: NaiveDate,
     pub to: NaiveDate,

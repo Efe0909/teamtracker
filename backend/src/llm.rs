@@ -341,9 +341,7 @@ impl ProfileRow {
 }
 
 pub async fn profile(pool: &PgPool, id: Uuid) -> Result<Option<ProfileRow>, sqlx::Error> {
-    sqlx::query_as("select id, name, endpoint, model, params, tested_at, created_at, updated_at, updated_by
-                      from llm_profiles where id = $1")
-        .bind(id).fetch_optional(pool).await
+    crate::db::llm::find_profile(pool, id).await
 }
 
 #[derive(Clone, sqlx::FromRow)]
@@ -359,13 +357,7 @@ pub struct TaskRow {
 }
 
 pub async fn task(pool: &PgPool, feature: &str) -> Result<Option<TaskRow>, sqlx::Error> {
-    sqlx::query_as(
-        "select t.profile_id, t.batch, t.enabled, t.store_bodies, t.prompt_version,
-                p.body as prompt, t.updated_at, t.updated_by
-           from llm_tasks t
-           left join llm_prompts p on p.feature = t.feature and p.version = t.prompt_version
-          where t.feature = $1")
-        .bind(feature).fetch_optional(pool).await
+    crate::db::llm::find_task(pool, feature).await
 }
 
 /// Profil + gorev -> etkin ayar.
@@ -405,19 +397,10 @@ pub async fn ensure_defaults(pool: &PgPool, cfg: &crate::config::Config) -> Resu
         if !CONTRACTS.iter().any(|c| c.endpoint == endpoint) {
             continue;
         }
-        sqlx::query(
-            "insert into llm_profiles (name, endpoint, model)
-             select $1, $2, $3 where not exists (select 1 from llm_profiles where endpoint = $2)
-             on conflict (name) do nothing")
-            .bind(endpoint.default_name()).bind(endpoint.key()).bind(default_model(cfg, endpoint))
-            .execute(pool).await?;
+        crate::db::llm::insert_default_profile(pool, endpoint.default_name(), endpoint.key(), default_model(cfg, endpoint)).await?;
     }
     for c in &CONTRACTS {
-        sqlx::query(
-            "insert into llm_tasks (feature, profile_id)
-             select $1, id from llm_profiles where endpoint = $2 order by created_at, name limit 1
-             on conflict (feature) do nothing")
-            .bind(c.feature).bind(c.endpoint.key()).execute(pool).await?;
+        crate::db::llm::insert_default_task(pool, c.feature, c.endpoint.key()).await?;
     }
     Ok(())
 }
@@ -429,21 +412,14 @@ pub fn service_on(st: &AppState, c: &Contract) -> bool {
 /// DB'de kapatilmis ozelliklerin servis anahtarlari (`/api/meta` `external_off`'a eklenir:
 /// on yuz kapali ozelligi cizmesin).
 pub async fn disabled_services(pool: &PgPool) -> Result<Vec<&'static str>, sqlx::Error> {
-    let off: Vec<String> = sqlx::query_scalar("select feature from llm_tasks where not enabled")
-        .fetch_all(pool).await?;
+    let off = crate::db::llm::list_disabled_tasks(pool).await?;
     Ok(off.iter().filter_map(|f| contract(f)).map(|c| c.service.key()).collect())
 }
 
 /// Profilin herhangi bir penceresinde harcama tavana ulasti mi (spec/79 §11.3). Kayan
 /// pencere, toplam DB'den: cok surecte de dogru. Maliyeti NULL cagri 0 sayilir.
 pub async fn over_limit(pool: &PgPool, profile_id: Uuid) -> Result<bool, sqlx::Error> {
-    sqlx::query_scalar(
-        "select exists (
-           select 1 from llm_limits l
-            where l.profile_id = $1
-              and l.usd <= (select coalesce(sum(c.cost_usd), 0) from llm_calls c
-                             where c.profile_id = $1 and c.created_at > now() - make_interval(mins => l.window_minutes)))")
-        .bind(profile_id).fetch_one(pool).await
+    crate::db::llm::check_limit(pool, profile_id).await
 }
 
 /// Son `TESTED_WITHIN_MIN` dakikada bu profil + model ile basarili bir "Dene"nin zamani.
@@ -451,14 +427,7 @@ pub async fn over_limit(pool: &PgPool, profile_id: Uuid) -> Result<bool, sqlx::E
 pub async fn tested(
     pool: &PgPool, feature: Option<&str>, profile_id: Uuid, model: &str, prompt_version: Option<i32>,
 ) -> Result<Option<DateTime<Utc>>, sqlx::Error> {
-    sqlx::query_scalar(
-        "select max(created_at) from llm_calls
-          where is_try and status = 'ok' and profile_id = $2 and model = $3
-            and ($1::text is null or feature = $1)
-            and ($4::int is null or coalesce(prompt_version, 0) = $4)
-            and created_at > now() - make_interval(mins => $5)")
-        .bind(feature).bind(profile_id).bind(model).bind(prompt_version).bind(TESTED_WITHIN_MIN)
-        .fetch_one(pool).await
+    crate::db::llm::find_tested_at(pool, feature, profile_id, model, prompt_version, TESTED_WITHIN_MIN).await
 }
 
 // --- cagri -------------------------------------------------------------------------
@@ -638,18 +607,12 @@ async fn record(
     batch_id: Option<Uuid>, t: &mut Trace,
 ) {
     let to_i32 = |v: Option<u64>| v.and_then(|v| i32::try_from(v).ok());
-    let id: Result<Uuid, _> = sqlx::query_scalar(
-        "insert into llm_calls (feature, model, user_id, event_id, is_try, prompt_version, status,
-                                http_status, error, ms, prompt_tokens, completion_tokens, cost_usd,
-                                or_gen_id, batch_id, asked, kept, outcome, profile_id)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
-         returning id")
-        .bind(c.feature).bind(&e.model).bind(who.user_id).bind(who.event_id).bind(who.is_try)
-        .bind(prompt_version).bind(t.status.key()).bind(t.http_status.map(i32::from)).bind(&t.error)
-        .bind(i32::try_from(t.ms).unwrap_or(i32::MAX)).bind(to_i32(t.prompt_tokens)).bind(to_i32(t.completion_tokens))
-        .bind(t.cost_usd).bind(&t.or_gen_id).bind(batch_id).bind(t.asked).bind(t.kept).bind(t.outcome)
-        .bind(e.profile_id)
-        .fetch_one(&st.pool).await;
+    let id = crate::db::llm_usage::insert_call(
+        &st.pool, c.feature, &e.model, who.user_id, who.event_id, who.is_try,
+        prompt_version, t.status.key(), t.http_status.map(i32::from), &t.error,
+        i32::try_from(t.ms).unwrap_or(i32::MAX), to_i32(t.prompt_tokens), to_i32(t.completion_tokens),
+        t.cost_usd, &t.or_gen_id, batch_id, t.asked, t.kept, t.outcome, e.profile_id,
+    ).await;
     let id = match id {
         Ok(id) => id,
         Err(err) => {
@@ -660,8 +623,7 @@ async fn record(
     t.call_id = Some(id);
     if e.store_bodies && !who.is_try && t.status != Status::Limit {
         let raw = (!t.raw.is_empty()).then_some(&t.raw);
-        if let Err(err) = sqlx::query("insert into llm_call_bodies (call_id, request, response) values ($1, $2, $3)")
-            .bind(id).bind(&t.request).bind(raw).execute(&st.pool).await
+        if let Err(err) = crate::db::llm_usage::insert_body(&st.pool, id, &t.request, raw).await
         {
             tracing::error!("llm_call_bodies yazilamadi: {err}");
         }
@@ -701,36 +663,19 @@ impl TryOut {
 /// (tekrar kosmasi guvenli), sonra suresi dolan satirlari ve govdeleri siler. Silme gun
 /// sinirinda: bir gun ya tamamen `llm_calls`'ta ya tamamen ozette.
 pub async fn sweep(pool: &PgPool) -> Result<(u64, u64), sqlx::Error> {
-    sqlx::query(
-        "insert into llm_usage_daily (day, feature, model, calls, errors, prompt_tokens, completion_tokens,
-                                      cost_usd, unpriced, ms_total)
-         select (created_at at time zone $1)::date, feature, model,
-                count(*), count(*) filter (where status <> 'ok'),
-                coalesce(sum(prompt_tokens), 0), coalesce(sum(completion_tokens), 0),
-                coalesce(sum(cost_usd), 0), count(*) filter (where cost_usd is null), coalesce(sum(ms), 0)
-           from llm_calls
-          where status <> 'limit' and (created_at at time zone $1)::date < (now() at time zone $1)::date
-          group by 1, 2, 3
-         on conflict (day, feature, model) do update set
-           calls = excluded.calls, errors = excluded.errors, prompt_tokens = excluded.prompt_tokens,
-           completion_tokens = excluded.completion_tokens, cost_usd = excluded.cost_usd,
-           unpriced = excluded.unpriced, ms_total = excluded.ms_total")
-        .bind(TZ).execute(pool).await?;
-    let calls = sqlx::query("delete from llm_calls where (created_at at time zone $1)::date < $2")
-        .bind(TZ).bind(boundary(pool).await?).execute(pool).await?.rows_affected();
-    let bodies = sqlx::query("delete from llm_call_bodies where created_at < now() - make_interval(days => $1)")
-        .bind(BODY_TTL_DAYS).execute(pool).await?.rows_affected();
+    crate::db::llm_usage::upsert_daily_usage(pool, TZ).await?;
+    let calls = crate::db::llm_usage::delete_expired_calls(pool, TZ, boundary(pool).await?).await?;
+    let bodies = crate::db::llm_usage::delete_expired_bodies(pool, BODY_TTL_DAYS).await?;
     Ok((calls, bodies))
 }
 
 /// Saklama siniri: bu gunden onceki gunler yalniz `llm_usage_daily`'de.
 pub async fn boundary(pool: &PgPool) -> Result<chrono::NaiveDate, sqlx::Error> {
-    sqlx::query_scalar("select (now() at time zone $1)::date - $2::int")
-        .bind(TZ).bind(RETENTION_DAYS).fetch_one(pool).await
+    crate::db::llm_usage::find_boundary(pool, TZ, RETENTION_DAYS).await
 }
 
 pub async fn today(pool: &PgPool) -> Result<chrono::NaiveDate, sqlx::Error> {
-    sqlx::query_scalar("select (now() at time zone $1)::date").bind(TZ).fetch_one(pool).await
+    crate::db::llm_usage::find_today(pool, TZ).await
 }
 
 // --- yonetim okumalari icin onbellek -------------------------------------------------

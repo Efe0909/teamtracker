@@ -3,7 +3,69 @@
 use chrono::{DateTime, Utc};
 use serde_json::Value;
 use uuid::Uuid;
-use crate::llm::ProfileRow;
+use crate::llm::{ProfileRow, TaskRow};
+
+pub(crate) async fn find_profile(ex: impl sqlx::PgExecutor<'_>, id: Uuid) -> Result<Option<ProfileRow>, sqlx::Error> {
+    sqlx::query_as("select id, name, endpoint, model, params, tested_at, created_at, updated_at, updated_by
+                      from llm_profiles where id = $1")
+        .bind(id).fetch_optional(ex).await
+}
+
+pub(crate) async fn find_task(ex: impl sqlx::PgExecutor<'_>, feature: &str) -> Result<Option<TaskRow>, sqlx::Error> {
+    sqlx::query_as(
+        "select t.profile_id, t.batch, t.enabled, t.store_bodies, t.prompt_version,
+                p.body as prompt, t.updated_at, t.updated_by
+           from llm_tasks t
+           left join llm_prompts p on p.feature = t.feature and p.version = t.prompt_version
+          where t.feature = $1")
+        .bind(feature).fetch_optional(ex).await
+}
+
+pub(crate) async fn insert_default_profile(ex: impl sqlx::PgExecutor<'_>, name: &str, endpoint: &str, model: String) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "insert into llm_profiles (name, endpoint, model)
+             select $1, $2, $3 where not exists (select 1 from llm_profiles where endpoint = $2)
+             on conflict (name) do nothing")
+        .bind(name).bind(endpoint).bind(model).execute(ex).await?;
+    Ok(())
+}
+
+pub(crate) async fn insert_default_task(ex: impl sqlx::PgExecutor<'_>, feature: &str, endpoint: &str) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "insert into llm_tasks (feature, profile_id)
+             select $1, id from llm_profiles where endpoint = $2 order by created_at, name limit 1
+             on conflict (feature) do nothing")
+        .bind(feature).bind(endpoint).execute(ex).await?;
+    Ok(())
+}
+
+pub(crate) async fn list_disabled_tasks(ex: impl sqlx::PgExecutor<'_>) -> Result<Vec<String>, sqlx::Error> {
+    sqlx::query_scalar("select feature from llm_tasks where not enabled").fetch_all(ex).await
+}
+
+pub(crate) async fn check_limit(ex: impl sqlx::PgExecutor<'_>, profile_id: Uuid) -> Result<bool, sqlx::Error> {
+    sqlx::query_scalar(
+        "select exists (
+           select 1 from llm_limits l
+            where l.profile_id = $1
+              and l.usd <= (select coalesce(sum(c.cost_usd), 0) from llm_calls c
+                             where c.profile_id = $1 and c.created_at > now() - make_interval(mins => l.window_minutes)))")
+        .bind(profile_id).fetch_one(ex).await
+}
+
+pub(crate) async fn find_tested_at(
+    ex: impl sqlx::PgExecutor<'_>, feature: Option<&str>, profile_id: Uuid,
+    model: &str, prompt_version: Option<i32>, within_minutes: i32,
+) -> Result<Option<DateTime<Utc>>, sqlx::Error> {
+    sqlx::query_scalar(
+        "select max(created_at) from llm_calls
+          where is_try and status = 'ok' and profile_id = $2 and model = $3
+            and ($1::text is null or feature = $1)
+            and ($4::int is null or coalesce(prompt_version, 0) = $4)
+            and created_at > now() - make_interval(mins => $5)")
+        .bind(feature).bind(profile_id).bind(model).bind(prompt_version).bind(within_minutes)
+        .fetch_one(ex).await
+}
 
 pub(crate) async fn find_config(ex: impl sqlx::PgExecutor<'_>) -> Result<Option<Value>, sqlx::Error> {
     sqlx::query_scalar("select config from llm_config").fetch_optional(ex).await
