@@ -20,7 +20,7 @@ use uuid::Uuid;
 use crate::{
     domain::common,
     audit,
-    db::scope,
+    db::{admin as db, scope},
     error::{AppError, Result},
     models::{enums::NotifyLevel, user::{User, COLORS}},
     state::AppState,
@@ -81,22 +81,6 @@ struct ScopeRow {
     via_roles: Vec<Uuid>,
 }
 
-#[derive(sqlx::FromRow)]
-struct UserRow {
-    id: Uuid,
-    email: String,
-    name: String,
-    color: Option<String>,
-    is_admin: bool,
-    is_active: bool,
-    last_seen_at: Option<DateTime<Utc>>,
-    notify_level: NotifyLevel,
-    quiet_start: Option<i16>,
-    quiet_end: Option<i16>,
-    push_devices: i64,
-    chat_overrides: i64,
-}
-
 fn group<T>(rows: Vec<(Uuid, T)>) -> HashMap<Uuid, Vec<T>> {
     let mut m: HashMap<Uuid, Vec<T>> = HashMap::new();
     for (k, v) in rows {
@@ -106,28 +90,14 @@ fn group<T>(rows: Vec<(Uuid, T)>) -> HashMap<Uuid, Vec<T>> {
 }
 
 async fn view(p: &PgPool, me: &User) -> Result<AdminView> {
-    let scopes = sqlx::query_scalar("select name from scopes order by name").fetch_all(p).await?;
-    let roles: Vec<(Uuid, String, String)> =
-        sqlx::query_as("select id, name, color from roles order by name").fetch_all(p).await?;
-    let role_scopes = group(sqlx::query_as::<_, (Uuid, String)>(
-        "select role_id, scope from role_scopes order by scope").fetch_all(p).await?);
-    let role_nodes = group(sqlx::query_as::<_, (Uuid, Uuid)>(
-        "select role_id, node_id from role_node_scopes order by node_id").fetch_all(p).await?);
-    let user_roles = group(sqlx::query_as::<_, (Uuid, Uuid)>(
-        "select ur.user_id, ur.role_id from user_roles ur
-           join roles r on r.id = ur.role_id order by ur.user_id, r.name")
-        .fetch_all(p).await?);
-    let direct = group(sqlx::query_as::<_, (Uuid, String)>(
-        "select user_id, scope from user_scopes").fetch_all(p).await?);
-    let nodes = group(sqlx::query_as::<_, (Uuid, Uuid)>(
-        "select user_id, node_id from user_node_scopes").fetch_all(p).await?);
-    let users: Vec<UserRow> = sqlx::query_as(
-        "select u.id, u.email, u.name, u.color, u.is_admin, u.is_active, u.last_seen_at,
-                u.notify_level, u.quiet_start, u.quiet_end,
-                (select count(*) from push_subscriptions p where p.user_id = u.id) as push_devices,
-                (select count(*) from chat_prefs c where c.user_id = u.id) as chat_overrides
-           from users u order by u.name")
-        .fetch_all(p).await?;
+    let scopes = db::list_scopes(p).await?;
+    let roles = db::list_roles(p).await?;
+    let role_scopes = group(db::list_role_scopes(p).await?);
+    let role_nodes = group(db::list_role_nodes(p).await?);
+    let user_roles = group(db::list_user_roles(p).await?);
+    let direct = group(db::list_user_scopes(p).await?);
+    let nodes = group(db::list_user_nodes(p).await?);
+    let users = db::list_users(p).await?;
 
     let people = users.into_iter().map(|u| {
         let mut rows: BTreeMap<String, ScopeRow> = BTreeMap::new();
@@ -196,12 +166,7 @@ pub(crate) async fn add_user(st: &AppState, me: &User, b: NewUser) -> Result<Adm
     }
     let name = common::text(Some(b.name), NAME_MAX, "invalid_name")?
         .ok_or(AppError::BadRequest("invalid_name"))?;
-    let added = sqlx::query(
-        "insert into users (email, name, color)
-         values ($1, $2, ($3::text[])[1 + ((select count(*) from users) % 6)::int])
-         on conflict (lower(email)) do nothing")
-        .bind(&email).bind(&name).bind(COLORS.to_vec())
-        .execute(&st.pool).await?.rows_affected();
+    let added = db::insert_user(&st.pool, &email, &name, COLORS.to_vec()).await?;
     if added == 0 {
         return Err(AppError::Conflict("user_exists"));
     }
@@ -236,14 +201,11 @@ pub(crate) async fn patch_user(st: &AppState, me: &User, id: Uuid, op: UserOp, i
     // Ikinci islem birincinin commit'ini bekler ve guncel sayiyi gorur.
     let admins: Vec<Uuid> = match op {
         UserOp::Active(_) | UserOp::Admin(_) => {
-            sqlx::query_scalar("select id from users where is_admin and is_active for update")
-                .fetch_all(&mut *tx).await?
+            db::list_active_admins_for_update(&mut *tx).await?
         }
         _ => vec![],
     };
-    let (email, is_admin, is_active): (String, bool, bool) =
-        sqlx::query_as("select email, is_admin, is_active from users where id = $1")
-            .bind(id).fetch_optional(&mut *tx).await?.ok_or(AppError::NotFound)?;
+    let (email, is_admin, is_active) = db::find_user_status(&mut *tx, id).await?.ok_or(AppError::NotFound)?;
     let last_admin = admins.contains(&id) && admins.len() <= 1;
 
     // (olay, ayrinti) — yalniz gercekten degisen yazilir.
@@ -259,8 +221,7 @@ pub(crate) async fn patch_user(st: &AppState, me: &User, id: Uuid, op: UserOp, i
                 if !want && last_admin {
                     return Err(AppError::Conflict("last_admin"));
                 }
-                sqlx::query("update users set is_admin = $2 where id = $1")
-                    .bind(id).bind(want).execute(&mut *tx).await?;
+                db::set_admin(&mut *tx, id, want).await?;
                 Some((if want { "admin_granted" } else { "admin_revoked" }, None))
             }
         }
@@ -276,65 +237,48 @@ pub(crate) async fn patch_user(st: &AppState, me: &User, id: Uuid, op: UserOp, i
                 if !want && last_admin {
                     return Err(AppError::Conflict("last_admin"));
                 }
-                sqlx::query("update users set is_active = $2 where id = $1")
-                    .bind(id).bind(want).execute(&mut *tx).await?;
+                db::set_active(&mut *tx, id, want).await?;
                 Some(("deactivation", Some(if want { "acildi" } else { "kapatildi" }.into())))
             }
         }
         UserOp::GrantScope(s) => {
             valid_scopes(&st.pool, std::slice::from_ref(&s)).await?;
-            let n = sqlx::query(
-                "insert into user_scopes (user_id, scope, granted_by) values ($1, $2, $3)
-                 on conflict do nothing")
-                .bind(id).bind(&s).bind(me.id).execute(&mut *tx).await?.rows_affected();
+            let n = db::insert_user_scope(&mut *tx, id, &s, me.id).await?;
             (n > 0).then_some(("scope_granted", Some(s)))
         }
         UserOp::RevokeScope(s) => {
-            let n = sqlx::query("delete from user_scopes where user_id = $1 and scope = $2")
-                .bind(id).bind(&s).execute(&mut *tx).await?.rows_affected();
+            let n = db::delete_user_scope(&mut *tx, id, &s).await?;
             (n > 0).then_some(("scope_revoked", Some(s)))
         }
         UserOp::GrantRole(r) => {
             let name = role_name(&st.pool, r).await?;
-            let n = sqlx::query(
-                "insert into user_roles (user_id, role_id, granted_by) values ($1, $2, $3)
-                 on conflict do nothing")
-                .bind(id).bind(r).bind(me.id).execute(&mut *tx).await?.rows_affected();
+            let n = db::insert_user_role(&mut *tx, id, r, me.id).await?;
             (n > 0).then_some(("role_granted", Some(name)))
         }
         UserOp::RevokeRole(r) => {
             let name = role_name(&st.pool, r).await?;
-            let n = sqlx::query("delete from user_roles where user_id = $1 and role_id = $2")
-                .bind(id).bind(r).execute(&mut *tx).await?.rows_affected();
+            let n = db::delete_user_role(&mut *tx, id, r).await?;
             (n > 0).then_some(("role_revoked", Some(name)))
         }
         UserOp::GrantNode(node) => {
             let name = node_name(st, node)?;
-            let n = sqlx::query(
-                "insert into user_node_scopes (user_id, node_id, granted_by) values ($1, $2, $3)
-                 on conflict do nothing")
-                .bind(id).bind(node).bind(me.id).execute(&mut *tx).await?.rows_affected();
+            let n = db::insert_user_node(&mut *tx, id, node, me.id).await?;
             (n > 0).then_some(("scope_granted", Some(format!("dal: {name}"))))
         }
         UserOp::Avatar(photo) => {
             // Ek benim yukledigim, silinmemis olmali. Guvenlik olayi degil: kayit yok.
             if let Some(a) = photo {
-                let ok: bool = sqlx::query_scalar(
-                    "select exists(select 1 from attachments
-                                    where id = $1 and uploader_id = $2 and deleted_at is null)")
-                    .bind(a).bind(me.id).fetch_one(&mut *tx).await?;
+                let ok = db::check_avatar(&mut *tx, a, me.id).await?;
                 if !ok {
                     return Err(AppError::BadRequest("invalid_avatar"));
                 }
             }
-            sqlx::query("update users set avatar_id = $2 where id = $1")
-                .bind(id).bind(photo).execute(&mut *tx).await?;
+            db::set_avatar(&mut *tx, id, photo).await?;
             None
         }
         UserOp::RevokeNode(node) => {
             let name = node_name(st, node)?;
-            let n = sqlx::query("delete from user_node_scopes where user_id = $1 and node_id = $2")
-                .bind(id).bind(node).execute(&mut *tx).await?.rows_affected();
+            let n = db::delete_user_node(&mut *tx, id, node).await?;
             (n > 0).then_some(("scope_revoked", Some(format!("dal: {name}"))))
         }
     };
@@ -364,10 +308,8 @@ async fn within_grant(st: &AppState, me: &User, target: Uuid, op: &UserOp) -> Re
     let (wanted, wanted_nodes): (Vec<String>, Vec<Uuid>) = match op {
         UserOp::GrantScope(s) | UserOp::RevokeScope(s) => (vec![s.clone()], vec![]),
         UserOp::GrantRole(r) | UserOp::RevokeRole(r) => {
-            let scopes = sqlx::query_scalar("select scope from role_scopes where role_id = $1")
-                .bind(r).fetch_all(&st.pool).await?;
-            let nodes = sqlx::query_scalar("select node_id from role_node_scopes where role_id = $1")
-                .bind(r).fetch_all(&st.pool).await?;
+            let scopes = db::list_scopes_for_role(&st.pool, *r).await?;
+            let nodes = db::list_nodes_for_role(&st.pool, *r).await?;
             (scopes, nodes)
         }
         UserOp::GrantNode(n) | UserOp::RevokeNode(n) => {
@@ -403,14 +345,12 @@ async fn valid_scopes(p: &PgPool, names: &[String]) -> Result<()> {
     let mut want: Vec<&String> = names.iter().collect();
     want.sort();
     want.dedup();
-    let found: i64 = sqlx::query_scalar("select count(*) from scopes where name = any($1)")
-        .bind(names).fetch_one(p).await?;
+    let found = db::count_scopes(p, names).await?;
     if found as usize == want.len() { Ok(()) } else { Err(AppError::BadRequest("invalid_scope")) }
 }
 
 async fn role_name(p: &PgPool, id: Uuid) -> Result<String> {
-    sqlx::query_scalar("select name from roles where id = $1")
-        .bind(id).fetch_optional(p).await?.ok_or(AppError::BadRequest("unknown_role"))
+    db::find_role_name(p, id).await?.ok_or(AppError::BadRequest("unknown_role"))
 }
 
 fn node_name(st: &AppState, id: Uuid) -> Result<String> {
@@ -472,41 +412,30 @@ async fn write_role(
     let color = b.color.or_else(|| id.is_none().then(|| "#5b8cff".to_string()));
     let id = match (id, name) {
         (None, None) => return Err(AppError::BadRequest("invalid_name")),
-        (None, Some(n)) => sqlx::query_scalar(
-            "insert into roles (name, created_by, color) values ($1, $2, $3)
-             on conflict (name) do nothing returning id")
-            .bind(n).bind(me.id).bind(color.clone()).fetch_optional(&mut **tx).await?
+        (None, Some(n)) => db::insert_role(&mut **tx, n, me.id, color.clone()).await?
             .ok_or(AppError::Conflict("role_exists"))?,
         (Some(id), Some(n)) => {
-            let taken: Option<i32> = sqlx::query_scalar("select 1 from roles where name = $1 and id <> $2")
-                .bind(&n).bind(id).fetch_optional(&mut **tx).await?;
+            let taken = db::find_role_name_conflict(&mut **tx, &n, id).await?;
             if taken.is_some() {
                 return Err(AppError::Conflict("role_exists"));
             }
-            sqlx::query("update roles set name = $2, color = coalesce($3, color) where id = $1")
-                .bind(id).bind(n).bind(color).execute(&mut **tx).await?;
+            db::update_role(&mut **tx, id, n, color).await?;
             id
         }
         (Some(id), None) => {
             if let Some(color) = color {
-                sqlx::query("update roles set color = $2 where id = $1").bind(id).bind(color)
-                    .execute(&mut **tx).await?;
+                db::set_role_color(&mut **tx, id, color).await?;
             }
             id
         }
     };
     if let Some(s) = b.scopes {
-        sqlx::query("delete from role_scopes where role_id = $1").bind(id).execute(&mut **tx).await?;
-        sqlx::query("insert into role_scopes (role_id, scope) select $1, unnest($2::text[])
-                     on conflict do nothing")
-            .bind(id).bind(s).execute(&mut **tx).await?;
+        db::delete_role_scopes(&mut **tx, id).await?;
+        db::insert_role_scopes(&mut **tx, id, s).await?;
     }
     if let Some(nodes) = b.node_ids {
-        sqlx::query("delete from role_node_scopes where role_id = $1").bind(id).execute(&mut **tx).await?;
-        sqlx::query(
-            "insert into role_node_scopes (role_id, node_id, granted_by)
-             select $1, unnest($2::uuid[]), $3 on conflict do nothing")
-            .bind(id).bind(nodes).bind(me.id).execute(&mut **tx).await?;
+        db::delete_role_nodes(&mut **tx, id).await?;
+        db::insert_role_nodes(&mut **tx, id, nodes, me.id).await?;
     }
     Ok(id)
 }
@@ -535,8 +464,7 @@ pub(crate) async fn patch_role(st: &AppState, me: &User, id: Uuid, b: RoleIn) ->
 /// `user_scopes` satiri kalir — iki kaynak bagimsiz.
 pub(crate) async fn delete_role(st: &AppState, me: &User, id: Uuid, ip: Option<std::net::IpAddr>) -> Result<AdminView> {
     admin_only(me)?;
-    let name: String = sqlx::query_scalar("delete from roles where id = $1 returning name")
-        .bind(id).fetch_optional(&st.pool).await?.ok_or(AppError::NotFound)?;
+    let name = db::delete_role(&st.pool, id).await?.ok_or(AppError::NotFound)?;
     audit::log_event(st, ip, "role_deleted", Some(me.id), Some(&me.email),
         Some(&name)).await;
     view(&st.pool, me).await
@@ -556,13 +484,6 @@ pub struct DayUse {
     changes: i32,
 }
 
-#[derive(sqlx::FromRow)]
-struct LoginRow {
-    id: Uuid,
-    last_login_at: Option<DateTime<Utc>>,
-    last_seen_at: Option<DateTime<Utc>>,
-}
-
 #[derive(Serialize)]
 pub struct PersonUse {
     user_id: Uuid,
@@ -575,29 +496,14 @@ pub struct PersonUse {
 /// Kisi bazli kullanim: son giris, son hareket, gunluk istek/dakika.
 pub(crate) async fn activity(st: &AppState, me: &User) -> Result<Vec<PersonUse>> {
     can_manage(st, me).await?;
-    let people: Vec<LoginRow> = sqlx::query_as(
-        "select id, last_login_at, last_seen_at from users order by name")
-        .fetch_all(&st.pool).await?;
+    let people = db::list_logins(&st.pool).await?;
     // Uc kaynak gun gun birlesir: varlik sayaclari + yazilan mesaj + yazilan olay.
     // `created_at::date` oturum saat diliminde — `current_date` ile ayni gun siniri.
     // ponytail: messages/activity'de (yazar, tarih) indeksi yok, 120 gunluk tarama;
     // satir sayisi buyurse `(author_id, created_at)` / `(actor_id, created_at)` indeksi.
-    let rows: Vec<(Uuid, chrono::NaiveDate, i32, i32, i32, i32)> = sqlx::query_as(
-        "select user_id, day, sum(requests)::int, sum(minutes)::int, sum(messages)::int, sum(changes)::int
-           from (
-             select user_id, day, requests, minutes, 0 as messages, 0 as changes
-               from user_activity where day > current_date - 120
-             union all
-             select author_id, created_at::date, 0, 0, 1, 0
-               from messages where author_id is not null and created_at::date > current_date - 120
-             union all
-             select actor_id, created_at::date, 0, 0, 0, 1
-               from activity where actor_id is not null and created_at::date > current_date - 120
-           ) t
-          group by user_id, day order by day")
-        .fetch_all(&st.pool).await?;
+    let rows = db::list_activity(&st.pool).await?;
     let mut by: HashMap<Uuid, Vec<DayUse>> = HashMap::new();
-    for (u, day, requests, minutes, messages, changes) in rows {
+    for db::ActivityRow { user_id: u, day, requests, minutes, messages, changes } in rows {
         by.entry(u).or_default().push(DayUse { day, requests, minutes, messages, changes });
     }
     Ok(people.into_iter().map(|p| PersonUse {

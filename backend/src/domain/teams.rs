@@ -13,6 +13,7 @@ use serde_json::json;
 use uuid::Uuid;
 
 use crate::{
+    db::teams as db,
     domain::common,
     error::{AppError, Result},
     models::user::User,
@@ -53,11 +54,7 @@ async fn wall(
     tx: &mut Tx<'_>, chat: Uuid, actor: Uuid, verb: &str, subject: &str,
     target: Option<&str>, detail: Option<String>,
 ) -> Result<()> {
-    sqlx::query(
-        "insert into activity (chat_id, actor_id, verb, subject_label, target_label, detail)
-         values ($1, $2, $3, $4, $5, $6)")
-        .bind(chat).bind(actor).bind(verb).bind(subject).bind(target).bind(detail)
-        .execute(&mut **tx).await?;
+    db::insert_activity(&mut **tx, chat, actor, verb, subject, target, detail).await?;
     Ok(())
 }
 
@@ -65,17 +62,12 @@ async fn wall(
 /// asiyorsa 400 (`invalid_banner`; spec/83 §4.1).
 async fn set_banner(tx: &mut Tx<'_>, team: Uuid, banner: Option<Uuid>) -> Result<()> {
     if let Some(a) = banner {
-        let ok: bool = sqlx::query_scalar(
-            "select exists(select 1 from attachments where id = $1 and deleted_at is null
-                                                        and kind = 'image' and byte_size <= $2)")
-            .bind(a).bind(crate::media::Purpose::Banner.max_bytes() as i64)
-            .fetch_one(&mut **tx).await?;
+        let ok = db::check_banner(&mut **tx, a, crate::media::Purpose::Banner.max_bytes() as i64).await?;
         if !ok {
             return Err(AppError::BadRequest("invalid_banner"));
         }
     }
-    sqlx::query("update teams set banner_id = $2 where id = $1")
-        .bind(team).bind(banner).execute(&mut **tx).await?;
+    db::set_banner(&mut **tx, team, banner).await?;
     Ok(())
 }
 
@@ -83,13 +75,8 @@ async fn set_banner(tx: &mut Tx<'_>, team: Uuid, banner: Option<Uuid>) -> Result
 async fn insert_team(
     tx: &mut Tx<'_>, actor: Uuid, name: &str, description: Option<&str>, color: Option<&str>,
 ) -> Result<(Uuid, Uuid)> {
-    let chat: Uuid = sqlx::query_scalar("insert into chats default values returning id")
-        .fetch_one(&mut **tx).await?;
-    let id: Uuid = sqlx::query_scalar(
-        "insert into teams (name, description, color, chat_id) values ($1, $2, $3, $4)
-         returning id")
-        .bind(name).bind(description).bind(color).bind(chat)
-        .fetch_one(&mut **tx).await.map_err(name_taken)?;
+    let chat = db::insert_chat(&mut **tx).await?;
+    let id = db::insert_team(&mut **tx, name, description, color, chat).await.map_err(name_taken)?;
     wall(tx, chat, actor, "team_created", name, None, None).await?;
     Ok((id, chat))
 }
@@ -153,13 +140,8 @@ pub(crate) async fn patch_team(st: &AppState, me: &User, id: Uuid, p: TeamPatch)
     let color = p.color.map(|c| common::text(c, COLOR_MAX, "invalid_color")).transpose()?;
 
     let mut tx = st.pool.begin().await?;
-    let (old_name, old_description, old_color, chat, is_pillar): (
-        String, Option<String>, Option<String>, Uuid, bool,
-    ) = sqlx::query_as(
-        "select t.name, t.description, t.color, t.chat_id,
-                exists(select 1 from pillars p where p.team_id = t.id)
-           from teams t where t.id = $1 for update")
-        .bind(id).fetch_optional(&mut *tx).await?.ok_or(AppError::NotFound)?;
+    let db::TeamRow { name: old_name, description: old_description, color: old_color, chat_id: chat, is_pillar } =
+        db::find_team_for_update(&mut *tx, id).await?.ok_or(AppError::NotFound)?;
     let next_name = name.unwrap_or_else(|| old_name.clone());
     if next_name != old_name {
         common::min_chars(Some(&next_name), common::NAME_MIN, "name_too_short")?;
@@ -171,10 +153,8 @@ pub(crate) async fn patch_team(st: &AppState, me: &User, id: Uuid, p: TeamPatch)
     if is_pillar && next_name != old_name {
         return Err(AppError::Conflict("team_is_pillar"));
     }
-    sqlx::query("update teams set name = $2, description = $3, color = $4 where id = $1")
-        .bind(id).bind(&next_name)
-        .bind(description.unwrap_or(old_description)).bind(color.unwrap_or(old_color))
-        .execute(&mut *tx).await.map_err(name_taken)?;
+    db::update_team(&mut *tx, id, &next_name, description.unwrap_or(old_description), color.unwrap_or(old_color))
+        .await.map_err(name_taken)?;
     if let Some(banner) = p.banner_id {
         set_banner(&mut tx, id, banner).await?;
     }
@@ -188,9 +168,7 @@ pub(crate) async fn patch_team(st: &AppState, me: &User, id: Uuid, p: TeamPatch)
 
 pub(crate) async fn delete_team(st: &AppState, me: &User, id: Uuid) -> Result<()> {
     crate::domain::home::manage_teams(st, me).await?;
-    let is_pillar: Option<bool> = sqlx::query_scalar(
-        "select exists(select 1 from pillars p where p.team_id = t.id) from teams t where t.id = $1")
-        .bind(id).fetch_optional(&st.pool).await?;
+    let is_pillar = db::find_pillar_status(&st.pool, id).await?;
     match is_pillar {
         None => return Err(AppError::NotFound),
         Some(true) => return Err(AppError::Conflict("team_is_pillar")),
@@ -199,7 +177,7 @@ pub(crate) async fn delete_team(st: &AppState, me: &User, id: Uuid) -> Result<()
     // Sohbet tetikleyiciyle gider, records.team_id null olur (FK).
     // Arada pillar'a baglanamaz (pillar'i yalniz POST /api/pillars kurar);
     // yarisa kalirsa FK restrict 500 verir, kabul.
-    sqlx::query("delete from teams where id = $1").bind(id).execute(&st.pool).await?;
+    db::delete_team(&st.pool, id).await?;
     Ok(())
 }
 
@@ -207,21 +185,14 @@ pub(crate) async fn delete_team(st: &AppState, me: &User, id: Uuid) -> Result<()
 pub(crate) async fn link_node(st: &AppState, me: &User, team: Uuid, node: Uuid) -> Result<()> {
     crate::domain::home::manage_teams(st, me).await?;
     let mut tx = st.pool.begin().await?;
-    let (team_name, chat): (String, Uuid) =
-        sqlx::query_as("select name, chat_id from teams where id = $1")
-            .bind(team).fetch_optional(&mut *tx).await?.ok_or(AppError::NotFound)?;
-    let node_name: String =
-        sqlx::query_scalar("select name from nodes where id = $1 and is_active")
-            .bind(node).fetch_optional(&mut *tx).await?
+    let (team_name, chat) = db::find_team_chat(&mut *tx, team).await?.ok_or(AppError::NotFound)?;
+    let node_name = db::find_active_node_name(&mut *tx, node).await?
             .ok_or(AppError::BadRequest("invalid_node"))?;
     // Takim yalniz birime baglanir (spec/74 §4.7).
     if !crate::refdata::under(&common::tree(st), node, crate::refdata::UNITS) {
         return Err(AppError::BadRequest("unit_outside_units"));
     }
-    let inserted = sqlx::query(
-        "insert into team_nodes (team_id, node_id, linked_by) values ($1, $2, $3)
-         on conflict do nothing")
-        .bind(team).bind(node).bind(me.id).execute(&mut *tx).await?.rows_affected();
+    let inserted = db::insert_node_link(&mut *tx, team, node, me.id).await?;
     if inserted > 0 {
         wall(&mut tx, chat, me.id, "team_node_linked", &team_name, Some(&node_name), None).await?;
     }
@@ -233,13 +204,8 @@ pub(crate) async fn link_node(st: &AppState, me: &User, team: Uuid, node: Uuid) 
 pub(crate) async fn unlink_node(st: &AppState, me: &User, team: Uuid, node: Uuid) -> Result<()> {
     crate::domain::home::manage_teams(st, me).await?;
     let mut tx = st.pool.begin().await?;
-    let (team_name, chat): (String, Uuid) =
-        sqlx::query_as("select name, chat_id from teams where id = $1")
-            .bind(team).fetch_optional(&mut *tx).await?.ok_or(AppError::NotFound)?;
-    let node_name: Option<String> = sqlx::query_scalar(
-        "delete from team_nodes t using nodes n
-          where t.team_id = $1 and t.node_id = $2 and n.id = t.node_id returning n.name")
-        .bind(team).bind(node).fetch_optional(&mut *tx).await?;
+    let (team_name, chat) = db::find_team_chat(&mut *tx, team).await?.ok_or(AppError::NotFound)?;
+    let node_name = db::delete_node_link(&mut *tx, team, node).await?;
     if let Some(node_name) = node_name {
         wall(&mut tx, chat, me.id, "team_node_unlinked", &team_name, Some(&node_name), None).await?;
     }
@@ -260,12 +226,7 @@ pub(crate) async fn create_pillar(st: &AppState, me: &User, b: NewTeam) -> Resul
     let mut tx = st.pool.begin().await?;
     let (team_id, _) = insert_team(&mut tx, me.id, &name, description.as_deref(), color.as_deref()).await?;
     // Sona ekle: sira elle verilmiyor (agactaki kural).
-    let id: Uuid = sqlx::query_scalar(
-        "insert into pillars (name, description, color, team_id, created_by, sort_order)
-         values ($1, $2, $3, $4, $5, (select coalesce(max(sort_order), -1) + 1 from pillars))
-         returning id")
-        .bind(&name).bind(&description).bind(&color).bind(team_id).bind(me.id)
-        .fetch_one(&mut *tx).await.map_err(name_taken)?;
+    let id = db::insert_pillar(&mut *tx, &name, &description, &color, team_id, me.id).await.map_err(name_taken)?;
     tx.commit().await?;
     Ok(CreatedPillar { id, team_id })
 }
@@ -296,20 +257,7 @@ pub(crate) async fn patch_pillar(st: &AppState, me: &User, id: Uuid, p: PillarPa
     let color = p.color.map(|c| common::text(c, COLOR_MAX, "invalid_color")).transpose()?;
 
     let mut tx = st.pool.begin().await?;
-    #[derive(sqlx::FromRow)]
-    struct Row {
-        name: String,
-        description: Option<String>,
-        color: Option<String>,
-        team_id: Uuid,
-        is_active: bool,
-        sort_order: i32,
-        chat_id: Uuid,
-    }
-    let old: Row = sqlx::query_as(
-        "select p.name, p.description, p.color, p.team_id, p.is_active, p.sort_order, t.chat_id
-           from pillars p join teams t on t.id = p.team_id where p.id = $1 for update of p")
-        .bind(id).fetch_optional(&mut *tx).await?.ok_or(AppError::NotFound)?;
+    let old = db::find_pillar_for_update(&mut *tx, id).await?.ok_or(AppError::NotFound)?;
     let next_name = name.unwrap_or_else(|| old.name.clone());
     let next_description = description.unwrap_or_else(|| old.description.clone());
     if next_name != old.name {
@@ -319,16 +267,10 @@ pub(crate) async fn patch_pillar(st: &AppState, me: &User, id: Uuid, p: PillarPa
         check_description(next_description.as_deref(), bypass_quality)?;
     }
     let next_color = color.unwrap_or(old.color);
-    sqlx::query(
-        "update pillars set name = $2, description = $3, color = $4, is_active = $5,
-                            sort_order = $6 where id = $1")
-        .bind(id).bind(&next_name).bind(&next_description).bind(&next_color)
-        .bind(p.is_active.unwrap_or(old.is_active)).bind(p.sort_order.unwrap_or(old.sort_order))
-        .execute(&mut *tx).await.map_err(name_taken)?;
+    db::update_pillar(&mut *tx, id, &next_name, &next_description, &next_color,
+        p.is_active.unwrap_or(old.is_active), p.sort_order.unwrap_or(old.sort_order)).await.map_err(name_taken)?;
     // Ad/aciklama/renk ozel takima da yazilir.
-    sqlx::query("update teams set name = $2, description = $3, color = $4 where id = $1")
-        .bind(old.team_id).bind(&next_name).bind(&next_description).bind(&next_color)
-        .execute(&mut *tx).await.map_err(name_taken)?;
+    db::update_team(&mut *tx, old.team_id, &next_name, next_description, next_color).await.map_err(name_taken)?;
     if let Some(banner) = p.banner_id {
         set_banner(&mut tx, old.team_id, banner).await?;
     }
@@ -348,9 +290,8 @@ pub(crate) async fn delete_pillar(st: &AppState, me: &User, id: Uuid) -> Result<
     }
     let mut tx = st.pool.begin().await?;
     // Once pillar (team_id FK restrict), sonra takim.
-    let team: Uuid = sqlx::query_scalar("delete from pillars where id = $1 returning team_id")
-        .bind(id).fetch_optional(&mut *tx).await?.ok_or(AppError::NotFound)?;
-    sqlx::query("delete from teams where id = $1").bind(team).execute(&mut *tx).await?;
+    let team = db::delete_pillar(&mut *tx, id).await?.ok_or(AppError::NotFound)?;
+    db::delete_team(&mut *tx, team).await?;
     tx.commit().await?;
     Ok(())
 }

@@ -13,6 +13,7 @@ use serde_json::Value;
 use uuid::Uuid;
 
 use crate::{
+    db::llm_usage::{self as db, Filter},
     error::{AppError, Result},
     llm,
     openrouter,
@@ -31,15 +32,6 @@ pub struct FilterIn {
     /// ok | error | limit
     status: Option<String>,
     cursor: Option<String>,
-}
-
-struct Filter {
-    from: NaiveDate,
-    to: NaiveDate,
-    feature: Option<String>,
-    model: Option<String>,
-    user: Option<Uuid>,
-    status: Option<&'static str>,
 }
 
 fn date(raw: Option<&str>) -> Result<Option<NaiveDate>> {
@@ -77,21 +69,9 @@ impl Filter {
     }
 }
 
-/// `llm_calls` uzerindeki ortak kosul; $1 TZ, $2..$7 from, to, feature, model, user, status.
-/// Makro: sorgu `concat!` ile DERLEMEDE birlesir (sqlx yalniz `&'static str` kabul eder).
-macro_rules! calls_where { () => { "
-    (c.created_at at time zone $1)::date between $2 and $3
-    and ($4::text is null or c.feature = $4)
-    and ($5::text is null or c.model = $5)
-    and ($6::uuid is null or c.user_id = $6)
-    and ($7::text is null
-         or ($7 = 'ok' and c.status = 'ok')
-         or ($7 = 'limit' and c.status = 'limit')
-         or ($7 = 'error' and c.status not in ('ok', 'limit')))" } }
-
 // --- kullanim --------------------------------------------------------------------
 
-#[derive(Serialize, sqlx::FromRow)]
+#[derive(Serialize)]
 pub struct DayRow {
     day: NaiveDate,
     feature: String,
@@ -106,7 +86,15 @@ pub struct DayRow {
     ms_total: i64,
 }
 
-#[derive(Serialize, sqlx::FromRow)]
+impl DayRow {
+    fn of(r: db::DayRow) -> Self {
+        Self { day: r.day, feature: r.feature, model: r.model, calls: r.calls, errors: r.errors,
+            limited: r.limited, prompt_tokens: r.prompt_tokens, completion_tokens: r.completion_tokens,
+            cost_usd: r.cost_usd, unpriced: r.unpriced, ms_total: r.ms_total }
+    }
+}
+
+#[derive(Serialize)]
 pub struct UserRow {
     user_id: Option<Uuid>,
     calls: i64,
@@ -131,49 +119,24 @@ pub(crate) async fn usage(st: &AppState, me: &crate::models::user::User, q: Filt
     // Ozet kullanilacaksa llm_calls yalniz sinirdan itibaren (ayni gun iki kez sayilmasin).
     let calls_from = if f.daily_ok() { f.from.max(boundary) } else { f.from };
     let mut rows: Vec<DayRow> = if calls_from <= f.to {
-        sqlx::query_as(concat!(
-            "select (c.created_at at time zone $1)::date as day, c.feature, c.model,
-                    count(*) filter (where c.status <> 'limit') as calls,
-                    count(*) filter (where c.status not in ('ok', 'limit')) as errors,
-                    count(*) filter (where c.status = 'limit') as limited,
-                    coalesce(sum(c.prompt_tokens), 0)::bigint as prompt_tokens,
-                    coalesce(sum(c.completion_tokens), 0)::bigint as completion_tokens,
-                    coalesce(sum(c.cost_usd), 0)::float8 as cost_usd,
-                    count(*) filter (where c.cost_usd is null and c.status <> 'limit') as unpriced,
-                    coalesce(sum(c.ms) filter (where c.status <> 'limit'), 0)::bigint as ms_total
-               from llm_calls c where ", calls_where!(), "
-              group by 1, 2, 3"))
-            .bind(llm::TZ).bind(calls_from).bind(f.to).bind(&f.feature).bind(&f.model).bind(f.user).bind(f.status)
-            .fetch_all(&st.pool).await?
+        db::list_days(&st.pool, &f, calls_from).await?.into_iter().map(DayRow::of).collect()
     } else {
         Vec::new()
     };
     if f.daily_ok() && f.from < boundary {
-        let old: Vec<DayRow> = sqlx::query_as(
-            "select day, feature, model, calls::bigint, errors::bigint, 0::bigint as limited,
-                    prompt_tokens, completion_tokens, cost_usd, unpriced::bigint, ms_total
-               from llm_usage_daily
-              where day between $1 and $2 and day < $3
-                and ($4::text is null or feature = $4) and ($5::text is null or model = $5)")
-            .bind(f.from).bind(f.to).bind(boundary).bind(&f.feature).bind(&f.model)
-            .fetch_all(&st.pool).await?;
-        rows.extend(old);
+        let old = db::list_daily_summaries(&st.pool, &f, boundary).await?;
+        rows.extend(old.into_iter().map(DayRow::of));
     }
     rows.sort_by(|a, b| (a.day, &a.feature, &a.model).cmp(&(b.day, &b.feature, &b.model)));
-    let by_user = sqlx::query_as(concat!(
-        "select c.user_id, count(*) filter (where c.status <> 'limit') as calls,
-                count(*) filter (where c.status not in ('ok', 'limit')) as errors,
-                coalesce(sum(c.cost_usd), 0)::float8 as cost_usd
-           from llm_calls c where ", calls_where!(), "
-          group by c.user_id order by cost_usd desc, calls desc"))
-        .bind(llm::TZ).bind(f.from).bind(f.to).bind(&f.feature).bind(&f.model).bind(f.user).bind(f.status)
-        .fetch_all(&st.pool).await?;
+    let by_user = db::list_users(&st.pool, &f).await?.into_iter().map(|r| UserRow {
+        user_id: r.user_id, calls: r.calls, errors: r.errors, cost_usd: r.cost_usd,
+    }).collect();
     Ok(UsageView { from: f.from, to: f.to, boundary, rows, by_user })
 }
 
 // --- cagrilar --------------------------------------------------------------------
 
-#[derive(Serialize, sqlx::FromRow)]
+#[derive(Serialize)]
 pub struct CallRow {
     id: Uuid,
     created_at: DateTime<Utc>,
@@ -198,10 +161,16 @@ pub struct CallRow {
     has_body: bool,
 }
 
-macro_rules! call_cols { () => { "c.id, c.created_at, c.feature, c.model, c.user_id, c.event_id, c.is_try,
-    c.prompt_version, c.status, c.http_status, c.error, c.ms, c.prompt_tokens, c.completion_tokens, c.cost_usd,
-    c.or_gen_id, c.batch_id, c.asked, c.kept, c.outcome,
-    exists (select 1 from llm_call_bodies b where b.call_id = c.id) as has_body" } }
+impl CallRow {
+    fn of(r: db::CallRow) -> Self {
+        Self { id: r.id, created_at: r.created_at, feature: r.feature, model: r.model,
+            user_id: r.user_id, event_id: r.event_id, is_try: r.is_try, prompt_version: r.prompt_version,
+            status: r.status, http_status: r.http_status, error: r.error, ms: r.ms,
+            prompt_tokens: r.prompt_tokens, completion_tokens: r.completion_tokens, cost_usd: r.cost_usd,
+            or_gen_id: r.or_gen_id, batch_id: r.batch_id, asked: r.asked, kept: r.kept,
+            outcome: r.outcome, has_body: r.has_body }
+    }
+}
 
 const PAGE: i64 = 50;
 
@@ -230,16 +199,8 @@ pub(crate) async fn calls(st: &AppState, me: &crate::models::user::User, q: Filt
     crate::domain::llm::require(st, me).await?;
     let f = Filter::parse(&q, llm::today(&st.pool).await?)?;
     let (at, id) = cursor(q.cursor.as_deref())?;
-    let rows: Vec<CallRow> = sqlx::query_as(concat!(
-        "select ", call_cols!(), " from llm_calls c
-          where ", calls_where!(), " and ($8::timestamptz is null or (c.created_at, c.id) < ($8, $9))
-          order by c.created_at desc, c.id desc limit $10"))
-        .bind(llm::TZ).bind(f.from).bind(f.to).bind(&f.feature).bind(&f.model).bind(f.user).bind(f.status)
-        .bind(at).bind(id).bind(PAGE)
-        .fetch_all(&st.pool).await?;
-    let total = sqlx::query_scalar(concat!("select count(*) from llm_calls c where ", calls_where!()))
-        .bind(llm::TZ).bind(f.from).bind(f.to).bind(&f.feature).bind(&f.model).bind(f.user).bind(f.status)
-        .fetch_one(&st.pool).await?;
+    let rows: Vec<CallRow> = db::list_calls(&st.pool, &f, at, id, PAGE).await?.into_iter().map(CallRow::of).collect();
+    let total = db::count_calls(&st.pool, &f).await?;
     let next = (rows.len() as i64 == PAGE).then(|| rows.last().map(|r| format!("{}_{}", r.created_at.to_rfc3339(), r.id))).flatten();
     Ok(CallsView { rows, total, next })
 }
@@ -254,11 +215,8 @@ pub struct CallDetail {
 
 pub(crate) async fn call(st: &AppState, me: &crate::models::user::User, id: Uuid) -> Result<CallDetail> {
     crate::domain::llm::require(st, me).await?;
-    let call: CallRow = sqlx::query_as(concat!("select ", call_cols!(), " from llm_calls c where c.id = $1"))
-        .bind(id).fetch_optional(&st.pool).await?.ok_or(AppError::NotFound)?;
-    let body: Option<(Value, Option<String>)> =
-        sqlx::query_as("select request, response from llm_call_bodies where call_id = $1")
-            .bind(id).fetch_optional(&st.pool).await?;
+    let call = CallRow::of(db::find_call(&st.pool, id).await?.ok_or(AppError::NotFound)?);
+    let body = db::find_body(&st.pool, id).await?;
     let (request, response) = match body { Some((r, s)) => (Some(r), s), None => (None, None) };
     Ok(CallDetail { call, request, response })
 }
@@ -300,12 +258,7 @@ pub(crate) async fn status(st: &AppState, me: &crate::models::user::User) -> Res
             on: llm::service_on(st, c), enabled: llm::settings(st, c).await.enabled,
         });
     }
-    let (calls, bodies, daily_rows, oldest_call, size_bytes): (i64, i64, i64, Option<DateTime<Utc>>, i64) = sqlx::query_as(
-        "select (select count(*) from llm_calls), (select count(*) from llm_call_bodies),
-                (select count(*) from llm_usage_daily), (select min(created_at) from llm_calls),
-                (pg_total_relation_size('llm_calls') + pg_total_relation_size('llm_call_bodies')
-                 + pg_total_relation_size('llm_usage_daily'))::bigint")
-        .fetch_one(&st.pool).await?;
+    let db::StatusRow { calls, bodies, daily_rows, oldest_call, size_bytes } = db::find_status(&st.pool).await?;
     Ok(StatusView {
         key_configured: !st.cfg.decision_key.is_empty(),
         external_off: st.cfg.external_off.clone(),
