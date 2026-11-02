@@ -157,3 +157,14 @@ içindeki `001_schema.sql`…`011_node_types.sql` bir daha yeniden adlandırılm
 kurulu bir veritabanında yeniden adlandırılırsa uygulanmamış sayılır ve
 **yeniden koşar**. Rename bu geçişte serbestti çünkü henüz canlıya hiç
 kurulmamıştı (veritabanı boştu); artık ilk gerçek kurulumdan sonra donarlar.
+
+**Rust göçleri (`backend/migrations/`): 001..025 tek dosyada.** `025_baseline.sql`
+eski 001..025'in son hali (ALTER/DROP geçmişi yok, referans veri tohumu düz INSERT).
+Yeni göç 030+ ya da 026+ numarasıyla ayrı dosya. `db::collapse_legacy` tek seferlik
+köprü: eski göçleri koşmuş veritabanının `_sqlx_migrations` satırlarını tabana indirir
+(eski satırlar `_sqlx_migrations_pre_squash`ta). Tüm ortamlar yeni sürümle bir kez
+açıldıktan sonra o fonksiyonu sil. `025_baseline.sql` ilk dağıtımdan sonra DONAR
+(sqlx sağlama toplamı tutuyor, tek bayt değişirse uygulama açılmaz). Eski ortam 025'ten
+eskiyse açılış reddedilir: önce sıkıştırma öncesi sürümle 025'e göç ettir ya da
+veritabanını yeniden kur. Yerel `ekiptakip_*` veritabanları 025'ten eskiyse
+`dropdb` + `createdb` yeter. Spec'lerdeki "göç 001..025" numaraları tarihçedir.

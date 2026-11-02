@@ -21,7 +21,7 @@ teams ──< team_nodes >── nodes                          (takım ↔ ağa
 - Özel takımın adı pillar'ın adıdır; pillar yeniden adlandırılınca takım da.
   `teams.name` UNIQUE olduğu için çakışma `409 name_taken`.
 
-## Göç: `backend/migrations/002_teams_pillars.sql`
+## Göç 002 (tarihçe; artık `backend/migrations/025_baseline.sql` içinde son şema)
 
 Tek işlem, kurulu veritabanında veri kaybetmeden:
 

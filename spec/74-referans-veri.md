@@ -1,7 +1,7 @@
 # 74 — Referans veri: operational kökler, shape, slot şemaları
 
 **Durum: uygulanıyor** (Efe onayladı, 2026-10-03). Görüşme İngilizce yapıldı;
-terimler bilerek çevrilmedi. Göç `backend/migrations/011_reference_data.sql`,
+terimler bilerek çevrilmedi. Göç 011 (artık `backend/migrations/025_baseline.sql` içinde, düz tohum),
 şemalar `backend/src/refdata.rs`, uçlar `backend/src/api/nodes.rs`, seçiciler
 `frontend/src/features/nodes/NodePicker.tsx`.
 
