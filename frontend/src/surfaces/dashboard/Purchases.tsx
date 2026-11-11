@@ -12,7 +12,7 @@ import r from "../../features/record/record.module.css";
 import { ago, formatDay } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
 import { Icon } from "../../ui/icons";
-import { cx, IconButton, Segmented, ui, useToast } from "../../ui/ui";
+import { Button, cx, Dialog, IconButton, Segmented, ui, useToast } from "../../ui/ui";
 import {
   BOARD_COLUMNS, columnOf, dropState, etaOf, isLate, MATERIAL_STAGE, MATERIAL_TYPE, money, priceOf, purchaseHealth,
   purchaseTotals, type PurchaseHealth,
@@ -151,10 +151,7 @@ export function Purchases({ eventId, eventDate, items, onRemove }: {
           {HEALTH[health]}
         </span>
         <span className={s.grow} />
-        <a className={cx(ui.btn, ui["z-sm"])} href={`/api/events/${eventId}/purchases.xlsx`} download
-          title="Onaylı ve teslim edilen kalemler, Excel">
-          <Icon name="download" size={14} /> Excel
-        </a>
+        <ExcelExport eventId={eventId} items={items} />
         <Segmented label="Görünüm" value={view} onChange={setView}
           options={[{ value: "board", label: "Pano" }, { value: "list", label: "Liste" }]} />
         {onRemove !== undefined && (
@@ -259,6 +256,31 @@ export function Purchases({ eventId, eventDate, items, onRemove }: {
 }
 
 /** Tek alan, dugmesiz: Enter ekler. Adet, oncelik ve tur detayda ayarlanir. */
+/** Excel: iki kapsam (onaylı | tümü). "Zaten var" kalemler ikisinde de yok (sunucu). */
+function ExcelExport({ eventId, items }: { eventId: Uuid; items: Material[] }) {
+  const [open, setOpen] = useState(false);
+  const wanted = items.filter((m) => !m.owned);
+  const approvedN = wanted.filter((m) => m.state === 3).length;
+  const url = `/api/events/${eventId}/purchases.xlsx`;
+  return (
+    <>
+      <Button size="sm" onClick={() => setOpen(true)}><Icon name="download" size={14} /> Excel</Button>
+      <Dialog open={open} onClose={() => setOpen(false)} title="Excel'e aktar"
+        hint="“Zaten var” işaretli kalemler hiçbir seçenekte yer almaz.">
+        <div className={ui.formStack}>
+          <a className={ui.btn} href={url} download onClick={() => setOpen(false)}>
+            Yalnız onaylı ve teslim edilenler ({approvedN})
+          </a>
+          <a className={cx(ui.btn, ui["v-primary"])} href={`${url}?all=true`} download onClick={() => setOpen(false)}>
+            Tüm kalemler ({wanted.length})
+          </a>
+          <div className={ui.dact}><Button onClick={() => setOpen(false)}>Vazgeç</Button></div>
+        </div>
+      </Dialog>
+    </>
+  );
+}
+
 function AddForm({ eventId, run, busy }: { eventId: Uuid; run: Run; busy: boolean }) {
   const [name, setName] = useState("");
   return (

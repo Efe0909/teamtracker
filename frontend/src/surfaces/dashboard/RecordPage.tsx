@@ -8,6 +8,7 @@ import { useRecord } from "../../api/hooks";
 import type { Uuid } from "../../api/types";
 import { Chat } from "../../features/chat/Chat";
 import { ChatBell } from "../../features/chat/ChatBell";
+import { DeleteButton } from "../../features/record/DeleteButton";
 import { Properties } from "../../features/record/fields";
 import { Cards } from "../../features/record/Cards";
 import { JoinBanner, RestrictedSkeleton } from "../../features/record/Join";
@@ -18,7 +19,6 @@ import { Icon } from "../../ui/icons";
 import { Link, Loading } from "../../ui/ui";
 import { ErrorScreen } from "../errors/ErrorScreen";
 import s from "./dashboard.module.css";
-import { EventSwitch } from "./EventPage";
 import { href } from "./routes";
 
 export function RecordPage({ id }: { id: Uuid }) {
@@ -68,7 +68,9 @@ export function RecordPage({ id }: { id: Uuid }) {
           <div className={s.recordInner}>
             <JoinBanner d={d} />
             <RecordHead d={d} showPath={false}
-              titleExtra={d.event_id !== null && <EventSwitch eventId={d.event_id} recordId={id} at="record" />} />
+              titleExtra={<DeleteButton kind="records" id={id} title={d.record.title}
+                consequence="Eylemleri, kartları, ekleri ve sohbeti de silinir."
+                onDeleted={() => navigate(href({ name: "tasks", query: {} }))} />} />
             <ReadOnlyNote d={d} />
             <div className={s.fieldsBlock}>
               <CollapsibleProps d={d}>

@@ -28,7 +28,6 @@ function detail(title = "Bütçe onayı"): RecordDetail {
     },
     actions: [], participants: [], cards: [], access: { can_edit: true, can_edit_deadline: true },
     pinned: false, membership: { mode: "public", is_member: true, restricted: false, request: null, can_decide: false, requests: [] },
-    event_id: null,
   };
 }
 

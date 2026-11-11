@@ -359,7 +359,6 @@ pub(crate) async fn reject_suggestion(
 ) -> Result<axum::http::StatusCode> {
     let (id, sid) = (common::id(&raw)?, common::id(&sraw)?);
     require_scope(&st, &me, "manage_purchases").await?;
-    require_visible(&st, &me, id).await?;
     decide(&mut *st.pool.acquire().await?, id, sid, me.id, "rejected", None).await?;
     Ok(axum::http::StatusCode::NO_CONTENT)
 }

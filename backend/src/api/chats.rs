@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
-    api::{attachments::{self as att, AttachView}, common::{self, Body}, records},
+    api::{attachments::{self as att, AttachView}, common::{self, Body}, events, records},
     auth::CurrentUser,
     db::scope,
     error::{AppError, Result},
@@ -63,9 +63,10 @@ pub struct Feed {
 pub struct InboxChat {
     chat_id: Uuid,
     title: String,
-    kind: String, // "team" | "record"
+    kind: String, // "team" | "record" | "event"
     record_id: Option<Uuid>,
     team_id: Option<Uuid>,
+    event_id: Option<Uuid>,
     can_post: bool,
     last_message: Option<String>,
     last_actor_id: Option<Uuid>,
@@ -81,17 +82,22 @@ pub async fn inbox(
     let rows: Vec<InboxChat> = sqlx::query_as(
         r#"WITH my_chats AS (
           SELECT t.chat_id, t.name as title, 'team' as kind,
-                 null::uuid as record_id, t.id as team_id
+                 null::uuid as record_id, t.id as team_id, null::uuid as event_id
           FROM teams t
           WHERE EXISTS (SELECT 1 FROM team_members m WHERE m.team_id = t.id AND m.user_id = $1)
           UNION ALL
-          SELECT r.chat_id, r.title, 'record' as kind, r.id as record_id, r.team_id
+          SELECT e.chat_id, e.title, 'event' as kind, null::uuid, null::uuid, e.id
+          FROM events e
+          WHERE e.owner_id = $1 OR e.created_by = $1
+             OR EXISTS (SELECT 1 FROM event_participants p WHERE p.event_id = e.id AND p.user_id = $1)
+          UNION ALL
+          SELECT r.chat_id, r.title, 'record' as kind, r.id as record_id, r.team_id, null::uuid
           FROM records r
           WHERE r.owner_id = $1 OR r.created_by = $1
              OR EXISTS (SELECT 1 FROM record_participants p WHERE p.record_id = r.id AND p.user_id = $1)
              OR EXISTS (SELECT 1 FROM team_members m WHERE m.team_id = r.team_id AND m.user_id = $1)
         )
-        SELECT c.chat_id, c.title, c.kind, c.record_id, c.team_id, true as can_post,
+        SELECT c.chat_id, c.title, c.kind, c.record_id, c.team_id, c.event_id, true as can_post,
                m.body as last_message, m.author_id as last_actor_id, m.created_at as updated_at
         FROM my_chats c
         LEFT JOIN LATERAL (
@@ -218,12 +224,20 @@ pub async fn post(
             scope::can_edit_record(&st.pool, &me, &rec, &st.tree).await?
         }
         None => {
-            // Takim duvari: uyeler ve admin. Uyelik BURADAN degismez.
-            let member: Option<i32> = sqlx::query_scalar(
-                "select 1 from teams t join team_members m on m.team_id = t.id
-                  where t.chat_id = $1 and m.user_id = $2")
-                .bind(chat).bind(me.id).fetch_optional(&st.pool).await?;
-            me.is_admin || member.is_some()
+            let event: Option<Uuid> = sqlx::query_scalar("select id from events where chat_id = $1")
+                .bind(chat).fetch_optional(&st.pool).await?;
+            if let Some(eid) = event {
+                // Etkinlik sohbeti: etkinligi duzenleyebilen yazar (events::can_edit_event).
+                let ev = events::load(&st.pool, eid).await?;
+                events::can_edit_event(&st, &me, &ev).await?
+            } else {
+                // Takim duvari: uyeler ve admin. Uyelik BURADAN degismez.
+                let member: Option<i32> = sqlx::query_scalar(
+                    "select 1 from teams t join team_members m on m.team_id = t.id
+                      where t.chat_id = $1 and m.user_id = $2")
+                    .bind(chat).bind(me.id).fetch_optional(&st.pool).await?;
+                me.is_admin || member.is_some()
+            }
         }
     };
     if !allowed {

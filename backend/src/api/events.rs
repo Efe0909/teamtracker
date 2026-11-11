@@ -1,11 +1,10 @@
 //! Etkinlik planlama (spec/73).
 //!
-//! Her etkinligin bir IKIZ kaydi var (`events.record_id`): sohbet, arsiv,
-//! eylemler orada. Ikiz yalniz `create`'te dogar; var olan kayit ikiz
-//! yapilamaz, sonradan degistirilemez (gocteki tetikleyici).
+//! Etkinligin IKIZ kaydi YOK (goc 026'da kalkti): sohbet etkinligin kendisine
+//! ait (`events.chat_id`, `teams.chat_id` gibi); okuma/yazma kurali `chats.rs`'te.
 //!
-//! Yetki: etkinligi, ikiz kaydini duzenleyebilen (kayit yetki yollari aynen:
-//! sorumlu, acan, katilimci, takim, dal) YA DA `manage_events` sahibi duzenler.
+//! Yetki: etkinligi sorumlusu, acani, katilimcisi YA DA `manage_events` sahibi
+//! duzenler (`can_edit_event`). Sohbete yazma da ayni kural.
 //! Checkpoint yapisi (ekle, tarih) yalniz `manage_events`. Isaretlemek ve
 //! kaldirmak ONAYLAYICIYA (etkinlik sorumlusu ya da `manage_events`); diger
 //! duzenleyen onay ISTER (`event_checkpoint_requests`). Sablon widget'i (kayit disi) `manage_event_widgets`,
@@ -31,8 +30,7 @@ use crate::{
     decision,
     error::{AppError, Result},
     models::{
-        enums::{EventStatus, MaterialType, NodeType, Priority, RecordKind, WidgetType},
-        record::Record,
+        enums::{EventStatus, MaterialType, NodeType, Priority, WidgetType},
         user::User,
     },
     refdata,
@@ -50,10 +48,10 @@ const PRICE_MAX: f64 = 9_999_999_999.99;
 // --- satir ------------------------------------------------------------------
 
 /// Liste ve ayrinti AYNI satiri dondurur. `record_ids` = kayit widget'larinin
-/// kayitlari (ikiz HARIC: ikiz widget olamaz).
+/// kayitlari.
 macro_rules! event_cols {
     () => {
-        "e.id, e.record_id, e.title, e.kind_id, e.status, e.priority, e.owner_id, e.date,
+        "e.id, e.chat_id, e.title, e.kind_id, e.status, e.priority, e.owner_id, e.date,
          to_char(e.start_time, 'HH24:MI') as start_time, e.location_id, e.place, e.attendees, e.description,
          e.created_by, e.created_at, e.updated_at,
          coalesce((select array_agg(w.record_id order by w.position) from event_widgets w
@@ -64,7 +62,8 @@ macro_rules! event_cols {
 #[derive(Serialize, sqlx::FromRow)]
 pub struct EventRow {
     id: Uuid,
-    record_id: Uuid,
+    /// Etkinligin kendi sohbeti (arsiv + yazisma).
+    chat_id: Uuid,
     title: String,
     /// Etkinlik Turleri'ndeki `option` dugumu (adi `/api/meta` nodes'tan).
     kind_id: Uuid,
@@ -85,7 +84,7 @@ pub struct EventRow {
     record_ids: Vec<Uuid>,
 }
 
-async fn load(pool: &PgPool, id: Uuid) -> Result<EventRow> {
+pub(crate) async fn load(pool: &PgPool, id: Uuid) -> Result<EventRow> {
     sqlx::query_as(concat!("select ", event_cols!(), " from events e where e.id = $1"))
         .bind(id).fetch_optional(pool).await?.ok_or(AppError::NotFound)
 }
@@ -109,7 +108,7 @@ pub struct Detail {
     widgets: Vec<Widget>,
     materials: Vec<Material>,
     /// Duzenleyebilir mi (etkinlik alanlari, kisiler, takimlar, checkpoint
-    /// isaretleme, kayit widget'lari): ikiz kaydi duzenleyebilen ya da `manage_events`.
+    /// isaretleme, kayit widget'lari, sohbete yazma): sorumlu, acan, katilimci ya da `manage_events`.
     can_edit: bool,
     /// `manage_events`: checkpoint ekle/tarih.
     can_manage: bool,
@@ -228,9 +227,8 @@ pub(crate) use context::{
 use context::decide_suggestion;
 
 async fn detail_of(st: &AppState, me: &User, event: EventRow) -> Result<Detail> {
-    let twin = records::load(&st.pool, event.record_id).await?;
     let can_manage = common::has_scope(st, me, "manage_events").await?;
-    let can_edit = can_manage || crate::db::scope::can_edit_record(&st.pool, me, &twin, &st.tree).await?;
+    let can_edit = can_edit_event(st, me, &event).await?;
     let can_approve = can_manage || event.owner_id == Some(me.id);
     let participants = sqlx::query_as(
         "select user_id, role from event_participants where event_id = $1 order by added_at")
@@ -274,30 +272,44 @@ async fn reply(st: &AppState, me: &User, id: Uuid) -> Result<Json<Detail>> {
 pub async fn get(
     State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>,
 ) -> Result<Json<Detail>> {
-    let id = common::id(&raw)?;
-    require_visible(&st, &me, id).await?;
-    reply(&st, &me, id).await
+    reply(&st, &me, common::id(&raw)?).await
 }
 
-/// Ikiz gizliyse ve ben uye degilsem etkinlik de kapali: ikizin sohbeti gibi
-/// 403 (spec/75 A4). Ayrinti, OTF ve .docx bunu sorar.
-pub(crate) async fn require_visible(st: &AppState, me: &User, id: Uuid) -> Result<()> {
+/// Etkinligi duzenleyebilir mi: `manage_events` ya da sorumlu / acan / katilimci.
+/// Sohbete yazma (`chats::post`) ve her yazma ucu bu tek kapidan gecer.
+pub(crate) async fn can_edit_event(st: &AppState, me: &User, ev: &EventRow) -> Result<bool> {
+    if ev.owner_id == Some(me.id) || ev.created_by == Some(me.id)
+        || common::has_scope(st, me, "manage_events").await? {
+        return Ok(true);
+    }
+    let member: Option<i32> = sqlx::query_scalar(
+        "select 1 from event_participants where event_id = $1 and user_id = $2")
+        .bind(ev.id).bind(me.id).fetch_optional(&st.pool).await?;
+    Ok(member.is_some())
+}
+
+/// Etkinlik; duzenleyemeyen 403.
+pub(crate) async fn editable(st: &AppState, me: &User, id: Uuid) -> Result<EventRow> {
     let ev = load(&st.pool, id).await?;
-    let twin = records::load(&st.pool, ev.record_id).await?;
-    if records::is_restricted(st, me, &twin).await? {
+    if !can_edit_event(st, me, &ev).await? {
         return Err(AppError::Forbidden);
     }
-    Ok(())
+    Ok(ev)
 }
 
-/// Etkinlik + ikizi; ikizi duzenleyemeyen ve `manage_events`'i olmayan 403.
-pub(crate) async fn editable(st: &AppState, me: &User, id: Uuid) -> Result<(EventRow, Record)> {
-    let ev = load(&st.pool, id).await?;
-    let twin = records::load(&st.pool, ev.record_id).await?;
-    if !common::has_scope(st, me, "manage_events").await? {
-        records::require_edit(st, me, &twin).await?;
-    }
-    Ok((ev, twin))
+/// KALICI silme (`delete_records`; admin hepsine sahip). Katilimci, takim,
+/// checkpoint, widget, OTF ve oneri kayitlari FK cascade ile; sohbet
+/// `events_chat_gc` tetikleyicisiyle gider. Baglanan GOREV kayitlari kalir
+/// (yalniz yuva gider). Malzemeler (satin alim/maliye verisi) SILINMEZ:
+/// `event_materials` baglari gider, kalem sahipsiz kalir (KNOW-381).
+pub async fn delete(
+    State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>,
+) -> Result<axum::http::StatusCode> {
+    let ev = load(&st.pool, common::id(&raw)?).await?;
+    require_scope(&st, &me, "delete_records").await?;
+    sqlx::query("delete from events where id = $1").bind(ev.id).execute(&st.pool).await?;
+    tracing::info!("etkinlik silindi: {} ({}) - {}", ev.id, ev.title, me.id);
+    Ok(axum::http::StatusCode::NO_CONTENT)
 }
 
 async fn require_scope(st: &AppState, me: &User, scope: &str) -> Result<()> {
@@ -343,8 +355,6 @@ pub struct NewEvent {
     title: String,
     /// Etkinlik Turleri'ndeki `option` dugumu.
     kind_id: Uuid,
-    /// Ikiz kaydin birimi.
-    unit_id: Uuid,
     #[serde(default)]
     date: Option<NaiveDate>,
     #[serde(default)]
@@ -359,11 +369,9 @@ pub struct NewEvent {
 #[derive(Serialize)]
 pub struct Created {
     id: Uuid,
-    record_id: Uuid,
 }
 
-/// Etkinlik ve ikiz kaydi TEK islemde. Uc `record_id` ALMAZ: var olan kayit
-/// ikiz yapilamaz (spec/73 §3a). Acmak, kayit acmak gibi herkese acik.
+/// Etkinlik ve kendi sohbeti TEK islemde. Acmak, kayit acmak gibi herkese acik.
 pub async fn create(
     State(st): State<AppState>, CurrentUser(me): CurrentUser, Body(b): Body<NewEvent>,
 ) -> Result<Json<Created>> {
@@ -378,7 +386,6 @@ pub async fn create(
         records::check_title(&title)?;
         records::check_description(description.as_deref())?;
     }
-    records::check_unit(&st, b.unit_id)?;
     check_kind(&st, b.kind_id)?;
     let reasons = if bypass_quality { None } else {
         decision::gate(&st, me.id, decision::Kind::Entry,
@@ -392,18 +399,13 @@ pub async fn create(
     let mut tx = st.pool.begin().await?;
     let chat_id: Uuid = sqlx::query_scalar("insert into chats default values returning id")
         .fetch_one(&mut *tx).await?;
-    let record_id: Uuid = sqlx::query_scalar(
-        "insert into records (unit_id, chat_id, kind, title, priority, owner_id, created_by)
-         values ($1, $2, $3, $4, $5, $6, $6) returning id")
-        .bind(b.unit_id).bind(chat_id).bind(RecordKind::Task).bind(&title).bind(priority).bind(me.id)
-        .fetch_one(&mut *tx).await?;
     records::log(&mut tx, chat_id, me.id, "created", &title, None,
         records::change(serde_json::Value::Null, me.id)).await?;
     records::log_override(&mut tx, chat_id, me.id, &title, "record", reasons).await?;
     let id: Uuid = sqlx::query_scalar(
-        "insert into events (record_id, title, kind_id, status, priority, owner_id, date, created_by, description)
+        "insert into events (chat_id, title, kind_id, status, priority, owner_id, date, created_by, description)
          values ($1, $2, $3, $4, $5, $6, $7, $6, $8) returning id")
-        .bind(record_id).bind(&title).bind(b.kind_id).bind(status).bind(priority).bind(me.id).bind(b.date)
+        .bind(chat_id).bind(&title).bind(b.kind_id).bind(status).bind(priority).bind(me.id).bind(b.date)
         .bind(&description).fetch_one(&mut *tx).await?;
     sqlx::query("insert into event_participants (event_id, user_id) values ($1, $2)")
         .bind(id).bind(me.id).execute(&mut *tx).await?;
@@ -418,7 +420,7 @@ pub async fn create(
             .bind(id).bind(label).bind(*offset).bind(i as i16).execute(&mut *tx).await?;
     }
     tx.commit().await?;
-    Ok(Json(Created { id, record_id }))
+    Ok(Json(Created { id }))
 }
 
 // --- alan degisimi ---------------------------------------------------------
@@ -455,13 +457,13 @@ fn json(v: impl Serialize) -> serde_json::Value {
     serde_json::to_value(v).unwrap_or_default()
 }
 
-/// Ikizin sohbetine (arsiv) yapilandirilmis olgu: `event_changed`, alan, eski/yeni.
+/// Etkinligin sohbetine (arsiv) yapilandirilmis olgu: `event_changed`, alan, eski/yeni.
 async fn log_change(
-    tx: &mut sqlx::Transaction<'_, Postgres>, twin: &Record, me: &User,
+    tx: &mut sqlx::Transaction<'_, Postgres>, ev: &EventRow, me: &User,
     field: &str, from: serde_json::Value, to: serde_json::Value,
 ) -> Result<()> {
     if from != to {
-        records::log(tx, twin.chat_id, me.id, "event_changed", &twin.title, Some(field),
+        records::log(tx, ev.chat_id, me.id, "event_changed", &ev.title, Some(field),
             records::change(&from, &to)).await?;
     }
     Ok(())
@@ -471,7 +473,7 @@ pub async fn patch(
     State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>,
     Body(EventPatchBody { patch: p, quality_override }): Body<EventPatchBody>,
 ) -> Result<Json<Detail>> {
-    let (ev, twin) = editable(&st, &me, common::id(&raw)?).await?;
+    let ev = editable(&st, &me, common::id(&raw)?).await?;
     let bypass_quality = common::has_scope(&st, &me, "bypass_text_quality").await?;
     let fixed = matches!(ev.status, EventStatus::Confirmed | EventStatus::Done);
     // Bilgi yogunlugu (spec/76): yalniz DEGISEN baslik/aciklama; model islemden once.
@@ -495,20 +497,17 @@ pub async fn patch(
     };
     let mut tx = st.pool.begin().await?;
     if let Some((field, reasons)) = overridden {
-        records::log_override(&mut tx, twin.chat_id, me.id, &twin.title, field, Some(reasons)).await?;
+        records::log_override(&mut tx, ev.chat_id, me.id, &ev.title, field, Some(reasons)).await?;
     }
     let set = |sql: &'static str| sqlx::query(sql).bind(ev.id);
     match p {
         EventPatch::Title(v) => {
             let v = common::text(Some(v), TITLE_MAX, "invalid_title")?
                 .ok_or(AppError::BadRequest("invalid_title"))?;
-            // Tek ad, iki yuz: ikizin basligi AYNI islemde (spec/73 §3a).
             set("update events set title = $2, updated_at = now() where id = $1")
                 .bind(&v).execute(&mut *tx).await?;
-            sqlx::query("update records set title = $2 where id = $1")
-                .bind(twin.id).bind(&v).execute(&mut *tx).await?;
             if v != ev.title {
-                records::log(&mut tx, twin.chat_id, me.id, "field_changed", &ev.title, Some("title"),
+                records::log(&mut tx, ev.chat_id, me.id, "field_changed", &ev.title, Some("title"),
                     records::change(&ev.title, &v)).await?;
             }
         }
@@ -518,29 +517,26 @@ pub async fn patch(
             }
             set("update events set status = $2, updated_at = now() where id = $1")
                 .bind(v).execute(&mut *tx).await?;
-            log_change(&mut tx, &twin, &me, "status", json(ev.status), json(v)).await?;
+            log_change(&mut tx, &ev, &me, "status", json(ev.status), json(v)).await?;
         }
         EventPatch::Priority(v) => {
             set("update events set priority = $2, updated_at = now() where id = $1")
                 .bind(v).execute(&mut *tx).await?;
-            // Onem ve sorumlu iki yuzde ayni: ozet satiri ve "top kimde" ikizden okunur.
-            sqlx::query("update records set priority = $2 where id = $1")
-                .bind(twin.id).bind(v).execute(&mut *tx).await?;
-            log_change(&mut tx, &twin, &me, "priority", json(ev.priority), json(v)).await?;
+            log_change(&mut tx, &ev, &me, "priority", json(ev.priority), json(v)).await?;
         }
         EventPatch::OwnerId(v) => {
             records::check_user(&st.pool, v).await?;
             // Sorumlu onaylayicidir: her duzenleyen kendini atayamaz (spec/75 A2).
-            if !(records::may_set_owner(&st, &me, &twin, v).await?
-                || common::has_scope(&st, &me, "manage_events").await?)
-            {
+            // Mevcut sorumlu, sorumlusuz etkinligi kendine alan ya da `manage_events` degistirir.
+            let allowed = v == ev.owner_id || ev.owner_id == Some(me.id)
+                || (ev.owner_id.is_none() && v == Some(me.id))
+                || common::has_scope(&st, &me, "manage_events").await?;
+            if !allowed {
                 return Err(AppError::Denied("owner_change_denied"));
             }
             set("update events set owner_id = $2, updated_at = now() where id = $1")
                 .bind(v).execute(&mut *tx).await?;
-            sqlx::query("update records set owner_id = $2 where id = $1")
-                .bind(twin.id).bind(v).execute(&mut *tx).await?;
-            log_change(&mut tx, &twin, &me, "owner_id", json(ev.owner_id), json(v)).await?;
+            log_change(&mut tx, &ev, &me, "owner_id", json(ev.owner_id), json(v)).await?;
         }
         EventPatch::Date(v) => {
             if v.is_none() && fixed {
@@ -559,7 +555,7 @@ pub async fn patch(
                     start_time = case when $2::date is null then null else start_time end,
                     updated_at = now() where id = $1")
                 .bind(v).execute(&mut *tx).await?;
-            log_change(&mut tx, &twin, &me, "date", json(ev.date), json(v)).await?;
+            log_change(&mut tx, &ev, &me, "date", json(ev.date), json(v)).await?;
         }
         EventPatch::StartTime(v) => {
             let t = v.as_deref().map(|s| NaiveTime::parse_from_str(s, "%H:%M"))
@@ -569,7 +565,7 @@ pub async fn patch(
             }
             set("update events set start_time = $2, updated_at = now() where id = $1")
                 .bind(t).execute(&mut *tx).await?;
-            log_change(&mut tx, &twin, &me, "start_time", json(&ev.start_time),
+            log_change(&mut tx, &ev, &me, "start_time", json(&ev.start_time),
                 json(t.map(|t| t.format("%H:%M").to_string()))).await?;
         }
         // Yer tek: liste yeri YA DA metin; biri yazilinca obur temizlenir.
@@ -584,7 +580,7 @@ pub async fn patch(
             set("update events set location_id = $2,
                     place = case when $2::uuid is null then place end, updated_at = now() where id = $1")
                 .bind(v).execute(&mut *tx).await?;
-            log_change(&mut tx, &twin, &me, "place", json(from), json(to)).await?;
+            log_change(&mut tx, &ev, &me, "place", json(from), json(to)).await?;
         }
         EventPatch::Place(v) => {
             let v = common::text(v, TITLE_MAX, "invalid_place")?;
@@ -592,7 +588,7 @@ pub async fn patch(
             set("update events set place = $2,
                     location_id = case when $2::text is null then location_id end, updated_at = now() where id = $1")
                 .bind(&v).execute(&mut *tx).await?;
-            log_change(&mut tx, &twin, &me, "place", json(from), json(&v)).await?;
+            log_change(&mut tx, &ev, &me, "place", json(from), json(&v)).await?;
         }
         EventPatch::Attendees(v) => {
             if v.is_some_and(|n| !(0..=100_000).contains(&n)) {
@@ -600,7 +596,7 @@ pub async fn patch(
             }
             set("update events set attendees = $2, updated_at = now() where id = $1")
                 .bind(v).execute(&mut *tx).await?;
-            log_change(&mut tx, &twin, &me, "attendees", json(ev.attendees), json(v)).await?;
+            log_change(&mut tx, &ev, &me, "attendees", json(ev.attendees), json(v)).await?;
         }
         EventPatch::Description(v) => {
             let v = common::text(v, TEXT_MAX, "invalid_description")?;
@@ -609,10 +605,9 @@ pub async fn patch(
             }
             set("update events set description = $2, updated_at = now() where id = $1")
                 .bind(&v).execute(&mut *tx).await?;
-            log_change(&mut tx, &twin, &me, "description", json(&ev.description), json(&v)).await?;
+            log_change(&mut tx, &ev, &me, "description", json(&ev.description), json(&v)).await?;
         }
     }
-    records::touch(&mut tx, twin.id).await?;
     tx.commit().await?;
     reply(&st, &me, ev.id).await
 }
@@ -625,13 +620,13 @@ pub struct ParticipantBody {
     role: Option<String>,
 }
 
-/// Kisi ekle ya da rolunu degistir (IDEMPOTENT). Ikizin katilimcisi da olur:
-/// sohbet bildirimleri ve duzenleme yetkisi oradan gelir.
+/// Kisi ekle ya da rolunu degistir (IDEMPOTENT). Sohbet bildirimleri ve
+/// duzenleme yetkisi katilimcilikten gelir.
 pub async fn put_participant(
     State(st): State<AppState>, CurrentUser(me): CurrentUser,
     Path((raw, user)): Path<(String, String)>, Body(b): Body<ParticipantBody>,
 ) -> Result<Json<Detail>> {
-    let (ev, twin) = editable(&st, &me, common::id(&raw)?).await?;
+    let ev = editable(&st, &me, common::id(&raw)?).await?;
     let uid = common::id(&user)?;
     records::check_user(&st.pool, Some(uid)).await?;
     let role = common::text(b.role, ROLE_MAX, "invalid_role")?;
@@ -640,11 +635,6 @@ pub async fn put_participant(
         "insert into event_participants (event_id, user_id, role) values ($1, $2, $3)
          on conflict (event_id, user_id) do update set role = excluded.role")
         .bind(ev.id).bind(uid).bind(role).execute(&mut *tx).await?;
-    sqlx::query(
-        "insert into record_participants (record_id, user_id, added_by) values ($1, $2, $3)
-         on conflict do nothing")
-        .bind(twin.id).bind(uid).bind(me.id).execute(&mut *tx).await?;
-    records::touch(&mut tx, twin.id).await?;
     tx.commit().await?;
     reply(&st, &me, ev.id).await
 }
@@ -653,14 +643,10 @@ pub async fn remove_participant(
     State(st): State<AppState>, CurrentUser(me): CurrentUser,
     Path((raw, user)): Path<(String, String)>,
 ) -> Result<Json<Detail>> {
-    let (ev, twin) = editable(&st, &me, common::id(&raw)?).await?;
+    let ev = editable(&st, &me, common::id(&raw)?).await?;
     let uid = common::id(&user)?;
-    let mut tx = st.pool.begin().await?;
     sqlx::query("delete from event_participants where event_id = $1 and user_id = $2")
-        .bind(ev.id).bind(uid).execute(&mut *tx).await?;
-    sqlx::query("delete from record_participants where record_id = $1 and user_id = $2")
-        .bind(twin.id).bind(uid).execute(&mut *tx).await?;
-    tx.commit().await?;
+        .bind(ev.id).bind(uid).execute(&st.pool).await?;
     reply(&st, &me, ev.id).await
 }
 
@@ -668,7 +654,7 @@ pub async fn put_team(
     State(st): State<AppState>, CurrentUser(me): CurrentUser,
     Path((raw, team)): Path<(String, String)>,
 ) -> Result<Json<Detail>> {
-    let (ev, _) = editable(&st, &me, common::id(&raw)?).await?;
+    let ev = editable(&st, &me, common::id(&raw)?).await?;
     let tid = common::id(&team)?;
     records::check_team(&st.pool, Some(tid)).await?;
     sqlx::query("insert into event_teams (event_id, team_id) values ($1, $2) on conflict do nothing")
@@ -680,7 +666,7 @@ pub async fn remove_team(
     State(st): State<AppState>, CurrentUser(me): CurrentUser,
     Path((raw, team)): Path<(String, String)>,
 ) -> Result<Json<Detail>> {
-    let (ev, _) = editable(&st, &me, common::id(&raw)?).await?;
+    let ev = editable(&st, &me, common::id(&raw)?).await?;
     sqlx::query("delete from event_teams where event_id = $1 and team_id = $2")
         .bind(ev.id).bind(common::id(&team)?).execute(&st.pool).await?;
     reply(&st, &me, ev.id).await
@@ -744,7 +730,7 @@ pub async fn patch_checkpoint(
 ) -> Result<Json<Detail>> {
     let id = common::id(&raw)?;
     let event = event_of(&st.pool, "select event_id from event_checkpoints where id = $1", id).await?;
-    let (ev, _) = editable(&st, &me, event).await?;
+    let ev = editable(&st, &me, event).await?;
     let mut tx = st.pool.begin().await?;
     if let Some(done) = b.done {
         require_approver(&st, &me, &ev).await?;
@@ -808,7 +794,7 @@ pub async fn request_checkpoint(
 ) -> Result<Json<Detail>> {
     let id = common::id(&raw)?;
     let event = event_of(&st.pool, "select event_id from event_checkpoints where id = $1", id).await?;
-    let (ev, twin) = editable(&st, &me, event).await?;
+    let ev = editable(&st, &me, event).await?;
     let (label, done): (String, bool) = sqlx::query_as(
         "select label, done_at is not null from event_checkpoints where id = $1")
         .bind(id).fetch_one(&st.pool).await?;
@@ -822,8 +808,7 @@ pub async fn request_checkpoint(
          on conflict do nothing")
         .bind(id).bind(me.id).bind(b.action.as_str()).execute(&mut *tx).await?.rows_affected();
     if added > 0 {
-        records::log(&mut tx, twin.chat_id, me.id, "checkpoint_requested", &label, Some(b.action.as_str()), None).await?;
-        records::touch(&mut tx, twin.id).await?;
+        records::log(&mut tx, ev.chat_id, me.id, "checkpoint_requested", &label, Some(b.action.as_str()), None).await?;
     }
     tx.commit().await?;
     reply(&st, &me, ev.id).await
@@ -848,7 +833,6 @@ pub async fn resolve_request(
         .bind(id).fetch_optional(&st.pool).await?.ok_or(AppError::NotFound)?;
     let ev = load(&st.pool, event).await?;
     require_approver(&st, &me, &ev).await?;
-    let twin = records::load(&st.pool, ev.record_id).await?;
     let mut tx = st.pool.begin().await?;
     if b.approve {
         match action.as_str() {
@@ -865,9 +849,8 @@ pub async fn resolve_request(
     sqlx::query(
         "delete from event_checkpoint_requests where id = $1 or ($2 and checkpoint_id = $3 and action = $4)")
         .bind(id).bind(b.approve).bind(cid).bind(&action).execute(&mut *tx).await?;
-    records::log(&mut tx, twin.chat_id, me.id,
+    records::log(&mut tx, ev.chat_id, me.id,
         if b.approve { "checkpoint_approved" } else { "checkpoint_denied" }, &label, Some(&action), None).await?;
-    records::touch(&mut tx, twin.id).await?;
     tx.commit().await?;
     reply(&st, &me, event).await
 }
@@ -892,10 +875,7 @@ pub async fn add_widget(
     let id = common::id(&raw)?;
     match (b.kind, b.record_id) {
         (WidgetType::Record, Some(rid)) => {
-            let (ev, _) = editable(&st, &me, id).await?;
-            if rid == ev.record_id {
-                return Err(AppError::Conflict("own_record"));
-            }
+            editable(&st, &me, id).await?;
             if records::load(&st.pool, rid).await.is_err() {
                 return Err(AppError::BadRequest("unknown_record"));
             }
@@ -1366,9 +1346,17 @@ pub async fn set_purchased(
 
 // --- satin alim Excel'i (assets/satin-alimlar.xlsx) -------------------------------
 
-/// Dokumdeki kalemler: onayli (state 3) ve elde olmayan. Teslim edilenler de onaylidir, burada.
-fn purchase_rows(materials: &[Material]) -> Vec<&Material> {
-    materials.iter().filter(|m| m.state == 3 && !m.owned).collect()
+/// Dokumdeki kalemler: varsayilan onayli (state 3); `all` ise her asama. "Zaten var"
+/// kalemler HICBIR ZAMAN girmez (alinacak bir sey degil). Teslim edilenler de onaylidir.
+fn purchase_rows(materials: &[Material], all: bool) -> Vec<&Material> {
+    materials.iter().filter(|m| (all || m.state == 3) && !m.owned).collect()
+}
+
+#[derive(Deserialize)]
+pub struct XlsxQuery {
+    /// Onay bekleyenler de dahil (`?all=true`).
+    #[serde(default)]
+    all: bool,
 }
 
 /// Kalemin tedarikcisi: secili teklif, yoksa en dusuk fiyatli (kart kuraliyla ayni).
@@ -1420,16 +1408,16 @@ fn eta_of(m: &Material) -> Option<NaiveDate> {
 /// `GET /api/events/{id}/purchases.xlsx`: satin alim dokumu. Okuma etkinlik gibi gorunur olmaya bagli.
 pub async fn purchases_xlsx(
     State(st): State<AppState>, CurrentUser(me): CurrentUser, Path(raw): Path<String>,
+    axum::extract::Query(q): axum::extract::Query<XlsxQuery>,
 ) -> Result<Response> {
     let id = common::id(&raw)?;
-    require_visible(&st, &me, id).await?;
     let ev = load(&st.pool, id).await?;
     let date = ev.date.map(|d| d.format("%d.%m.%Y").to_string()).unwrap_or_else(|| "tarihsiz".into());
     let title = format!("Satın alımlar — {}", ev.title);
-    let summary = format!("Etkinlik tarihi: {date} · Yalnız onaylı ve teslim edilen kalemler · dışa aktarım {}",
-        Utc::now().format("%d.%m.%Y"));
+    let scope = if q.all { "Tüm kalemler (zaten var olanlar hariç)" } else { "Yalnız onaylı ve teslim edilen kalemler" };
+    let summary = format!("Etkinlik tarihi: {date} · {scope} · dışa aktarım {}", Utc::now().format("%d.%m.%Y"));
     let detail = detail_of(&st, &me, ev).await?;
-    let rows: Vec<purchases_xlsx::Row> = purchase_rows(&detail.materials).into_iter().map(xlsx_row).collect();
+    let rows: Vec<purchases_xlsx::Row> = purchase_rows(&detail.materials, q.all).into_iter().map(xlsx_row).collect();
     let bytes = purchases_xlsx::render(&title, &summary, &rows).map_err(|e| {
         tracing::error!("satin alim xlsx: {e}");
         AppError::Conflict("xlsx_template")
@@ -1541,7 +1529,9 @@ mod material_tests {
             Material { state: 2, ..mat() },
             Material { state: 3, owned: true, ..mat() },
         ];
-        assert_eq!(purchase_rows(&v).len(), 1);
+        assert_eq!(purchase_rows(&v, false).len(), 1);
+        // `all`: onay bekleyen de girer, "zaten var" yine hic girmez.
+        assert_eq!(purchase_rows(&v, true).len(), 2);
     }
 
     #[test]

@@ -287,7 +287,7 @@ fn probe(root: &Path) -> (Option<String>, Option<String>, Option<String>) {
 // --- supurme (KNOW-278) ----------------------------------------------------
 
 /// Sahipsiz kalanlari temizler, gunde bir. Iki kaynak:
-///  - sahibi (kayit/takim) silinmis SOHBETLER: dugum kalici silinince kayit
+///  - sahibi (kayit/takim/etkinlik) silinmis SOHBETLER: dugum kalici silinince kayit
 ///    cascade ile gider ama `records.chat_id` sohbeti tutmaz; mesajlari ve
 ///    ekleri kimsenin gormedigi yerde kalirdi.
 ///  - hicbir mesaja/karta/profile/banner'a BAGLANMAMIS ekler: yuklenip gonderilmeyen, ya da
@@ -299,7 +299,8 @@ pub async fn sweep(pool: &PgPool) -> Result<(u64, usize), sqlx::Error> {
         "delete from chats c
           where c.created_at < now() - interval '1 day'
             and not exists (select 1 from records r where r.chat_id = c.id)
-            and not exists (select 1 from teams t where t.chat_id = c.id)")
+            and not exists (select 1 from teams t where t.chat_id = c.id)
+            and not exists (select 1 from events e where e.chat_id = c.id)")
         .execute(pool).await?.rows_affected();
     let gone: Vec<(String, String, String, Option<String>)> = sqlx::query_as(
         "with d as (

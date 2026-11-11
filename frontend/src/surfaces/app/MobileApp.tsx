@@ -15,7 +15,7 @@ import { ErrorScreen } from "../errors/ErrorScreen";
 import { signOut } from "../Session";
 import s from "./app.module.css";
 import { ActionsPage, ChatsPage, NewPage, NotificationsPage, SearchPage, TeamsListPage } from "./pages";
-import { RecordPage, TeamPage } from "./RecordPage";
+import { EventPage, RecordPage, TeamPage } from "./RecordPage";
 import { href, parse, type Route } from "./routes";
 
 export default function MobileApp() {
@@ -32,6 +32,7 @@ function Page({ route }: { route: Route }) {
     case "notifications": return <NotificationsPage />;
     case "record": return <RecordPage key={route.id} id={route.id} />;
     case "team": return <TeamPage key={route.id} id={route.id} />;
+    case "event": return <EventPage key={route.id} id={route.id} />;
     case "new": return <NewPage />;
     case "notFound": return <><TopBar title="Bulunamadı" /><ErrorScreen code="not_found" /></>;
   }

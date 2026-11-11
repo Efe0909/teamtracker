@@ -23,7 +23,9 @@ SHA=$(git rev-parse --short=10 HEAD)
 TAG=rust-$SHA
 REPO=Efe0909/teamtracker
 # Nix sistemi -> Rust hedefi
-TARGETS="aarch64-linux:aarch64-unknown-linux-musl x86_64-linux:x86_64-unknown-linux-musl"
+# Intel (x86_64, VDS) GEÇİCİ KAPALI: yalnız Pi (aarch64) yayınlanır. Açmak için alttaki satırı kullan.
+# TARGETS="aarch64-linux:aarch64-unknown-linux-musl x86_64-linux:x86_64-unknown-linux-musl"
+TARGETS="aarch64-linux:aarch64-unknown-linux-musl"
 
 # npm ci: package-lock.json'a birebir; derleme tsc denetiminden gecmezse durur.
 (cd frontend && npm ci --no-audit --no-fund && npm run build)

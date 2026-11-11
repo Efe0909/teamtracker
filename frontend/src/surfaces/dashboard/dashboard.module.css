@@ -2119,6 +2119,13 @@ a.evMore:hover {
 .evSide {
   overflow: auto;
 }
+.evChat {
+  display: flex;
+  flex-direction: column;
+  height: 34rem;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--line);
+}
 .evSideSec {
   padding: var(--s-4);
   border-bottom: 1px solid var(--line);

@@ -352,10 +352,23 @@ export function useEvent(id: Uuid) {
 export function useCreateEvent() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (e: NewEvent) => request<{ id: Uuid; record_id: Uuid }>("POST", "/api/events", e),
+    mutationFn: (e: NewEvent) => request<{ id: Uuid }>("POST", "/api/events", e),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: keys.events });
       void qc.invalidateQueries({ queryKey: keys.recordsAll });
+    },
+  });
+}
+
+/** Kalici silme (`delete_records`): kayit ya da etkinlik; listeler ve ana sayfa tazelenir. */
+export function useDeleteRecord(kind: "records" | "events") {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: Uuid) => request<void>("DELETE", `/api/${kind}/${id}`),
+    onSuccess: () => {
+      for (const key of [keys.recordsAll, keys.events, keys.home, keys.myActions, keys.inbox, keys.notifications]) {
+        void qc.invalidateQueries({ queryKey: key });
+      }
     },
   });
 }
@@ -407,9 +420,9 @@ export function useEventWrite() {
     onSuccess: (d) => {
       qc.setQueryData(keys.event(d.id), d);
       void qc.invalidateQueries({ queryKey: keys.events });
-      // Baslik ve kisiler ikize de yazilir; baglanan kayit "en cok baglanan"i degistirir.
+      // Baglanan kayit "en cok baglanan"i degistirir; yazis etkinlik sohbetine olgu dusurur.
       void qc.invalidateQueries({ queryKey: keys.recordsAll });
-      void qc.invalidateQueries({ queryKey: keys.record(d.record_id) });
+      void qc.invalidateQueries({ queryKey: keys.feed(d.chat_id) });
     },
   });
 }

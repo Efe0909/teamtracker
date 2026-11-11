@@ -11,16 +11,18 @@ import { useEffect, useState, type ReactNode } from "react";
 import { ApiError, errorText } from "../../api/client";
 import { eventOps, useEvent, useEventWrite, useRecord, useRecords } from "../../api/hooks";
 import type { CheckpointAction, EventDetail, EventStatus, Uuid } from "../../api/types";
+import { Chat } from "../../features/chat/Chat";
+import { ChatBell } from "../../features/chat/ChatBell";
 import { NodeListPicker } from "../../features/nodes/NodePicker";
+import { DeleteButton } from "../../features/record/DeleteButton";
+import { navigate } from "../../lib/router";
 import { NewRecordForm } from "../../features/record/NewRecordForm";
-import { BallLine } from "../../features/record/parts";
 import { InlineDescription } from "../../features/record/InlineDescription";
 import { QualityNote } from "../../features/record/QualityNote";
 import r from "../../features/record/record.module.css";
 import { ago, formatDay, isDone, parseDay, PRIORITY, PRIORITY_ORDER, toIsoDay } from "../../lib/labels";
 import { useLookup } from "../../lib/lookup";
 import { handle } from "../../lib/mentions";
-import { navigate } from "../../lib/router";
 import { useStored } from "../../lib/stored";
 import { DateField } from "../../ui/DateField";
 import { Icon, type IconName } from "../../ui/icons";
@@ -68,6 +70,8 @@ function EventView({ e }: { e: EventDetail }) {
   // Kayit secilmemis kayit widget'i sunucuya GITMEZ (record_id sart); kayit
   // secilince/olusunca eklenir, gecici yuva duser.
   const [pending, setPending] = useState<string[]>([]);
+  // "Kisiye yaz": sohbet kutusuna hazir anma (Chat `prefill`).
+  const [mention, setMention] = useState<string | undefined>(undefined);
   // Sablon widget'lari etkinlik acilirken gelir; eklemek/kaldirmak scope ister.
   // Kayit widget'i serbest (etkinligi duzenleyebilen herkes).
   const canStructure = L.can("manage_event_widgets");
@@ -77,8 +81,7 @@ function EventView({ e }: { e: EventDetail }) {
     run(eventOps.addWidget(e.id, "record", rid), () => {
       if (temp !== undefined) setPending((p) => p.filter((x) => x !== temp));
     });
-  // Etkinligin kendi kaydi da "bagli" sayilir: widget olarak eklenemez.
-  const linked = new Set([...e.widgets.flatMap((w) => (w.record_id === null ? [] : [w.record_id])), e.record_id]);
+  const linked = new Set(e.widgets.flatMap((w) => (w.record_id === null ? [] : [w.record_id])));
   const count = e.widgets.length + pending.length;
 
   return (
@@ -95,10 +98,8 @@ function EventView({ e }: { e: EventDetail }) {
           <div className={s.recordInner}>
             <Requests e={e} />
             <Head e={e} />
-            {/* Kayit sayfasiyla ayni blok: ozellikler + "top kimde" (ikiz kaydin eylemlerinden). */}
             <div className={s.fieldsBlock}>
               <Props e={e} />
-              <TwinBall recordId={e.record_id} />
             </div>
             <section className={r.section} aria-labelledby="widgets-h">
               <div className={r.secHead}>
@@ -153,29 +154,21 @@ function EventView({ e }: { e: EventDetail }) {
         </div>
         <aside className={cx(s.recordSide, s.evSide)} aria-label="Etkinlik özeti">
           <Timeline e={e} />
-          <People e={e} />
+          <People e={e} onTalk={setMention} />
           <Teams e={e} onCreated={(rid) => link(rid)} />
+          <section className={s.evChat} aria-label="Sohbet">
+            <div className={s.sideHead}>
+              <Icon name="chat" size={16} /> Sohbet
+              <ChatBell chatId={e.chat_id} />
+            </div>
+            <div className={s.sideBody}>
+              <Chat chatId={e.chat_id} canPost={e.can_edit} lockedText="Bu etkinlikte yazma yetkin yok."
+                empty="Henüz mesaj yok. İlk mesajı sen yaz." prefill={mention} />
+            </div>
+          </section>
         </aside>
       </div>
     </div>
-  );
-}
-
-// --- etkinlik | kayit anahtari ------------------------------------------------------
-
-/** Etkinlik sayfasi ile etkinligin kendi kaydi (sohbet + arsiv) arasinda gecis
- *  (spec/73 §3a). TEK baglanti: neresine basilsa obur yuze gider; hangi yuzde
- *  olundugunu dolu parca gosterir. Iki sayfada da baslik satirinin EN SAGINDA,
- *  yeri gidip gelirken kaymaz. */
-export function EventSwitch({ eventId, recordId, at }: { eventId: string; recordId: Uuid; at: "event" | "record" }) {
-  const label = at === "event" ? "Etkinliğin kaydına geç (sohbet ve arşiv)" : "Etkinlik sayfasına geç";
-  return (
-    <Link href={at === "event" ? href({ name: "record", id: recordId }) : href({ name: "event", id: eventId })}
-      className={cx(ui.seg, s.evSwitch)} title={label}>
-      <span className={ui.segBtn} data-on={at === "event"}><Icon name="calendar" size={15} /></span>
-      <span className={ui.segBtn} data-on={at === "record"}><Icon name="chat" size={15} /></span>
-      <span className="visually-hidden">{label}</span>
-    </Link>
   );
 }
 
@@ -203,7 +196,9 @@ function Head({ e }: { e: EventDetail }) {
       <div className={r.titleRow}>
         <h1 className={r.title}>{e.title}</h1>
         {e.can_edit && <IconButton icon="edit" label="Başlığı düzenle" onClick={() => setEditTitle(true)} />}
-        <EventSwitch eventId={e.id} recordId={e.record_id} at="event" />
+        <DeleteButton kind="events" id={e.id} title={e.title}
+          consequence="Kişileri, adımları, widget'ları, OTF'yi ve sohbeti de silinir; bağlı görevler ve satın alım kalemleri kalır."
+          onDeleted={() => navigate(href({ name: "events", query: {} }))} />
       </div>
       <div className={r.byline}>
         <Tag tone={EVENT_STATUS[e.status].tone}>{EVENT_STATUS[e.status].label}</Tag>
@@ -398,12 +393,6 @@ function Props({ e }: { e: EventDetail }) {
       )}
     </div>
   );
-}
-
-/** Etkinligin eylemleri ikiz kayitta: "top kimde" satiri oradan, kayittakiyle ayni bilesen. */
-function TwinBall({ recordId }: { recordId: Uuid }) {
-  const q = useRecord(recordId);
-  return q.data === undefined ? null : <BallLine d={q.data} />;
 }
 
 // --- widget ------------------------------------------------------------------------
@@ -633,12 +622,12 @@ function AddPerson({ e, className, children }: { e: EventDetail; className: stri
   );
 }
 
-/** Sohbet dugmesi: DM yok — ikiz kaydin sohbetine, kisinin anmasi hazir ve
- *  odak kutuda (`?mention=`, RecordPage okur). Kendine yazis yok. */
-function People({ e }: { e: EventDetail }) {
+/** Sohbet dugmesi: DM yok — sayfadaki etkinlik sohbetinde kisinin anmasi hazir
+ *  (`onTalk`). Kendine yazis yok. */
+function People({ e, onTalk }: { e: EventDetail; onTalk: (mention: string) => void }) {
   const L = useLookup();
   const { run, busy } = useRun();
-  const talk = (name: string) => navigate(`${href({ name: "record", id: e.record_id })}?mention=${handle(name)}`);
+  const talk = (name: string) => onTalk(`@${handle(name)} `);
   return (
     <SideSec icon="user" title="Kişiler"
       action={e.can_edit ? <AddPerson e={e} className={ui.iconBtn}><Icon name="plus" size={16} /></AddPerson> : undefined}>

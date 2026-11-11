@@ -11,6 +11,7 @@ export type Route =
   | { name: "notifications" }
   | { name: "record"; id: Uuid }
   | { name: "team"; id: Uuid }
+  | { name: "event"; id: Uuid }
   | { name: "new" }
   | { name: "notFound" };
 
@@ -29,6 +30,7 @@ export function parse(url: URL): Route {
   if (seg.length === 2 && b !== undefined) {
     if (a === "record") return { name: "record", id: b };
     if (a === "team") return { name: "team", id: b };
+    if (a === "events") return { name: "event", id: b };
   }
   return { name: "notFound" };
 }
@@ -49,6 +51,8 @@ export function href(r: Route): string {
       return `/record/${r.id}`;
     case "team":
       return `/team/${r.id}`;
+    case "event":
+      return `/events/${r.id}`;
     case "new":
       return "/new";
     case "notFound":

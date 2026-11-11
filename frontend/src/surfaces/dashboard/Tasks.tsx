@@ -15,7 +15,7 @@ import { navigate } from "../../lib/router";
 import { Icon } from "../../ui/icons";
 import { SortTh } from "../../ui/SortTh";
 import {
-  Avatar, Button, Dialog, Due, Empty, IconButton, KindTag, Link, Loading, Picker, PriorityTag, Segmented, Status, Tag, TeamName, ui, Who,
+  Avatar, Button, Dialog, Due, Empty, IconButton, KindTag, Link, Loading, Picker, PriorityTag, Segmented, Status, TeamName, ui, Who,
   type Option,
 } from "../../ui/ui";
 import { NodeTreePicker } from "../../features/nodes/NodePicker";
@@ -236,12 +236,6 @@ export function RecordTable({ rows, showTeam = true, sortKey = "records" }: {
                   <span className={s.rowTitle}>
                     <Link href={to}>{r.title}</Link>
                     <KindTag kind={r.kind} />
-                    {/* Etkinligin ikiziyse etiket etkinlige goturur (spec/73 §3a). */}
-                    {r.event_id !== null && (
-                      <Link href={href({ name: "event", id: r.event_id })} className={s.evTag} title="Bu kayıt bir etkinliğin kaydı — etkinliğe git">
-                        <Tag tone="neutral"><Icon name="calendar" size={12} /> Etkinlik</Tag>
-                      </Link>
-                    )}
                     {r.messages > 0 && (
                       <span className={s.msgs} title={`${r.messages} mesaj`}>
                         <Icon name="chat" size={13} /> {r.messages}

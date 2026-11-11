@@ -50,7 +50,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/home", get(home::home))
         .route("/api/pins/{slug}", post(home::pin).delete(home::unpin))
         .route("/api/records", get(records::list).post(records::create))
-        .route("/api/records/{id}", get(records::get).patch(records::patch))
+        .route("/api/records/{id}", get(records::get).patch(records::patch).delete(records::delete))
         .route("/api/records/{id}/participants/{user}", put(records::add_participant).delete(records::remove_participant))
         .route("/api/records/{id}/join", post(records::join).delete(records::cancel_join))
         .route("/api/records/{id}/join-requests/{user}", post(records::decide_join))
@@ -65,7 +65,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/actions/mine", get(records::my_actions))
         .route("/api/actions/{id}", patch(records::patch_action))
         .route("/api/events", get(events::list).post(events::create))
-        .route("/api/events/{id}", get(events::get).patch(events::patch))
+        .route("/api/events/{id}", get(events::get).patch(events::patch).delete(events::delete))
         .route("/api/events/{id}/participants/{user}",
             put(events::put_participant).delete(events::remove_participant))
         .route("/api/events/{id}/teams/{team}", put(events::put_team).delete(events::remove_team))

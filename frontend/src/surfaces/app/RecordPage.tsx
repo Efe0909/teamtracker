@@ -163,6 +163,39 @@ export function MobileEventStrip({ eventId }: { eventId: Uuid }) {
   );
 }
 
+/** Mobil etkinlik: ozet seridi + sag alttaki baloncuktan acilan etkinlik sohbeti. */
+export function EventPage({ id }: { id: Uuid }) {
+  const q = useEvent(id);
+  if (q.error !== null) {
+    return (
+      <>
+        <TopBar title="Etkinlik" back />
+        <ErrorScreen code={q.error instanceof ApiError && q.error.code === "not_found" ? "not_found" : "network"} />
+      </>
+    );
+  }
+  if (q.data === undefined) {
+    return (
+      <>
+        <TopBar title="Etkinlik" back />
+        <Loading />
+      </>
+    );
+  }
+  const e = q.data;
+  return (
+    <>
+      <TopBar title="Etkinlik" back />
+      <div className={s.recordPad}>
+        <h1>{e.title}</h1>
+        <MobileEventStrip eventId={id} />
+      </div>
+      <ChatSheet chatId={e.chat_id} title={e.title} canPost={e.can_edit}
+        lockedText="Bu etkinlikte yazma yetkin yok." empty="Henüz mesaj yok. İlk mesajı sen yaz." />
+    </>
+  );
+}
+
 export function RecordPage({ id }: { id: Uuid }) {
   const loc = useLocation();
   const [pre] = useState(() => {
@@ -197,7 +230,6 @@ export function RecordPage({ id }: { id: Uuid }) {
       <div className={s.recordPad}>
         <JoinBanner d={d} />
         <RecordHead d={d} />
-        {d.event_id !== null && <MobileEventStrip eventId={d.event_id} />}
         <ReadOnlyNote d={d} />
         <CollapsibleProps d={d}>
           <Properties d={d} />

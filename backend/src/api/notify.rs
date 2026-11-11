@@ -43,6 +43,7 @@ pub struct Notice {
     body: Option<String>,
     record_id: Option<Uuid>,
     team_id: Option<Uuid>,
+    event_id: Option<Uuid>,
     title: String,
     #[sqlx(skip)]
     unread: bool,
@@ -86,7 +87,7 @@ pub async fn list(State(st): State<AppState>, CurrentUser(me): CurrentUser) -> R
     // Suzme Rust'ta: fazladan cekilir (4x), sonra kirpilir.
     let rows: Vec<Notice> = sqlx::query_as(
         "with mine as (
-           select r.chat_id, r.id as record_id, null::uuid as team_id, r.title
+           select r.chat_id, r.id as record_id, null::uuid as team_id, null::uuid as event_id, r.title
              from records r
             where r.owner_id = $1 or r.created_by = $1
                or exists(select 1 from record_participants p
@@ -94,11 +95,16 @@ pub async fn list(State(st): State<AppState>, CurrentUser(me): CurrentUser) -> R
                or exists(select 1 from actions a where a.record_id = r.id and a.owner_id = $1)
                or r.team_id in (select team_id from team_members where user_id = $1)
            union all
-           select t.chat_id, null, t.id, t.name
+           select e.chat_id, null, null, e.id, e.title
+             from events e
+            where e.owner_id = $1 or e.created_by = $1
+               or exists(select 1 from event_participants p where p.event_id = e.id and p.user_id = $1)
+           union all
+           select t.chat_id, null, t.id, null, t.name
              from teams t join team_members m on m.team_id = t.id and m.user_id = $1
          )
          select f.kind, f.id, f.created_at, f.chat_id, f.actor_id, f.verb, f.subject_label,
-                f.target_label, f.body, mine.record_id, mine.team_id, mine.title
+                f.target_label, f.body, mine.record_id, mine.team_id, mine.event_id, mine.title
            from chat_feed f join mine on mine.chat_id = f.chat_id
           where f.actor_id is distinct from $1
           order by f.created_at desc limit 240")
@@ -255,12 +261,23 @@ async fn fanout_inner(st: &AppState, chat: Uuid, author: Uuid, body: &str) -> Re
     let (url, title, audience) = match rec {
         Some((id, title, aud)) => (format!("/record/{id}"), title, aud),
         None => {
-            let team: Option<(Uuid, String, Vec<Uuid>)> = sqlx::query_as(
-                "select t.id, t.name, array(select user_id from team_members where team_id = t.id)
-                   from teams t where t.chat_id = $1")
+            let event: Option<(Uuid, String, Vec<Uuid>)> = sqlx::query_as(
+                "select e.id, e.title, array(
+                          select e.owner_id where e.owner_id is not null
+                          union select e.created_by where e.created_by is not null
+                          union select user_id from event_participants where event_id = e.id)
+                   from events e where e.chat_id = $1")
                 .bind(chat).fetch_optional(&st.pool).await?;
-            let Some((id, name, aud)) = team else { return Ok(()) };
-            (format!("/team/{id}"), name, aud)
+            if let Some((id, title, aud)) = event {
+                (format!("/events/{id}"), title, aud)
+            } else {
+                let team: Option<(Uuid, String, Vec<Uuid>)> = sqlx::query_as(
+                    "select t.id, t.name, array(select user_id from team_members where team_id = t.id)
+                       from teams t where t.chat_id = $1")
+                    .bind(chat).fetch_optional(&st.pool).await?;
+                let Some((id, name, aud)) = team else { return Ok(()) };
+                (format!("/team/{id}"), name, aud)
+            }
         }
     };
     let author_name: String = sqlx::query_scalar("select name from users where id = $1")

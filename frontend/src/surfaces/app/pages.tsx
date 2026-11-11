@@ -29,11 +29,6 @@ export function RecordCard({ r }: { r: RecordSummary }) {
       <span className={s.cardBody}>
         <span className={s.cardTags}>
           <KindTag kind={r.kind} />
-          {r.event_id !== null && (
-            <Tag tone="neutral">
-              <Icon name="calendar" size={12} /> Etkinlik
-            </Tag>
-          )}
           {(r.priority === "critical" || r.priority === "high") && <PriorityTag priority={r.priority} />}
         </span>
         <span className={s.cardTitle}>{r.title}</span>
@@ -308,7 +303,9 @@ export function NotificationsPage() {
         ) : (
           q.data.items.map((n) => {
             const actor = L.user(n.actor_id);
-            const to = n.record_id !== null ? href({ name: "record", id: n.record_id }) : href({ name: "team", id: n.team_id ?? "" });
+            const to = n.record_id !== null ? href({ name: "record", id: n.record_id })
+              : n.event_id !== null ? href({ name: "event", id: n.event_id })
+              : href({ name: "team", id: n.team_id ?? "" });
             return (
               <Link key={n.id} href={to} className={cx(s.card, fresh.current?.has(n.id) === true && s.cardUnread)}>
                 <Avatar user={actor} size={34} />
@@ -386,15 +383,15 @@ export function ChatsPage() {
     <TopBar title="Konuşmalar" />
     <div className={s.inbox}>
       {q.error !== null ? <p role="alert">Konuşmalar yüklenemedi.</p> : q.data === undefined ? <Loading /> : q.data.length === 0 ? <Empty title="Sohbet yok">Dahil olduğun takım veya kayıt sohbeti bulunmuyor.</Empty> : q.data.map((chat) => {
-        const id = chat.kind === "team" ? chat.team_id : chat.record_id;
+        const id = chat.kind === "team" ? chat.team_id : chat.kind === "event" ? chat.event_id : chat.record_id;
         if (id === null) return null;
         const actor = L.user(chat.last_actor_id);
-        return <Link key={chat.chat_id} href={`${href({ name: chat.kind === "team" ? "team" : "record", id })}#chat`} className={s.inboxRow}>
+        return <Link key={chat.chat_id} href={`${href({ name: chat.kind, id })}#chat`} className={s.inboxRow}>
           <span className={s.teamMark}><Icon name={chat.kind === "team" ? "teams" : "chat"} size={24} /></span>
           <span className={s.cardBody}>
             <span className={s.inboxHeading}><span className={s.cardTitle}>{chat.title}</span>{chat.updated_at !== null && <time dateTime={chat.updated_at}>{ago(chat.updated_at)}</time>}</span>
             <span className={s.cardPath}>{chat.last_message === null ? "Henüz mesaj yok" : `${actor?.name ?? "Sistem"}: ${chat.last_message.trim() === "" ? "Fotoğraf / ek" : chat.last_message}`}</span>
-            <span className={s.cardMeta}>{chat.kind === "team" ? "Takım" : "Kayıt"}</span>
+            <span className={s.cardMeta}>{chat.kind === "team" ? "Takım" : chat.kind === "event" ? "Etkinlik" : "Kayıt"}</span>
           </span>
         </Link>;
       })}

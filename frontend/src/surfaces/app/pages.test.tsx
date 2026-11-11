@@ -140,7 +140,6 @@ const REC_BASE: RecordSummary = {
   open_actions: 0,
   action_overdue: false,
   messages: 0,
-  event_id: null,
 };
 
 describe("mobil kayıt kartı etkinlik rozeti (spec/31 Faz 2)", () => {
@@ -163,23 +162,11 @@ describe("mobil kayıt kartı etkinlik rozeti (spec/31 Faz 2)", () => {
     );
     expect(screen.queryByText("Etkinlik")).toBeNull();
   });
-
-  it("etkinliğe bağlı kayıtta (event_id !== null) Etkinlik rozeti görünür", () => {
-    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    render(
-      <QueryClientProvider client={qc}>
-        <LookupProvider meta={META}>
-          <RecordCard r={{ ...REC_BASE, event_id: "ev1" }} />
-        </LookupProvider>
-      </QueryClientProvider>,
-    );
-    expect(screen.getByText("Etkinlik")).toBeTruthy();
-  });
 });
 
 const EVENT_FIXTURE: EventDetail = {
   id: "ev1",
-  record_id: "r1",
+  chat_id: "c1",
   title: "Robotik Turnuvası",
   kind_id: "k1",
   status: "confirmed",

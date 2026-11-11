@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 import { ApiError, errorText } from "../../api/client";
 import { useCreateEvent, useEvents, useRecords } from "../../api/hooks";
 import type { EventSummary, IsoDate, RecordSummary, Uuid } from "../../api/types";
-import { NodeListPicker, NodeTreePicker, useNodesOf } from "../../features/nodes/NodePicker";
+import { NodeListPicker, useNodesOf } from "../../features/nodes/NodePicker";
 import { QualityNote } from "../../features/record/QualityNote";
 import { MarkdownField } from "../../ui/MarkdownField";
 import { daysFromToday, parseDay, PRIORITY, PRIORITY_ORDER, toIsoDay } from "../../lib/labels";
@@ -243,10 +243,8 @@ function EventTable({ rows }: { rows: EventSummary[] }) {
 function TopLinked({ events, records }: { events: EventSummary[]; records: RecordSummary[] }) {
   const n = new Map<Uuid, number>();
   for (const e of events) for (const id of e.record_ids) n.set(id, (n.get(id) ?? 0) + 1);
-  // Ikiz kayitlar sayilmaz: etkinligin kendisi, "bagli kayit" degil (spec/73 §3a).
-  const twins = new Set(events.map((e) => e.record_id));
   const top = records
-    .filter((r) => n.has(r.id) && !twins.has(r.id))
+    .filter((r) => n.has(r.id))
     .sort((a, b) => (n.get(b.id) ?? 0) - (n.get(a.id) ?? 0))
     .slice(0, 5);
   return (
@@ -388,17 +386,16 @@ function NewEventForm({ onCancel }: { onCancel: () => void }) {
   // Varsayilan: ilk tur (secilmeden once de sablon gorunsun).
   const [picked, setKind] = useState<Uuid | null>(null);
   const kind = picked ?? kinds[0]?.id ?? null;
-  const [unit, setUnit] = useState<Uuid | null>(null);
   const [date, setDate] = useState("");
   const [description, setDescription] = useState("");
   const [qualityReasons, setQualityReasons] = useState<string[] | null>(null);
   const bypassQuality = L.can("bypass_text_quality");
   const tpl = kindTemplate(L.meta.nodes, kind);
-  const ready = (bypassQuality ? title.trim() !== "" && description.trim() !== "" : Array.from(title.trim()).length >= 5 && Array.from(description.trim()).length >= 30) && unit !== null && kind !== null;
+  const ready = (bypassQuality ? title.trim() !== "" && description.trim() !== "" : Array.from(title.trim()).length >= 5 && Array.from(description.trim()).length >= 30) && kind !== null;
   const submit = (quality_override = false) => {
-    if (kind === null || unit === null) return;
+    if (kind === null) return;
     create.mutate(
-      { title: title.trim(), kind_id: kind, unit_id: unit, description: description.trim(), quality_override, ...(date === "" ? {} : { date }) },
+      { title: title.trim(), kind_id: kind, description: description.trim(), quality_override, ...(date === "" ? {} : { date }) },
       {
         onSuccess: (r) => navigate(href({ name: "event", id: r.id })),
         onError: (e) => { if (e instanceof ApiError && e.code === "low_quality") setQualityReasons(e.reasons); },
@@ -408,7 +405,7 @@ function NewEventForm({ onCancel }: { onCancel: () => void }) {
   return (
     <form className={ui.formStack} onSubmit={(e) => {
       e.preventDefault();
-      if (!ready || kind === null || unit === null || create.isPending) return;
+      if (!ready || kind === null || create.isPending) return;
       submit();
     }}>
       <label className={ui.field}>
@@ -427,11 +424,6 @@ function NewEventForm({ onCancel }: { onCancel: () => void }) {
       <div className={ui.field}>
         <span>Tür</span>
         <NodeListPicker rootKey="event_types" label="Tür" value={kind} onChange={setKind} placeholder="Tür seç" />
-      </div>
-      {/* Etkinligin kaydi ayni islemde acilir; kayit bir konuda durur (spec/73 §3a). */}
-      <div className={ui.field}>
-        <span>Konu <span className={ui.fieldHint}>— etkinliğin kaydı (sohbet + arşiv) burada açılır</span></span>
-        <NodeTreePicker rootKey="units" label="Konu" value={unit} onChange={setUnit} placeholder="Konu seç" />
       </div>
       <div className={ui.field}>
         <span>Tarih <span className={ui.fieldHint}>— boş bırakılırsa havuza düşer</span></span>

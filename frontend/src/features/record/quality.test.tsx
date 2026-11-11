@@ -33,7 +33,7 @@ const detail: RecordDetail = {
     created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-01T00:00:00Z", closing_note: null,
   },
   actions: [], participants: [], cards: [], access: { can_edit: true, can_edit_deadline: true },
-  pinned: false, membership: { mode: "public", is_member: true, restricted: false, request: null, can_decide: false, requests: [] }, event_id: null,
+  pinned: false, membership: { mode: "public", is_member: true, restricted: false, request: null, can_decide: false, requests: [] },
 };
 function wrap(child: React.ReactNode, scopes: string[] = []) {
   const scoped = { ...meta, me: { ...meta.me, scopes } };

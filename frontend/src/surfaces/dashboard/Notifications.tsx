@@ -54,7 +54,9 @@ export function Notifications() {
           <ul className={s.rows}>
             {q.data.items.map((n) => {
               const actor = L.user(n.actor_id);
-              const to = n.record_id !== null ? href({ name: "record", id: n.record_id }) : href({ name: "team", id: n.team_id ?? "" });
+              const to = n.record_id !== null ? href({ name: "record", id: n.record_id })
+                : n.event_id !== null ? href({ name: "event", id: n.event_id })
+                : href({ name: "team", id: n.team_id ?? "" });
               return (
                 <li key={n.id}>
                   <Link href={to} className={cx(s.row, fresh.current?.has(n.id) === true && s.rowUnread)}>

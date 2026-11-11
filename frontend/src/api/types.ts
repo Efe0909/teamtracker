@@ -127,8 +127,6 @@ export interface RecordSummary {
   open_actions: number;
   action_overdue: boolean;
   messages: number;
-  /** Etkinligin ikiz kaydiysa etkinlik (spec/73 §3a). */
-  event_id: Uuid | null;
 }
 
 export interface RecordFull {
@@ -170,8 +168,6 @@ export interface RecordDetail {
   /** Bu kisi kaydi sabitlemis mi (Panolar widget'i). */
   pinned: boolean;
   membership: Membership;
-  /** Etkinligin ikiz kaydiysa etkinlik: Etkinlik | Kayit anahtari buradan. */
-  event_id: Uuid | null;
 }
 
 /** Karar modelinin bir degerlendirmesi (spec/76). `noul` = evet olasiligi. */
@@ -198,8 +194,8 @@ export type MaterialType = "consumable" | "equipment" | "service";
 /** Liste ve ayrintinin ortak satiri. `record_ids` = kayit widget'larinin kayitlari (ikiz haric). */
 export interface EventSummary {
   id: Uuid;
-  /** Ikiz kayit: sohbet + arsiv. */
-  record_id: Uuid;
+  /** Etkinligin kendi sohbeti (arsiv + yazisma). */
+  chat_id: Uuid;
   title: string;
   /** Etkinlik Turleri'ndeki `option` dugumu (adi meta.nodes'tan). */
   kind_id: Uuid;
@@ -310,7 +306,6 @@ export interface EventDetail extends EventSummary {
 export interface NewEvent {
   title: string;
   kind_id: Uuid;
-  unit_id: Uuid;
   date?: IsoDate;
   priority?: Priority;
   description: string;
@@ -581,11 +576,12 @@ export interface Feed {
 export interface InboxChat {
   chat_id: Uuid;
   title: string;
-  kind: "team" | "record";
+  kind: "team" | "record" | "event";
   last_message: string | null;
   last_actor_id: Uuid | null;
   record_id: Uuid | null;
   team_id: Uuid | null;
+  event_id: Uuid | null;
   can_post: boolean;
   updated_at: IsoTime | null;
 }
@@ -619,6 +615,7 @@ export interface Notice {
   body: string | null;
   record_id: Uuid | null;
   team_id: Uuid | null;
+  event_id: Uuid | null;
   title: string;
 }
 
